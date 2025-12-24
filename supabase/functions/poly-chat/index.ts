@@ -4065,10 +4065,11 @@ If only 1 result, analyze it directly.
             }
             
             // PROGRAMMATIC MULTI-MARKET CHOOSER - Bypass Claude entirely for 3+ markets
+            // SKIP chooser if deepResearch is enabled - just analyze the top market directly
             const activeMarkets = marketData.allMarkets;
             const hasSpecificTarget = marketData.targetMarket !== null && marketData.targetMarket !== undefined;
             
-            if (activeMarkets.length >= 3 && !hasSpecificTarget && !voiceMode) {
+            if (activeMarkets.length >= 3 && !hasSpecificTarget && !voiceMode && !deepResearch) {
               console.log(`[CHOOSER] Detected ${activeMarkets.length} markets, returning chooser UI`);
               
               // Build chooser response directly - no Claude call needed
@@ -4104,6 +4105,12 @@ Reply with a number (e.g. "1") or a name (e.g. "Kevin Hassett").`;
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
+            }
+            
+            // When deepResearch is enabled and no specific target, auto-select top market
+            if (deepResearch && !hasSpecificTarget && activeMarkets.length > 0) {
+              console.log(`[DeepResearch] Auto-selecting top market for deep analysis`);
+              marketData.targetMarket = activeMarkets[0];
             }
           }
           
