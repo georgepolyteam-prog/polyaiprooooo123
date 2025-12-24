@@ -18,7 +18,7 @@ export const PolyfactualToggle = ({ enabled, onToggle, disabled }: PolyfactualTo
           onClick={onToggle}
           disabled={disabled}
           className={cn(
-            "relative flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-300 shrink-0 overflow-hidden",
+            "relative flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-all duration-300 shrink-0 overflow-hidden",
             "border",
             enabled
               ? "bg-[#0d1117] border-emerald-500/50 shadow-lg shadow-emerald-500/20"
@@ -33,7 +33,7 @@ export const PolyfactualToggle = ({ enabled, onToggle, disabled }: PolyfactualTo
           
           {/* Logo container with dark background for visibility */}
           <div className={cn(
-            "relative flex items-center justify-center w-7 h-7 rounded-lg overflow-hidden transition-all duration-300",
+            "relative flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg overflow-hidden transition-all duration-300",
             enabled 
               ? "bg-gradient-to-br from-emerald-600 to-cyan-600 shadow-md shadow-emerald-500/30" 
               : "bg-[#21262d]"
@@ -42,14 +42,14 @@ export const PolyfactualToggle = ({ enabled, onToggle, disabled }: PolyfactualTo
               src={polyfactualLogo} 
               alt="Polyfactual" 
               className={cn(
-                "w-5 h-5 object-contain transition-all duration-300",
+                "w-4 h-4 sm:w-5 sm:h-5 object-contain transition-all duration-300",
                 enabled ? "brightness-110" : "opacity-60"
               )}
             />
           </div>
           
-          {/* Text badge */}
-          <div className="relative flex flex-col items-start">
+          {/* Text badge - hidden on mobile */}
+          <div className="relative hidden sm:flex flex-col items-start">
             <span className={cn(
               "text-sm font-semibold transition-all duration-300",
               enabled 
@@ -70,7 +70,7 @@ export const PolyfactualToggle = ({ enabled, onToggle, disabled }: PolyfactualTo
           
           {/* Status indicator */}
           <div className={cn(
-            "relative w-2.5 h-2.5 rounded-full transition-all duration-300 ml-1",
+            "relative w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-300",
             enabled 
               ? "bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse" 
               : "bg-gray-600"
