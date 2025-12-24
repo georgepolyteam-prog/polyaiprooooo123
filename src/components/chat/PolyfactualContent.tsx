@@ -135,11 +135,11 @@ const getSectionInfo = (line: string): { icon: React.ReactNode; type: string } |
   if (isMarkdownHeader && lowerLine.includes('source')) {
     return { icon: <ExternalLink className="w-4 h-4" />, type: 'Sources' };
   }
-  // Legacy emoji-based detection (for backward compatibility)
-  if (lowerLine.includes('📊') || lowerLine.includes('market summary')) {
+  // Non-emoji detection (professional icons only)
+  if (lowerLine.includes('market summary')) {
     return { icon: <Target className="w-4 h-4" />, type: 'Summary' };
   }
-  if (lowerLine.includes('📰') || lowerLine.includes('key news')) {
+  if (lowerLine.includes('key news')) {
     return { icon: <Lightbulb className="w-4 h-4" />, type: 'Key Developments' };
   }
   if (lowerLine.includes('market sentiment') || lowerLine.includes('odds') || lowerLine.includes('probability')) {
