@@ -155,6 +155,8 @@ const defaultMarkets: ExampleMarket[] = [
 ];
 
 
+const POLYFACTUAL_HINT_KEY = "poly-polyfactual-intro-seen";
+
 const Index = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -186,6 +188,30 @@ const Index = () => {
   const [markets, setMarkets] = useState<ExampleMarket[]>([]);
   const [loadingMarkets, setLoadingMarkets] = useState(true);
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+
+  // Polyfactual hint state - show for first-time authenticated users with no messages
+  const [showPolyfactualHint, setShowPolyfactualHint] = useState(false);
+  
+  useEffect(() => {
+    // Show hint only if: authenticated, no messages, and hasn't been shown before
+    const hasSeenHint = localStorage.getItem(POLYFACTUAL_HINT_KEY) === "true";
+    if (isAuthenticated && messages.length === 0 && !hasSeenHint && !authLoading) {
+      setShowPolyfactualHint(true);
+    } else {
+      setShowPolyfactualHint(false);
+    }
+  }, [isAuthenticated, messages.length, authLoading]);
+
+  const dismissPolyfactualHint = useCallback(() => {
+    setShowPolyfactualHint(false);
+    localStorage.setItem(POLYFACTUAL_HINT_KEY, "true");
+  }, []);
+
+  // Wrap toggleDeepResearch to also dismiss hint
+  const handleToggleDeepResearch = useCallback(() => {
+    dismissPolyfactualHint();
+    toggleDeepResearch();
+  }, [toggleDeepResearch, dismissPolyfactualHint]);
 
   // Fetch example markets data via server-side proxy (bypasses CORS)
   useEffect(() => {
@@ -544,7 +570,9 @@ const Index = () => {
                   onSubmit={handleSubmit}
                   disabled={isProcessing}
                   deepResearch={deepResearch}
-                  onToggleDeepResearch={toggleDeepResearch}
+                  onToggleDeepResearch={handleToggleDeepResearch}
+                  showPolyfactualHint={showPolyfactualHint}
+                  onDismissHint={dismissPolyfactualHint}
                 />
               ) : (
                 <AuthGateInline />
