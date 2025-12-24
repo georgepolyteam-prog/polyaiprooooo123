@@ -14,6 +14,7 @@ import BuilderStats from "./pages/BuilderStats";
 import WalletProfile from "./pages/WalletProfile";
 import MyTrades from "./pages/MyTrades";
 import Markets from "./pages/Markets";
+import LiveTrades from "./pages/LiveTrades";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -36,6 +37,7 @@ const AppContent = () => {
           <Route path="/" element={<Index />} />
           <Route path="/chat" element={<Index />} />
           <Route path="/markets" element={<Markets />} />
+          <Route path="/trades" element={<LiveTrades />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
