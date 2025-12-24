@@ -5,6 +5,7 @@ import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
 import { TradeDetailModal } from '@/components/trades/TradeDetailModal';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Trade {
   token_id: string;
@@ -27,65 +28,91 @@ export default function LiveTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [paused, setPaused] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
   const wsRef = useRef<WebSocket | null>(null);
   const pausedTradesRef = useRef<Trade[]>([]);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const wsUrlRef = useRef<string | null>(null);
 
-  const connectWebSocket = useCallback(() => {
+  const connectWebSocket = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const ws = new WebSocket('wss://api.domeapi.io/v1/ws');
-
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      setConnected(true);
-      
-      // Subscribe to ALL trades
-      ws.send(JSON.stringify({
-        action: "subscribe",
-        platform: "polymarket",
-        version: 1,
-        type: "orders",
-        filters: {
-          users: ["*"]
-        }
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      if (data.type === 'ack') {
-        console.log('Subscription confirmed:', data.subscription_id);
-      }
-      
-      if (data.type === 'event') {
-        const newTrade = data.data;
+    try {
+      // Get the WebSocket URL from edge function if we don't have it
+      if (!wsUrlRef.current) {
+        setLoading(true);
+        const { data, error } = await supabase.functions.invoke('dome-ws-url');
         
-        if (paused) {
-          pausedTradesRef.current.unshift(newTrade);
-        } else {
-          setTrades(prev => [newTrade, ...prev.slice(0, 99)]);
+        if (error || !data?.wsUrl) {
+          console.error('Failed to get WebSocket URL:', error);
+          setError('Failed to connect to trade feed');
+          setLoading(false);
+          return;
         }
+        wsUrlRef.current = data.wsUrl;
       }
-    };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setConnected(false);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
+      setLoading(false);
+      setError(null);
       
-      // Reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
-    };
+      const ws = new WebSocket(wsUrlRef.current);
 
-    wsRef.current = ws;
+      ws.onopen = () => {
+        console.log('WebSocket connected to Dome');
+        setConnected(true);
+        
+        // Subscribe to ALL trades
+        ws.send(JSON.stringify({
+          action: "subscribe",
+          platform: "polymarket",
+          version: 1,
+          type: "orders",
+          filters: {
+            users: ["*"]
+          }
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'ack') {
+          console.log('Subscription confirmed:', data.subscription_id);
+        }
+        
+        if (data.type === 'event') {
+          const newTrade = data.data;
+          
+          if (paused) {
+            pausedTradesRef.current.unshift(newTrade);
+          } else {
+            setTrades(prev => [newTrade, ...prev.slice(0, 99)]);
+          }
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setConnected(false);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setConnected(false);
+        
+        // Reconnect after 3 seconds
+        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+      };
+
+      wsRef.current = ws;
+    } catch (err) {
+      console.error('Error connecting to WebSocket:', err);
+      setError('Failed to connect to trade feed');
+      setLoading(false);
+    }
   }, [paused]);
 
   useEffect(() => {
