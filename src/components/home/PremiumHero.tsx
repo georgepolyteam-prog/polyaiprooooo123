@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, CheckCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import polyLogo from "@/assets/poly-logo-new.png";
-import polymarketLogo from "@/assets/polymarket-logo.png";
 
 interface PremiumHeroProps {
   isAuthenticated: boolean;
@@ -12,17 +11,28 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
   return (
     <div className="relative text-center py-8 sm:py-12">
       {/* Badges Row */}
-      <div className="flex items-center justify-center gap-2 mb-6 animate-fade-in flex-wrap">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card border border-border">
-          <img src={polymarketLogo} alt="Polymarket" className="w-4 h-4 object-contain" />
-          <span className="text-xs font-medium text-muted-foreground">Backed by Polymarket</span>
+      <div className="flex items-center justify-center gap-3 mb-6 animate-fade-in flex-wrap">
+        {/* Official Builder Badge */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
+          <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Official Polymarket Builder</span>
         </div>
-        <Link to="/capabilities">
-          <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-3 rounded-full text-xs text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border">
-            <HelpCircle className="w-3.5 h-3.5" />
-            What can I do?
-          </Button>
-        </Link>
+        
+        {/* Learn More & Capabilities Links */}
+        <div className="flex items-center gap-2">
+          <Link to="/about">
+            <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-3 rounded-full text-xs text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border">
+              Learn More
+              <ArrowRight className="w-3 h-3" />
+            </Button>
+          </Link>
+          <Link to="/capabilities">
+            <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-3 rounded-full text-xs text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border">
+              <HelpCircle className="w-3.5 h-3.5" />
+              What can I do?
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Logo - Clean and simple */}
