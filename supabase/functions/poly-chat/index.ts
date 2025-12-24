@@ -5084,16 +5084,39 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
       console.log("[DeepResearch] Deep research mode enabled, fetching comprehensive data...");
       
       // Use market TITLE for research, not the raw URL
-      let researchQuery = lastUserMessage?.content || '';
+      let researchQuery = '';
       
-      // Extract market title from fetched data if available (set earlier when URL was detected)
+      // Priority 1: Use fetched market info (most reliable)
       if (fetchedMarketInfo?.question) {
         researchQuery = fetchedMarketInfo.question;
-        console.log(`[DeepResearch] Using market title: "${researchQuery}"`);
+        console.log(`[DeepResearch] Using fetched market title: "${researchQuery}"`);
+      }
+      // Priority 2: Use currentMarket from client
+      else if (currentMarket?.question || currentMarket?.title) {
+        researchQuery = currentMarket.question || currentMarket.title || '';
+        console.log(`[DeepResearch] Using currentMarket title: "${researchQuery}"`);
+      }
+      // Priority 3: Extract quoted title from message (e.g., 'Analyze this market: "Will X happen?"')
+      else {
+        const quotedMatch = (lastUserMessage?.content || '').match(/"([^"]{10,})"/);
+        if (quotedMatch) {
+          researchQuery = quotedMatch[1];
+          console.log(`[DeepResearch] Extracted quoted title: "${researchQuery}"`);
+        } else {
+          // Fallback: Use message content after stripping URLs
+          researchQuery = (lastUserMessage?.content || '').replace(/https?:\/\/[^\s]+/g, '').trim();
+          console.log(`[DeepResearch] Fallback to message content: "${researchQuery}"`);
+        }
       }
       
-      // Strip any URLs from the query - we want the title only
+      // Strip any remaining URLs from the query - we want the title only
       researchQuery = researchQuery.replace(/https?:\/\/[^\s]+/g, '').trim();
+      
+      // Guard: If query is too short after stripping, log warning
+      if (researchQuery.length < 10) {
+        console.warn(`[DeepResearch] ⚠️ Query too short (${researchQuery.length} chars): "${researchQuery}"`);
+      }
+      
       console.log(`[DeepResearch] Final research query: "${researchQuery.substring(0, 100)}..."`);
       
       const researchData = await getDeepResearch(researchQuery);
