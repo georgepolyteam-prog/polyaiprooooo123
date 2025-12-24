@@ -166,7 +166,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     }, 5000);
   }, [checkQueueStatus, clearRetryState]);
 
-  const sendMessage = useCallback(async (userMessage: string, isRetry = false, isHiddenAnalysis = false) => {
+  const sendMessage = useCallback(async (userMessage: string, isRetry = false, isHiddenAnalysis = false, forceDeepResearch?: boolean) => {
     const normalized = userMessage.trim();
     const requestKey = `${isRetry ? "retry" : "send"}|${isHiddenAnalysis ? "hidden" : "show"}|${normalized}`;
 
@@ -189,8 +189,11 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
       clearRetryState();
     }
 
+    // Use forceDeepResearch if provided, otherwise fall back to state
+    const effectiveDeepResearch = forceDeepResearch ?? deepResearch;
+
     setIsLoading(true);
-    if (deepResearch) {
+    if (effectiveDeepResearch) {
       setAnalysisStep('deep_research');
     } else {
       setAnalysisStep('analyzing');
@@ -268,7 +271,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
           authToken,
           walletAddress: effectiveWallet,
           authType,
-          deepResearch
+          deepResearch: effectiveDeepResearch
         }),
       });
 
