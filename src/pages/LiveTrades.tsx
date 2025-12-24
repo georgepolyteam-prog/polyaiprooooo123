@@ -681,7 +681,7 @@ export default function LiveTrades() {
               </div>
 
               {/* Trades List */}
-              <div className="divide-y divide-border/50 max-h-[60vh] overflow-y-auto">
+              <div className="divide-y divide-border/50 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto min-h-[200px]">
                 {filteredTrades.map((trade) => {
                   const tradeId = trade.order_hash || `${trade.tx_hash}-${trade.timestamp}-${trade.token_id}`;
                   const whaleLevel = getWhaleLevel(trade.price, trade.shares_normalized || trade.shares);
