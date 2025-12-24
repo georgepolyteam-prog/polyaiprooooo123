@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      width: 320px;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #ffffff;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .logo {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #1E8E3E 0%, #16a34a 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+    }
+    .logo span {
+      color: white;
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .title {
+      color: #111827;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: #1E8E3E;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .description {
+      color: #6b7280;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .platforms {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .platform-badge {
+      background: #f3f4f6;
+      color: #374151;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .platform-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .platform-badge.polymarket .dot {
+      background: #8b5cf6;
+    }
+    .platform-badge.kalshi .dot {
+      background: #3b82f6;
+    }
+    .cta-button {
+      display: block;
+      width: 100%;
+      background: linear-gradient(135deg, #1E8E3E 0%, #16a34a 100%);
+      color: white;
+      padding: 14px;
+      border-radius: 10px;
+      text-align: center;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(30, 142, 62, 0.3);
+    }
+    .cta-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(30, 142, 62, 0.4);
+    }
+    .status {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #166534;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    .footer a {
+      color: #1E8E3E;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span>P</span>
+    </div>
+    <div class="title">Poly</div>
+    <div class="subtitle">AI Market Analysis</div>
+  </div>
+  
+  <div class="platforms">
+    <div class="platform-badge polymarket">
+      <span class="dot"></span>
+      Polymarket
+    </div>
+    <div class="platform-badge kalshi">
+      <span class="dot"></span>
+      Kalshi
+    </div>
+  </div>
+  
+  <div class="description">
+    Click the green "Ask Poly" button on any Polymarket or Kalshi page to get instant AI analysis.
+  </div>
+  
+  <a href="https://polyai.pro" target="_blank" class="cta-button">
+    Open Poly Dashboard
+  </a>
+  
+  <div class="status">
+    <div class="status-dot"></div>
+    Extension active on prediction markets
+  </div>
+  
+  <div class="footer">
+    <a href="https://polyai.pro" target="_blank">polyai.pro</a> • v2.0.0
+  </div>
+</body>
+</html>

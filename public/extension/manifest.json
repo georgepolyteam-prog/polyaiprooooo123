@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Poly - Prediction Market AI",
+  "version": "2.0.0",
+  "description": "Get instant AI analysis on Polymarket and Kalshi prediction markets",
+  "permissions": ["activeTab"],
+  "host_permissions": ["https://polymarket.com/*", "https://kalshi.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://polymarket.com/*", "https://kalshi.com/*"],
+      "css": ["styles.css"],
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

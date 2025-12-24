@@ -1,0 +1,87 @@
+/* Poly Extension Styles */
+
+.poly-extension-container {
+  margin: 16px 0 !important;
+  display: flex !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+  animation: polyFadeIn 0.3s ease-in !important;
+  z-index: 9999 !important;
+}
+
+@keyframes polyFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.poly-extension-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 12px 24px !important;
+  border-radius: 10px !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+  font-size: 15px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: none !important;
+  cursor: pointer !important;
+  position: relative !important;
+  overflow: hidden !important;
+  background: linear-gradient(135deg, #1E8E3E 0%, #16a34a 100%) !important;
+  background-color: #1E8E3E !important;
+  color: white !important;
+}
+
+.poly-extension-button:hover {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  background-color: #16a34a !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px rgba(30, 142, 62, 0.4) !important;
+}
+
+.poly-extension-button:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 8px rgba(30, 142, 62, 0.3) !important;
+}
+
+/* ICONS */
+.poly-extension-button svg {
+  width: 18px !important;
+  height: 18px !important;
+  flex-shrink: 0 !important;
+}
+
+.poly-extension-button svg path,
+.poly-extension-button svg line {
+  stroke: white !important;
+  fill: none !important;
+}
+
+.poly-extension-button span {
+  color: white !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+
+/* RESPONSIVE - Stack on mobile */
+@media (max-width: 640px) {
+  .poly-extension-container {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .poly-extension-button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}
