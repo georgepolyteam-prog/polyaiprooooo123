@@ -10,10 +10,12 @@ import { TradeStats } from '@/components/trades/TradeStats';
 import { TopTradersSidebar } from '@/components/trades/TopTradersSidebar';
 import { MarketHeatmap } from '@/components/trades/MarketHeatmap';
 import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
+import { MarketTradeModal } from '@/components/MarketTradeModal';
 import { LiveTradesTour } from '@/components/trades/LiveTradesTour';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trade-data';
 
 interface Trade {
   token_id: string;
@@ -42,6 +44,16 @@ interface MarketContext {
   url: string;
   slug: string;
   eventSlug: string;
+  image?: string;
+}
+
+// Simplified trade info for analysis context
+interface TradeAnalysisInfo {
+  title: string;
+  price: number;
+  shares_normalized?: number;
+  shares?: number;
+  market_slug: string;
   image?: string;
 }
 
@@ -74,9 +86,17 @@ export default function LiveTrades() {
   const [hideUpDown, setHideUpDown] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
 
-  // Analysis modal state
+  // Analysis modal state (for heatmap analyze)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [analysisContext, setAnalysisContext] = useState<MarketContext | null>(null);
+  
+  // Trade modal state (lifted from TradeDetailModal)
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [tradeMarketData, setTradeMarketData] = useState<TradeableMarketData | null>(null);
+  
+  // Analysis modal for trade detail (lifted from TradeDetailModal)
+  const [tradeAnalysisModalOpen, setTradeAnalysisModalOpen] = useState(false);
+  const [tradeAnalysisContext, setTradeAnalysisContext] = useState<{ trade: TradeAnalysisInfo; resolvedUrl: string } | null>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
   const pausedTradesRef = useRef<Trade[]>([]);
@@ -540,8 +560,17 @@ export default function LiveTrades() {
             <h1 className="text-3xl sm:text-4xl font-bold mb-1 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
               Live Trade Feed
             </h1>
-            <p className="text-muted-foreground text-sm">
-              Real-time Polymarket activity • Powered by Dome
+            <p className="text-muted-foreground text-sm flex items-center gap-1 flex-wrap">
+              Real-time Polymarket activity • Powered by{" "}
+              <a 
+                href="https://domeapi.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-poly-cyan font-semibold hover:underline transition-colors"
+              >
+                DOME
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </p>
           </div>
 
@@ -915,10 +944,89 @@ export default function LiveTrades() {
           <TradeDetailModal
             trade={selectedTrade}
             onClose={() => setSelectedTrade(null)}
+            onTrade={async (marketUrl) => {
+              const res = await fetchTradeableMarketData(marketUrl);
+              if (res.ok === false) {
+                if (res.reason === 'needs_market_selection') {
+                  toast.info("Multiple markets - please select a specific one");
+                  navigate('/chat', {
+                    state: {
+                      initialMessage: `Show me the markets for: ${marketUrl}`
+                    }
+                  });
+                } else {
+                  toast.error(res.message || "Failed to load market data");
+                }
+                return;
+              }
+              setTradeMarketData(res.data);
+              setTradeModalOpen(true);
+            }}
+            onAnalyze={(trade, resolvedUrl) => {
+              setTradeAnalysisContext({ 
+                trade: {
+                  title: trade.title,
+                  price: trade.price,
+                  shares_normalized: trade.shares_normalized,
+                  shares: trade.shares,
+                  market_slug: trade.market_slug,
+                  image: trade.image
+                },
+                resolvedUrl 
+              });
+              setTradeAnalysisModalOpen(true);
+            }}
           />
         )}
       </AnimatePresence>
 
+      {/* Trade Modal (lifted from TradeDetailModal) */}
+      {tradeMarketData && (
+        <MarketTradeModal
+          open={tradeModalOpen}
+          onOpenChange={setTradeModalOpen}
+          marketData={tradeMarketData}
+        />
+      )}
+
+      {/* Analysis Modal for Trade Detail (lifted) */}
+      <AnalysisSelectionModal
+        open={tradeAnalysisModalOpen}
+        onOpenChange={setTradeAnalysisModalOpen}
+        marketContext={tradeAnalysisContext ? {
+          eventTitle: tradeAnalysisContext.trade.title,
+          outcomeQuestion: tradeAnalysisContext.trade.title,
+          currentOdds: tradeAnalysisContext.trade.price,
+          volume: tradeAnalysisContext.trade.price * (tradeAnalysisContext.trade.shares_normalized || tradeAnalysisContext.trade.shares || 0),
+          url: tradeAnalysisContext.resolvedUrl,
+          slug: tradeAnalysisContext.trade.market_slug,
+          eventSlug: tradeAnalysisContext.trade.market_slug,
+          image: tradeAnalysisContext.trade.image
+        } : null}
+        onSelect={(type) => {
+          if (!tradeAnalysisContext) return;
+          setTradeAnalysisModalOpen(false);
+          const { trade, resolvedUrl } = tradeAnalysisContext;
+          navigate('/chat', {
+            state: {
+              autoAnalyze: true,
+              deepResearch: type === 'deep',
+              marketContext: {
+                eventTitle: trade.title,
+                outcomeQuestion: trade.title,
+                currentOdds: trade.price,
+                volume: trade.price * (trade.shares_normalized || trade.shares || 0),
+                url: resolvedUrl,
+                slug: trade.market_slug,
+                eventSlug: trade.market_slug,
+                image: trade.image
+              }
+            }
+          });
+        }}
+      />
+
+      {/* Analysis Modal for Heatmap */}
       <AnalysisSelectionModal
         open={analysisModalOpen}
         onOpenChange={setAnalysisModalOpen}

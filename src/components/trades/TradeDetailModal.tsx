@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target, Copy, Sparkles, ArrowRightLeft, Check, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target, Copy, Sparkles, ArrowRightLeft, Check } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
-import { MarketTradeModal } from '@/components/MarketTradeModal';
 import { toast } from '@/hooks/use-toast';
-import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trade-data';
 interface Trade {
   token_id: string;
   token_label: string;
@@ -45,20 +42,17 @@ interface WalletMetrics {
 interface TradeDetailModalProps {
   trade: Trade;
   onClose: () => void;
+  onTrade?: (marketUrl: string, trade: Trade) => void;
+  onAnalyze?: (trade: Trade, resolvedUrl: string) => void;
 }
 
-export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
-  const navigate = useNavigate();
+export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDetailModalProps) {
   const isMobile = useIsMobile();
   const [pnlData, setPnlData] = useState<PnLData | null>(null);
   const [walletTrades, setWalletTrades] = useState<Trade[]>([]);
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [tradeModalOpen, setTradeModalOpen] = useState(false);
-  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
-  const [loadingTradeData, setLoadingTradeData] = useState(false);
-  const [tradeMarketData, setTradeMarketData] = useState<TradeableMarketData | null>(null);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(trade.resolved_url || null);
   const [resolvingUrl, setResolvingUrl] = useState(false);
   // Resolve correct market URL on mount
@@ -129,57 +123,22 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleTrade = async () => {
-    setLoadingTradeData(true);
-    // Use resolved URL or fallback
+  const handleTrade = () => {
     const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
-    const res = await fetchTradeableMarketData(marketUrl);
-    setLoadingTradeData(false);
-    
-    if (res.ok === false) {
-      if (res.reason === 'needs_market_selection') {
-        toast({ title: "Multiple markets", description: "Please use the chat to select a specific market.", variant: "default" });
-        navigate('/chat', {
-          state: {
-            initialMessage: `Show me the markets for: ${marketUrl}`
-          }
-        });
-        onClose();
-      } else {
-        toast({ title: "Error", description: res.message, variant: "destructive" });
-      }
-      return;
-    }
-    
-    setTradeMarketData(res.data);
-    setTradeModalOpen(true);
+    onClose();
+    // Small delay to ensure modal is fully closed before opening new one
+    setTimeout(() => {
+      onTrade?.(marketUrl, trade);
+    }, 100);
   };
 
   const handleAnalyze = () => {
-    setAnalysisModalOpen(true);
-  };
-
-  const handleAnalysisSelect = (type: 'quick' | 'deep') => {
-    setAnalysisModalOpen(false);
-    const shares = trade.shares_normalized || trade.shares || 0;
-    const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
-    navigate('/chat', {
-      state: {
-        autoAnalyze: true,
-        deepResearch: type === 'deep',
-        marketContext: {
-          eventTitle: trade.title,
-          outcomeQuestion: trade.title,
-          currentOdds: trade.price,
-          volume: trade.price * shares,
-          url: marketUrl,
-          slug: trade.market_slug,
-          eventSlug: trade.market_slug,
-          image: trade.image
-        }
-      }
-    });
+    const url = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
     onClose();
+    // Small delay to ensure modal is fully closed before opening new one
+    setTimeout(() => {
+      onAnalyze?.(trade, url);
+    }, 100);
   };
 
   const totalPnL = pnlData?.pnl_over_time?.[pnlData.pnl_over_time.length - 1]?.pnl_to_date || 0;
@@ -264,13 +223,8 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
             variant="outline"
             className="flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10 transition-all duration-300 min-h-[48px]"
             onClick={handleTrade}
-            disabled={loadingTradeData}
           >
-            {loadingTradeData ? (
-              <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-            ) : (
-              <ArrowRightLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            )}
+            <ArrowRightLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Trade</span>
           </Button>
           <Button
@@ -486,83 +440,31 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
   // Use Sheet on mobile for better UX
   if (isMobile) {
     return (
-      <>
-        <Sheet open={true} onOpenChange={(open) => !open && onClose()}>
-          <SheetContent side="bottom" className="h-[95vh] p-0 rounded-t-2xl">
-            {modalContent}
-          </SheetContent>
-        </Sheet>
-
-        {tradeMarketData && (
-          <MarketTradeModal
-            open={tradeModalOpen}
-            onOpenChange={setTradeModalOpen}
-            marketData={tradeMarketData}
-          />
-        )}
-
-        <AnalysisSelectionModal
-          open={analysisModalOpen}
-          onOpenChange={setAnalysisModalOpen}
-          marketContext={{
-            eventTitle: trade.title,
-            outcomeQuestion: trade.title,
-            currentOdds: trade.price,
-            volume: trade.price * shares,
-            url: resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`,
-            slug: trade.market_slug,
-            eventSlug: trade.market_slug,
-            image: trade.image
-          }}
-          onSelect={handleAnalysisSelect}
-        />
-      </>
+      <Sheet open={true} onOpenChange={(open) => !open && onClose()}>
+        <SheetContent side="bottom" className="h-[95vh] p-0 rounded-t-2xl">
+          {modalContent}
+        </SheetContent>
+      </Sheet>
     );
   }
 
   return (
-    <>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onClick={onClose}
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-card border border-border rounded-2xl max-w-5xl w-full h-[90vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-card border border-border rounded-2xl max-w-5xl w-full h-[90vh] overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {modalContent}
-        </motion.div>
+        {modalContent}
       </motion.div>
-
-      {tradeMarketData && (
-        <MarketTradeModal
-          open={tradeModalOpen}
-          onOpenChange={setTradeModalOpen}
-          marketData={tradeMarketData}
-        />
-      )}
-
-      <AnalysisSelectionModal
-        open={analysisModalOpen}
-        onOpenChange={setAnalysisModalOpen}
-        marketContext={{
-          eventTitle: trade.title,
-          outcomeQuestion: trade.title,
-          currentOdds: trade.price,
-          volume: trade.price * shares,
-          url: resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`,
-          slug: trade.market_slug,
-          eventSlug: trade.market_slug,
-          image: trade.image
-        }}
-        onSelect={handleAnalysisSelect}
-      />
-    </>
+    </motion.div>
   );
 }
