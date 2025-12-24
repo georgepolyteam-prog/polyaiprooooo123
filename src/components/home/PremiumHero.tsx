@@ -11,10 +11,10 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
   return (
     <div className="relative text-center py-8 sm:py-12">
       {/* Official Builder Badge - Top */}
-      <div className="flex items-center justify-center mb-6 animate-fade-in">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30">
-          <CheckCircle className="w-4 h-4 text-primary" />
-          <span className="text-xs font-semibold text-primary">Official Polymarket Builder</span>
+      <div className="flex items-center justify-center mb-6 animate-fade-in px-4">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 max-w-full">
+          <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+          <span className="text-xs font-semibold text-primary truncate">Official Polymarket Builder</span>
         </div>
       </div>
 
@@ -46,11 +46,11 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
       </div>
 
       {/* Title - Clean typography */}
-      <div className="animate-fade-in" style={{ animationDelay: '100ms' }}>
+      <div className="animate-fade-in px-4" style={{ animationDelay: '100ms' }}>
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3 text-foreground tracking-tight">
           Meet <span className="text-primary">Poly</span>
         </h1>
-        <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto mb-4">
+        <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-md mx-auto mb-4 break-words">
           AI-powered market intelligence for Polymarket
         </p>
         
