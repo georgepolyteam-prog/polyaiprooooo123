@@ -679,106 +679,53 @@
 .animate-delay-500 { animation-delay: 500ms; }
 
 /* ===== CYBERPUNK TOASTS ===== */
+/* ===== PROFESSIONAL TOAST STYLES ===== */
 .toast-cyber {
-  background: linear-gradient(135deg, rgba(15, 15, 20, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 12px !important;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  background: hsl(220 13% 10%) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid hsl(220 10% 20%) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
 }
 
 .toast-success-cyber {
-  border-color: hsl(var(--success) / 0.5) !important;
-  box-shadow: 
-    0 0 20px hsl(var(--success) / 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 hsl(var(--success) / 0.1) !important;
-}
-
-.toast-success-cyber::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, hsl(var(--success) / 0.08) 0%, transparent 50%);
-  pointer-events: none;
+  border-left: 3px solid hsl(217 91% 60%) !important;
 }
 
 .toast-error-cyber {
-  border-color: hsl(var(--destructive) / 0.5) !important;
-  box-shadow: 
-    0 0 20px hsl(var(--destructive) / 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 hsl(var(--destructive) / 0.1) !important;
-}
-
-.toast-error-cyber::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, hsl(var(--destructive) / 0.08) 0%, transparent 50%);
-  pointer-events: none;
+  border-left: 3px solid hsl(0 84% 60%) !important;
 }
 
 .toast-warning-cyber {
-  border-color: rgba(251, 191, 36, 0.5) !important;
-  box-shadow: 
-    0 0 20px rgba(251, 191, 36, 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(251, 191, 36, 0.1) !important;
-}
-
-.toast-warning-cyber::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.08) 0%, transparent 50%);
-  pointer-events: none;
+  border-left: 3px solid hsl(45 93% 47%) !important;
 }
 
 .toast-info-cyber {
-  border-color: hsl(var(--poly-cyan) / 0.5) !important;
-  box-shadow: 
-    0 0 20px hsl(var(--poly-cyan) / 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 hsl(var(--poly-cyan) / 0.1) !important;
-}
-
-.toast-info-cyber::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  background: linear-gradient(135deg, hsl(var(--poly-cyan) / 0.08) 0%, transparent 50%);
-  pointer-events: none;
+  border-left: 3px solid hsl(217 91% 60%) !important;
 }
 
 /* Toast text styling */
 [data-sonner-toast] [data-title] {
-  font-weight: 600 !important;
-  letter-spacing: 0.01em;
+  font-weight: 500 !important;
+  letter-spacing: 0;
 }
 
 [data-sonner-toast] [data-description] {
-  opacity: 0.8;
+  opacity: 0.7;
   font-size: 0.875rem;
 }
 
 /* Toast close button */
 [data-sonner-toast] [data-close-button] {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  opacity: 0.6;
-  transition: all 0.2s ease;
+  background: transparent !important;
+  border: 1px solid hsl(220 10% 25%) !important;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
 }
 
 [data-sonner-toast] [data-close-button]:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: hsl(220 10% 15%) !important;
 }
 
 /* ===== MARKET CARD STYLES ===== */

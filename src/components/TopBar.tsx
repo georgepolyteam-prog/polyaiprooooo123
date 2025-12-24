@@ -85,8 +85,8 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 <span className="font-bold text-sm sm:text-base lg:text-lg bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent leading-tight">
                   Poly
                 </span>
-                <span className="text-[8px] sm:text-[10px] lg:text-xs text-gray-400 leading-tight whitespace-nowrap">
-                  Analyze. Trade. Win.
+                <span className="text-[8px] sm:text-[10px] lg:text-xs text-muted-foreground leading-tight whitespace-nowrap">
+                  Market Terminal
                 </span>
               </div>
             </Link>
@@ -258,17 +258,17 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
             )}
             <button
               onClick={copyCA}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20 transition-all cursor-pointer group"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600/20 transition-all cursor-pointer group"
               title="Click to copy POLY token CA"
             >
-              <span className="text-xs font-bold text-purple-400">$POLY</span>
-              <span className="text-xs text-gray-400 font-mono max-w-[80px] truncate">
+              <span className="text-xs font-bold text-blue-400">$POLY</span>
+              <span className="text-xs text-muted-foreground font-mono max-w-[80px] truncate">
                 {POLY_CA === "Coming Soon" ? "Soon" : `${POLY_CA.slice(0, 4)}...${POLY_CA.slice(-4)}`}
               </span>
               {copied ? (
                 <Check className="w-3 h-3 text-emerald-400" />
               ) : (
-                <Copy className="w-3 h-3 text-gray-500 group-hover:text-purple-400 transition-colors" />
+                <Copy className="w-3 h-3 text-muted-foreground group-hover:text-blue-400 transition-colors" />
               )}
             </button>
 
