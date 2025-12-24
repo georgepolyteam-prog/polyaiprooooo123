@@ -21,6 +21,7 @@ import Disclaimer from "./pages/Disclaimer";
 import Help from "./pages/Help";
 import AdminPanel from "./pages/AdminPanel";
 import About from "./pages/About";
+import Capabilities from "./pages/Capabilities";
 
 const AppContent = () => {
   const { isHighTraffic } = useUserPresence();
@@ -46,6 +47,7 @@ const AppContent = () => {
           <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="/help" element={<Help />} />
           <Route path="/about" element={<About />} />
+          <Route path="/capabilities" element={<Capabilities />} />
           <Route path="/adminpanel" element={<AdminPanel />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

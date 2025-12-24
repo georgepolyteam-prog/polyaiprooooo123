@@ -1,6 +1,7 @@
 import { Sparkles, Search, LineChart, Activity } from "lucide-react";
 import polyfactualLogo from "@/assets/polyfactual-logo.png";
 import polymarketLogo from "@/assets/polymarket-logo.png";
+import domeLogo from "@/assets/dome-logo.png";
 
 const capabilities = [
   { 
@@ -42,17 +43,16 @@ export const PremiumCapabilities = () => {
             </h3>
             {cap.hasPolyfactual ? (
               <div className="flex items-center justify-center gap-1.5">
-                <img src={polyfactualLogo} alt="Polyfactual" className="w-3.5 h-3.5 object-contain" />
-                <span className="text-xs text-muted-foreground">Polyfactual</span>
+                <img src={polyfactualLogo} alt="Polyfactual" className="h-3.5 object-contain" />
               </div>
             ) : cap.hasDataPartners ? (
               <div className="flex items-center justify-center gap-2">
+                <img src={polymarketLogo} alt="Polymarket" className="h-3.5 object-contain" />
+                <span className="text-muted-foreground/40">+</span>
                 <div className="flex items-center gap-1">
-                  <img src={polymarketLogo} alt="Polymarket" className="w-3.5 h-3.5 object-contain" />
-                  <span className="text-xs text-muted-foreground">Polymarket</span>
+                  <img src={domeLogo} alt="Dome" className="h-4 object-contain" />
+                  <span className="text-xs font-semibold text-[#7C3AED]">Dome</span>
                 </div>
-                <span className="text-muted-foreground/40">•</span>
-                <span className="text-xs font-medium text-secondary">Dome</span>
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">{cap.text}</p>
