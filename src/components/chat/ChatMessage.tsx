@@ -494,29 +494,86 @@ const formatText = (text: string) => {
   const lines = text.split("\n");
 
   return lines.map((line, index) => {
-    if (line.trim() === "") return <div key={index} className="h-2" />;
-
-    if (/^[🎯💭⚠️📊🏁📈⚡🔥✨💡🚨]/.test(line.trim())) {
+    const trimmedLine = line.trim();
+    
+    // Empty lines - spacing
+    if (trimmedLine === "") return <div key={index} className="h-2" />;
+    
+    // Main header: ## Title
+    if (trimmedLine.startsWith("## ")) {
+      const headerText = trimmedLine.slice(3);
       return (
-        <div key={index} className="font-semibold text-foreground mt-3 mb-1">
-          {formatInlineText(line)}
+        <h2 key={index} className="text-lg font-bold text-foreground mt-5 mb-2 first:mt-0">
+          {formatInlineText(headerText)}
+        </h2>
+      );
+    }
+    
+    // Sub header: ### Subtitle
+    if (trimmedLine.startsWith("### ")) {
+      const headerText = trimmedLine.slice(4);
+      return (
+        <h3 key={index} className="text-base font-semibold text-foreground mt-4 mb-1.5 border-l-2 border-primary/50 pl-3">
+          {formatInlineText(headerText)}
+        </h3>
+      );
+    }
+    
+    // Key-value bold line at start: **Label:** Value (like "Current Odds: 25%")
+    if (trimmedLine.startsWith("**") && trimmedLine.includes(":**")) {
+      return (
+        <div key={index} className="py-1.5 px-3 my-1 rounded-lg bg-muted/40 text-sm">
+          {formatInlineText(trimmedLine)}
         </div>
       );
     }
 
-    if (line.trim().startsWith("• ") || line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-      const bulletContent = line.trim().slice(2);
+    // Emoji headers
+    if (/^[🎯💭⚠️📊🏁📈⚡🔥✨💡🚨]/.test(trimmedLine)) {
       return (
-        <div key={index} className="flex gap-2 ml-2 my-1">
-          <span className="text-primary">•</span>
-          <span className="text-muted-foreground">{formatInlineText(bulletContent)}</span>
+        <div key={index} className="font-semibold text-foreground mt-4 mb-1.5">
+          {formatInlineText(trimmedLine)}
+        </div>
+      );
+    }
+    
+    // Bullet points
+    if (trimmedLine.startsWith("• ") || trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ")) {
+      const bulletContent = trimmedLine.slice(2);
+      return (
+        <div key={index} className="flex gap-2 ml-3 my-1">
+          <span className="text-primary mt-0.5">•</span>
+          <span className="text-muted-foreground text-sm leading-relaxed">{formatInlineText(bulletContent)}</span>
+        </div>
+      );
+    }
+    
+    // Numbered lists (1., 2., etc.)
+    const numberMatch = trimmedLine.match(/^(\d+)\.\s+(.+)/);
+    if (numberMatch) {
+      return (
+        <div key={index} className="flex gap-2 ml-3 my-1">
+          <span className="text-primary/70 font-medium min-w-[1.2rem] text-sm">{numberMatch[1]}.</span>
+          <span className="text-muted-foreground text-sm leading-relaxed">{formatInlineText(numberMatch[2])}</span>
+        </div>
+      );
+    }
+    
+    // For YES/For NO special handling
+    if (trimmedLine.toLowerCase().startsWith("for yes") || 
+        trimmedLine.toLowerCase().startsWith("for no") ||
+        trimmedLine.toLowerCase().startsWith("bottom line")) {
+      return (
+        <div key={index} className="font-semibold text-foreground mt-3 mb-1 text-sm">
+          {formatInlineText(trimmedLine)}
         </div>
       );
     }
 
+    // Regular paragraph
     return (
-      <p key={index} className="text-muted-foreground my-1 leading-relaxed">
-        {formatInlineText(line)}
+      <p key={index} className="text-muted-foreground my-1.5 leading-relaxed text-sm">
+        {formatInlineText(trimmedLine)}
       </p>
     );
   });
