@@ -53,7 +53,7 @@
 
 @layer base {
   :root {
-    /* Clean Color System - Light */
+    /* Clean Color System - Light (Blue Theme) */
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
     
@@ -63,11 +63,11 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     
-    --primary: 172 66% 45%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 189 94% 43%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 221 83% 53%;
+    --secondary-foreground: 0 0% 100%;
     
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
@@ -86,34 +86,34 @@
     
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 172 66% 45%;
+    --ring: 217 91% 60%;
     
     --radius: 0.75rem;
     
-    /* Teal/Cyan Theme Colors */
-    --poly-purple: 172 66% 45%;
-    --poly-cyan: 189 94% 43%;
+    /* Blue Theme Colors (Polymarket-style) */
+    --poly-purple: 217 91% 60%;
+    --poly-cyan: 221 83% 53%;
     --poly-pink: 199 89% 48%;
     --poly-blue: 217 91% 60%;
     
     /* Glow colors */
-    --glow-purple: 172 100% 50%;
-    --glow-cyan: 189 100% 50%;
+    --glow-purple: 217 100% 60%;
+    --glow-cyan: 221 100% 55%;
     --glow-pink: 199 100% 55%;
     
     /* Sidebar - light mode */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 172 66% 45%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 172 66% 45%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   .dark {
-    /* Deep Space Blacks - Teal/Cyan Theme */
+    /* Deep Space Blacks - Blue Theme (Polymarket-style) */
     --background: 240 20% 3.5%;
     --foreground: 210 40% 98%;
     
@@ -123,10 +123,10 @@
     --popover: 240 15% 6%;
     --popover-foreground: 210 40% 98%;
     
-    --primary: 172 66% 50%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 189 94% 43%;
+    --secondary: 221 83% 53%;
     --secondary-foreground: 0 0% 100%;
     
     --muted: 240 10% 12%;
@@ -146,17 +146,17 @@
     
     --border: 240 10% 15%;
     --input: 240 10% 15%;
-    --ring: 172 66% 50%;
+    --ring: 217 91% 60%;
     
     /* Sidebar - dark mode */
     --sidebar-background: 240 15% 6%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 172 66% 50%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 10% 12%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 240 10% 20%;
-    --sidebar-ring: 172 66% 50%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 
@@ -180,8 +180,8 @@
 
   .dark body {
     background: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(172 66% 15% / 0.4) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(189 94% 20% / 0.25) 0%, transparent 40%),
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(217 91% 15% / 0.4) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(221 83% 20% / 0.25) 0%, transparent 40%),
       radial-gradient(ellipse 40% 30% at 20% 90%, hsl(199 89% 20% / 0.15) 0%, transparent 30%),
       hsl(240 20% 3.5%);
     background-attachment: fixed;
