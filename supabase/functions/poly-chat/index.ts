@@ -5082,8 +5082,21 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
     // ============= DEEP RESEARCH MODE =============
     if (deepResearch) {
       console.log("[DeepResearch] Deep research mode enabled, fetching comprehensive data...");
-      const userQuery = lastUserMessage?.content || '';
-      const researchData = await getDeepResearch(userQuery);
+      
+      // Use market TITLE for research, not the raw URL
+      let researchQuery = lastUserMessage?.content || '';
+      
+      // Extract market title from fetched data if available (set earlier when URL was detected)
+      if (fetchedMarketInfo?.question) {
+        researchQuery = fetchedMarketInfo.question;
+        console.log(`[DeepResearch] Using market title: "${researchQuery}"`);
+      }
+      
+      // Strip any URLs from the query - we want the title only
+      researchQuery = researchQuery.replace(/https?:\/\/[^\s]+/g, '').trim();
+      console.log(`[DeepResearch] Final research query: "${researchQuery.substring(0, 100)}..."`);
+      
+      const researchData = await getDeepResearch(researchQuery);
       
       if (researchData) {
         // Extract short summary (first 2-3 sentences) and key news
@@ -5099,18 +5112,38 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
           formattedResponse += `\n\n## Key Developments\n\n${newsContent}`;
         }
         
-        // Show 10-15 sources for comprehensive coverage
+        // Filter out prediction market sources - only keep news/analysis
         if (researchData.citations && researchData.citations.length > 0) {
-          formattedResponse += '\n\n## Sources\n';
-          researchData.citations.slice(0, 15).forEach((c: any, i: number) => {
-            const url = c.url || c.link || '';
-            const title = c.title || c.name || (url ? new URL(url).hostname : 'Source');
-            if (url) {
-              formattedResponse += `${i + 1}. [${title}](${url})\n`;
-            } else {
-              formattedResponse += `${i + 1}. ${title}\n`;
-            }
+          const excludedDomains = [
+            'polymarket.com',
+            'kalshi.com',
+            'predictit.org',
+            'metaculus.com',
+            'manifold.markets',
+            'augur.net',
+            'betfair.com',
+            'smarkets.com'
+          ];
+          
+          const filteredCitations = researchData.citations.filter((c: any) => {
+            const url = (c.url || c.link || '').toLowerCase();
+            return !excludedDomains.some(domain => url.includes(domain));
           });
+          
+          console.log(`[DeepResearch] Filtered sources: ${filteredCitations.length} from ${researchData.citations.length} total`);
+          
+          if (filteredCitations.length > 0) {
+            formattedResponse += '\n\n## Sources\n';
+            filteredCitations.slice(0, 15).forEach((c: any, i: number) => {
+              const url = c.url || c.link || '';
+              const title = c.title || c.name || (url ? new URL(url).hostname : 'Source');
+              if (url) {
+                formattedResponse += `${i + 1}. [${title}](${url})\n`;
+              } else {
+                formattedResponse += `${i + 1}. ${title}\n`;
+              }
+            });
+          }
         }
         
         console.log("[DeepResearch] ✅ Returning research results");
