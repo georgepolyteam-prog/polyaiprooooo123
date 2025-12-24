@@ -38,22 +38,18 @@ export const PolyfactualSourceCard = ({ title, url, index }: PolyfactualSourceCa
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "group relative flex items-center gap-3 p-4 rounded-xl",
+        "group relative flex items-center gap-2 p-3 rounded-lg",
         "bg-[#161b22] hover:bg-[#1c2128] border border-white/5 hover:border-emerald-500/30",
-        "transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10",
-        "hover:-translate-y-0.5"
+        "transition-all duration-200 hover:shadow-md hover:shadow-emerald-500/10"
       )}
     >
-      {/* Hover glow effect */}
-      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      
       {/* Source number badge */}
-      <div className="relative flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-600 to-cyan-600 text-white flex items-center justify-center text-sm font-bold shadow-md shadow-emerald-500/20">
+      <div className="relative flex-shrink-0 w-5 h-5 rounded bg-gradient-to-br from-emerald-600 to-cyan-600 text-white flex items-center justify-center text-xs font-bold">
         {index + 1}
       </div>
       
       {/* Favicon */}
-      <div className="relative flex-shrink-0 w-6 h-6 rounded-md overflow-hidden bg-[#21262d] flex items-center justify-center">
+      <div className="relative flex-shrink-0 w-4 h-4 rounded overflow-hidden bg-[#21262d] flex items-center justify-center">
         {faviconUrl ? (
           <img 
             src={faviconUrl} 
@@ -70,16 +66,16 @@ export const PolyfactualSourceCard = ({ title, url, index }: PolyfactualSourceCa
       
       {/* Content */}
       <div className="relative flex-1 min-w-0">
-        <p className="text-sm font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
+        <p className="text-xs font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
           {title || domain}
         </p>
-        <p className="text-xs text-gray-500 truncate mt-0.5">
+        <p className="text-[10px] text-gray-500 truncate">
           {domain}
         </p>
       </div>
       
       {/* External link icon */}
-      <ExternalLink className="relative flex-shrink-0 w-4 h-4 text-gray-600 group-hover:text-emerald-400 transition-colors" />
+      <ExternalLink className="relative flex-shrink-0 w-3 h-3 text-gray-600 group-hover:text-emerald-400 transition-colors" />
     </a>
   );
 };
