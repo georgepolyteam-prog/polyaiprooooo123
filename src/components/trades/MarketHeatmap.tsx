@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Flame, Activity, ExternalLink, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronUp, Flame, Activity, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface MarketVolume {
@@ -91,31 +91,19 @@ export function MarketHeatmap({ markets, onMarketClick, onAnalyze, selectedMarke
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-1.5 mt-2">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAnalyze?.(market);
-                    }}
-                    variant="ghost"
-                    size="sm"
-                    className="flex-1 h-8 text-xs gap-1 bg-muted/50 hover:bg-muted min-h-[36px]"
-                  >
-                    <Sparkles className="w-3 h-3 text-primary" />
-                    Analyze
-                  </Button>
-                  <a
-                    href={`https://polymarket.com/event/${market.slug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex-1 flex items-center justify-center gap-1 h-8 rounded-md text-xs font-medium bg-primary/90 hover:bg-primary text-primary-foreground min-h-[36px] transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Trade
-                  </a>
-                </div>
+                {/* Action Button - Only Analyze */}
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAnalyze?.(market);
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full mt-2 h-9 text-xs gap-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 min-h-[40px] font-medium"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Analyze
+                </Button>
               </div>
             );
           })}
