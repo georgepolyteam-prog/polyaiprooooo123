@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw } from 'lucide-react';
+import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
 import { TradeDetailModal } from '@/components/trades/TradeDetailModal';
@@ -22,6 +22,7 @@ interface Trade {
   order_hash: string;
   user: string;
   taker: string;
+  image?: string;
 }
 
 export default function LiveTrades() {
@@ -32,6 +33,8 @@ export default function LiveTrades() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
+  const [queuedCount, setQueuedCount] = useState(0);
+  const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
   const pausedTradesRef = useRef<Trade[]>([]);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -41,7 +44,6 @@ export default function LiveTrades() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
-      // Get the WebSocket URL from edge function if we don't have it
       if (!wsUrlRef.current) {
         setLoading(true);
         const { data, error } = await supabase.functions.invoke('dome-ws-url');
@@ -64,7 +66,6 @@ export default function LiveTrades() {
         console.log('WebSocket connected to Dome');
         setConnected(true);
         
-        // Subscribe to ALL trades
         ws.send(JSON.stringify({
           action: "subscribe",
           platform: "polymarket",
@@ -85,11 +86,24 @@ export default function LiveTrades() {
         
         if (data.type === 'event') {
           const newTrade = data.data;
+          const tradeId = newTrade.order_hash || `${newTrade.tx_hash}-${newTrade.timestamp}`;
           
           if (paused) {
             pausedTradesRef.current.unshift(newTrade);
+            setQueuedCount(pausedTradesRef.current.length);
           } else {
+            // Track new trade for highlight animation
+            setNewTradeIds(prev => new Set([...prev, tradeId]));
             setTrades(prev => [newTrade, ...prev.slice(0, 99)]);
+            
+            // Remove highlight after 3 seconds
+            setTimeout(() => {
+              setNewTradeIds(prev => {
+                const next = new Set(prev);
+                next.delete(tradeId);
+                return next;
+              });
+            }, 3000);
           }
         }
       };
@@ -102,8 +116,6 @@ export default function LiveTrades() {
       ws.onclose = () => {
         console.log('WebSocket disconnected');
         setConnected(false);
-        
-        // Reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
       };
 
@@ -129,23 +141,11 @@ export default function LiveTrades() {
 
   const togglePause = () => {
     if (paused) {
-      // Resume: add paused trades to feed
       setTrades(prev => [...pausedTradesRef.current, ...prev].slice(0, 100));
       pausedTradesRef.current = [];
+      setQueuedCount(0);
     }
     setPaused(!paused);
-  };
-
-  const handleMouseEnter = () => {
-    if (!paused) setPaused(true);
-  };
-
-  const handleMouseLeave = () => {
-    if (paused && pausedTradesRef.current.length > 0) {
-      setTrades(prev => [...pausedTradesRef.current, ...prev].slice(0, 100));
-      pausedTradesRef.current = [];
-    }
-    setPaused(false);
   };
 
   const filteredTrades = trades.filter(trade => {
@@ -161,54 +161,57 @@ export default function LiveTrades() {
 
   const formatVolume = (price: number, shares: number) => {
     const volume = price * shares;
-    if (volume >= 1000) {
-      return `$${(volume / 1000).toFixed(1)}k`;
-    }
+    if (volume >= 1000) return `$${(volume / 1000).toFixed(1)}k`;
     return `$${volume.toFixed(2)}`;
+  };
+
+  const isWhale = (price: number, shares: number) => {
+    return (price * shares) >= 1000;
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopBar />
       
-      {/* Animated background effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-[120px] animate-pulse" />
         <div className="absolute top-1/3 -right-40 w-96 h-96 bg-secondary/15 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-accent/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
       </div>
 
       <main className="flex-1 relative z-10 container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+            <h1 className="text-3xl sm:text-4xl font-bold mb-1 bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
               Live Trade Feed
             </h1>
-            <p className="text-muted-foreground text-sm sm:text-base">
+            <p className="text-muted-foreground text-sm">
               Real-time Polymarket activity • Powered by Dome
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Connection Status */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm ${
               connected 
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                ? 'bg-success/10 border-success/30 text-success' 
                 : 'bg-destructive/10 border-destructive/30 text-destructive'
             }`}>
-              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-destructive'}`} />
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
               <span className="font-medium">{connected ? 'Live' : 'Disconnected'}</span>
             </div>
 
-            {/* Pause/Resume Button */}
             <Button
               onClick={togglePause}
               variant={paused ? "default" : "secondary"}
-              className="gap-2"
+              className="gap-2 relative"
             >
               {paused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
               {paused ? 'Resume' : 'Pause'}
+              {paused && queuedCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                  {queuedCount}
+                </span>
+              )}
             </Button>
           </div>
         </div>
@@ -219,7 +222,6 @@ export default function LiveTrades() {
             onClick={() => setFilter('all')}
             variant={filter === 'all' ? 'default' : 'ghost'}
             size="sm"
-            className="gap-2"
           >
             All Trades
           </Button>
@@ -227,111 +229,155 @@ export default function LiveTrades() {
             onClick={() => setFilter('buy')}
             variant={filter === 'buy' ? 'default' : 'ghost'}
             size="sm"
-            className={`gap-2 ${filter === 'buy' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+            className={filter === 'buy' ? 'bg-success hover:bg-success/90' : ''}
           >
-            <TrendingUp className="w-4 h-4" />
+            <TrendingUp className="w-4 h-4 mr-1" />
             Buys
           </Button>
           <Button
             onClick={() => setFilter('sell')}
             variant={filter === 'sell' ? 'default' : 'ghost'}
             size="sm"
-            className={`gap-2 ${filter === 'sell' ? 'bg-destructive hover:bg-destructive/90' : ''}`}
+            className={filter === 'sell' ? 'bg-destructive hover:bg-destructive/90' : ''}
           >
-            <TrendingDown className="w-4 h-4" />
+            <TrendingDown className="w-4 h-4 mr-1" />
             Sells
           </Button>
           <div className="ml-auto text-sm text-muted-foreground">
-            {filteredTrades.length} trades shown
+            {filteredTrades.length} trades
           </div>
         </div>
 
-        {/* Trades Feed */}
-        <div 
-          className="space-y-2"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <AnimatePresence mode="popLayout">
-            {filteredTrades.map((trade, index) => (
-              <motion.div
-                key={`${trade.order_hash}-${index}`}
-                initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.3 }}
-                onClick={() => setSelectedTrade(trade)}
-                className="group relative glass-card rounded-xl p-4 sm:p-5 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 cursor-pointer"
-              >
-                {/* Glow effect on hover */}
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary/0 to-accent/0 group-hover:from-primary/5 group-hover:to-accent/5 transition-all duration-300" />
+        {/* Paused Banner */}
+        {paused && queuedCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2 text-primary">
+              <AlertCircle className="w-4 h-4" />
+              <span className="text-sm font-medium">{queuedCount} new trades waiting</span>
+            </div>
+            <Button size="sm" onClick={togglePause} className="gap-1">
+              <Play className="w-3 h-3" />
+              Resume
+            </Button>
+          </motion.div>
+        )}
 
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  {/* Left: Market Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-foreground font-semibold text-base sm:text-lg mb-1 truncate group-hover:text-primary transition-colors">
-                      {trade.title}
-                    </h3>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      <span className="font-mono">{trade.user.slice(0, 6)}...{trade.user.slice(-4)}</span>
-                      <span>•</span>
-                      <span>{formatTime(trade.timestamp)}</span>
+        {/* Trades Feed - Table-like layout */}
+        <div className="rounded-xl border border-border overflow-hidden bg-card/50 backdrop-blur-sm">
+          {/* Table Header */}
+          <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-3 bg-muted/30 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="col-span-5">Market</div>
+            <div className="col-span-2">Side</div>
+            <div className="col-span-2 text-right">Price</div>
+            <div className="col-span-2 text-right">Volume</div>
+            <div className="col-span-1 text-right">Time</div>
+          </div>
+
+          {/* Trades List */}
+          <div className="divide-y divide-border/50">
+            <AnimatePresence initial={false}>
+              {filteredTrades.map((trade, index) => {
+                const tradeId = trade.order_hash || `${trade.tx_hash}-${trade.timestamp}`;
+                const isNew = newTradeIds.has(tradeId);
+                const whale = isWhale(trade.price, trade.shares_normalized || trade.shares);
+                
+                return (
+                  <motion.div
+                    key={tradeId}
+                    initial={{ opacity: 0, backgroundColor: 'hsl(var(--primary) / 0.2)' }}
+                    animate={{ 
+                      opacity: 1, 
+                      backgroundColor: isNew ? 'hsl(var(--primary) / 0.1)' : 'transparent'
+                    }}
+                    transition={{ duration: 0.5 }}
+                    onClick={() => setSelectedTrade(trade)}
+                    className={`group grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${
+                      whale ? 'bg-warning/5' : ''
+                    }`}
+                  >
+                    {/* Market Info */}
+                    <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                      {trade.image ? (
+                        <img 
+                          src={trade.image} 
+                          alt="" 
+                          className="w-10 h-10 rounded-lg object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <Activity className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
+                          {trade.title}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {trade.user.slice(0, 6)}...{trade.user.slice(-4)}
+                        </div>
+                      </div>
+                      {whale && (
+                        <span className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold bg-warning/20 text-warning rounded">
+                          🐋 WHALE
+                        </span>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Right: Trade Details */}
-                  <div className="flex items-center gap-3 sm:gap-6">
-                    {/* Side Badge */}
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-sm ${
-                      trade.side === 'BUY' 
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                        : 'bg-destructive/20 text-destructive border border-destructive/30'
-                    }`}>
-                      {trade.side === 'BUY' ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      {trade.side} {trade.token_label}
+                    {/* Side */}
+                    <div className="sm:col-span-2 flex items-center">
+                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${
+                        trade.side === 'BUY' 
+                          ? 'bg-success/20 text-success' 
+                          : 'bg-destructive/20 text-destructive'
+                      }`}>
+                        {trade.side === 'BUY' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        {trade.side} {trade.token_label}
+                      </div>
                     </div>
 
                     {/* Price */}
-                    <div className="text-right">
-                      <div className="text-xl sm:text-2xl font-bold text-foreground">
+                    <div className="sm:col-span-2 flex items-center sm:justify-end">
+                      <span className="text-foreground font-mono font-semibold">
                         ${trade.price.toFixed(3)}
-                      </div>
-                      <div className="text-xs sm:text-sm text-muted-foreground">
-                        {trade.shares_normalized?.toFixed(2) || trade.shares?.toFixed(2)} shares
-                      </div>
+                      </span>
                     </div>
 
                     {/* Volume */}
-                    <div className="text-right min-w-[70px] sm:min-w-[90px]">
-                      <div className="text-base sm:text-lg font-semibold text-primary">
+                    <div className="sm:col-span-2 flex items-center sm:justify-end">
+                      <span className={`font-mono font-bold ${whale ? 'text-warning' : 'text-primary'}`}>
                         {formatVolume(trade.price, trade.shares_normalized || trade.shares)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Volume</div>
+                      </span>
                     </div>
 
-                    {/* Arrow indicator */}
-                    <div className="hidden sm:block text-primary group-hover:translate-x-1 transition-transform">
-                      <ExternalLink className="w-4 h-4" />
+                    {/* Time */}
+                    <div className="sm:col-span-1 flex items-center sm:justify-end">
+                      <span className="text-xs text-muted-foreground">
+                        {formatTime(trade.timestamp)}
+                      </span>
                     </div>
-                  </div>
-                </div>
 
-                {/* Pulse animation for new trades */}
-                {index === 0 && !paused && (
-                  <motion.div
-                    initial={{ opacity: 1 }}
-                    animate={{ opacity: 0 }}
-                    transition={{ duration: 2 }}
-                    className="absolute inset-0 rounded-xl border-2 border-primary/50"
-                  />
-                )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                    {/* Mobile: Show whale badge and external link */}
+                    <div className="sm:hidden flex items-center justify-between">
+                      {whale && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold bg-warning/20 text-warning rounded">
+                          🐋 WHALE
+                        </span>
+                      )}
+                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Empty State */}
-        {filteredTrades.length === 0 && (
+        {filteredTrades.length === 0 && !loading && (
           <div className="text-center py-20">
             <Activity className="w-16 h-16 text-muted-foreground mx-auto mb-4 animate-pulse" />
             <p className="text-muted-foreground text-lg">Waiting for trades...</p>
@@ -339,22 +385,25 @@ export default function LiveTrades() {
               {connected ? 'Connected to live feed' : 'Reconnecting...'}
             </p>
             {!connected && (
-              <Button 
-                onClick={connectWebSocket} 
-                variant="outline" 
-                className="mt-4 gap-2"
-              >
+              <Button onClick={connectWebSocket} variant="outline" className="mt-4 gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Reconnect
               </Button>
             )}
           </div>
         )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-20">
+            <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-muted-foreground">Connecting to live feed...</p>
+          </div>
+        )}
       </main>
 
       <Footer />
 
-      {/* Trade Detail Modal */}
       <AnimatePresence>
         {selectedTrade && (
           <TradeDetailModal

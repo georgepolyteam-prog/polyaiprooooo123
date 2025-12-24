@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Trade {
   token_id: string;
@@ -17,6 +18,7 @@ interface Trade {
   title: string;
   timestamp: number;
   user: string;
+  image?: string;
 }
 
 interface PnLData {
@@ -50,25 +52,20 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
 
   async function fetchWalletData() {
     try {
-      const [pnlRes, tradesRes, metricsRes] = await Promise.all([
-        fetch(`https://api.domeapi.io/v1/polymarket/wallet/pnl/${trade.user}?granularity=day`),
-        fetch(`https://api.domeapi.io/v1/polymarket/orders?user=${trade.user}&limit=50`),
-        fetch(`https://api.domeapi.io/v1/polymarket/wallet?eoa=${trade.user}&with_metrics=true`)
-      ]);
+      const { data, error } = await supabase.functions.invoke('wallet-analytics', {
+        body: { address: trade.user }
+      });
 
-      if (pnlRes.ok) {
-        const pnlJson = await pnlRes.json();
-        setPnlData(pnlJson);
+      if (error) {
+        console.error('Error fetching wallet analytics:', error);
+        setLoading(false);
+        return;
       }
 
-      if (tradesRes.ok) {
-        const tradesJson = await tradesRes.json();
-        setWalletTrades(tradesJson.orders || []);
-      }
-
-      if (metricsRes.ok) {
-        const metricsJson = await metricsRes.json();
-        setWalletMetrics(metricsJson.wallet_metrics);
+      if (data) {
+        setPnlData(data.pnlData);
+        setWalletTrades(data.recentTrades || []);
+        setWalletMetrics(data.walletMetrics);
       }
     } catch (error) {
       console.error('Error fetching wallet data:', error);
@@ -88,6 +85,12 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
 
   const shares = trade.shares_normalized || trade.shares || 0;
 
+  const formatVolume = (volume: number) => {
+    if (volume >= 1000000) return `$${(volume / 1000000).toFixed(2)}M`;
+    if (volume >= 1000) return `$${(volume / 1000).toFixed(1)}K`;
+    return `$${volume.toFixed(2)}`;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -105,14 +108,23 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
       >
         {/* Header */}
         <div className="sticky top-0 bg-card/95 backdrop-blur-xl border-b border-border p-4 sm:p-6 flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 line-clamp-2">
-              {trade.title}
-            </h2>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-muted-foreground text-sm">
-              <span className="font-mono text-primary">{trade.user.slice(0, 10)}...{trade.user.slice(-8)}</span>
-              <span className="hidden sm:inline">•</span>
-              <span>{new Date(trade.timestamp * 1000).toLocaleString()}</span>
+          <div className="flex gap-4 flex-1 min-w-0">
+            {trade.image && (
+              <img 
+                src={trade.image} 
+                alt={trade.title}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shrink-0"
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 line-clamp-2">
+                {trade.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-muted-foreground text-sm">
+                <span className="font-mono text-primary">{trade.user.slice(0, 10)}...{trade.user.slice(-8)}</span>
+                <span className="hidden sm:inline">•</span>
+                <span>{new Date(trade.timestamp * 1000).toLocaleString()}</span>
+              </div>
             </div>
           </div>
           <Button
@@ -136,7 +148,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
               <div>
                 <div className="text-muted-foreground text-sm mb-1">Side</div>
                 <div className={`text-xl sm:text-2xl font-bold flex items-center gap-2 ${
-                  trade.side === 'BUY' ? 'text-emerald-400' : 'text-destructive'
+                  trade.side === 'BUY' ? 'text-success' : 'text-destructive'
                 }`}>
                   {trade.side === 'BUY' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                   {trade.side} {trade.token_label}
@@ -180,16 +192,16 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
               {/* Wallet Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className={`glass-card rounded-xl p-4 sm:p-6 border ${
-                  pnlIsPositive ? 'border-emerald-500/30' : 'border-destructive/30'
+                  pnlIsPositive ? 'border-success/30' : 'border-destructive/30'
                 }`}>
                   <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
                     <Target className="w-4 h-4" />
                     Total PnL
                   </div>
                   <div className={`text-xl sm:text-2xl md:text-3xl font-bold ${
-                    pnlIsPositive ? 'text-emerald-400' : 'text-destructive'
+                    pnlIsPositive ? 'text-success' : 'text-destructive'
                   }`}>
-                    {pnlIsPositive ? '+' : ''}${totalPnL.toFixed(2)}
+                    {pnlIsPositive ? '+' : ''}{formatVolume(totalPnL)}
                   </div>
                 </div>
                 <div className="glass-card rounded-xl p-4 sm:p-6">
@@ -198,7 +210,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                     Total Volume
                   </div>
                   <div className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                    ${walletMetrics?.total_volume?.toFixed(2) || '0'}
+                    {formatVolume(walletMetrics?.total_volume || 0)}
                   </div>
                 </div>
                 <div className="glass-card rounded-xl p-4 sm:p-6">
@@ -233,8 +245,8 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                       <AreaChart data={chartData}>
                         <defs>
                           <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={pnlIsPositive ? "#10b981" : "#ef4444"} stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor={pnlIsPositive ? "#10b981" : "#ef4444"} stopOpacity={0}/>
+                            <stop offset="5%" stopColor={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"} stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"} stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -264,7 +276,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                         <Area
                           type="monotone"
                           dataKey="pnl"
-                          stroke={pnlIsPositive ? "#10b981" : "#ef4444"}
+                          stroke={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
                           strokeWidth={2}
                           fill="url(#pnlGradient)"
                         />
@@ -294,7 +306,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                           <div className="flex items-center gap-3 sm:gap-4">
                             <div className={`px-2 py-1 rounded text-xs sm:text-sm font-bold ${
                               t.side === 'BUY' 
-                                ? 'bg-emerald-500/20 text-emerald-400' 
+                                ? 'bg-success/20 text-success' 
                                 : 'bg-destructive/20 text-destructive'
                             }`}>
                               {t.side}
