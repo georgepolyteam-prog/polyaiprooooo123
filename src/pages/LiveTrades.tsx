@@ -48,6 +48,8 @@ interface MarketContext {
 const STALE_THRESHOLD_MS = 15000;
 const WATCHDOG_INTERVAL_MS = 5000;
 const HARD_RECONNECT_INTERVAL_MS = 300000;
+const CONNECTION_TIMEOUT_MS = 10000; // 10s timeout for initial connection
+const FALLBACK_POLL_INTERVAL_MS = 3000; // Poll REST every 3s when WS is down
 const WHALE_THRESHOLD = 1000; // $1k+
 const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
@@ -62,6 +64,7 @@ export default function LiveTrades() {
   const [queuedCount, setQueuedCount] = useState(0);
   const [lastUpdateAgo, setLastUpdateAgo] = useState<number>(0);
   const [tradesPerMinute, setTradesPerMinute] = useState(0);
+  const [usingFallback, setUsingFallback] = useState(false);
   
   // Advanced filters
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
@@ -89,6 +92,9 @@ export default function LiveTrades() {
   const pendingSlugsRef = useRef<Set<string>>(new Set());
   const imageFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackPollRef = useRef<NodeJS.Timeout | null>(null);
+  const seenTradeIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize audio
   useEffect(() => {
@@ -153,6 +159,70 @@ export default function LiveTrades() {
     }
   }, []);
 
+  // Fallback REST polling when WebSocket is unavailable
+  const fetchFallbackTrades = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('dome-trades-snapshot', {
+        body: { limit: 50 }
+      });
+      
+      if (error || !data?.trades) {
+        console.error('Fallback fetch failed:', error);
+        return;
+      }
+
+      setLoading(false);
+      setUsingFallback(true);
+      lastMessageTimeRef.current = Date.now();
+      
+      const newTrades = data.trades as Trade[];
+      
+      setTrades(prev => {
+        const combined = [...newTrades];
+        // Add existing trades that aren't duplicates
+        for (const existing of prev) {
+          const existingId = existing.order_hash || `${existing.tx_hash}-${existing.timestamp}-${existing.token_id}`;
+          const isDuplicate = combined.some(t => {
+            const tId = t.order_hash || `${t.tx_hash}-${t.timestamp}-${t.token_id}`;
+            return tId === existingId;
+          });
+          if (!isDuplicate) {
+            combined.push(existing);
+          }
+        }
+        return combined.slice(0, 500);
+      });
+      
+      console.log(`Fallback loaded ${newTrades.length} trades`);
+    } catch (err) {
+      console.error('Error in fallback fetch:', err);
+    }
+  }, []);
+
+  // Start fallback polling
+  const startFallbackPolling = useCallback(() => {
+    if (fallbackPollRef.current) return; // Already polling
+    
+    console.log('Starting fallback REST polling...');
+    fetchFallbackTrades(); // Immediate first fetch
+    
+    fallbackPollRef.current = setInterval(() => {
+      if (!connected && !paused) {
+        fetchFallbackTrades();
+      }
+    }, FALLBACK_POLL_INTERVAL_MS);
+  }, [connected, paused, fetchFallbackTrades]);
+
+  // Stop fallback polling
+  const stopFallbackPolling = useCallback(() => {
+    if (fallbackPollRef.current) {
+      console.log('Stopping fallback REST polling');
+      clearInterval(fallbackPollRef.current);
+      fallbackPollRef.current = null;
+      setUsingFallback(false);
+    }
+  }, []);
+
   // Whale alert - clickable to view trade details
   const showWhaleAlert = useCallback((trade: Trade, volume: number) => {
     if (soundEnabled && audioRef.current) {
@@ -172,6 +242,11 @@ export default function LiveTrades() {
   const connectWebSocket = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+    // Clear any existing connection timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+    }
+
     try {
       if (!wsUrlRef.current) {
         setLoading(true);
@@ -179,21 +254,39 @@ export default function LiveTrades() {
         
         if (error || !data?.wsUrl) {
           console.error('Failed to get WebSocket URL:', error);
-          setError('Failed to connect to trade feed');
+          setError('Failed to get trade feed URL - using fallback');
           setLoading(false);
+          // Start fallback polling immediately
+          startFallbackPolling();
           return;
         }
         wsUrlRef.current = data.wsUrl;
       }
 
-      setLoading(false);
       setError(null);
       
       const ws = new WebSocket(wsUrlRef.current);
 
+      // Set connection timeout - if not connected within 10s, use fallback
+      connectionTimeoutRef.current = setTimeout(() => {
+        if (!connected && ws.readyState !== WebSocket.OPEN) {
+          console.log('WebSocket connection timeout - switching to fallback');
+          ws.close();
+          wsRef.current = null;
+          setLoading(false);
+          startFallbackPolling();
+        }
+      }, CONNECTION_TIMEOUT_MS);
+
       ws.onopen = () => {
         console.log('WebSocket connected to Dome');
+        // Clear timeout on successful connection
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+        }
         setConnected(true);
+        setLoading(false);
+        stopFallbackPolling(); // Stop fallback if we were using it
         lastMessageTimeRef.current = Date.now();
         tradeCounterRef.current = { count: 0, startTime: Date.now() };
         
@@ -263,9 +356,12 @@ export default function LiveTrades() {
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket disconnected, code:', event.code);
+        console.log('WebSocket disconnected, code:', event.code, 'reason:', event.reason);
         setConnected(false);
         wsRef.current = null;
+        
+        // Start fallback polling when disconnected
+        startFallbackPolling();
         
         reconnectTimeoutRef.current = setTimeout(() => {
           connectWebSocket();
@@ -277,8 +373,10 @@ export default function LiveTrades() {
       console.error('Error connecting to WebSocket:', err);
       setError('Failed to connect to trade feed');
       setLoading(false);
+      // Use fallback on any connection error
+      startFallbackPolling();
     }
-  }, [paused, queueImageFetch, showWhaleAlert]);
+  }, [paused, queueImageFetch, showWhaleAlert, connected, startFallbackPolling, stopFallbackPolling]);
 
   // Watchdog
   useEffect(() => {
@@ -331,6 +429,12 @@ export default function LiveTrades() {
       }
       if (imageFetchTimeoutRef.current) {
         clearTimeout(imageFetchTimeoutRef.current);
+      }
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
+      if (fallbackPollRef.current) {
+        clearInterval(fallbackPollRef.current);
       }
     };
   }, [connectWebSocket]);
@@ -539,19 +643,21 @@ export default function LiveTrades() {
           <div className="flex items-center gap-2 flex-wrap">
             {/* Connection status */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm ${
-              isStale
-                ? 'bg-warning/10 border-warning/30 text-warning'
-                : connected 
-                  ? 'bg-success/10 border-success/30 text-success' 
-                  : 'bg-destructive/10 border-destructive/30 text-destructive'
+              usingFallback
+                ? 'bg-secondary/10 border-secondary/30 text-secondary-foreground'
+                : isStale
+                  ? 'bg-warning/10 border-warning/30 text-warning'
+                  : connected 
+                    ? 'bg-success/10 border-success/30 text-success' 
+                    : 'bg-destructive/10 border-destructive/30 text-destructive'
             }`}>
               <div className={`w-2 h-2 rounded-full ${
-                isStale ? 'bg-warning' : connected ? 'bg-success animate-pulse' : 'bg-destructive'
+                usingFallback ? 'bg-secondary animate-pulse' : isStale ? 'bg-warning' : connected ? 'bg-success animate-pulse' : 'bg-destructive'
               }`} />
               <span className="font-medium">
-                {isStale ? 'Stale' : connected ? 'Live' : 'Offline'}
+                {usingFallback ? 'Polling' : isStale ? 'Stale' : connected ? 'Live' : 'Connecting...'}
               </span>
-              {connected && (
+              {(connected || usingFallback) && (
                 <span className="text-xs opacity-70">{lastUpdateAgo}s ago</span>
               )}
             </div>
@@ -788,12 +894,12 @@ export default function LiveTrades() {
                   {trades.length > 0 ? 'No trades match your filters' : 'Waiting for trades...'}
                 </p>
                 <p className="text-muted-foreground/60 text-sm mt-2">
-                  {connected ? 'Connected to live feed' : 'Reconnecting...'}
+                  {connected ? 'Connected to live feed' : usingFallback ? 'Using REST fallback' : 'Reconnecting...'}
                 </p>
-                {!connected && (
-                  <Button onClick={connectWebSocket} variant="outline" className="mt-4 gap-2">
+                {!connected && !usingFallback && (
+                  <Button onClick={() => { forceReconnect(); startFallbackPolling(); }} variant="outline" className="mt-4 gap-2">
                     <RefreshCw className="w-4 h-4" />
-                    Reconnect
+                    Tap to Reconnect
                   </Button>
                 )}
               </div>
@@ -804,6 +910,7 @@ export default function LiveTrades() {
               <div className="text-center py-20">
                 <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-muted-foreground">Connecting to live feed...</p>
+                <p className="text-muted-foreground/60 text-xs mt-2">If this takes too long, we'll switch to polling mode</p>
               </div>
             )}
           </div>
