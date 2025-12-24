@@ -24,6 +24,7 @@ import { MarketTradeModal } from "@/components/MarketTradeModal";
 import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
+import { fetchTradeableMarketData } from "@/lib/market-trade-data";
 import domeLogo from "@/assets/dome-logo.png";
 interface Position {
   asset: string;
@@ -349,12 +350,25 @@ export default function MyTrades() {
     setAnalysisModalOpen(true);
   };
 
+  const handleTradeMarket = useCallback(async (market: TopMarket) => {
+    const res = await fetchTradeableMarketData(`https://polymarket.com/event/${market.slug}`);
+
+    if (!res.ok) {
+      toast.error(res.message);
+      return;
+    }
+
+    setSelectedMarketForTrade(res.data);
+    setTradeModalOpen(true);
+  }, []);
+
   const handleAnalysisSelect = (type: 'quick' | 'deep') => {
     setAnalysisModalOpen(false);
     navigate('/chat', {
       state: {
+        autoAnalyze: true,
+        deepResearch: type === 'deep',
         marketContext: analysisContext,
-        analysisType: type
       }
     });
   };
@@ -865,24 +879,35 @@ export default function MyTrades() {
                       <p className="text-muted-foreground text-center py-8">No market data</p>
                     ) : (
                       topMarkets.slice(0, 8).map((market, i) => (
-                        <div 
-                          key={i} 
+                        <div
+                          key={i}
                           className="group cursor-pointer hover:bg-primary/5 p-2 -mx-2 rounded-lg transition-colors"
-                          onClick={() => handleAnalyzeMarket(market)}
+                          onClick={() => handleTradeMarket(market)}
                         >
-                          <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center justify-between gap-3 mb-1">
                             <span className="text-sm text-foreground truncate flex-1 group-hover:text-primary transition-colors">
                               {market.title}
                             </span>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span className="text-xs text-muted-foreground font-mono">
                                 ${market.volume.toFixed(0)}
                               </span>
-                              <Sparkles className="w-3 h-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-xs bg-primary/10 hover:bg-primary/15 text-primary border border-primary/20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAnalyzeMarket(market);
+                                }}
+                              >
+                                <Sparkles className="w-3 h-3 mr-1" />
+                                Analyze
+                              </Button>
                             </div>
                           </div>
                           <div className="h-2 rounded-full bg-muted/30 overflow-hidden">
-                            <div 
+                            <div
                               className="h-full rounded-full bg-gradient-to-r from-primary via-secondary to-accent transition-all duration-500"
                               style={{ width: `${(market.volume / maxVolume) * 100}%` }}
                             />
