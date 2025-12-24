@@ -18,16 +18,22 @@ export const PremiumCapabilities = () => {
           </p>
         </div>
 
-        {/* Deep Research */}
-        <div className="bg-card/50 border border-border/50 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-1.5">
+        {/* Deep Research - NEW */}
+        <div className="bg-card/50 border border-purple-500/30 rounded-lg p-3 relative overflow-hidden">
+          {/* Subtle glow effect */}
+          <div className="absolute -top-4 -right-4 w-16 h-16 bg-purple-500/20 rounded-full blur-xl" />
+          
+          <div className="flex items-center gap-2 mb-1.5 relative">
             <Search className="w-3.5 h-3.5 text-purple-500" />
             <h3 className="font-medium text-xs text-foreground">Deep Research</h3>
+            <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full animate-pulse">
+              New
+            </span>
           </div>
-          <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
+          <p className="text-[11px] text-muted-foreground leading-relaxed mb-2 relative">
             AI research with cited sources
           </p>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 relative">
             <img src={polyfactualLogo} alt="Polyfactual" className="h-3.5 object-contain opacity-70" />
           </div>
         </div>
