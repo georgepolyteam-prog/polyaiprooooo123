@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PolyfactualToggle } from "@/components/chat/PolyfactualToggle";
 
 interface UnifiedInputProps {
   onSubmit: (message: string, isVoice: boolean, audioBlob?: Blob) => void;
@@ -42,28 +42,13 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
 
   return (
     <div ref={ref} className="flex items-center gap-3 backdrop-blur-xl bg-white/5 border-2 border-white/10 hover:border-purple-500/50 focus-within:border-purple-500 rounded-2xl shadow-2xl transition-all duration-300 p-2">
-      {/* Deep Research Toggle */}
+      {/* Polyfactual Toggle */}
       {onToggleDeepResearch && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onToggleDeepResearch}
-              className={cn(
-                "p-3 rounded-xl transition-all duration-300 shrink-0",
-                deepResearch
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/25"
-                  : "bg-white/10 text-gray-400 hover:text-white hover:bg-white/20"
-              )}
-            >
-              <Sparkles className={cn("w-5 h-5", deepResearch && "animate-pulse")} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            <p className="font-medium">{deepResearch ? "Deep Research ON" : "Deep Research OFF"}</p>
-            <p className="text-xs text-muted-foreground">Comprehensive web research for any market</p>
-          </TooltipContent>
-        </Tooltip>
+        <PolyfactualToggle 
+          enabled={deepResearch} 
+          onToggle={onToggleDeepResearch}
+          disabled={disabled}
+        />
       )}
       
       <input
