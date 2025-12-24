@@ -11,7 +11,7 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
   return (
     <div className="relative">
       {/* Premium Badge Row */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mb-6 sm:mb-8 animate-fade-in">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 animate-fade-in">
         {/* Backed by Polymarket Badge */}
         <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 backdrop-blur-sm">
           <img src={polymarketLogo} alt="Polymarket" className="w-4 h-4 sm:w-5 sm:h-5 object-contain" />
@@ -28,7 +28,7 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
       </div>
 
       {/* Logo with Premium Effects */}
-      <div className="flex justify-center mb-6 sm:mb-10 animate-fade-in">
+      <div className="flex justify-center mb-4 sm:mb-6 animate-fade-in">
         <div className="relative">
           {/* Outer glow rings - smaller on mobile */}
           <div className="absolute inset-[-12px] sm:inset-[-20px] rounded-full bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/30 blur-xl sm:blur-2xl animate-pulse" />
@@ -53,7 +53,7 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
       </div>
 
       {/* Title with Gradient */}
-      <div className="text-center mb-6 sm:mb-8 animate-fade-in" style={{ animationDelay: '100ms' }}>
+      <div className="text-center mb-4 sm:mb-6 animate-fade-in" style={{ animationDelay: '100ms' }}>
         <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-4 tracking-tight">
           <span className="bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text text-transparent">
             Meet{" "}
@@ -67,7 +67,7 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
       </div>
 
       {/* Stats Ticker - horizontal scroll on mobile */}
-      <div className="flex items-center justify-start sm:justify-center gap-3 sm:gap-6 mb-8 sm:mb-10 animate-fade-in overflow-x-auto pb-2 px-4 -mx-4 sm:mx-0 sm:px-0 scrollbar-hide" style={{ animationDelay: '200ms' }}>
+      <div className="flex items-center justify-start sm:justify-center gap-3 sm:gap-6 mb-6 sm:mb-8 animate-fade-in overflow-x-auto pb-2 px-4 -mx-4 sm:mx-0 sm:px-0 scrollbar-hide" style={{ animationDelay: '200ms' }}>
         <StatBadge icon={<TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} value="$7.2B+" label="Volume" />
         <StatBadge icon={<Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} value="Real-time" label="Data" />
         <StatBadge icon={<Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />} value="AI-Powered" label="Analysis" />
