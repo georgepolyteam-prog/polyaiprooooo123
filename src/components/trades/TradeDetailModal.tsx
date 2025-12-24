@@ -25,6 +25,7 @@ interface Trade {
   timestamp: number;
   user: string;
   image?: string;
+  resolved_url?: string; // Cached resolved URL
 }
 
 interface PnLData {
@@ -58,6 +59,41 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
   const [loadingTradeData, setLoadingTradeData] = useState(false);
   const [tradeMarketData, setTradeMarketData] = useState<TradeableMarketData | null>(null);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(trade.resolved_url || null);
+  const [resolvingUrl, setResolvingUrl] = useState(false);
+  // Resolve correct market URL on mount
+  useEffect(() => {
+    async function resolveMarketUrl() {
+      if (trade.resolved_url) {
+        setResolvedUrl(trade.resolved_url);
+        return;
+      }
+      
+      if (!trade.market_slug) return;
+      
+      setResolvingUrl(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('resolve-market-url', {
+          body: { marketSlug: trade.market_slug, conditionId: trade.condition_id }
+        });
+        
+        if (!error && data?.fullUrl) {
+          setResolvedUrl(data.fullUrl);
+        } else {
+          // Fallback to market_slug based URL
+          setResolvedUrl(`https://polymarket.com/event/${trade.market_slug}`);
+        }
+      } catch (err) {
+        console.error('Error resolving market URL:', err);
+        setResolvedUrl(`https://polymarket.com/event/${trade.market_slug}`);
+      } finally {
+        setResolvingUrl(false);
+      }
+    }
+    
+    resolveMarketUrl();
+  }, [trade.market_slug, trade.condition_id, trade.resolved_url]);
+
   useEffect(() => {
     fetchWalletData();
   }, [trade.user]);
@@ -95,7 +131,8 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
 
   const handleTrade = async () => {
     setLoadingTradeData(true);
-    const marketUrl = `https://polymarket.com/event/${trade.market_slug}`;
+    // Use resolved URL or fallback
+    const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
     const res = await fetchTradeableMarketData(marketUrl);
     setLoadingTradeData(false);
     
@@ -125,6 +162,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
   const handleAnalysisSelect = (type: 'quick' | 'deep') => {
     setAnalysisModalOpen(false);
     const shares = trade.shares_normalized || trade.shares || 0;
+    const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
     navigate('/chat', {
       state: {
         autoAnalyze: true,
@@ -134,7 +172,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
           outcomeQuestion: trade.title,
           currentOdds: trade.price,
           volume: trade.price * shares,
-          url: `https://polymarket.com/event/${trade.market_slug}`,
+          url: marketUrl,
           slug: trade.market_slug,
           eventSlug: trade.market_slug,
           image: trade.image
@@ -278,12 +316,12 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
           </div>
           <div className="mt-4 pt-4 border-t border-border">
             <a
-              href={`https://polymarket.com/event/${trade.market_slug}`}
+              href={resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm min-h-[44px]"
             >
-              View Market on Polymarket
+              {resolvingUrl ? 'Resolving link...' : 'View Market on Polymarket'}
               <ExternalLink className="w-4 h-4" />
             </a>
           </div>
@@ -471,7 +509,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
             outcomeQuestion: trade.title,
             currentOdds: trade.price,
             volume: trade.price * shares,
-            url: `https://polymarket.com/event/${trade.market_slug}`,
+            url: resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`,
             slug: trade.market_slug,
             eventSlug: trade.market_slug,
             image: trade.image
@@ -518,7 +556,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
           outcomeQuestion: trade.title,
           currentOdds: trade.price,
           volume: trade.price * shares,
-          url: `https://polymarket.com/event/${trade.market_slug}`,
+          url: resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`,
           slug: trade.market_slug,
           eventSlug: trade.market_slug,
           image: trade.image
