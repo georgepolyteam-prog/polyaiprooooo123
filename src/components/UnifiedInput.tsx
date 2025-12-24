@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PolyfactualToggle } from "@/components/chat/PolyfactualToggle";
 
@@ -17,12 +17,20 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
   onToggleDeepResearch
 }, ref) => {
   const [textInput, setTextInput] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const handleTextSubmit = () => {
@@ -39,11 +47,17 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
     }
   };
 
+  const placeholder = isMobile 
+    ? "Ask anything..." 
+    : deepResearch 
+      ? "Deep research mode - ask anything..." 
+      : "Paste a market URL or ask anything...";
+
   return (
     <div 
       ref={ref} 
       className={cn(
-        "relative flex items-center gap-3 p-2 rounded-2xl transition-all duration-300",
+        "relative flex items-center gap-2 sm:gap-3 p-2 rounded-2xl transition-all duration-300",
         "glass-card border-2",
         deepResearch 
           ? "border-accent/50 shadow-glow-cyan" 
@@ -69,9 +83,9 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
         value={textInput}
         onChange={(e) => setTextInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={deepResearch ? "Deep research mode - ask anything..." : "Paste a market URL or ask anything..."}
+        placeholder={placeholder}
         disabled={disabled}
-        className="flex-1 px-4 py-3 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/60 text-base"
+        className="flex-1 min-w-0 px-2 sm:px-4 py-2 sm:py-3 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/60 text-sm sm:text-base"
         autoFocus
       />
       
@@ -80,7 +94,7 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
         onClick={handleTextSubmit}
         disabled={disabled || !textInput.trim()}
         className={cn(
-          "relative p-3.5 rounded-xl transition-all duration-300 shrink-0",
+          "relative p-2.5 sm:p-3.5 rounded-xl transition-all duration-300 shrink-0",
           textInput.trim() && !disabled
             ? "bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-105 active:scale-95"
             : "bg-muted text-muted-foreground cursor-not-allowed"
@@ -89,7 +103,7 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
         {textInput.trim() && !disabled && (
           <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary to-secondary opacity-50 blur-lg -z-10" />
         )}
-        <Send className="w-5 h-5" />
+        <Send className="w-4 h-4 sm:w-5 sm:h-5" />
       </button>
     </div>
   );

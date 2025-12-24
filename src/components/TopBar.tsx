@@ -74,18 +74,18 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
       >
         <div className="h-full max-w-7xl mx-auto px-4 flex items-center justify-between">
           {/* Logo & Branding */}
-          <div className="flex items-center gap-4 lg:gap-6">
-            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
+            <Link to="/" className="flex items-center gap-1.5 sm:gap-2 hover:opacity-80 transition-opacity shrink-0">
               <div className="relative">
-                <img src={polyLogo} alt="Poly" className="w-8 h-8 lg:w-10 lg:h-10 object-contain" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 lg:w-3 lg:h-3 bg-emerald-500 rounded-full border-2 border-[#0f0a1f]" />
+                <img src={polyLogo} alt="Poly" className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 object-contain" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 lg:w-3 lg:h-3 bg-emerald-500 rounded-full border-2 border-[#0f0a1f]" />
               </div>
 
-              <div className="hidden sm:flex flex-col">
-                <span className="font-bold text-base lg:text-lg bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent leading-tight">
+              <div className="flex flex-col">
+                <span className="font-bold text-sm sm:text-base lg:text-lg bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent leading-tight">
                   Poly
                 </span>
-                <span className="text-[10px] lg:text-xs text-gray-400 leading-tight whitespace-nowrap">
+                <span className="text-[8px] sm:text-[10px] lg:text-xs text-gray-400 leading-tight whitespace-nowrap">
                   Analyze. Trade. Win.
                 </span>
               </div>
