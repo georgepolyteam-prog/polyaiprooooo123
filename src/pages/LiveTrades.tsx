@@ -10,6 +10,7 @@ import { TradeStats } from '@/components/trades/TradeStats';
 import { TopTradersSidebar } from '@/components/trades/TopTradersSidebar';
 import { MarketHeatmap } from '@/components/trades/MarketHeatmap';
 import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
+import { LiveTradesTour } from '@/components/trades/LiveTradesTour';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -155,8 +156,16 @@ export default function LiveTrades() {
 
   // Whale alert - clickable to view trade details
   const showWhaleAlert = useCallback((trade: Trade, volume: number) => {
-    if (soundEnabled && audioRef.current) {
-      audioRef.current.play().catch(() => {});
+    // Only play sound if explicitly enabled
+    if (soundEnabled) {
+      try {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        }
+      } catch {
+        // Silently fail
+      }
     }
     
     toast(`🐋 ${volume >= MEGA_WHALE_THRESHOLD ? 'MEGA ' : ''}Whale Alert!`, {
@@ -926,6 +935,9 @@ export default function LiveTrades() {
           });
         }}
       />
+
+      {/* Tour for first-time visitors */}
+      <LiveTradesTour />
     </div>
   );
 }

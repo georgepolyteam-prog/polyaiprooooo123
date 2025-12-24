@@ -15,6 +15,7 @@ import WalletProfile from "./pages/WalletProfile";
 import MyTrades from "./pages/MyTrades";
 import Markets from "./pages/Markets";
 import LiveTrades from "./pages/LiveTrades";
+import Status from "./pages/Status";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -48,6 +49,7 @@ const AppContent = () => {
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="/help" element={<Help />} />
+          <Route path="/status" element={<Status />} />
           <Route path="/about" element={<About />} />
           <Route path="/capabilities" element={<Capabilities />} />
           <Route path="/adminpanel" element={<AdminPanel />} />

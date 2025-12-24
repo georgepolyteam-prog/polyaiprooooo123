@@ -16,6 +16,7 @@ import {
   Users,
   Info,
   Activity,
+  Radio,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
@@ -307,6 +308,14 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                     Support
                   </DropdownMenuItem>
                 </Link>
+                <Link to="/status">
+                  <DropdownMenuItem
+                    className={`gap-2 cursor-pointer ${isActive("/status") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                  >
+                    <Radio className="w-4 h-4" />
+                    Status & Updates
+                  </DropdownMenuItem>
+                </Link>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -472,6 +481,15 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 >
                   <HelpCircle className="w-5 h-5" />
                   Help
+                </Button>
+              </Link>
+              <Link to="/status" onClick={() => setMobileMenuOpen(false)}>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 text-gray-400 hover:text-white hover:bg-white/5"
+                >
+                  <Radio className="w-5 h-5" />
+                  Status & Updates
                 </Button>
               </Link>
               <div className="pt-2">
