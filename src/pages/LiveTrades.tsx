@@ -69,6 +69,7 @@ export default function LiveTrades() {
   const [searchTerm, setSearchTerm] = useState('');
   const [tokenFilter, setTokenFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [marketFilter, setMarketFilter] = useState('all');
+  const [hideUpDown, setHideUpDown] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
 
   // Analysis modal state
@@ -151,7 +152,7 @@ export default function LiveTrades() {
     }
   }, []);
 
-  // Whale alert
+  // Whale alert - clickable to view trade details
   const showWhaleAlert = useCallback((trade: Trade, volume: number) => {
     if (soundEnabled && audioRef.current) {
       audioRef.current.play().catch(() => {});
@@ -160,6 +161,10 @@ export default function LiveTrades() {
     toast(`🐋 ${volume >= MEGA_WHALE_THRESHOLD ? 'MEGA ' : ''}Whale Alert!`, {
       description: `$${volume.toFixed(0)} ${trade.side} on ${trade.title?.slice(0, 50)}...`,
       duration: 5000,
+      action: {
+        label: 'View',
+        onClick: () => setSelectedTrade(trade),
+      },
     });
   }, [soundEnabled]);
 
@@ -440,6 +445,17 @@ export default function LiveTrades() {
       // Market filter
       if (marketFilter !== 'all' && trade.market_slug !== marketFilter) return false;
       
+      // Hide Up/Down markets filter
+      if (hideUpDown && trade.title) {
+        const titleLower = trade.title.toLowerCase();
+        if (titleLower.includes(' up ') || titleLower.includes(' down ') || 
+            titleLower.startsWith('up ') || titleLower.startsWith('down ') ||
+            titleLower.endsWith(' up') || titleLower.endsWith(' down') ||
+            titleLower.includes(' up?') || titleLower.includes(' down?')) {
+          return false;
+        }
+      }
+      
       // Search filter
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -452,7 +468,7 @@ export default function LiveTrades() {
       
       return true;
     });
-  }, [trades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm]);
+  }, [trades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown]);
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleTimeString();
@@ -604,6 +620,8 @@ export default function LiveTrades() {
           setMarketFilter={setMarketFilter}
           availableMarkets={availableMarkets}
           totalTrades={filteredTrades.length}
+          hideUpDown={hideUpDown}
+          setHideUpDown={setHideUpDown}
         />
 
         {/* Banners */}
