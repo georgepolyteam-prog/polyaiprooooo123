@@ -383,12 +383,13 @@ const Index = () => {
       hasAskedRef.current = true;
       const { marketContext } = state;
       
-      // Enable deep research if flag is set
+      // Enable deep research UI toggle if flag is set
       if (state.deepResearch && !deepResearch) {
         toggleDeepResearch();
       }
       
-      sendMessage(`Analyze this market: ${marketContext.url}`);
+      // Pass deepResearch directly to sendMessage to avoid race condition
+      sendMessage(`Analyze this market: ${marketContext.url}`, false, false, state.deepResearch);
       fetchMarketDataForSidebar(marketContext.url);
       window.history.replaceState({}, document.title);
     } else if (state?.initialMessage && !hasAskedRef.current && messages.length === 0) {
