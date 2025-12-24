@@ -68,14 +68,14 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
       {/* Gradient border effect */}
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
       
-      {/* Polyfactual Toggle */}
-      {onToggleDeepResearch && (
+      {/* Polyfactual Toggle - temporarily hidden */}
+      {/* {onToggleDeepResearch && (
         <PolyfactualToggle 
           enabled={deepResearch} 
           onToggle={onToggleDeepResearch}
           disabled={disabled}
         />
-      )}
+      )} */}
       
       <input
         ref={inputRef}
