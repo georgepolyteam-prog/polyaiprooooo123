@@ -84,8 +84,17 @@ export default function LiveTrades() {
           console.log('Subscription confirmed:', data.subscription_id);
         }
         
+        // Log all incoming data for debugging
         if (data.type === 'event') {
-          const newTrade = data.data;
+          const rawTrade = data.data;
+          // Log first trade to see available fields including image
+          console.log('Trade received:', Object.keys(rawTrade), rawTrade.image ? 'has image' : 'no image');
+          
+          // Map the trade data, including image if available
+          const newTrade: Trade = {
+            ...rawTrade,
+            image: rawTrade.image || rawTrade.market_image || rawTrade.icon || null
+          };
           const tradeId = newTrade.order_hash || `${newTrade.tx_hash}-${newTrade.timestamp}`;
           
           if (paused) {
@@ -113,10 +122,15 @@ export default function LiveTrades() {
         setConnected(false);
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected, code:', event.code, 'reason:', event.reason);
         setConnected(false);
-        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+        wsRef.current = null;
+        // Reconnect after 2 seconds
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('Attempting to reconnect...');
+          connectWebSocket();
+        }, 2000);
       };
 
       wsRef.current = ws;
