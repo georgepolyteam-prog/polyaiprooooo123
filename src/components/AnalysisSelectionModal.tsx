@@ -31,7 +31,7 @@ export function AnalysisSelectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden">
+      <DialogContent elevated className="sm:max-w-lg p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden">
         {/* Header with market preview */}
         <div className="relative p-6 pb-4 border-b border-border/50">
           <DialogTitle className="text-lg font-semibold text-foreground pr-8">

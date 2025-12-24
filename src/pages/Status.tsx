@@ -35,49 +35,49 @@ const systemStatuses: SystemStatus[] = [
 
 const recentUpdates: Update[] = [
   {
-    date: "Dec 24, 2024",
+    date: "Dec 24, 2025",
     title: "Live Trades Tour Added",
     description: "New interactive tour for first-time users explaining all Live Trades features including whale alerts, filters, and export functionality.",
     type: "feature",
   },
   {
-    date: "Dec 24, 2024",
+    date: "Dec 24, 2025",
     title: "Status Page Launch",
     description: "New status page to monitor system health, view recent updates, and stay informed about platform improvements.",
     type: "feature",
   },
   {
-    date: "Dec 24, 2024",
+    date: "Dec 24, 2025",
     title: "Sound Mute Fix",
     description: "Fixed an issue where muting whale alerts didn't fully stop sound playback on the Live Trades page.",
     type: "fix",
   },
   {
-    date: "Dec 24, 2024",
+    date: "Dec 24, 2025",
     title: "Trading Panel Repositioned",
     description: "Moved the trading panel to the top of the market data sidebar for quicker access.",
     type: "improvement",
   },
   {
-    date: "Dec 23, 2024",
+    date: "Dec 23, 2025",
     title: "Polyfactual Deep Research Hint",
     description: "Added a pulsing hint for new users to discover the Deep Research feature in chat.",
     type: "feature",
   },
   {
-    date: "Dec 23, 2024",
+    date: "Dec 23, 2025",
     title: "Market URL Resolution Fix",
     description: "Improved market URL handling to correctly resolve Polymarket event and market slugs.",
     type: "fix",
   },
   {
-    date: "Dec 22, 2024",
+    date: "Dec 22, 2025",
     title: "Mobile Live Trades Improvements",
     description: "Enhanced mobile layout for live trades with better scrolling and visibility.",
     type: "improvement",
   },
   {
-    date: "Dec 21, 2024",
+    date: "Dec 21, 2025",
     title: "Whale Alert Thresholds",
     description: "Added tiered whale alerts: $1k+ for whales and $10k+ for mega whales with distinct visual treatments.",
     type: "feature",
