@@ -33,6 +33,7 @@ import { MarketDetailModal } from "@/components/MarketDetailModal";
 import { OutcomeSelectionModal } from "@/components/OutcomeSelectionModal";
 import { OutcomesModal } from "@/components/OutcomesModal";
 import { MarketsTour } from "@/components/MarketsTour";
+import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -142,6 +143,16 @@ const Markets = () => {
   const [selectedOutcomesEvent, setSelectedOutcomesEvent] = useState<MarketEvent | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [analysisContext, setAnalysisContext] = useState<{
+    eventTitle: string;
+    outcomeQuestion: string;
+    currentOdds: number;
+    volume: number;
+    url: string;
+    slug: string;
+    eventSlug: string;
+  } | null>(null);
 
   // Check if tour should be shown
   useEffect(() => {
@@ -327,13 +338,22 @@ const Markets = () => {
       eventSlug: event.slug,
     };
     
+    setAnalysisContext(marketContext);
+    setAnalysisModalOpen(true);
+  }, []);
+
+  const handleAnalysisSelect = useCallback((type: 'quick' | 'deep') => {
+    if (!analysisContext) return;
+    
+    setAnalysisModalOpen(false);
     navigate('/chat', { 
       state: { 
         autoAnalyze: true,
-        marketContext 
+        deepResearch: type === 'deep',
+        marketContext: analysisContext
       }
     });
-  }, [navigate]);
+  }, [navigate, analysisContext]);
 
   const handleShowAllOutcomes = useCallback((event: MarketEvent) => {
     setSelectedOutcomesEvent(event);
@@ -645,6 +665,14 @@ const Markets = () => {
         event={selectedOutcomesEvent}
         onTrade={handleTrade}
         onAskPoly={handleAskPoly}
+      />
+
+      {/* Analysis Selection Modal */}
+      <AnalysisSelectionModal
+        open={analysisModalOpen}
+        onOpenChange={setAnalysisModalOpen}
+        marketContext={analysisContext}
+        onSelect={handleAnalysisSelect}
       />
     </div>
   );
