@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, ExternalLink, ChevronDown, AlertTriangle, SkipForward } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, ExternalLink, ChevronDown, AlertTriangle, SkipForward, Newspaper } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MarketSelector } from "./MarketSelector";
@@ -178,13 +178,30 @@ const parsePolyfactualResult = (text: string): PolyfactualResult | null => {
         return;
       }
       
+      // Try broken markdown format: Title](URL) - missing opening bracket
+      const brokenMdMatch = line.match(/([^(\[]+)\]\((https?:\/\/[^)]+)\)/);
+      if (brokenMdMatch) {
+        const title = brokenMdMatch[1].replace(/^\d+\.\s*/, '').trim();
+        sources.push({ title: title || 'Source', url: brokenMdMatch[2].trim() });
+        return;
+      }
+      
       // Try format: Title only (no URL) - skip these
       const titleOnlyMatch = line.match(/\d+\.\s*(.+)/);
       if (titleOnlyMatch && !titleOnlyMatch[1].startsWith('http')) {
         // Check if there's a URL embedded anywhere
-        const embeddedUrl = titleOnlyMatch[1].match(/(https?:\/\/[^\s]+)/);
+        const embeddedUrl = titleOnlyMatch[1].match(/(https?:\/\/[^\s\)]+)/);
         if (embeddedUrl) {
-          sources.push({ title: titleOnlyMatch[1].replace(embeddedUrl[1], '').trim() || 'Source', url: embeddedUrl[1] });
+          // Clean up title by removing URL and brackets
+          let title = titleOnlyMatch[1]
+            .replace(embeddedUrl[1], '')
+            .replace(/[\[\]\(\)]/g, '')
+            .trim();
+          if (!title) {
+            try { title = new URL(embeddedUrl[1]).hostname.replace('www.', ''); } 
+            catch { title = 'Source'; }
+          }
+          sources.push({ title, url: embeddedUrl[1] });
         }
       }
     });
@@ -775,8 +792,10 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-xs">📚</span>
-                    Sources & News
+                    <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                      <Newspaper className="w-3.5 h-3.5 text-white" />
+                    </span>
+                    Sources
                   </h4>
                   <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded-full">
                     {polyfactualResult.sources.length} sources
