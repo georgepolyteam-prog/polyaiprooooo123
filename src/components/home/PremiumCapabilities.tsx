@@ -43,14 +43,15 @@ export const PremiumCapabilities = () => {
             </h3>
             {cap.hasPolyfactual ? (
               <div className="flex items-center justify-center gap-1.5">
-                <img src={polyfactualLogo} alt="Polyfactual" className="h-3.5 object-contain" />
+                <span className="text-[10px] text-muted-foreground">Powered by</span>
+                <img src={polyfactualLogo} alt="Polyfactual" className="h-4 object-contain" />
               </div>
             ) : cap.hasDataPartners ? (
               <div className="flex items-center justify-center gap-2">
-                <img src={polymarketLogo} alt="Polymarket" className="h-3.5 object-contain" />
+                <img src={polymarketLogo} alt="Polymarket" className="h-4 object-contain" />
                 <span className="text-muted-foreground/40">+</span>
                 <div className="flex items-center gap-1">
-                  <img src={domeLogo} alt="Dome" className="h-4 object-contain" />
+                  <img src={domeLogo} alt="Dome" className="h-5 object-contain" />
                   <span className="text-xs font-semibold text-[#7C3AED]">Dome</span>
                 </div>
               </div>
