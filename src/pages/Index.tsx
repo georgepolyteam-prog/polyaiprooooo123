@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TopBar } from "@/components/TopBar";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { AnalysisStatus } from "@/components/chat/AnalysisStatus";
-import { ChatUpgradeBanner } from "@/components/chat/ChatUpgradeBanner";
+// ChatUpgradeBanner removed - was unprofessional
 import { UnifiedInput } from "@/components/UnifiedInput";
 import { MarketDataPanel } from "@/components/MarketDataPanel";
 import { MarketDataSheet } from "@/components/MarketDataSheet";
@@ -459,7 +459,7 @@ const Index = () => {
       <AnimatedBackground />
 
       <TopBar />
-      <ChatUpgradeBanner />
+      {/* Removed ChatUpgradeBanner - was unprofessional */}
 
       <div className="flex flex-1 relative overflow-hidden">
         {/* Main Chat Area */}

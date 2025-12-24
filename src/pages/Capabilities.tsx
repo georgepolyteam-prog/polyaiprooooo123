@@ -41,25 +41,13 @@ const features = [
     icon: TrendingUp,
     title: "Price Alerts",
     description: "Set custom price alerts via Telegram. Get notified instantly when markets hit your target prices or experience significant movements.",
-    highlight: "Notifications",
-  },
-  {
-    icon: BarChart3,
-    title: "Portfolio Dashboard",
-    description: "Track all your positions in one place. View P&L, exposure, and performance metrics across your entire Polymarket portfolio.",
-    highlight: "Analytics",
+    highlight: "Telegram",
   },
   {
     icon: Users,
     title: "Trader Leaderboard",
     description: "See who's winning. Browse the top traders by profit, volume, and win rate. Learn from the best performers on Polymarket.",
     highlight: "Community",
-  },
-  {
-    icon: Shield,
-    title: "Risk Analysis",
-    description: "Understand your exposure. Get warnings about correlated positions, overconcentration, and potential hedging opportunities.",
-    highlight: "Safety",
   },
 ];
 
@@ -73,7 +61,7 @@ const partners = [
   {
     name: "Polyfactual",
     logo: polyfactualLogo,
-    description: "Advanced AI research engine providing deep analysis, source verification, and probability assessments.",
+    description: "Advanced AI research engine providing deep analysis, source verification, and probability assessments with citations.",
     role: "Research Partner",
   },
   {
@@ -87,10 +75,10 @@ const partners = [
 ];
 
 const stats = [
-  { value: "50K+", label: "Markets Analyzed" },
+  { value: "3", label: "Partner Integrations" },
   { value: "Real-time", label: "Data Updates" },
   { value: "24/7", label: "Availability" },
-  { value: "100+", label: "Data Points per Market" },
+  { value: "Cited", label: "Research Sources" },
 ];
 
 const Capabilities = () => {
