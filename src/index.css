@@ -53,8 +53,8 @@
 
 @layer base {
   :root {
-    /* Clean Color System - Light (Blue Theme) */
-    --background: 220 20% 97%;
+    /* Clean Color System - Light (Teal Theme) */
+    --background: 180 20% 97%;
     --foreground: 222 47% 11%;
     
     --card: 0 0% 100%;
@@ -63,16 +63,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     
-    --primary: 217 91% 60%;
+    --primary: 172 66% 50%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 221 83% 53%;
+    --secondary: 160 84% 39%;
     --secondary-foreground: 0 0% 100%;
     
-    --muted: 210 40% 96%;
+    --muted: 180 20% 96%;
     --muted-foreground: 215 16% 47%;
     
-    --accent: 199 89% 48%;
+    --accent: 187 92% 35%;
     --accent-foreground: 0 0% 100%;
     
     --destructive: 0 84% 60%;
@@ -84,55 +84,55 @@
     --warning: 45 93% 47%;
     --warning-foreground: 222 47% 11%;
     
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --border: 180 20% 91%;
+    --input: 180 20% 91%;
+    --ring: 172 66% 50%;
     
     --radius: 0.75rem;
     
-    /* Blue Theme Colors (Polymarket-style) */
-    --poly-purple: 217 91% 60%;
-    --poly-cyan: 221 83% 53%;
-    --poly-pink: 199 89% 48%;
+    /* Teal/Cyan Theme Colors */
+    --poly-purple: 280 65% 60%;
+    --poly-cyan: 172 66% 50%;
+    --poly-pink: 330 80% 60%;
     --poly-blue: 217 91% 60%;
     
     /* Glow colors */
-    --glow-purple: 217 100% 60%;
-    --glow-cyan: 221 100% 55%;
-    --glow-pink: 199 100% 55%;
+    --glow-purple: 280 100% 60%;
+    --glow-cyan: 172 100% 50%;
+    --glow-pink: 330 100% 60%;
     
     /* Sidebar - light mode */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 172 66% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 172 66% 50%;
   }
 
   .dark {
-    /* Deep Space Blacks - Blue Theme (Polymarket-style) */
-    --background: 240 20% 3.5%;
-    --foreground: 210 40% 98%;
+    /* Deep Space Blacks - Teal/Cyan Theme */
+    --background: 200 25% 3.5%;
+    --foreground: 180 20% 98%;
     
-    --card: 240 15% 6%;
-    --card-foreground: 210 40% 98%;
+    --card: 200 20% 6%;
+    --card-foreground: 180 20% 98%;
     
-    --popover: 240 15% 6%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 200 20% 6%;
+    --popover-foreground: 180 20% 98%;
     
-    --primary: 217 91% 60%;
+    --primary: 172 66% 50%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 221 83% 53%;
+    --secondary: 160 84% 39%;
     --secondary-foreground: 0 0% 100%;
     
-    --muted: 240 10% 12%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 200 15% 12%;
+    --muted-foreground: 180 15% 55%;
     
-    --accent: 199 89% 48%;
+    --accent: 187 92% 35%;
     --accent-foreground: 0 0% 100%;
     
     --destructive: 0 63% 45%;
@@ -144,19 +144,19 @@
     --warning: 45 93% 47%;
     --warning-foreground: 0 0% 0%;
     
-    --border: 240 10% 15%;
-    --input: 240 10% 15%;
-    --ring: 217 91% 60%;
+    --border: 200 15% 15%;
+    --input: 200 15% 15%;
+    --ring: 172 66% 50%;
     
     /* Sidebar - dark mode */
-    --sidebar-background: 240 15% 6%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-background: 200 20% 6%;
+    --sidebar-foreground: 180 20% 98%;
+    --sidebar-primary: 172 66% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 12%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 240 10% 20%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 200 15% 12%;
+    --sidebar-accent-foreground: 180 20% 98%;
+    --sidebar-border: 200 15% 20%;
+    --sidebar-ring: 172 66% 50%;
   }
 }
 
@@ -180,10 +180,10 @@
 
   .dark body {
     background: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(217 91% 15% / 0.4) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(221 83% 20% / 0.25) 0%, transparent 40%),
-      radial-gradient(ellipse 40% 30% at 20% 90%, hsl(199 89% 20% / 0.15) 0%, transparent 30%),
-      hsl(240 20% 3.5%);
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(172 66% 15% / 0.4) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(160 84% 20% / 0.25) 0%, transparent 40%),
+      radial-gradient(ellipse 40% 30% at 20% 90%, hsl(187 92% 20% / 0.15) 0%, transparent 30%),
+      hsl(200 25% 3.5%);
     background-attachment: fixed;
   }
 
