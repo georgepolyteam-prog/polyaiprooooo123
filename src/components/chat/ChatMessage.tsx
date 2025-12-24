@@ -126,14 +126,19 @@ interface PolyfactualResult {
 
 const parsePolyfactualResult = (text: string): PolyfactualResult | null => {
   // Check if this is a Polyfactual deep research result
-  if (!text.includes("Deep Research Results") && !text.includes("📊 **Deep Research")) {
+  // Support both new clean format (## Summary) and legacy emoji format
+  const isPolyfactual = text.includes("Deep Research Results") || 
+                        text.includes("📊 **Deep Research") ||
+                        (text.includes("## Summary") && text.includes("## Sources"));
+  if (!isPolyfactual) {
     return null;
   }
   
   const sources: Array<{ title: string; url: string }> = [];
   
   // Extract sources section - look for numbered sources with URLs
-  const sourcesMatch = text.match(/(?:📚\s*\*?\*?Sources:?\*?\*?|Sources:)\s*([\s\S]*?)$/i);
+  // Support both new format (## Sources) and legacy emoji format
+  const sourcesMatch = text.match(/(?:##\s*Sources|📚\s*\*?\*?Sources:?\*?\*?|Sources:)\s*([\s\S]*?)$/i);
   if (sourcesMatch) {
     const sourcesText = sourcesMatch[1];
     
@@ -186,9 +191,10 @@ const parsePolyfactualResult = (text: string): PolyfactualResult | null => {
   }
   
   // Remove sources section and header from content
+  // Support both new clean format and legacy emoji format
   let content = text
     .replace(/📊\s*\*?\*?Deep Research Results\*?\*?\s*/i, '')
-    .replace(/(?:📚\s*\*?\*?Sources:?\*?\*?|Sources:)\s*[\s\S]*$/i, '')
+    .replace(/(?:##\s*Sources|📚\s*\*?\*?Sources:?\*?\*?|Sources:)\s*[\s\S]*$/i, '')
     .trim();
   
   return {

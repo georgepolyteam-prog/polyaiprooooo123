@@ -123,30 +123,40 @@ const formatStatsInText = (text: string, keyPrefix: string): React.ReactNode[] =
 // Detect section type and return appropriate styling
 const getSectionInfo = (line: string): { icon: React.ReactNode; type: string; color: string } | null => {
   const lowerLine = line.toLowerCase();
+  const trimmedLine = line.trim();
   
-  // New structured sections from Deep Research
-  if (lowerLine.includes('market summary') || lowerLine.includes('📊')) {
-    return { icon: <Target className="w-4 h-4" />, type: 'Market Summary', color: 'cyan' };
+  // Check for markdown headers (## Summary, ### Key Developments, etc.)
+  const isMarkdownHeader = trimmedLine.startsWith('#');
+  
+  // Summary section (## Summary or variations)
+  if (isMarkdownHeader && (lowerLine.includes('summary') || lowerLine.includes('market summary'))) {
+    return { icon: <Target className="w-4 h-4" />, type: 'Summary', color: 'cyan' };
   }
-  if (lowerLine.includes('key news') || lowerLine.includes('developments') || lowerLine.includes('📰')) {
-    return { icon: <Lightbulb className="w-4 h-4" />, type: 'Key News', color: 'amber' };
+  // Key developments/news section
+  if (isMarkdownHeader && (lowerLine.includes('development') || lowerLine.includes('key news') || lowerLine.includes('news'))) {
+    return { icon: <Lightbulb className="w-4 h-4" />, type: 'Key Developments', color: 'amber' };
   }
-  if (lowerLine.includes('key finding') || lowerLine.includes('summary') || lowerLine.includes('tldr') || lowerLine.includes('overview')) {
-    return { icon: <Target className="w-4 h-4" />, type: 'summary', color: 'cyan' };
+  // Sources section
+  if (isMarkdownHeader && lowerLine.includes('source')) {
+    return { icon: <ExternalLink className="w-4 h-4" />, type: 'Sources', color: 'emerald' };
+  }
+  // Legacy emoji-based detection (for backward compatibility)
+  if (lowerLine.includes('📊') || lowerLine.includes('market summary')) {
+    return { icon: <Target className="w-4 h-4" />, type: 'Summary', color: 'cyan' };
+  }
+  if (lowerLine.includes('📰') || lowerLine.includes('key news')) {
+    return { icon: <Lightbulb className="w-4 h-4" />, type: 'Key Developments', color: 'amber' };
   }
   if (lowerLine.includes('market sentiment') || lowerLine.includes('odds') || lowerLine.includes('probability')) {
     return { icon: <BarChart3 className="w-4 h-4" />, type: 'odds', color: 'purple' };
   }
-  if (lowerLine.includes('implication') || lowerLine.includes('trader') || lowerLine.includes('takeaway')) {
-    return { icon: <Lightbulb className="w-4 h-4" />, type: 'implication', color: 'amber' };
-  }
   if (lowerLine.includes('risk') || lowerLine.includes('warning') || lowerLine.includes('caution')) {
     return { icon: <AlertTriangle className="w-4 h-4" />, type: 'risk', color: 'red' };
   }
-  if (lowerLine.includes('upside') || lowerLine.includes('bullish') || lowerLine.includes('positive')) {
+  if (lowerLine.includes('upside') || lowerLine.includes('bullish')) {
     return { icon: <TrendingUp className="w-4 h-4" />, type: 'bullish', color: 'green' };
   }
-  if (lowerLine.includes('downside') || lowerLine.includes('bearish') || lowerLine.includes('negative')) {
+  if (lowerLine.includes('downside') || lowerLine.includes('bearish')) {
     return { icon: <TrendingDown className="w-4 h-4" />, type: 'bearish', color: 'red' };
   }
   
