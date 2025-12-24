@@ -874,8 +874,9 @@ export default function LiveTrades() {
           setAnalysisModalOpen(false);
           navigate('/chat', {
             state: {
+              autoAnalyze: true,
+              deepResearch: type === 'deep',
               marketContext: analysisContext,
-              analysisType: type
             }
           });
         }}

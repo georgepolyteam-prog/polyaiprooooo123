@@ -149,15 +149,17 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
       <div className="p-4 border-b sticky top-0 bg-background z-10">
         {/* Data source attribution */}
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-          <span>
+          <span className="inline-flex items-center gap-1.5">
             Powered by{" "}
-            <a 
-              href="https://domeapi.io" 
-              target="_blank" 
+            <a
+              href="https://domeapi.io"
+              target="_blank"
               rel="noopener noreferrer"
-              className="text-poly-cyan underline underline-offset-2 decoration-poly-cyan/50 hover:decoration-poly-cyan transition-colors"
+              className="inline-flex items-center gap-1 text-poly-cyan underline underline-offset-2 decoration-poly-cyan/50 hover:decoration-poly-cyan transition-colors"
+              aria-label="Powered by domeapi.io (opens in a new tab)"
             >
               domeapi.io
+              <ExternalLink className="w-3 h-3" />
             </a>
           </span>
           <span>Updated {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>

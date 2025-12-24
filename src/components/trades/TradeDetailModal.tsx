@@ -473,7 +473,7 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-card border border-border rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden"
+          className="bg-card border border-border rounded-2xl max-w-5xl w-full h-[90vh] overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {modalContent}
