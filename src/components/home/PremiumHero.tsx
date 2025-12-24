@@ -54,8 +54,8 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
           AI-powered market intelligence for Polymarket
         </p>
         
-        {/* What can I do & Learn More links - below subtitle */}
-        <div className="flex items-center justify-center gap-2">
+        {/* What can I do & Learn More links - temporarily hidden */}
+        {/* <div className="flex items-center justify-center gap-2">
           <Link to="/about">
             <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-3 rounded-full text-xs text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border">
               Learn More
@@ -68,7 +68,7 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
               What can I do?
             </Button>
           </Link>
-        </div>
+        </div> */}
       </div>
     </div>
   );
