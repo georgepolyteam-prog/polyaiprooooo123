@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.resolve-market-url]
 verify_jwt = false
+
+[functions.dome-ws-url]
+verify_jwt = false
+
+[functions.dome-trades-snapshot]
+verify_jwt = false
