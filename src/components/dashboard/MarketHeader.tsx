@@ -123,12 +123,6 @@ export function MarketHeader({
             Analyze with AI
           </Button>
         </Link>
-        <a href={marketUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
-          <Button variant="outline" className="w-full gap-2 border-border/50 hover:bg-muted/30 hover:border-border">
-            <ExternalLink className="w-4 h-4" />
-            Trade on Polymarket
-          </Button>
-        </a>
       </div>
     </GlassCard>
   );

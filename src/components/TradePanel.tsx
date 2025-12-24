@@ -632,43 +632,23 @@ export function TradePanel({ marketData }: TradePanelProps) {
           )}
         </AnimatePresence>
 
-        {/* Trade on Polymarket button */}
-        <Button
-          onClick={handleTradeOnPolymarket}
-          variant={canDirectTrade && isFullyApproved ? "outline" : "default"}
-          className={cn(
-            "w-full font-semibold transition-all",
-            canDirectTrade && isFullyApproved 
-              ? "py-3 text-sm border-border/50 hover:border-border" 
-              : cn(
-                  "py-4 text-base",
-                  selectedSide === 'YES'
-                    ? "trade-cta-yes"
-                    : "trade-cta-no"
-                )
-          )}
-        >
-          <ExternalLink className="w-4 h-4 mr-2" />
-          {canDirectTrade && isFullyApproved ? 'Trade on Polymarket' : `Trade ${selectedSide} on Polymarket`}
-        </Button>
-
         {/* Wallet connection */}
         {!isConnected && (
           <Button
             onClick={() => open()}
-            variant="outline"
-            className="w-full py-4 font-medium border-border/50 hover:border-primary/50 hover:bg-primary/5 transition-all"
+            variant="default"
+            className="w-full py-4 font-medium bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white border-0 shadow-lg shadow-primary/20"
           >
             <Wallet className="w-4 h-4 mr-2" />
-            Connect Wallet for Direct Trading
+            Connect Wallet to Trade
           </Button>
         )}
 
-        <p className="text-xs text-center text-muted-foreground">
-          {canDirectTrade && isFullyApproved 
-            ? 'Trades attributed to builder program'
-            : 'Opens Polymarket with your trade pre-filled'}
-        </p>
+        {canDirectTrade && isFullyApproved && (
+          <p className="text-xs text-center text-muted-foreground">
+            Trades attributed to builder program
+          </p>
+        )}
       </div>
     </div>
   );
