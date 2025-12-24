@@ -358,8 +358,13 @@ export default function MyTrades() {
       return;
     }
 
-    setSelectedMarketForTrade(res.data);
-    setTradeModalOpen(true);
+    // Clear previous state first, then set new state
+    setSelectedMarketForTrade(null);
+    // Use setTimeout to ensure state is cleared before setting new value
+    setTimeout(() => {
+      setSelectedMarketForTrade(res.data);
+      setTradeModalOpen(true);
+    }, 0);
   }, []);
 
   const handleAnalysisSelect = (type: 'quick' | 'deep') => {
@@ -953,15 +958,28 @@ export default function MyTrades() {
 
       {/* Trade Modal */}
       <MarketTradeModal
+        key={selectedMarketForTrade?.tokenId || 'trade-modal'}
         open={tradeModalOpen}
-        onOpenChange={setTradeModalOpen}
+        onOpenChange={(open) => {
+          setTradeModalOpen(open);
+          if (!open) {
+            // Clear state when modal closes
+            setTimeout(() => setSelectedMarketForTrade(null), 100);
+          }
+        }}
         marketData={selectedMarketForTrade}
       />
 
       {/* Analysis Selection Modal */}
       <AnalysisSelectionModal
+        key={analysisContext?.slug || 'analysis-modal'}
         open={analysisModalOpen}
-        onOpenChange={setAnalysisModalOpen}
+        onOpenChange={(open) => {
+          setAnalysisModalOpen(open);
+          if (!open) {
+            setTimeout(() => setAnalysisContext(null), 100);
+          }
+        }}
         marketContext={analysisContext}
         onSelect={handleAnalysisSelect}
       />

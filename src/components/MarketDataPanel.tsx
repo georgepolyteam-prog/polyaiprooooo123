@@ -181,6 +181,23 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         
+        {/* Trade Panel - Moved to Top */}
+        <section>
+          <TradePanel 
+            marketData={{
+              tokenId: data.market.tokenId,
+              yesTokenId: data.market.tokenId,
+              noTokenId: data.market.noTokenId,
+              conditionId: data.market.conditionId,
+              title: data.market.question,
+              currentPrice: data.market.odds / 100,
+              url: data.market.url,
+              eventSlug: data.market.url ? (() => { try { return new URL(data.market.url).pathname.split('/')[2]; } catch { return undefined; } })() : undefined,
+              marketSlug: data.market.url ? (() => { try { return new URL(data.market.url).pathname.split('/')[3]; } catch { return undefined; } })() : undefined,
+            }}
+          />
+        </section>
+
         {/* Trade Activity - Dashboard Style */}
         <section className="bg-card border rounded-lg p-3">
           {/* Volume Summary - Using full 24h data from dashboard */}
@@ -518,23 +535,6 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
               <p className="text-xs text-muted-foreground mt-1">Historical data may start from Oct 14, 2025</p>
             </div>
           )}
-        </section>
-
-        {/* Trade Panel */}
-        <section>
-          <TradePanel 
-            marketData={{
-              tokenId: data.market.tokenId,
-              yesTokenId: data.market.tokenId, // YES token (tokenId is the YES token)
-              noTokenId: data.market.noTokenId, // NO token
-              conditionId: data.market.conditionId,
-              title: data.market.question,
-              currentPrice: data.market.odds / 100,
-              url: data.market.url,
-              eventSlug: data.market.url ? (() => { try { return new URL(data.market.url).pathname.split('/')[2]; } catch { return undefined; } })() : undefined,
-              marketSlug: data.market.url ? (() => { try { return new URL(data.market.url).pathname.split('/')[3]; } catch { return undefined; } })() : undefined,
-            }}
-          />
         </section>
 
       </div>
