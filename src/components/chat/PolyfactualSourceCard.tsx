@@ -39,12 +39,12 @@ export const PolyfactualSourceCard = ({ title, url, index }: PolyfactualSourceCa
       rel="noopener noreferrer"
       className={cn(
         "group relative flex items-center gap-2 p-3 rounded-lg",
-        "bg-[#161b22] hover:bg-[#1c2128] border border-white/5 hover:border-emerald-500/30",
-        "transition-all duration-200 hover:shadow-md hover:shadow-emerald-500/10"
+        "bg-[#161b22] hover:bg-[#1c2128] border border-white/5 hover:border-primary/30",
+        "transition-all duration-200 hover:shadow-md hover:shadow-primary/10"
       )}
     >
       {/* Source number badge */}
-      <div className="relative flex-shrink-0 w-5 h-5 rounded bg-gradient-to-br from-emerald-600 to-cyan-600 text-white flex items-center justify-center text-xs font-bold">
+      <div className="relative flex-shrink-0 w-5 h-5 rounded bg-gradient-to-br from-primary to-primary/80 text-white flex items-center justify-center text-xs font-bold">
         {index + 1}
       </div>
       
@@ -66,7 +66,7 @@ export const PolyfactualSourceCard = ({ title, url, index }: PolyfactualSourceCa
       
       {/* Content */}
       <div className="relative flex-1 min-w-0">
-        <p className="text-xs font-medium text-white truncate group-hover:text-emerald-300 transition-colors">
+        <p className="text-xs font-medium text-white truncate group-hover:text-primary transition-colors">
           {title || domain}
         </p>
         <p className="text-[10px] text-gray-500 truncate">
@@ -75,7 +75,7 @@ export const PolyfactualSourceCard = ({ title, url, index }: PolyfactualSourceCa
       </div>
       
       {/* External link icon */}
-      <ExternalLink className="relative flex-shrink-0 w-3 h-3 text-gray-600 group-hover:text-emerald-400 transition-colors" />
+      <ExternalLink className="relative flex-shrink-0 w-3 h-3 text-gray-600 group-hover:text-primary transition-colors" />
     </a>
   );
 };
