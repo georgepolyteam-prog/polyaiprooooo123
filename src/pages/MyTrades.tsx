@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { 
   RefreshCw, ExternalLink, Wallet, ArrowUpRight, ArrowDownRight, 
@@ -19,9 +20,11 @@ import { GlassCard } from "@/components/dashboard/GlassCard";
 import { CyberLoader } from "@/components/dashboard/CyberLoader";
 import { AnimatedNumber } from "@/components/dashboard/AnimatedNumber";
 import { SellPositionModal } from "@/components/SellPositionModal";
+import { MarketTradeModal } from "@/components/MarketTradeModal";
+import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
-
+import domeLogo from "@/assets/dome-logo.png";
 interface Position {
   asset: string;
   conditionId: string;
@@ -115,6 +118,7 @@ const getPolymarketUrl = (marketSlug?: string) => {
 
 export default function MyTrades() {
   const { address, isConnected } = useAccount();
+  const navigate = useNavigate();
   const { placeOrder, isPlacingOrder, getOpenOrders, cancelOrder } = usePolymarketTrading();
   const { apiCreds, getApiCreds } = usePolymarketApiCreds();
   
@@ -137,6 +141,10 @@ export default function MyTrades() {
   // Modal state
   const [sellModalPosition, setSellModalPosition] = useState<Position | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [selectedMarketForTrade, setSelectedMarketForTrade] = useState<any>(null);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [analysisContext, setAnalysisContext] = useState<any>(null);
 
   const [activeTab, setActiveTab] = useState("positions");
 
@@ -326,6 +334,29 @@ export default function MyTrades() {
       toast.error("Failed to place sell order");
       throw err;
     }
+  };
+
+  const handleAnalyzeMarket = (market: TopMarket) => {
+    setAnalysisContext({
+      eventTitle: market.title,
+      outcomeQuestion: market.title,
+      currentOdds: 0.5,
+      volume: market.volume,
+      url: `https://polymarket.com/event/${market.slug}`,
+      slug: market.slug,
+      eventSlug: market.slug,
+    });
+    setAnalysisModalOpen(true);
+  };
+
+  const handleAnalysisSelect = (type: 'quick' | 'deep') => {
+    setAnalysisModalOpen(false);
+    navigate('/chat', {
+      state: {
+        marketContext: analysisContext,
+        analysisType: type
+      }
+    });
   };
 
   const maxVolume = topMarkets.length > 0 ? Math.max(...topMarkets.map(m => m.volume)) : 1;
@@ -822,7 +853,7 @@ export default function MyTrades() {
                     </h3>
                   </div>
                   
-                  <div className="p-4 space-y-4">
+                  <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto touch-pan-y overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                     {isLoadingHistory ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className="space-y-2">
@@ -834,14 +865,21 @@ export default function MyTrades() {
                       <p className="text-muted-foreground text-center py-8">No market data</p>
                     ) : (
                       topMarkets.slice(0, 8).map((market, i) => (
-                        <div key={i}>
+                        <div 
+                          key={i} 
+                          className="group cursor-pointer hover:bg-primary/5 p-2 -mx-2 rounded-lg transition-colors"
+                          onClick={() => handleAnalyzeMarket(market)}
+                        >
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm text-foreground truncate flex-1">
+                            <span className="text-sm text-foreground truncate flex-1 group-hover:text-primary transition-colors">
                               {market.title}
                             </span>
-                            <span className="text-xs text-muted-foreground font-mono ml-2">
-                              ${market.volume.toFixed(0)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground font-mono">
+                                ${market.volume.toFixed(0)}
+                              </span>
+                              <Sparkles className="w-3 h-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
                           </div>
                           <div className="h-2 rounded-full bg-muted/30 overflow-hidden">
                             <div 
@@ -858,6 +896,25 @@ export default function MyTrades() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Powered by DOME Attribution */}
+        <div className="mt-8 flex items-center justify-center">
+          <a 
+            href="https://domeapi.io" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-background/80 to-muted/30 border border-border/50 hover:border-primary/40 transition-all group backdrop-blur-sm"
+          >
+            <span className="text-xs text-muted-foreground/70">Powered by</span>
+            <div className="flex items-center gap-1.5">
+              <img src={domeLogo} alt="DOME" className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
+                DOME
+              </span>
+            </div>
+            <ExternalLink className="w-3 h-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
+          </a>
+        </div>
       </main>
 
       {/* Sell Modal */}
@@ -868,6 +925,21 @@ export default function MyTrades() {
           onSell={handleSellPosition}
         />
       )}
+
+      {/* Trade Modal */}
+      <MarketTradeModal
+        open={tradeModalOpen}
+        onOpenChange={setTradeModalOpen}
+        marketData={selectedMarketForTrade}
+      />
+
+      {/* Analysis Selection Modal */}
+      <AnalysisSelectionModal
+        open={analysisModalOpen}
+        onOpenChange={setAnalysisModalOpen}
+        marketContext={analysisContext}
+        onSelect={handleAnalysisSelect}
+      />
     </div>
   );
 }
