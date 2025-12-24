@@ -1,5 +1,21 @@
 import React, { useState } from "react";
-import { HelpCircle, BarChart3, MessageSquare, Menu, X, Trophy, Copy, Check, Receipt, ChevronDown, Wallet, Hammer, Store, Users, Info } from "lucide-react";
+import {
+  HelpCircle,
+  BarChart3,
+  MessageSquare,
+  Menu,
+  X,
+  Trophy,
+  Copy,
+  Check,
+  Receipt,
+  ChevronDown,
+  Wallet,
+  Hammer,
+  Store,
+  Users,
+  Info,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
@@ -13,11 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -55,7 +67,11 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
 
   return (
     <>
-      <header ref={ref} className="h-16 backdrop-blur-xl bg-black/20 sticky top-0 z-50 border-b border-white/10" {...props}>
+      <header
+        ref={ref}
+        className="h-16 backdrop-blur-xl bg-black/20 sticky top-0 z-50 border-b border-white/10"
+        {...props}
+      >
         <div className="h-full max-w-7xl mx-auto px-4 flex items-center justify-between">
           {/* Logo & Branding */}
           <div className="flex items-center gap-4 lg:gap-6">
@@ -64,13 +80,13 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 <img src={polyLogo} alt="Poly" className="w-8 h-8 lg:w-10 lg:h-10 object-contain" />
                 <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 lg:w-3 lg:h-3 bg-emerald-500 rounded-full border-2 border-[#0f0a1f]" />
               </div>
-              
+
               <div className="hidden sm:flex flex-col">
                 <span className="font-bold text-base lg:text-lg bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent leading-tight">
                   Poly
                 </span>
                 <span className="text-[10px] lg:text-xs text-gray-400 leading-tight whitespace-nowrap">
-                  AI Market Analyst
+                  Analyze. Trade. Win.
                 </span>
               </div>
             </Link>
@@ -78,13 +94,13 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
             {/* Navigation - Desktop: Chat → Markets → My Trades → Dashboard → Leaderboard */}
             <nav className="hidden md:flex items-center gap-1">
               <Link to="/">
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
-                className={`text-sm gap-2 rounded-lg transition-all ${
-                    isActive('/') || isActive('/chat')
-                      ? 'text-black bg-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  className={`text-sm gap-2 rounded-lg transition-all ${
+                    isActive("/") || isActive("/chat")
+                      ? "text-black bg-white"
+                      : "text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
                 >
                   <MessageSquare className="w-4 h-4" />
@@ -95,13 +111,13 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               {/* Markets Dropdown - includes Dashboard */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     className={`text-sm gap-2 rounded-lg transition-all ${
-                      isActive('/markets') || isActive('/my-trades') || isActive('/dashboard')
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/markets") || isActive("/my-trades") || isActive("/dashboard")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <Store className="w-4 h-4" />
@@ -111,19 +127,25 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="bg-[#1a1525] border-white/10 min-w-[160px]">
                   <Link to="/markets">
-                    <DropdownMenuItem className={`gap-2 cursor-pointer ${isActive('/markets') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white focus:text-white focus:bg-white/10'}`}>
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/markets") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
                       <Store className="w-4 h-4" />
                       Browse Markets
                     </DropdownMenuItem>
                   </Link>
                   <Link to="/dashboard">
-                    <DropdownMenuItem className={`gap-2 cursor-pointer ${isActive('/dashboard') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white focus:text-white focus:bg-white/10'}`}>
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/dashboard") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
                       <BarChart3 className="w-4 h-4" />
                       Dashboard
                     </DropdownMenuItem>
                   </Link>
                   <Link to="/my-trades">
-                    <DropdownMenuItem className={`gap-2 cursor-pointer ${isActive('/my-trades') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white focus:text-white focus:bg-white/10'}`}>
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/my-trades") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
                       <Receipt className="w-4 h-4" />
                       My Trades
                     </DropdownMenuItem>
@@ -133,13 +155,11 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
 
               {/* About Link */}
               <Link to="/about">
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   className={`text-sm gap-2 rounded-lg transition-all ${
-                    isActive('/about') 
-                      ? 'text-black bg-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    isActive("/about") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
                 >
                   <Info className="w-4 h-4" />
@@ -150,13 +170,13 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               {/* Leaderboard Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     className={`text-sm gap-2 rounded-lg transition-all ${
-                      isActive('/leaderboard') || isActive('/builders')
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/leaderboard") || isActive("/builders")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <Trophy className="w-4 h-4" />
@@ -166,32 +186,31 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="bg-[#1a1525] border-white/10 min-w-[160px]">
                   <Link to="/leaderboard">
-                    <DropdownMenuItem className={`gap-2 cursor-pointer ${isActive('/leaderboard') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white focus:text-white focus:bg-white/10'}`}>
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/leaderboard") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
                       <Users className="w-4 h-4" />
                       Traders
                     </DropdownMenuItem>
                   </Link>
                   <Link to="/builders">
-                    <DropdownMenuItem className={`gap-2 cursor-pointer ${isActive('/builders') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white focus:text-white focus:bg-white/10'}`}>
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/builders") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
                       <Hammer className="w-4 h-4" />
                       Builders
                     </DropdownMenuItem>
                   </Link>
                 </DropdownMenuContent>
               </DropdownMenu>
-
             </nav>
           </div>
 
           {/* Right Actions - Desktop */}
           <div className="hidden md:flex items-center gap-2 lg:gap-3">
             {/* Official X Page - Follow Button */}
-            <a 
-              href="https://x.com/trypolyai"
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              <Button 
+            <a href="https://x.com/trypolyai" target="_blank" rel="noopener noreferrer">
+              <Button
                 size="sm"
                 className="gap-1.5 rounded-lg bg-white text-black hover:bg-gray-200 font-semibold transition-all shadow-lg shadow-white/20 px-3"
               >
@@ -224,7 +243,10 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                       My Trades
                     </DropdownMenuItem>
                   </Link>
-                  <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10" asChild>
+                  <DropdownMenuItem
+                    className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10"
+                    asChild
+                  >
                     <div>
                       <ConnectWallet />
                     </div>
@@ -250,17 +272,16 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               )}
             </button>
 
-
             {/* Help Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className={`gap-2 rounded-lg transition-all ${
-                    location.pathname === '/help' || location.pathname === '/about'
-                      ? 'text-black bg-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    location.pathname === "/help" || location.pathname === "/about"
+                      ? "text-black bg-white"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   <HelpCircle className="w-4 h-4" />
@@ -270,7 +291,9 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-[#1a1525] border-white/10 min-w-[160px]">
                 <Link to="/help">
-                  <DropdownMenuItem className={`gap-2 cursor-pointer ${isActive('/help') ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white focus:text-white focus:bg-white/10'}`}>
+                  <DropdownMenuItem
+                    className={`gap-2 cursor-pointer ${isActive("/help") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                  >
                     <HelpCircle className="w-4 h-4" />
                     Support
                   </DropdownMenuItem>
@@ -295,12 +318,12 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
           <div className="md:hidden absolute top-16 left-0 right-0 bg-[#0f0a1f]/95 backdrop-blur-xl border-b border-white/10 p-4 animate-fade-in">
             <nav className="flex flex-col gap-2">
               <Link to="/" onClick={() => setMobileMenuOpen(false)}>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className={`w-full justify-start gap-3 ${
-                    isActive('/') || isActive('/chat')
-                      ? 'text-black bg-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    isActive("/") || isActive("/chat")
+                      ? "text-black bg-white"
+                      : "text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
                 >
                   <MessageSquare className="w-5 h-5" />
@@ -314,12 +337,10 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   Markets
                 </div>
                 <Link to="/markets" onClick={() => setMobileMenuOpen(false)}>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className={`w-full justify-start gap-3 pl-8 ${
-                      isActive('/markets') 
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/markets") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <Store className="w-5 h-5" />
@@ -327,12 +348,12 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   </Button>
                 </Link>
                 <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className={`w-full justify-start gap-3 pl-8 ${
-                      isActive('/dashboard') 
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/dashboard")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <BarChart3 className="w-5 h-5" />
@@ -340,12 +361,12 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   </Button>
                 </Link>
                 <Link to="/my-trades" onClick={() => setMobileMenuOpen(false)}>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className={`w-full justify-start gap-3 pl-8 ${
-                      isActive('/my-trades') 
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/my-trades")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <Receipt className="w-5 h-5" />
@@ -355,12 +376,10 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               </div>
 
               <Link to="/about" onClick={() => setMobileMenuOpen(false)}>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className={`w-full justify-start gap-3 ${
-                    isActive('/about') 
-                      ? 'text-black bg-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/10'
+                    isActive("/about") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
                   }`}
                 >
                   <Info className="w-5 h-5" />
@@ -375,12 +394,12 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   Leaderboard
                 </div>
                 <Link to="/leaderboard" onClick={() => setMobileMenuOpen(false)}>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className={`w-full justify-start gap-3 pl-8 ${
-                      isActive('/leaderboard') 
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/leaderboard")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <Users className="w-5 h-5" />
@@ -388,12 +407,10 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   </Button>
                 </Link>
                 <Link to="/builders" onClick={() => setMobileMenuOpen(false)}>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className={`w-full justify-start gap-3 pl-8 ${
-                      isActive('/builders') 
-                        ? 'text-black bg-white' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                      isActive("/builders") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
                     }`}
                   >
                     <Hammer className="w-5 h-5" />
@@ -401,15 +418,13 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   </Button>
                 </Link>
               </div>
-              <a 
-                href="https://x.com/trypolyai" 
-                target="_blank" 
+              <a
+                href="https://x.com/trypolyai"
+                target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Button 
-                  className="w-full justify-start gap-3 bg-white text-black hover:bg-gray-200 font-semibold"
-                >
+                <Button className="w-full justify-start gap-3 bg-white text-black hover:bg-gray-200 font-semibold">
                   <XLogo className="w-5 h-5" />
                   Follow on X
                 </Button>
@@ -427,16 +442,12 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                     {POLY_CA === "Coming Soon" ? "Coming Soon" : `${POLY_CA.slice(0, 6)}...${POLY_CA.slice(-4)}`}
                   </span>
                 </div>
-                {copied ? (
-                  <Check className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <Copy className="w-4 h-4 text-gray-500" />
-                )}
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-gray-500" />}
               </button>
               <div className="border-t border-white/10 my-2" />
               <Link to="/help" onClick={() => setMobileMenuOpen(false)}>
                 <Button
-                  variant="ghost" 
+                  variant="ghost"
                   className="w-full justify-start gap-3 text-gray-400 hover:text-white hover:bg-white/5"
                 >
                   <HelpCircle className="w-5 h-5" />
@@ -448,13 +459,25 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               </div>
               {/* Legal Links - Mobile */}
               <div className="flex items-center justify-center gap-4 pt-3 text-xs text-gray-500">
-                <Link to="/privacy" onClick={() => setMobileMenuOpen(false)} className="hover:text-white transition-colors">
+                <Link
+                  to="/privacy"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="hover:text-white transition-colors"
+                >
                   Privacy
                 </Link>
-                <Link to="/terms" onClick={() => setMobileMenuOpen(false)} className="hover:text-white transition-colors">
+                <Link
+                  to="/terms"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="hover:text-white transition-colors"
+                >
                   Terms
                 </Link>
-                <Link to="/disclaimer" onClick={() => setMobileMenuOpen(false)} className="hover:text-white transition-colors">
+                <Link
+                  to="/disclaimer"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="hover:text-white transition-colors"
+                >
                   Disclaimer
                 </Link>
               </div>
@@ -468,4 +491,4 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
   );
 });
 
-TopBar.displayName = 'TopBar';
+TopBar.displayName = "TopBar";
