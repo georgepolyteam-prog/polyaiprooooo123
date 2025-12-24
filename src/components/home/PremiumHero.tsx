@@ -16,19 +16,13 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
         </div>
       </div>
 
-      {/* Logo - Clean & Professional */}
+      {/* Logo - Clean & Simple like chat */}
       <div className="relative flex justify-center items-center mb-8 animate-fade-in" style={{ animationDelay: '50ms' }}>
-        {/* Subtle ambient glow */}
-        <div className="absolute w-24 h-24 rounded-full bg-primary/10 blur-2xl" />
-        
-        {/* Logo container */}
-        <div className="relative">
-          <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/90 p-0.5 shadow-xl shadow-primary/20">
-            <div className="w-full h-full rounded-[14px] bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-              <img src={polyLogo} alt="Poly" className="w-9 h-9 sm:w-10 sm:h-10 object-contain" />
-            </div>
-          </div>
-        </div>
+        <img 
+          src={polyLogo} 
+          alt="Poly" 
+          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-contain" 
+        />
       </div>
 
       {/* Title & Subtitle */}
