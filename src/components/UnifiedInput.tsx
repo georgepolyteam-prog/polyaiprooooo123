@@ -2,19 +2,24 @@ import React, { useState, useRef, useEffect } from "react";
 import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PolyfactualToggle } from "@/components/chat/PolyfactualToggle";
+import { PolyfactualHint } from "@/components/chat/PolyfactualHint";
 
 interface UnifiedInputProps {
   onSubmit: (message: string, isVoice: boolean, audioBlob?: Blob) => void;
   disabled?: boolean;
   deepResearch?: boolean;
   onToggleDeepResearch?: () => void;
+  showPolyfactualHint?: boolean;
+  onDismissHint?: () => void;
 }
 
 export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(({ 
   onSubmit, 
   disabled,
   deepResearch = false,
-  onToggleDeepResearch
+  onToggleDeepResearch,
+  showPolyfactualHint = false,
+  onDismissHint
 }, ref) => {
   const [textInput, setTextInput] = useState("");
   const [isMobile, setIsMobile] = useState(false);
@@ -53,6 +58,14 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
       ? "Deep research mode - ask anything..." 
       : "Paste a market URL or ask anything...";
 
+  const polyfactualToggle = onToggleDeepResearch ? (
+    <PolyfactualToggle 
+      enabled={deepResearch} 
+      onToggle={onToggleDeepResearch}
+      disabled={disabled}
+    />
+  ) : null;
+
   return (
     <div 
       ref={ref} 
@@ -68,13 +81,15 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
       {/* Gradient border effect */}
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
       
-      {/* Polyfactual Toggle */}
-      {onToggleDeepResearch && (
-        <PolyfactualToggle 
-          enabled={deepResearch} 
-          onToggle={onToggleDeepResearch}
-          disabled={disabled}
-        />
+      {/* Polyfactual Toggle with optional hint */}
+      {polyfactualToggle && (
+        showPolyfactualHint && onDismissHint ? (
+          <PolyfactualHint show={showPolyfactualHint} onDismiss={onDismissHint}>
+            {polyfactualToggle}
+          </PolyfactualHint>
+        ) : (
+          polyfactualToggle
+        )
       )}
       
       <input
