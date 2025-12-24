@@ -37,6 +37,7 @@ import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import polymarketLogo from "@/assets/polymarket-logo.png";
 
 interface MarketOutcome {
   question: string;
@@ -698,48 +699,43 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
   const isHighVolume = (event.volume24hr || 0) > 100000;
 
   const handleCardClick = useCallback(() => onClick(event), [onClick, event]);
-  const handleAnalyze = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onAskPoly(event);
-  }, [onAskPoly, event]);
-  const handleTradeClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (primaryOutcome) onTrade(primaryOutcome, event.slug);
-  }, [onTrade, primaryOutcome, event.slug]);
-  const handleShowAll = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onShowAllOutcomes(event);
-  }, [onShowAllOutcomes, event]);
 
   return (
     <div 
-      className="group bg-card border border-border rounded-xl overflow-hidden cursor-pointer transition-colors duration-200 hover:border-muted-foreground/40"
+      className="market-card-premium group bg-card/80 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
       onClick={handleCardClick}
     >
       {/* Header with Image */}
-      <div className="relative h-28 overflow-hidden">
+      <div className="relative h-32 overflow-hidden">
         {event.image ? (
           <img 
             src={event.image} 
             alt="" 
             loading="lazy"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-primary/20 via-secondary/10 to-accent/5" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
         
+        {/* Polymarket Badge */}
+        <div className="absolute bottom-3 left-3">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-background/80 backdrop-blur-sm border border-border/50">
+            <img src={polymarketLogo} alt="Polymarket" className="h-3.5 w-auto opacity-80" />
+            <span className="text-[10px] text-muted-foreground font-medium">Polymarket</span>
+          </div>
+        </div>
         
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-2">
           {event.category && (
-            <Badge variant="secondary" className="bg-background/80 backdrop-blur-sm text-xs">
+            <Badge variant="secondary" className="bg-background/90 backdrop-blur-sm text-xs font-medium border-0">
               {event.category}
             </Badge>
           )}
           {isHighVolume && (
-            <Badge className="bg-primary/90 text-primary-foreground text-xs gap-1">
+            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs gap-1 border-0 shadow-lg shadow-amber-500/20">
               <Flame className="w-3 h-3" />
               Hot
             </Badge>
@@ -748,7 +744,7 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
 
         {/* Time remaining / Multi-Market indicator */}
         <div className="absolute top-3 right-3">
-          <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-xs gap-1">
+          <Badge variant="outline" className="bg-background/90 backdrop-blur-sm text-xs gap-1 border-border/50">
             {isMultiMarket && !event.endDate ? (
               <>
                 <Layers className="w-3 h-3" />
@@ -772,18 +768,18 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
 
         {/* Stats Row */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
-          <span className="flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" />
+          <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50">
+            <TrendingUp className="w-3 h-3 text-primary" />
             {formatVolume(event.volume24hr || 0)}
           </span>
-          <span className="flex items-center gap-1">
-            <Droplets className="w-3 h-3" />
+          <span className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50">
+            <Droplets className="w-3 h-3 text-secondary" />
             {formatVolume(event.liquidity || 0)}
           </span>
           {event.marketsCount > 1 && (
-            <span className="ml-auto flex items-center gap-1">
+            <span className="ml-auto flex items-center gap-1 text-muted-foreground">
               <Layers className="w-3 h-3" />
-              {event.marketsCount} outcomes
+              {event.marketsCount}
             </span>
           )}
         </div>
@@ -805,7 +801,7 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
             <Button
               variant="ghost"
               size="sm"
-              className="w-full text-muted-foreground hover:text-foreground text-xs gap-1.5"
+              className="w-full text-muted-foreground hover:text-foreground text-xs gap-1.5 hover:bg-muted/50"
               onClick={(e) => {
                 e.stopPropagation();
                 onShowAllOutcomes(event);
@@ -817,31 +813,28 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
           )}
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Premium Polymarket Style */}
         <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 gap-1.5 text-xs h-9"
+          <button
+            className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-medium transition-all duration-200 bg-muted/50 hover:bg-muted border border-border/50 hover:border-primary/30 text-foreground group/analyze"
             onClick={(e) => {
               e.stopPropagation();
               onAskPoly(event);
             }}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            Analyze
-          </Button>
-          <Button
-            size="sm"
-            className="flex-1 gap-1.5 text-xs h-9 bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+            <Sparkles className="w-4 h-4 text-primary group-hover/analyze:scale-110 transition-transform" />
+            <span>Analyze</span>
+          </button>
+          <button
+            className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-medium transition-all duration-200 bg-gradient-to-r from-primary to-secondary text-primary-foreground hover:shadow-lg hover:shadow-primary/25 hover:scale-[1.02] active:scale-[0.98]"
             onClick={(e) => {
               e.stopPropagation();
               if (primaryOutcome) onTrade(primaryOutcome, event.slug);
             }}
           >
-            <Zap className="w-3.5 h-3.5" />
-            Trade
-          </Button>
+            <Zap className="w-4 h-4" />
+            <span>Trade</span>
+          </button>
         </div>
       </div>
     </div>
@@ -859,7 +852,6 @@ interface OutcomeRowProps {
 
 const OutcomeRow = memo(({ outcome, event, onTrade, onAskPoly, isMultiOutcome }: OutcomeRowProps) => {
   const yesPercent = Math.round(outcome.yesPrice * 100);
-  const noPercent = 100 - yesPercent;
   const priceValid = isValidPrice(outcome.yesPrice);
   const yesPriceDisplay = formatPrice(outcome.yesPrice);
   const noPriceDisplay = formatPrice(1 - outcome.yesPrice);
@@ -873,57 +865,55 @@ const OutcomeRow = memo(({ outcome, event, onTrade, onAskPoly, isMultiOutcome }:
     );
   }
 
-  // Single outcome: show prominent Yes/No buy buttons
+  // Single outcome: show prominent Yes/No buy buttons with glow
   if (!isMultiOutcome) {
     return (
-      <div className="bg-muted/30 rounded-xl p-3">
+      <div className="bg-gradient-to-br from-muted/40 to-muted/20 rounded-xl p-3 border border-border/30">
         <div className="flex items-center gap-2">
-          {/* Yes Button */}
+          {/* Yes Button - Premium Glow */}
           <button 
             onClick={(e) => {
               e.stopPropagation();
               onTrade(outcome, event.slug);
             }}
-            className="flex-1 py-3 px-4 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group/yes"
+            className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 hover:from-emerald-500/25 hover:to-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/50 transition-all group/yes hover:shadow-lg hover:shadow-emerald-500/10"
           >
-            <div className="text-xl font-bold text-emerald-500 group-hover/yes:scale-105 transition-transform">{yesPriceDisplay}</div>
-            <div className="text-xs text-emerald-400/80 font-medium">Buy Yes</div>
+            <div className="text-2xl font-bold text-emerald-400 group-hover/yes:scale-105 transition-transform tabular-nums">{yesPriceDisplay}</div>
+            <div className="text-xs text-emerald-400/70 font-medium uppercase tracking-wide">Buy Yes</div>
           </button>
           
-          {/* No Button */}
+          {/* No Button - Premium Glow */}
           <button 
             onClick={(e) => {
               e.stopPropagation();
               onTrade(outcome, event.slug);
             }}
-            className="flex-1 py-3 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-500/50 transition-all group/no"
+            className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-500/5 hover:from-rose-500/25 hover:to-rose-500/10 border border-rose-500/30 hover:border-rose-500/50 transition-all group/no hover:shadow-lg hover:shadow-rose-500/10"
           >
-            <div className="text-xl font-bold text-rose-500 group-hover/no:scale-105 transition-transform">{noPriceDisplay}</div>
-            <div className="text-xs text-rose-400/80 font-medium">Buy No</div>
+            <div className="text-2xl font-bold text-rose-400 group-hover/no:scale-105 transition-transform tabular-nums">{noPriceDisplay}</div>
+            <div className="text-xs text-rose-400/70 font-medium uppercase tracking-wide">Buy No</div>
           </button>
           
-          {/* Analyze */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-full py-3 px-3 text-muted-foreground hover:text-primary hover:bg-primary/10"
+          {/* Analyze Button */}
+          <button
+            className="h-full py-3 px-3 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
             onClick={(e) => {
               e.stopPropagation();
               onAskPoly(event, outcome);
             }}
             title="AI Analysis"
           >
-            <Sparkles className="w-4 h-4" />
-          </Button>
+            <Sparkles className="w-5 h-5" />
+          </button>
         </div>
       </div>
     );
   }
 
-  // Multi-outcome: show compact price bar with loading state
+  // Multi-outcome: show compact price bar
   return (
     <div 
-      className="bg-muted/30 rounded-xl p-3 hover:bg-muted/50 transition-all group/outcome cursor-pointer border border-transparent hover:border-border/50"
+      className="bg-gradient-to-br from-muted/40 to-muted/20 rounded-xl p-3 hover:from-muted/60 hover:to-muted/30 transition-all group/outcome cursor-pointer border border-border/30 hover:border-border/50"
       onClick={(e) => {
         e.stopPropagation();
         onTrade(outcome, event.slug);
@@ -936,28 +926,22 @@ const OutcomeRow = memo(({ outcome, event, onTrade, onAskPoly, isMultiOutcome }:
       <div className="flex items-center justify-between gap-3">
         {/* Price Bar */}
         <div className="flex-1">
-          <div className="flex items-center justify-between mb-1.5 text-xs font-medium">
-            <span className="text-emerald-500">Yes {priceValid ? yesPriceDisplay : <Skeleton className="inline-block h-3 w-8" />}</span>
-            <span className="text-rose-500">No {priceValid ? noPriceDisplay : <Skeleton className="inline-block h-3 w-8" />}</span>
+          <div className="flex items-center justify-between mb-1.5 text-xs font-semibold">
+            <span className="text-emerald-400">Yes {yesPriceDisplay}</span>
+            <span className="text-rose-400">No {noPriceDisplay}</span>
           </div>
-          <div className="h-2 bg-rose-500/20 rounded-full overflow-hidden">
-            {priceValid ? (
-              <div 
-                className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${yesPercent}%` }}
-              />
-            ) : (
-              <Skeleton className="h-full w-1/2 rounded-full" />
-            )}
+          <div className="h-2.5 bg-rose-500/20 rounded-full overflow-hidden shadow-inner">
+            <div 
+              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500 shadow-sm"
+              style={{ width: `${yesPercent}%` }}
+            />
           </div>
         </div>
 
         {/* Actions - always visible on mobile, hover on desktop */}
         <div className="flex items-center gap-1 bg-muted/60 rounded-lg p-0.5 md:bg-transparent md:p-0 md:opacity-0 md:group-hover/outcome:opacity-100 transition-all">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
+          <button
+            className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full transition-all"
             onClick={(e) => {
               e.stopPropagation();
               onAskPoly(event, outcome);
@@ -965,11 +949,9 @@ const OutcomeRow = memo(({ outcome, event, onTrade, onAskPoly, isMultiOutcome }:
             title="Analyze"
           >
             <Sparkles className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
+          </button>
+          <button
+            className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full transition-all"
             onClick={(e) => {
               e.stopPropagation();
               onTrade(outcome, event.slug);
@@ -977,7 +959,7 @@ const OutcomeRow = memo(({ outcome, event, onTrade, onAskPoly, isMultiOutcome }:
             title="Trade"
           >
             <ArrowUpRight className="w-3.5 h-3.5" />
-          </Button>
+          </button>
         </div>
       </div>
     </div>
