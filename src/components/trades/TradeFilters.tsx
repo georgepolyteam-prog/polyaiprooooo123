@@ -19,6 +19,8 @@ interface TradeFiltersProps {
   setMarketFilter: (value: string) => void;
   availableMarkets: string[];
   totalTrades: number;
+  hideUpDown: boolean;
+  setHideUpDown: (value: boolean) => void;
 }
 
 export function TradeFilters({
@@ -35,9 +37,11 @@ export function TradeFilters({
   marketFilter,
   setMarketFilter,
   availableMarkets,
-  totalTrades
+  totalTrades,
+  hideUpDown,
+  setHideUpDown
 }: TradeFiltersProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true); // Open by default
   const [minVolumeInput, setMinVolumeInput] = useState(minVolume > 0 ? minVolume.toString() : '');
 
   // Sync local input with parent state when parent changes externally
@@ -126,7 +130,7 @@ export function TradeFilters({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="p-4 rounded-xl border border-border bg-card/50 backdrop-blur-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-xl border border-border bg-card/50 backdrop-blur-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Search */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Search</label>
@@ -196,6 +200,19 @@ export function TradeFilters({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Hide Up/Down Markets Toggle */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Market Type</label>
+                <Button
+                  onClick={() => setHideUpDown(!hideUpDown)}
+                  variant={hideUpDown ? 'default' : 'outline'}
+                  size="sm"
+                  className={`w-full min-h-[44px] ${hideUpDown ? 'bg-primary hover:bg-primary/90' : ''}`}
+                >
+                  {hideUpDown ? '✓ Hiding Up/Down' : 'Hide Up/Down'}
+                </Button>
               </div>
             </div>
           </motion.div>
