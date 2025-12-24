@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -38,15 +38,36 @@ export function TradeFilters({
   totalTrades
 }: TradeFiltersProps) {
   const [expanded, setExpanded] = useState(false);
+  const [minVolumeInput, setMinVolumeInput] = useState(minVolume > 0 ? minVolume.toString() : '');
+
+  // Sync local input with parent state when parent changes externally
+  useEffect(() => {
+    setMinVolumeInput(minVolume > 0 ? minVolume.toString() : '');
+  }, [minVolume]);
+
+  const handleMinVolumeChange = (value: string) => {
+    // Allow only numbers and decimal point
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    // Prevent multiple decimal points
+    const parts = cleaned.split('.');
+    const formatted = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned;
+    setMinVolumeInput(formatted);
+  };
+
+  const handleMinVolumeBlur = () => {
+    const parsed = parseFloat(minVolumeInput) || 0;
+    setMinVolume(parsed);
+  };
 
   return (
     <div className="mb-6 space-y-3">
       {/* Main Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <Button
           onClick={() => setFilter('all')}
           variant={filter === 'all' ? 'default' : 'ghost'}
           size="sm"
+          className="min-h-[44px] sm:min-h-[36px]"
         >
           All Trades
         </Button>
@@ -54,7 +75,7 @@ export function TradeFilters({
           onClick={() => setFilter('buy')}
           variant={filter === 'buy' ? 'default' : 'ghost'}
           size="sm"
-          className={filter === 'buy' ? 'bg-success hover:bg-success/90' : ''}
+          className={`min-h-[44px] sm:min-h-[36px] ${filter === 'buy' ? 'bg-success hover:bg-success/90' : ''}`}
         >
           <TrendingUp className="w-4 h-4 mr-1" />
           Buys
@@ -63,7 +84,7 @@ export function TradeFilters({
           onClick={() => setFilter('sell')}
           variant={filter === 'sell' ? 'default' : 'ghost'}
           size="sm"
-          className={filter === 'sell' ? 'bg-destructive hover:bg-destructive/90' : ''}
+          className={`min-h-[44px] sm:min-h-[36px] ${filter === 'sell' ? 'bg-destructive hover:bg-destructive/90' : ''}`}
         >
           <TrendingDown className="w-4 h-4 mr-1" />
           Sells
@@ -74,7 +95,7 @@ export function TradeFilters({
           onClick={() => setWhalesOnly(!whalesOnly)}
           variant={whalesOnly ? 'default' : 'outline'}
           size="sm"
-          className={whalesOnly ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : ''}
+          className={`min-h-[44px] sm:min-h-[36px] ${whalesOnly ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : ''}`}
         >
           🐋 Whales Only
         </Button>
@@ -84,7 +105,7 @@ export function TradeFilters({
           onClick={() => setExpanded(!expanded)}
           variant="ghost"
           size="sm"
-          className="gap-1"
+          className="gap-1 min-h-[44px] sm:min-h-[36px]"
         >
           <Filter className="w-4 h-4" />
           Filters
@@ -107,22 +128,25 @@ export function TradeFilters({
           >
             <div className="p-4 rounded-xl border border-border bg-card/50 backdrop-blur-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search markets or wallets..."
-                  className="pl-10 pr-8"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Markets or wallets..."
+                    className="pl-10 pr-8 min-h-[44px]"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Min Volume */}
@@ -131,11 +155,14 @@ export function TradeFilters({
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">$</span>
                   <Input
-                    type="number"
-                    value={minVolume}
-                    onChange={(e) => setMinVolume(Number(e.target.value))}
+                    type="text"
+                    inputMode="decimal"
+                    value={minVolumeInput}
+                    onChange={(e) => handleMinVolumeChange(e.target.value)}
+                    onBlur={handleMinVolumeBlur}
+                    onKeyDown={(e) => e.key === 'Enter' && handleMinVolumeBlur()}
                     placeholder="0"
-                    className="w-full"
+                    className="w-full min-h-[44px]"
                   />
                 </div>
               </div>
@@ -146,7 +173,7 @@ export function TradeFilters({
                 <select
                   value={tokenFilter}
                   onChange={(e) => setTokenFilter(e.target.value as 'all' | 'yes' | 'no')}
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                  className="w-full min-h-[44px] px-3 rounded-md border border-input bg-background text-sm"
                 >
                   <option value="all">All Outcomes</option>
                   <option value="yes">Yes Only</option>
@@ -160,7 +187,7 @@ export function TradeFilters({
                 <select
                   value={marketFilter}
                   onChange={(e) => setMarketFilter(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm truncate"
+                  className="w-full min-h-[44px] px-3 rounded-md border border-input bg-background text-sm truncate"
                 >
                   <option value="all">All Markets</option>
                   {availableMarkets.slice(0, 20).map(slug => (
