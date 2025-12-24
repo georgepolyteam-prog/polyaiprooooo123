@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock, Download, Volume2, VolumeX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
 import { TradeDetailModal } from '@/components/trades/TradeDetailModal';
@@ -8,6 +9,7 @@ import { TradeFilters } from '@/components/trades/TradeFilters';
 import { TradeStats } from '@/components/trades/TradeStats';
 import { TopTradersSidebar } from '@/components/trades/TopTradersSidebar';
 import { MarketHeatmap } from '@/components/trades/MarketHeatmap';
+import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -30,6 +32,17 @@ interface Trade {
   image?: string;
 }
 
+interface MarketContext {
+  eventTitle: string;
+  outcomeQuestion: string;
+  currentOdds: number;
+  volume: number;
+  url: string;
+  slug: string;
+  eventSlug: string;
+  image?: string;
+}
+
 // Constants for connection health
 const STALE_THRESHOLD_MS = 15000;
 const WATCHDOG_INTERVAL_MS = 5000;
@@ -38,6 +51,7 @@ const WHALE_THRESHOLD = 1000; // $1k+
 const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
 export default function LiveTrades() {
+  const navigate = useNavigate();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [paused, setPaused] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -56,6 +70,10 @@ export default function LiveTrades() {
   const [tokenFilter, setTokenFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [marketFilter, setMarketFilter] = useState('all');
   const [soundEnabled, setSoundEnabled] = useState(false);
+
+  // Analysis modal state
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [analysisContext, setAnalysisContext] = useState<MarketContext | null>(null);
   
   const wsRef = useRef<WebSocket | null>(null);
   const pausedTradesRef = useRef<Trade[]>([]);
@@ -771,18 +789,68 @@ export default function LiveTrades() {
             )}
           </div>
 
-          {/* Right Sidebar */}
-          <div className="space-y-4">
+          {/* Right Sidebar - Hidden on mobile, shown on lg+ */}
+          <div className="hidden lg:block space-y-4">
             <TopTradersSidebar 
               traders={topTraders} 
-              onWalletClick={(wallet) => setSearchTerm(wallet)}
+              onWalletClick={(wallet) => {
+                // Find a trade from this trader to open the detail modal
+                const traderTrade = trades.find(t => t.user === wallet);
+                if (traderTrade) {
+                  setSelectedTrade(traderTrade);
+                }
+              }}
             />
             <MarketHeatmap 
               markets={marketVolumes}
-              onMarketClick={(slug) => setMarketFilter(slug)}
+              onMarketClick={(slug) => setMarketFilter(slug === marketFilter ? 'all' : slug)}
+              onAnalyze={(market) => {
+                setAnalysisContext({
+                  eventTitle: market.title || market.slug.replace(/-/g, ' '),
+                  outcomeQuestion: market.title || market.slug.replace(/-/g, ' '),
+                  currentOdds: 0.5,
+                  volume: market.volume,
+                  url: `https://polymarket.com/event/${market.slug}`,
+                  slug: market.slug,
+                  eventSlug: market.slug,
+                  image: market.image
+                });
+                setAnalysisModalOpen(true);
+              }}
               selectedMarket={marketFilter !== 'all' ? marketFilter : undefined}
             />
           </div>
+        </div>
+
+        {/* Mobile Sidebars - Shown below trade feed on mobile */}
+        <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+          <TopTradersSidebar 
+            traders={topTraders} 
+            onWalletClick={(wallet) => {
+              const traderTrade = trades.find(t => t.user === wallet);
+              if (traderTrade) {
+                setSelectedTrade(traderTrade);
+              }
+            }}
+          />
+          <MarketHeatmap 
+            markets={marketVolumes}
+            onMarketClick={(slug) => setMarketFilter(slug === marketFilter ? 'all' : slug)}
+            onAnalyze={(market) => {
+              setAnalysisContext({
+                eventTitle: market.title || market.slug.replace(/-/g, ' '),
+                outcomeQuestion: market.title || market.slug.replace(/-/g, ' '),
+                currentOdds: 0.5,
+                volume: market.volume,
+                url: `https://polymarket.com/event/${market.slug}`,
+                slug: market.slug,
+                eventSlug: market.slug,
+                image: market.image
+              });
+              setAnalysisModalOpen(true);
+            }}
+            selectedMarket={marketFilter !== 'all' ? marketFilter : undefined}
+          />
         </div>
       </main>
 
@@ -796,6 +864,22 @@ export default function LiveTrades() {
           />
         )}
       </AnimatePresence>
+
+      <AnalysisSelectionModal
+        open={analysisModalOpen}
+        onOpenChange={setAnalysisModalOpen}
+        marketContext={analysisContext}
+        onSelect={(type) => {
+          if (!analysisContext) return;
+          setAnalysisModalOpen(false);
+          navigate('/chat', {
+            state: {
+              marketContext: analysisContext,
+              analysisType: type
+            }
+          });
+        }}
+      />
     </div>
   );
 }

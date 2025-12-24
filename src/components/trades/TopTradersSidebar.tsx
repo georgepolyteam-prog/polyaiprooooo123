@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Trophy, ExternalLink } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 interface TraderStats {
   wallet: string;
@@ -37,7 +36,7 @@ export function TopTradersSidebar({ traders, onWalletClick }: TopTradersSidebarP
     <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors min-h-[52px] touch-manipulation"
       >
         <div className="flex items-center gap-2">
           <Trophy className="w-4 h-4 text-warning" />
@@ -48,12 +47,12 @@ export function TopTradersSidebar({ traders, onWalletClick }: TopTradersSidebarP
       </button>
 
       {expanded && (
-        <div className="border-t border-border divide-y divide-border/50 max-h-[400px] overflow-y-auto">
+        <div className="border-t border-border divide-y divide-border/50 max-h-[300px] sm:max-h-[400px] overflow-y-auto">
           {traders.map((trader, index) => (
-            <div
+            <button
               key={trader.wallet}
               onClick={() => onWalletClick?.(trader.wallet)}
-              className="p-3 hover:bg-muted/30 transition-colors cursor-pointer group"
+              className="w-full p-3 hover:bg-muted/30 transition-colors cursor-pointer group text-left min-h-[60px] touch-manipulation"
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
@@ -71,7 +70,7 @@ export function TopTradersSidebar({ traders, onWalletClick }: TopTradersSidebarP
                   {trader.buyPercent.toFixed(0)}% buy
                 </span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
