@@ -10,9 +10,9 @@ export const PremiumCapabilities = () => {
         {/* Market Analysis */}
         <div className="bg-card/50 border border-primary/20 rounded-lg p-2.5 sm:p-3 relative overflow-hidden">
           <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 rounded-full blur-xl" />
-          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative">
-            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
-            <h3 className="font-medium text-[10px] sm:text-xs text-foreground">Market Analysis</h3>
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative min-w-0">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary flex-shrink-0" />
+            <h3 className="font-medium text-[10px] sm:text-xs text-foreground truncate">Market Analysis</h3>
           </div>
           <p className="text-[9px] sm:text-[11px] text-muted-foreground leading-relaxed relative">
             Paste any URL for instant AI breakdown
@@ -23,10 +23,10 @@ export const PremiumCapabilities = () => {
         <div className="bg-card/50 border border-primary/20 rounded-lg p-2.5 sm:p-3 relative overflow-hidden">
           <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 rounded-full blur-xl" />
           
-          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative flex-wrap">
-            <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
-            <h3 className="font-medium text-[10px] sm:text-xs text-foreground">Deep Research</h3>
-            <span className="px-1 sm:px-1.5 py-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider bg-primary text-primary-foreground rounded-full">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative min-w-0">
+            <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary flex-shrink-0" />
+            <h3 className="font-medium text-[10px] sm:text-xs text-foreground truncate">Deep Research</h3>
+            <span className="px-1 sm:px-1.5 py-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-wider bg-primary text-primary-foreground rounded-full flex-shrink-0">
               New
             </span>
           </div>
@@ -42,9 +42,9 @@ export const PremiumCapabilities = () => {
         {/* Smart Money */}
         <div className="bg-card/50 border border-primary/20 rounded-lg p-2.5 sm:p-3 relative overflow-hidden">
           <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 rounded-full blur-xl" />
-          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative">
-            <LineChart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
-            <h3 className="font-medium text-[10px] sm:text-xs text-foreground">Smart Money</h3>
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative min-w-0">
+            <LineChart className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary flex-shrink-0" />
+            <h3 className="font-medium text-[10px] sm:text-xs text-foreground truncate">Smart Money</h3>
           </div>
           <p className="text-[9px] sm:text-[11px] text-muted-foreground leading-relaxed relative">
             Track whale activity and flows
@@ -54,9 +54,9 @@ export const PremiumCapabilities = () => {
         {/* Live Data */}
         <div className="bg-card/50 border border-primary/20 rounded-lg p-2.5 sm:p-3 relative overflow-hidden">
           <div className="absolute -top-4 -right-4 w-12 h-12 bg-primary/10 rounded-full blur-xl" />
-          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative">
-            <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
-            <h3 className="font-medium text-[10px] sm:text-xs text-foreground">Live Data</h3>
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 relative min-w-0">
+            <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary flex-shrink-0" />
+            <h3 className="font-medium text-[10px] sm:text-xs text-foreground truncate">Live Data</h3>
           </div>
           <p className="text-[9px] sm:text-[11px] text-muted-foreground leading-relaxed mb-1.5 relative">
             Real-time market data & analytics
