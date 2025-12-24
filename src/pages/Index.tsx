@@ -367,6 +367,7 @@ const Index = () => {
     const state = location.state as { 
       initialMessage?: string;
       autoAnalyze?: boolean;
+      deepResearch?: boolean;
       marketContext?: {
         eventTitle: string;
         outcomeQuestion: string;
@@ -382,6 +383,11 @@ const Index = () => {
       hasAskedRef.current = true;
       const { marketContext } = state;
       
+      // Enable deep research if flag is set
+      if (state.deepResearch && !deepResearch) {
+        toggleDeepResearch();
+      }
+      
       sendMessage(`Analyze this market: ${marketContext.url}`);
       fetchMarketDataForSidebar(marketContext.url);
       window.history.replaceState({}, document.title);
@@ -390,7 +396,7 @@ const Index = () => {
       sendMessage(state.initialMessage);
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, sendMessage, messages.length]);
+  }, [location.state, sendMessage, messages.length, deepResearch, toggleDeepResearch]);
 
   useEffect(() => {
     const marketQuery = searchParams.get("market");
