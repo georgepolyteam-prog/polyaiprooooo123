@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { MarketSelector } from "./MarketSelector";
 import { PolyfactualResultHeader } from "./PolyfactualResultHeader";
 import { PolyfactualSourceCard } from "./PolyfactualSourceCard";
+import { PolyfactualContent } from "./PolyfactualContent";
 import polyLogo from "@/assets/poly-logo-new.png";
 interface MarketData {
   id: number;
@@ -697,23 +698,27 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
           />
         ) : polyfactualResult ? (
           /* Polyfactual Deep Research Results */
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Branded header */}
             <PolyfactualResultHeader />
             
-            {/* Research content */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-muted/40 to-muted/20 border border-cyan-500/10 shadow-soft backdrop-blur-sm">
-              <div className="text-sm leading-relaxed prose prose-invert max-w-none">
-                {formatText(polyfactualResult.content)}
-              </div>
+            {/* Research content with enhanced formatting */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-[#0d1117] to-[#161b22] border border-cyan-500/20 shadow-lg shadow-cyan-500/5 backdrop-blur-sm">
+              <PolyfactualContent content={polyfactualResult.content} />
             </div>
             
             {/* Source cards with favicons */}
             {polyfactualResult.sources.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                  <span>📚</span> Sources ({polyfactualResult.sources.length})
-                </h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-xs">📚</span>
+                    Verified Sources
+                  </h4>
+                  <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded-full">
+                    {polyfactualResult.sources.length} sources
+                  </span>
+                </div>
                 <div className="grid gap-2">
                   {polyfactualResult.sources.map((source, i) => (
                     <PolyfactualSourceCard 
