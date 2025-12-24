@@ -54,7 +54,7 @@ export function MarketTradeModal({ open, onOpenChange, marketData }: MarketTrade
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
+        <SheetContent side="bottom" elevated className="h-[85vh] rounded-t-3xl">
           <SheetHeader className="pb-4">
             <SheetTitle className="text-left">Trade Market</SheetTitle>
           </SheetHeader>
@@ -66,7 +66,7 @@ export function MarketTradeModal({ open, onOpenChange, marketData }: MarketTrade
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent elevated className="max-w-md h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Trade Market</DialogTitle>
         </DialogHeader>

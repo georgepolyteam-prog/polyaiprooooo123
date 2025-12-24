@@ -125,20 +125,14 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
 
   const handleTrade = () => {
     const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
-    onClose();
-    // Small delay to ensure modal is fully closed before opening new one
-    setTimeout(() => {
-      onTrade?.(marketUrl, trade);
-    }, 100);
+    // Don't close - let the new modal stack on top
+    onTrade?.(marketUrl, trade);
   };
 
   const handleAnalyze = () => {
     const url = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
-    onClose();
-    // Small delay to ensure modal is fully closed before opening new one
-    setTimeout(() => {
-      onAnalyze?.(trade, url);
-    }, 100);
+    // Don't close - let the new modal stack on top
+    onAnalyze?.(trade, url);
   };
 
   const totalPnL = pnlData?.pnl_over_time?.[pnlData.pnl_over_time.length - 1]?.pnl_to_date || 0;
