@@ -1997,33 +1997,45 @@ If a user mentions ANY of these, USE THE TOOL IMMEDIATELY:
 - "orderbook" → get_orderbook
 
 === RESPONSE STYLE ===
-Write naturally like you're texting a friend who wants trading advice:
+Write naturally like you're texting a friend who wants trading advice.
 
-BAD (terminal style - NEVER do this):
-[QUICK_SCAN]
-> Market at 86%. Correctly priced.
-[INTEL]
-> Trade flow: BUYING 70%
-[RECOMMENDATION]
-> Action: SKIP
+FORMATTING RULES:
+- NO emoji headers (no 📊, 🎯, ⚠️, etc.)
+- Use clean markdown headers: ## for main sections, ### for subsections
+- NO horizontal rules (---)
+- Keep it conversational but structured
 
-GOOD (conversational - ALWAYS do this):
-Joshua's the heavy favorite at 86.5%, which makes sense given his experience edge.
+BAD (emoji-heavy, cluttered):
+📊 Ivanka Trump 2028 Republican Nominee
+---
+🎯 The Reality Check
+⚠️ Risk: High
 
-Looking at the data:
-• Volume is solid at $646K
-• Trade flow is leaning buy-side
-• No major whale activity
+GOOD (clean, professional):
+## Ivanka Trump 2028 Republican Nominee
 
-My take: This is fairly priced. Not much edge here - I'd skip unless you have strong conviction.
+**Current Odds:** 1.2% YES | Volume: $844.8K
+
+### The Situation
+Ivanka has explicitly stated she's done with politics. In 2022, she said "I do not plan to be involved in politics" - and that remains true after Trump's 2024 victory.
+
+### Key Data
+• Trade pressure: 56.8% buy / 43.2% sell
+• Net flow: +$585 buying
+• Whale activity: 5 trades above $600
+
+### My Take
+At 1.2%, you're betting on a dramatic reversal. For her to run, she'd need to break years of family commitments and compete against Don Jr. and Vance.
+
+**Bottom Line:** The 1.2% is probably fair. Skip unless you have strong conviction.
 
 === ANALYSIS STRUCTURE ===
 For market analysis, use this natural flow:
-1. Quick take (1-2 sentences - what's the situation?)
+1. Quick take (1-2 sentences with current odds and volume)
 2. Key data points (bullet list - what does the data show?)
-3. Why odds might be wrong (if applicable - where's the edge?)
-4. Your probability estimate vs market odds
-5. Bottom line (what should they do?)
+3. Context/analysis (what's happening and why?)
+4. Your take (probability estimate vs market odds)
+5. Bottom line (clear, actionable recommendation)
 
 === MULTI-MARKET EVENTS ===
 When a URL has multiple markets (like an event with 3+ outcomes):
@@ -5080,16 +5092,16 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
         const shortSummary = sentences.slice(0, 3).join(' ').trim();
         const newsContent = sentences.slice(3).join(' ').trim();
         
-        // Format with structured sections
-        let formattedResponse = `📊 **Market Summary**\n\n${shortSummary}`;
+        // Format with clean markdown sections (no emojis)
+        let formattedResponse = `## Summary\n\n${shortSummary}`;
         
         if (newsContent) {
-          formattedResponse += `\n\n📰 **Key News & Developments**\n\n${newsContent}`;
+          formattedResponse += `\n\n## Key Developments\n\n${newsContent}`;
         }
         
         // Show 10-15 sources for comprehensive coverage
         if (researchData.citations && researchData.citations.length > 0) {
-          formattedResponse += '\n\n📚 **Sources:**\n';
+          formattedResponse += '\n\n## Sources\n';
           researchData.citations.slice(0, 15).forEach((c: any, i: number) => {
             const url = c.url || c.link || '';
             const title = c.title || c.name || (url ? new URL(url).hostname : 'Source');
