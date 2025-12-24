@@ -482,6 +482,39 @@
   background: linear-gradient(180deg, hsl(var(--poly-purple) / 0.7), hsl(var(--poly-cyan) / 0.7));
 }
 
+/* Hide scrollbar for horizontal scroll areas */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Float slow animation for background orbs */
+@keyframes float-slow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(10px, -20px) scale(1.02); }
+  50% { transform: translate(-5px, -10px) scale(0.98); }
+  75% { transform: translate(-15px, -25px) scale(1.01); }
+}
+
+.animate-float-slow {
+  animation: float-slow 20s ease-in-out infinite;
+}
+
+/* Safe area insets for iOS */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Shadow glow utility */
+.shadow-glow {
+  box-shadow: 0 0 20px hsl(var(--primary) / 0.2);
+}
+
 /* ===== SELECTION ===== */
 ::selection {
   background: hsl(var(--poly-purple) / 0.3);
