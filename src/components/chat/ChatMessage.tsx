@@ -3,6 +3,8 @@ import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, Extern
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MarketSelector } from "./MarketSelector";
+import { PolyfactualResultHeader } from "./PolyfactualResultHeader";
+import { PolyfactualSourceCard } from "./PolyfactualSourceCard";
 import polyLogo from "@/assets/poly-logo-new.png";
 interface MarketData {
   id: number;
@@ -114,6 +116,86 @@ const formatVolume = (vol: string): string => {
   return num.toString();
 };
 
+// Parse Polyfactual deep research results
+interface PolyfactualResult {
+  isPolyfactual: boolean;
+  content: string;
+  sources: Array<{ title: string; url: string }>;
+}
+
+const parsePolyfactualResult = (text: string): PolyfactualResult | null => {
+  // Check if this is a Polyfactual deep research result
+  if (!text.includes("Deep Research Results") && !text.includes("📊 **Deep Research")) {
+    return null;
+  }
+  
+  const sources: Array<{ title: string; url: string }> = [];
+  
+  // Extract sources section - look for numbered sources with URLs
+  const sourcesMatch = text.match(/(?:📚\s*\*?\*?Sources:?\*?\*?|Sources:)\s*([\s\S]*?)$/i);
+  if (sourcesMatch) {
+    const sourcesText = sourcesMatch[1];
+    
+    // Parse sources - they can be in format:
+    // 1. Title - URL
+    // 1. [Title](URL)
+    // 1. Title (URL)
+    // 1. URL
+    const sourceLines = sourcesText.split('\n').filter(line => line.trim());
+    
+    sourceLines.forEach(line => {
+      // Try markdown link format: [Title](URL)
+      const mdMatch = line.match(/\d+\.\s*\[([^\]]+)\]\(([^)]+)\)/);
+      if (mdMatch) {
+        sources.push({ title: mdMatch[1].trim(), url: mdMatch[2].trim() });
+        return;
+      }
+      
+      // Try format: Title - URL or Title: URL
+      const titleUrlMatch = line.match(/\d+\.\s*([^-:]+)[-:]\s*(https?:\/\/[^\s]+)/);
+      if (titleUrlMatch) {
+        sources.push({ title: titleUrlMatch[1].trim(), url: titleUrlMatch[2].trim() });
+        return;
+      }
+      
+      // Try format: Just URL
+      const urlOnlyMatch = line.match(/\d+\.\s*(https?:\/\/[^\s]+)/);
+      if (urlOnlyMatch) {
+        const url = urlOnlyMatch[1].trim();
+        // Extract domain as title
+        try {
+          const domain = new URL(url).hostname.replace('www.', '');
+          sources.push({ title: domain, url });
+        } catch {
+          sources.push({ title: 'Source', url });
+        }
+        return;
+      }
+      
+      // Try format: Title only (no URL) - skip these
+      const titleOnlyMatch = line.match(/\d+\.\s*(.+)/);
+      if (titleOnlyMatch && !titleOnlyMatch[1].startsWith('http')) {
+        // Check if there's a URL embedded anywhere
+        const embeddedUrl = titleOnlyMatch[1].match(/(https?:\/\/[^\s]+)/);
+        if (embeddedUrl) {
+          sources.push({ title: titleOnlyMatch[1].replace(embeddedUrl[1], '').trim() || 'Source', url: embeddedUrl[1] });
+        }
+      }
+    });
+  }
+  
+  // Remove sources section and header from content
+  let content = text
+    .replace(/📊\s*\*?\*?Deep Research Results\*?\*?\s*/i, '')
+    .replace(/(?:📚\s*\*?\*?Sources:?\*?\*?|Sources:)\s*[\s\S]*$/i, '')
+    .trim();
+  
+  return {
+    isPolyfactual: true,
+    content,
+    sources
+  };
+};
 const parseMarketCards = (text: string): { markets: MarketCard[]; introText: string; summaryText: string } => {
   const markets: MarketCard[] = [];
   const sections = text.split(/---+/).filter(s => s.trim());
@@ -544,13 +626,20 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
   const marketSelector = !isUser && !hasStructuredMarkets ? parseMarketSelector(displayedContent) : null;
   
   // Memoize parsing to prevent expensive regex on every stream chunk
-  const { markets, introText, summaryText } = useMemo(() => {
-    if (isUser) return { markets: [], introText: content, summaryText: "" };
+  const { markets, introText, summaryText, polyfactualResult } = useMemo(() => {
+    if (isUser) return { markets: [], introText: content, summaryText: "", polyfactualResult: null };
     // Skip parsing short content during streaming to reduce flicker
     if (isStreaming && displayedContent.length < 50) {
-      return { markets: [], introText: displayedContent, summaryText: "" };
+      return { markets: [], introText: displayedContent, summaryText: "", polyfactualResult: null };
     }
-    return parseMarketCards(displayedContent);
+    
+    // Check for Polyfactual deep research results first
+    const polyfactual = parsePolyfactualResult(displayedContent);
+    if (polyfactual) {
+      return { markets: [], introText: "", summaryText: "", polyfactualResult: polyfactual };
+    }
+    
+    return { ...parseMarketCards(displayedContent), polyfactualResult: null };
   }, [displayedContent, isUser, isStreaming]);
 
   // User message - clean bubble
@@ -606,6 +695,38 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
               }
             }}
           />
+        ) : polyfactualResult ? (
+          /* Polyfactual Deep Research Results */
+          <div className="space-y-4">
+            {/* Branded header */}
+            <PolyfactualResultHeader />
+            
+            {/* Research content */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-muted/40 to-muted/20 border border-cyan-500/10 shadow-soft backdrop-blur-sm">
+              <div className="text-sm leading-relaxed prose prose-invert max-w-none">
+                {formatText(polyfactualResult.content)}
+              </div>
+            </div>
+            
+            {/* Source cards with favicons */}
+            {polyfactualResult.sources.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                  <span>📚</span> Sources ({polyfactualResult.sources.length})
+                </h4>
+                <div className="grid gap-2">
+                  {polyfactualResult.sources.map((source, i) => (
+                    <PolyfactualSourceCard 
+                      key={i} 
+                      title={source.title} 
+                      url={source.url} 
+                      index={i} 
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <>
             {/* Intro text */}

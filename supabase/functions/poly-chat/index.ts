@@ -5067,13 +5067,19 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
       const researchData = await getDeepResearch(userQuery);
       
       if (researchData) {
-        // Format the research results with citations
+        // Format the research results with clickable source citations
         let formattedResponse = `📊 **Deep Research Results**\n\n${researchData.answer || ''}`;
         
         if (researchData.citations && researchData.citations.length > 0) {
           formattedResponse += '\n\n📚 **Sources:**\n';
-          researchData.citations.slice(0, 5).forEach((c: any, i: number) => {
-            formattedResponse += `${i + 1}. ${c.title || c.url || 'Source'}\n`;
+          researchData.citations.slice(0, 8).forEach((c: any, i: number) => {
+            const url = c.url || c.link || '';
+            const title = c.title || c.name || (url ? new URL(url).hostname : 'Source');
+            if (url) {
+              formattedResponse += `${i + 1}. [${title}](${url})\n`;
+            } else {
+              formattedResponse += `${i + 1}. ${title}\n`;
+            }
           });
         }
         
