@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
+import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
 import { TradeDetailModal } from '@/components/trades/TradeDetailModal';
@@ -25,6 +25,11 @@ interface Trade {
   image?: string;
 }
 
+// Constants for connection health
+const STALE_THRESHOLD_MS = 15000; // 15 seconds without messages = stale
+const WATCHDOG_INTERVAL_MS = 5000; // Check every 5 seconds
+const HARD_RECONNECT_INTERVAL_MS = 300000; // Force reconnect every 5 minutes
+
 export default function LiveTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [paused, setPaused] = useState(false);
@@ -34,11 +39,81 @@ export default function LiveTrades() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
   const [queuedCount, setQueuedCount] = useState(0);
-  const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
+  const [lastUpdateAgo, setLastUpdateAgo] = useState<number>(0);
+  const [tradesPerMinute, setTradesPerMinute] = useState(0);
+  
   const wsRef = useRef<WebSocket | null>(null);
   const pausedTradesRef = useRef<Trade[]>([]);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const wsUrlRef = useRef<string | null>(null);
+  const lastMessageTimeRef = useRef<number>(Date.now());
+  const watchdogIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hardReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const tradeCounterRef = useRef<{ count: number; startTime: number }>({ count: 0, startTime: Date.now() });
+  const imageCacheRef = useRef<Map<string, string>>(new Map());
+  const pendingSlugsRef = useRef<Set<string>>(new Set());
+  const imageFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch images for market slugs that don't have images
+  const fetchMarketImages = useCallback(async (slugs: string[]) => {
+    if (slugs.length === 0) return;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('get-market-previews', {
+        body: { eventSlugs: slugs }
+      });
+      
+      if (error || !data?.markets) return;
+      
+      // Store images in cache
+      for (const market of data.markets) {
+        if (market.image && market.slug) {
+          imageCacheRef.current.set(market.slug, market.image);
+        }
+      }
+      
+      // Update existing trades with new images
+      setTrades(prev => prev.map(trade => {
+        if (!trade.image && trade.market_slug) {
+          const cachedImage = imageCacheRef.current.get(trade.market_slug);
+          if (cachedImage) {
+            return { ...trade, image: cachedImage };
+          }
+        }
+        return trade;
+      }));
+    } catch (err) {
+      // Silently fail - images are nice to have, not critical
+    }
+  }, []);
+
+  // Queue slugs for batch image fetching
+  const queueImageFetch = useCallback((slug: string) => {
+    if (!slug || imageCacheRef.current.has(slug) || pendingSlugsRef.current.has(slug)) return;
+    
+    pendingSlugsRef.current.add(slug);
+    
+    // Debounce: fetch after 500ms of no new slugs
+    if (imageFetchTimeoutRef.current) {
+      clearTimeout(imageFetchTimeoutRef.current);
+    }
+    
+    imageFetchTimeoutRef.current = setTimeout(() => {
+      const slugsToFetch = Array.from(pendingSlugsRef.current);
+      pendingSlugsRef.current.clear();
+      if (slugsToFetch.length > 0) {
+        fetchMarketImages(slugsToFetch);
+      }
+    }, 500);
+  }, [fetchMarketImages]);
+
+  const forceReconnect = useCallback(() => {
+    console.log('Force reconnecting...');
+    if (wsRef.current) {
+      wsRef.current.close(4000, 'forced_reconnect');
+      wsRef.current = null;
+    }
+  }, []);
 
   const connectWebSocket = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -65,6 +140,8 @@ export default function LiveTrades() {
       ws.onopen = () => {
         console.log('WebSocket connected to Dome');
         setConnected(true);
+        lastMessageTimeRef.current = Date.now();
+        tradeCounterRef.current = { count: 0, startTime: Date.now() };
         
         ws.send(JSON.stringify({
           action: "subscribe",
@@ -78,41 +155,48 @@ export default function LiveTrades() {
       };
 
       ws.onmessage = (event) => {
+        lastMessageTimeRef.current = Date.now();
+        
         const data = JSON.parse(event.data);
         
         if (data.type === 'ack') {
           console.log('Subscription confirmed:', data.subscription_id);
         }
         
-        // Log all incoming data for debugging
         if (data.type === 'event') {
           const rawTrade = data.data;
-          // Log first trade to see available fields including image
-          console.log('Trade received:', Object.keys(rawTrade), rawTrade.image ? 'has image' : 'no image');
           
-          // Map the trade data, including image if available
+          // Update trade counter for velocity
+          tradeCounterRef.current.count++;
+          
+          // Check for cached image
+          const cachedImage = rawTrade.market_slug ? imageCacheRef.current.get(rawTrade.market_slug) : null;
+          
           const newTrade: Trade = {
             ...rawTrade,
-            image: rawTrade.image || rawTrade.market_image || rawTrade.icon || null
+            image: rawTrade.image || rawTrade.market_image || rawTrade.icon || cachedImage || null
           };
-          const tradeId = newTrade.order_hash || `${newTrade.tx_hash}-${newTrade.timestamp}`;
+          
+          // Queue image fetch if no image
+          if (!newTrade.image && newTrade.market_slug) {
+            queueImageFetch(newTrade.market_slug);
+          }
+          
+          const tradeId = newTrade.order_hash || `${newTrade.tx_hash}-${newTrade.timestamp}-${newTrade.token_id}`;
           
           if (paused) {
             pausedTradesRef.current.unshift(newTrade);
             setQueuedCount(pausedTradesRef.current.length);
           } else {
-            // Track new trade for highlight animation
-            setNewTradeIds(prev => new Set([...prev, tradeId]));
-            setTrades(prev => [newTrade, ...prev.slice(0, 99)]);
-            
-            // Remove highlight after 3 seconds
-            setTimeout(() => {
-              setNewTradeIds(prev => {
-                const next = new Set(prev);
-                next.delete(tradeId);
-                return next;
-              });
-            }, 3000);
+            setTrades(prev => {
+              // Dedupe by checking if trade already exists
+              const exists = prev.some(t => 
+                (t.order_hash && t.order_hash === newTrade.order_hash) ||
+                (t.tx_hash === newTrade.tx_hash && t.timestamp === newTrade.timestamp && t.token_id === newTrade.token_id)
+              );
+              if (exists) return prev;
+              return [newTrade, ...prev.slice(0, 99)];
+            });
           }
         }
       };
@@ -123,12 +207,12 @@ export default function LiveTrades() {
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket disconnected, code:', event.code, 'reason:', event.reason);
+        console.log('WebSocket disconnected, code:', event.code);
         setConnected(false);
         wsRef.current = null;
+        
         // Reconnect after 2 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
-          console.log('Attempting to reconnect...');
           connectWebSocket();
         }, 2000);
       };
@@ -139,7 +223,50 @@ export default function LiveTrades() {
       setError('Failed to connect to trade feed');
       setLoading(false);
     }
-  }, [paused]);
+  }, [paused, queueImageFetch]);
+
+  // Watchdog: detect stale connections and force reconnect
+  useEffect(() => {
+    watchdogIntervalRef.current = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastMessage = now - lastMessageTimeRef.current;
+      
+      // Update "last update ago" display
+      setLastUpdateAgo(Math.floor(timeSinceLastMessage / 1000));
+      
+      // Calculate trades per minute
+      const elapsed = (now - tradeCounterRef.current.startTime) / 60000; // minutes
+      if (elapsed > 0) {
+        setTradesPerMinute(Math.round(tradeCounterRef.current.count / elapsed));
+      }
+      
+      // Check if connection is stale
+      if (connected && timeSinceLastMessage > STALE_THRESHOLD_MS) {
+        console.log(`Connection stale (${Math.floor(timeSinceLastMessage / 1000)}s), forcing reconnect...`);
+        forceReconnect();
+      }
+    }, WATCHDOG_INTERVAL_MS);
+
+    return () => {
+      if (watchdogIntervalRef.current) {
+        clearInterval(watchdogIntervalRef.current);
+      }
+    };
+  }, [connected, forceReconnect]);
+
+  // Hard reconnect every 5 minutes as safety net
+  useEffect(() => {
+    hardReconnectTimeoutRef.current = setInterval(() => {
+      console.log('Periodic hard reconnect...');
+      forceReconnect();
+    }, HARD_RECONNECT_INTERVAL_MS);
+
+    return () => {
+      if (hardReconnectTimeoutRef.current) {
+        clearInterval(hardReconnectTimeoutRef.current);
+      }
+    };
+  }, [forceReconnect]);
 
   useEffect(() => {
     connectWebSocket();
@@ -149,6 +276,9 @@ export default function LiveTrades() {
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (imageFetchTimeoutRef.current) {
+        clearTimeout(imageFetchTimeoutRef.current);
       }
     };
   }, [connectWebSocket]);
@@ -183,13 +313,15 @@ export default function LiveTrades() {
     return (price * shares) >= 1000;
   };
 
+  const isStale = lastUpdateAgo > 10;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopBar />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-secondary/15 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-0 -left-40 w-80 h-80 bg-primary/20 rounded-full blur-[120px]" />
+        <div className="absolute top-1/3 -right-40 w-96 h-96 bg-secondary/15 rounded-full blur-[150px]" />
       </div>
 
       <main className="flex-1 relative z-10 container mx-auto px-4 py-8">
@@ -204,15 +336,35 @@ export default function LiveTrades() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Connection status with last update */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm ${
-              connected 
-                ? 'bg-success/10 border-success/30 text-success' 
-                : 'bg-destructive/10 border-destructive/30 text-destructive'
+              isStale
+                ? 'bg-warning/10 border-warning/30 text-warning'
+                : connected 
+                  ? 'bg-success/10 border-success/30 text-success' 
+                  : 'bg-destructive/10 border-destructive/30 text-destructive'
             }`}>
-              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
-              <span className="font-medium">{connected ? 'Live' : 'Disconnected'}</span>
+              <div className={`w-2 h-2 rounded-full ${
+                isStale ? 'bg-warning' : connected ? 'bg-success animate-pulse' : 'bg-destructive'
+              }`} />
+              <span className="font-medium">
+                {isStale ? 'Stale' : connected ? 'Live' : 'Offline'}
+              </span>
+              {connected && (
+                <span className="text-xs opacity-70">
+                  {lastUpdateAgo}s ago
+                </span>
+              )}
             </div>
+
+            {/* Trades per minute */}
+            {tradesPerMinute > 0 && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 text-xs text-muted-foreground">
+                <Activity className="w-3 h-3" />
+                <span>{tradesPerMinute}/min</span>
+              </div>
+            )}
 
             <Button
               onClick={togglePause}
@@ -263,22 +415,46 @@ export default function LiveTrades() {
         </div>
 
         {/* Paused Banner */}
-        {paused && queuedCount > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2 text-primary">
-              <AlertCircle className="w-4 h-4" />
-              <span className="text-sm font-medium">{queuedCount} new trades waiting</span>
-            </div>
-            <Button size="sm" onClick={togglePause} className="gap-1">
-              <Play className="w-3 h-3" />
-              Resume
-            </Button>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {paused && queuedCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4 p-3 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2 text-primary">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm font-medium">{queuedCount} new trades waiting</span>
+              </div>
+              <Button size="sm" onClick={togglePause} className="gap-1">
+                <Play className="w-3 h-3" />
+                Resume
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Stale Warning Banner */}
+        <AnimatePresence>
+          {isStale && connected && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/30 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2 text-warning">
+                <Clock className="w-4 h-4" />
+                <span className="text-sm font-medium">Connection may be stale - auto-reconnecting...</span>
+              </div>
+              <Button size="sm" variant="outline" onClick={forceReconnect} className="gap-1">
+                <RefreshCw className="w-3 h-3" />
+                Reconnect Now
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Trades Feed - Table-like layout */}
         <div className="rounded-xl border border-border overflow-hidden bg-card/50 backdrop-blur-sm">
@@ -292,101 +468,92 @@ export default function LiveTrades() {
           </div>
 
           {/* Trades List */}
-          <div className="divide-y divide-border/50">
-            <AnimatePresence initial={false}>
-              {filteredTrades.map((trade, index) => {
-                const tradeId = trade.order_hash || `${trade.tx_hash}-${trade.timestamp}`;
-                const isNew = newTradeIds.has(tradeId);
-                const whale = isWhale(trade.price, trade.shares_normalized || trade.shares);
-                
-                return (
-                  <motion.div
-                    key={tradeId}
-                    initial={{ opacity: 0, backgroundColor: 'hsl(var(--primary) / 0.2)' }}
-                    animate={{ 
-                      opacity: 1, 
-                      backgroundColor: isNew ? 'hsl(var(--primary) / 0.1)' : 'transparent'
-                    }}
-                    transition={{ duration: 0.5 }}
-                    onClick={() => setSelectedTrade(trade)}
-                    className={`group grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${
-                      whale ? 'bg-warning/5' : ''
-                    }`}
-                  >
-                    {/* Market Info */}
-                    <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
-                      {trade.image ? (
-                        <img 
-                          src={trade.image} 
-                          alt="" 
-                          className="w-10 h-10 rounded-lg object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <Activity className="w-5 h-5 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
-                          {trade.title}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {trade.user.slice(0, 6)}...{trade.user.slice(-4)}
-                        </div>
+          <div className="divide-y divide-border/50 max-h-[70vh] overflow-y-auto">
+            {filteredTrades.map((trade) => {
+              const tradeId = trade.order_hash || `${trade.tx_hash}-${trade.timestamp}-${trade.token_id}`;
+              const whale = isWhale(trade.price, trade.shares_normalized || trade.shares);
+              
+              return (
+                <div
+                  key={tradeId}
+                  onClick={() => setSelectedTrade(trade)}
+                  className={`group grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${
+                    whale ? 'bg-warning/5' : ''
+                  }`}
+                >
+                  {/* Market Info */}
+                  <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                    {trade.image ? (
+                      <img 
+                        src={trade.image} 
+                        alt="" 
+                        className="w-10 h-10 rounded-lg object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Activity className="w-5 h-5 text-muted-foreground" />
                       </div>
-                      {whale && (
-                        <span className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold bg-warning/20 text-warning rounded">
-                          🐋 WHALE
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Side */}
-                    <div className="sm:col-span-2 flex items-center">
-                      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${
-                        trade.side === 'BUY' 
-                          ? 'bg-success/20 text-success' 
-                          : 'bg-destructive/20 text-destructive'
-                      }`}>
-                        {trade.side === 'BUY' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {trade.side} {trade.token_label}
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
+                        {trade.title}
+                      </div>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {trade.user.slice(0, 6)}...{trade.user.slice(-4)}
                       </div>
                     </div>
-
-                    {/* Price */}
-                    <div className="sm:col-span-2 flex items-center sm:justify-end">
-                      <span className="text-foreground font-mono font-semibold">
-                        ${trade.price.toFixed(3)}
+                    {whale && (
+                      <span className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold bg-warning/20 text-warning rounded">
+                        🐋 WHALE
                       </span>
-                    </div>
+                    )}
+                  </div>
 
-                    {/* Volume */}
-                    <div className="sm:col-span-2 flex items-center sm:justify-end">
-                      <span className={`font-mono font-bold ${whale ? 'text-warning' : 'text-primary'}`}>
-                        {formatVolume(trade.price, trade.shares_normalized || trade.shares)}
+                  {/* Side */}
+                  <div className="sm:col-span-2 flex items-center">
+                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${
+                      trade.side === 'BUY' 
+                        ? 'bg-success/20 text-success' 
+                        : 'bg-destructive/20 text-destructive'
+                    }`}>
+                      {trade.side === 'BUY' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                      {trade.side} {trade.token_label}
+                    </div>
+                  </div>
+
+                  {/* Price */}
+                  <div className="sm:col-span-2 flex items-center sm:justify-end">
+                    <span className="text-foreground font-mono font-semibold">
+                      ${trade.price.toFixed(3)}
+                    </span>
+                  </div>
+
+                  {/* Volume */}
+                  <div className="sm:col-span-2 flex items-center sm:justify-end">
+                    <span className={`font-mono font-bold ${whale ? 'text-warning' : 'text-primary'}`}>
+                      {formatVolume(trade.price, trade.shares_normalized || trade.shares)}
+                    </span>
+                  </div>
+
+                  {/* Time */}
+                  <div className="sm:col-span-1 flex items-center sm:justify-end">
+                    <span className="text-xs text-muted-foreground">
+                      {formatTime(trade.timestamp)}
+                    </span>
+                  </div>
+
+                  {/* Mobile: Show whale badge and external link */}
+                  <div className="sm:hidden flex items-center justify-between">
+                    {whale && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-warning/20 text-warning rounded">
+                        🐋 WHALE
                       </span>
-                    </div>
-
-                    {/* Time */}
-                    <div className="sm:col-span-1 flex items-center sm:justify-end">
-                      <span className="text-xs text-muted-foreground">
-                        {formatTime(trade.timestamp)}
-                      </span>
-                    </div>
-
-                    {/* Mobile: Show whale badge and external link */}
-                    <div className="sm:hidden flex items-center justify-between">
-                      {whale && (
-                        <span className="px-1.5 py-0.5 text-[10px] font-bold bg-warning/20 text-warning rounded">
-                          🐋 WHALE
-                        </span>
-                      )}
-                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                    )}
+                    <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
