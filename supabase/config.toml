@@ -1,1 +1,28 @@
 project_id = "rgmzmtsgpxxzxvdcwsdx"
+
+[functions.get-market-previews]
+verify_jwt = false
+
+[functions.polymarket-data]
+verify_jwt = false
+
+[functions.market-dashboard]
+verify_jwt = false
+
+[functions.poly-chat]
+verify_jwt = false
+
+[functions.leaderboard]
+verify_jwt = false
+
+[functions.builder-stats]
+verify_jwt = false
+
+[functions.fetch-news]
+verify_jwt = false
+
+[functions.whale-tracker]
+verify_jwt = false
+
+[functions.wallet-profile]
+verify_jwt = false
