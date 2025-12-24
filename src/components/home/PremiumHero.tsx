@@ -1,4 +1,5 @@
-import { CheckCircle } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import polyLogo from "@/assets/poly-logo-new.png";
 
 interface PremiumHeroProps {
@@ -8,12 +9,12 @@ interface PremiumHeroProps {
 export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
   return (
     <div className="relative text-center pt-6 pb-8 sm:pt-8 sm:pb-10">
-      {/* Official Builder Badge */}
-      <div className="flex items-center justify-center mb-8 animate-fade-in px-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/5 border border-primary/20 backdrop-blur-sm">
-          <CheckCircle className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-          <span className="text-xs font-medium text-primary/90 tracking-wide uppercase">Official Polymarket Builder</span>
-        </div>
+      {/* Professional Tagline with Learn More Link */}
+      <div className="flex items-center justify-center gap-2 mb-8 animate-fade-in px-4">
+        <span className="text-sm text-muted-foreground">AI-Powered Market Intelligence</span>
+        <Link to="/about" className="text-sm text-primary hover:underline flex items-center gap-0.5 transition-colors">
+          Learn more <ChevronRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Logo - Clean & Simple like chat */}
