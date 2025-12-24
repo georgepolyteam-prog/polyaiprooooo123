@@ -13,9 +13,9 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
       {/* Badges Row */}
       <div className="flex items-center justify-center gap-3 mb-6 animate-fade-in flex-wrap">
         {/* Official Builder Badge */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
-          <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Official Polymarket Builder</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30">
+          <CheckCircle className="w-4 h-4 text-primary" />
+          <span className="text-xs font-semibold text-primary">Official Polymarket Builder</span>
         </div>
         
         {/* Learn More & Capabilities Links */}
