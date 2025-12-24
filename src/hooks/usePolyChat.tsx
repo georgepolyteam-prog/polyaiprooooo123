@@ -578,11 +578,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
   }, [detailMode]);
 
   const toggleDeepResearch = useCallback(() => {
-    setDeepResearch((prev) => {
-      const newValue = !prev;
-      toast.success(newValue ? "Deep Research enabled - comprehensive analysis mode" : "Deep Research disabled");
-      return newValue;
-    });
+    setDeepResearch((prev) => !prev);
   }, []);
 
   const clearMessages = useCallback(() => {
