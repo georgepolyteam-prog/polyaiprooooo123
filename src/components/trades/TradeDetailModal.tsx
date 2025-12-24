@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target, Copy, Sparkles, ArrowRightLeft, Check } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
+import { MarketTradeModal } from '@/components/MarketTradeModal';
+import { toast } from '@/hooks/use-toast';
 
 interface Trade {
   token_id: string;
@@ -41,10 +47,15 @@ interface TradeDetailModalProps {
 }
 
 export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [pnlData, setPnlData] = useState<PnLData | null>(null);
   const [walletTrades, setWalletTrades] = useState<Trade[]>([]);
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
 
   useEffect(() => {
     fetchWalletData();
@@ -74,10 +85,45 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
     }
   }
 
+  const copyWallet = async () => {
+    await navigator.clipboard.writeText(trade.user);
+    setCopied(true);
+    toast({ title: "Wallet address copied!" });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleTrade = () => {
+    setTradeModalOpen(true);
+  };
+
+  const handleAnalyze = () => {
+    setAnalysisModalOpen(true);
+  };
+
+  const handleAnalysisSelect = (type: 'quick' | 'deep') => {
+    setAnalysisModalOpen(false);
+    const shares = trade.shares_normalized || trade.shares || 0;
+    navigate('/chat', {
+      state: {
+        marketContext: {
+          eventTitle: trade.title,
+          outcomeQuestion: trade.title,
+          currentOdds: trade.price,
+          volume: trade.price * shares,
+          url: `https://polymarket.com/event/${trade.market_slug}`,
+          slug: trade.market_slug,
+          eventSlug: trade.market_slug,
+          image: trade.image
+        },
+        analysisType: type
+      }
+    });
+    onClose();
+  };
+
   const totalPnL = pnlData?.pnl_over_time?.[pnlData.pnl_over_time.length - 1]?.pnl_to_date || 0;
   const pnlIsPositive = totalPnL >= 0;
 
-  // Format PnL data for chart
   const chartData = pnlData?.pnl_over_time?.map(point => ({
     date: new Date(point.timestamp * 1000).toLocaleDateString(),
     pnl: point.pnl_to_date
@@ -91,241 +137,377 @@ export function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
     return `$${volume.toFixed(2)}`;
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-card border border-border rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="sticky top-0 bg-card/95 backdrop-blur-xl border-b border-border p-4 sm:p-6 flex items-start justify-between gap-4">
-          <div className="flex gap-4 flex-1 min-w-0">
-            {trade.image && (
-              <img 
-                src={trade.image} 
-                alt={trade.title}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover shrink-0"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 line-clamp-2">
-                {trade.title}
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-muted-foreground text-sm">
-                <span className="font-mono text-primary">{trade.user.slice(0, 10)}...{trade.user.slice(-8)}</span>
-                <span className="hidden sm:inline">•</span>
-                <span>{new Date(trade.timestamp * 1000).toLocaleString()}</span>
+  const modalContent = (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="sticky top-0 bg-card/95 backdrop-blur-xl border-b border-border p-4 sm:p-6 flex items-start justify-between gap-4 z-10">
+        <div className="flex gap-4 flex-1 min-w-0">
+          {trade.image && (
+            <img 
+              src={trade.image} 
+              alt={trade.title}
+              className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover shrink-0"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-foreground mb-2 line-clamp-2">
+              {trade.title}
+            </h2>
+            {/* Wallet with links */}
+            <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-sm">
+              <div className="flex items-center gap-1.5">
+                <Link 
+                  to={`/wallet/${trade.user}`}
+                  onClick={(e) => { e.stopPropagation(); onClose(); }}
+                  className="font-mono text-primary hover:text-primary/80 hover:underline transition-colors min-h-[44px] flex items-center"
+                >
+                  {trade.user.slice(0, 8)}...{trade.user.slice(-6)}
+                </Link>
+                <button
+                  onClick={copyWallet}
+                  className="p-1.5 rounded-md hover:bg-muted transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+                <a
+                  href={`https://polymarket.com/profile/${trade.user}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-md hover:bg-muted hover:text-primary transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
               </div>
+              <span className="hidden sm:inline text-muted-foreground/50">•</span>
+              <span className="text-xs sm:text-sm">{new Date(trade.timestamp * 1000).toLocaleString()}</span>
             </div>
           </div>
+        </div>
+        {!isMobile && (
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="shrink-0"
+            className="shrink-0 min-h-[44px] min-w-[44px]"
           >
             <X className="w-5 h-5" />
           </Button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
+        {/* Action Buttons - Epic Styling */}
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10 transition-all duration-300 min-h-[48px]"
+            onClick={handleTrade}
+          >
+            <ArrowRightLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Trade on Polymarket</span>
+            <span className="sm:hidden">Trade</span>
+          </Button>
+          <Button
+            className="flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all duration-300 min-h-[48px]"
+            onClick={handleAnalyze}
+          >
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Analyze Market</span>
+            <span className="sm:hidden">Analyze</span>
+          </Button>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-6">
-          {/* Trade Details Card */}
-          <div className="glass-card rounded-xl p-4 sm:p-6">
-            <h3 className="text-lg sm:text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              Trade Details
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-              <div>
-                <div className="text-muted-foreground text-sm mb-1">Side</div>
-                <div className={`text-xl sm:text-2xl font-bold flex items-center gap-2 ${
-                  trade.side === 'BUY' ? 'text-success' : 'text-destructive'
-                }`}>
-                  {trade.side === 'BUY' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                  {trade.side} {trade.token_label}
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground text-sm mb-1">Price</div>
-                <div className="text-xl sm:text-2xl font-bold text-foreground">${trade.price.toFixed(3)}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground text-sm mb-1">Shares</div>
-                <div className="text-xl sm:text-2xl font-bold text-foreground">{shares.toFixed(2)}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground text-sm mb-1">Volume</div>
-                <div className="text-xl sm:text-2xl font-bold text-primary">
-                  ${(trade.price * shares).toFixed(2)}
-                </div>
+        {/* Trade Details Card */}
+        <div className="glass-card rounded-xl p-4 sm:p-6">
+          <h3 className="text-base sm:text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+            <Activity className="w-5 h-5 text-primary" />
+            Trade Details
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+            <div>
+              <div className="text-muted-foreground text-xs sm:text-sm mb-1">Side</div>
+              <div className={`text-lg sm:text-2xl font-bold flex items-center gap-1.5 ${
+                trade.side === 'BUY' ? 'text-success' : 'text-destructive'
+              }`}>
+                {trade.side === 'BUY' ? <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" /> : <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" />}
+                <span className="truncate">{trade.side} {trade.token_label}</span>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-border">
-              <a
-                href={`https://polymarket.com/event/${trade.market_slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm"
-              >
-                View Market on Polymarket
-                <ExternalLink className="w-4 h-4" />
-              </a>
+            <div>
+              <div className="text-muted-foreground text-xs sm:text-sm mb-1">Price</div>
+              <div className="text-lg sm:text-2xl font-bold text-foreground">${trade.price.toFixed(3)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs sm:text-sm mb-1">Shares</div>
+              <div className="text-lg sm:text-2xl font-bold text-foreground">{shares.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs sm:text-sm mb-1">Volume</div>
+              <div className="text-lg sm:text-2xl font-bold text-primary">
+                ${(trade.price * shares).toFixed(2)}
+              </div>
             </div>
           </div>
+          <div className="mt-4 pt-4 border-t border-border">
+            <a
+              href={`https://polymarket.com/event/${trade.market_slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors text-sm min-h-[44px]"
+            >
+              View Market on Polymarket
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
 
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-muted-foreground">Loading wallet analytics...</p>
-            </div>
-          ) : (
-            <>
-              {/* Wallet Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                <div className={`glass-card rounded-xl p-4 sm:p-6 border ${
-                  pnlIsPositive ? 'border-success/30' : 'border-destructive/30'
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-muted-foreground">Loading wallet analytics...</p>
+          </div>
+        ) : (
+          <>
+            {/* Wallet Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              <div className={`glass-card rounded-xl p-3 sm:p-6 border ${
+                pnlIsPositive ? 'border-success/30' : 'border-destructive/30'
+              }`}>
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm mb-1 sm:mb-2">
+                  <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Total PnL
+                </div>
+                <div className={`text-lg sm:text-2xl md:text-3xl font-bold ${
+                  pnlIsPositive ? 'text-success' : 'text-destructive'
                 }`}>
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
-                    <Target className="w-4 h-4" />
-                    Total PnL
-                  </div>
-                  <div className={`text-xl sm:text-2xl md:text-3xl font-bold ${
-                    pnlIsPositive ? 'text-success' : 'text-destructive'
-                  }`}>
-                    {pnlIsPositive ? '+' : ''}{formatVolume(totalPnL)}
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4 sm:p-6">
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
-                    <BarChart3 className="w-4 h-4" />
-                    Total Volume
-                  </div>
-                  <div className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                    {formatVolume(walletMetrics?.total_volume || 0)}
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4 sm:p-6">
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
-                    <Activity className="w-4 h-4" />
-                    Total Trades
-                  </div>
-                  <div className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                    {walletMetrics?.total_trades || 0}
-                  </div>
-                </div>
-                <div className="glass-card rounded-xl p-4 sm:p-6">
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
-                    <Wallet className="w-4 h-4" />
-                    Markets
-                  </div>
-                  <div className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                    {walletMetrics?.unique_markets || 0}
-                  </div>
+                  {pnlIsPositive ? '+' : ''}{formatVolume(totalPnL)}
                 </div>
               </div>
-
-              {/* PnL Chart */}
-              {chartData.length > 0 && (
-                <div className="glass-card rounded-xl p-4 sm:p-6">
-                  <h3 className="text-lg sm:text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-primary" />
-                    Profit & Loss Over Time
-                  </h3>
-                  <div className="h-[250px] sm:h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData}>
-                        <defs>
-                          <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"} stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"} stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          dataKey="date" 
-                          stroke="hsl(var(--muted-foreground))" 
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis 
-                          stroke="hsl(var(--muted-foreground))" 
-                          fontSize={12}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(value) => `$${value}`}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            color: 'hsl(var(--foreground))'
-                          }}
-                          formatter={(value: number) => [`$${value.toFixed(2)}`, 'PnL']}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="pnl"
-                          stroke={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
-                          strokeWidth={2}
-                          fill="url(#pnlGradient)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
+              <div className="glass-card rounded-xl p-3 sm:p-6">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm mb-1 sm:mb-2">
+                  <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Total Volume
                 </div>
-              )}
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold text-foreground">
+                  {formatVolume(walletMetrics?.total_volume || 0)}
+                </div>
+              </div>
+              <div className="glass-card rounded-xl p-3 sm:p-6">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm mb-1 sm:mb-2">
+                  <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Total Trades
+                </div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold text-foreground">
+                  {walletMetrics?.total_trades || 0}
+                </div>
+              </div>
+              <div className="glass-card rounded-xl p-3 sm:p-6">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm mb-1 sm:mb-2">
+                  <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Markets
+                </div>
+                <div className="text-lg sm:text-2xl md:text-3xl font-bold text-foreground">
+                  {walletMetrics?.unique_markets || 0}
+                </div>
+              </div>
+            </div>
 
-              {/* Recent Trades */}
-              {walletTrades.length > 0 && (
-                <div className="glass-card rounded-xl p-4 sm:p-6">
-                  <h3 className="text-lg sm:text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-primary" />
-                    Recent Trades ({walletTrades.length})
-                  </h3>
-                  <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                    {walletTrades.slice(0, 20).map((t, i) => (
-                      <div key={i} className="bg-muted/30 rounded-lg p-3 sm:p-4 hover:bg-muted/50 transition-colors">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-foreground font-medium truncate text-sm sm:text-base">{t.title}</div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-                              {new Date(t.timestamp * 1000).toLocaleString()}
-                            </div>
+            {/* PnL Chart */}
+            {chartData.length > 0 && (
+              <div className="glass-card rounded-xl p-4 sm:p-6">
+                <h3 className="text-base sm:text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Profit & Loss Over Time
+                </h3>
+                <div className="h-[200px] sm:h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"} stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="date" 
+                        stroke="hsl(var(--muted-foreground))" 
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis 
+                        stroke="hsl(var(--muted-foreground))" 
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `$${value}`}
+                        width={50}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          color: 'hsl(var(--foreground))'
+                        }}
+                        formatter={(value: number) => [`$${value.toFixed(2)}`, 'PnL']}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="pnl"
+                        stroke={pnlIsPositive ? "hsl(var(--success))" : "hsl(var(--destructive))"}
+                        strokeWidth={2}
+                        fill="url(#pnlGradient)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Recent Trades */}
+            {walletTrades.length > 0 && (
+              <div className="glass-card rounded-xl p-4 sm:p-6">
+                <h3 className="text-base sm:text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-primary" />
+                  Recent Trades ({walletTrades.length})
+                </h3>
+                <div className="space-y-2 max-h-[300px] sm:max-h-[350px] overflow-y-auto overscroll-contain">
+                  {walletTrades.slice(0, 20).map((t, i) => (
+                    <a
+                      key={i}
+                      href={`https://polymarket.com/event/${t.market_slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-muted/30 rounded-lg p-3 sm:p-4 hover:bg-muted/50 transition-colors min-h-[60px]"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-foreground font-medium truncate text-sm sm:text-base flex items-center gap-1.5">
+                            {t.title}
+                            <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0" />
                           </div>
-                          <div className="flex items-center gap-3 sm:gap-4">
-                            <div className={`px-2 py-1 rounded text-xs sm:text-sm font-bold ${
-                              t.side === 'BUY' 
-                                ? 'bg-success/20 text-success' 
-                                : 'bg-destructive/20 text-destructive'
-                            }`}>
-                              {t.side}
-                            </div>
-                            <div className="text-foreground font-bold text-sm sm:text-base">${t.price.toFixed(3)}</div>
-                            <div className="text-muted-foreground text-xs sm:text-sm">
-                              {(t.shares_normalized || t.shares || 0).toFixed(2)} shares
-                            </div>
+                          <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+                            {new Date(t.timestamp * 1000).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-4">
+                          <div className={`px-2 py-1 rounded text-xs sm:text-sm font-bold ${
+                            t.side === 'BUY' 
+                              ? 'bg-success/20 text-success' 
+                              : 'bg-destructive/20 text-destructive'
+                          }`}>
+                            {t.side}
+                          </div>
+                          <div className="text-foreground font-bold text-sm sm:text-base">${t.price.toFixed(3)}</div>
+                          <div className="text-muted-foreground text-xs sm:text-sm">
+                            {(t.shares_normalized || t.shares || 0).toFixed(2)} shares
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </a>
+                  ))}
                 </div>
-              )}
-            </>
-          )}
-        </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // Use Sheet on mobile for better UX
+  if (isMobile) {
+    return (
+      <>
+        <Sheet open={true} onOpenChange={(open) => !open && onClose()}>
+          <SheetContent side="bottom" className="h-[95vh] p-0 rounded-t-2xl">
+            {modalContent}
+          </SheetContent>
+        </Sheet>
+
+        <MarketTradeModal
+          open={tradeModalOpen}
+          onOpenChange={setTradeModalOpen}
+          marketData={{
+            conditionId: trade.condition_id,
+            title: trade.title,
+            currentPrice: trade.price,
+            url: `https://polymarket.com/event/${trade.market_slug}`,
+            eventSlug: trade.market_slug,
+            marketSlug: trade.market_slug,
+          }}
+        />
+
+        <AnalysisSelectionModal
+          open={analysisModalOpen}
+          onOpenChange={setAnalysisModalOpen}
+          marketContext={{
+            eventTitle: trade.title,
+            outcomeQuestion: trade.title,
+            currentOdds: trade.price,
+            volume: trade.price * shares,
+            url: `https://polymarket.com/event/${trade.market_slug}`,
+            slug: trade.market_slug,
+            eventSlug: trade.market_slug,
+            image: trade.image
+          }}
+          onSelect={handleAnalysisSelect}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          className="bg-card border border-border rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {modalContent}
+        </motion.div>
       </motion.div>
-    </motion.div>
+
+      <MarketTradeModal
+        open={tradeModalOpen}
+        onOpenChange={setTradeModalOpen}
+        marketData={{
+          conditionId: trade.condition_id,
+          title: trade.title,
+          currentPrice: trade.price,
+          url: `https://polymarket.com/event/${trade.market_slug}`,
+          eventSlug: trade.market_slug,
+          marketSlug: trade.market_slug,
+        }}
+      />
+
+      <AnalysisSelectionModal
+        open={analysisModalOpen}
+        onOpenChange={setAnalysisModalOpen}
+        marketContext={{
+          eventTitle: trade.title,
+          outcomeQuestion: trade.title,
+          currentOdds: trade.price,
+          volume: trade.price * shares,
+          url: `https://polymarket.com/event/${trade.market_slug}`,
+          slug: trade.market_slug,
+          eventSlug: trade.market_slug,
+          image: trade.image
+        }}
+        onSelect={handleAnalysisSelect}
+      />
+    </>
   );
 }
