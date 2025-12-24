@@ -13,9 +13,9 @@ export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
     if (isConnected && address) {
       return (
         <div ref={ref} className="flex items-center gap-2" {...props}>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-            <Wallet className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm font-medium text-emerald-400">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {address.slice(0, 6)}...{address.slice(-4)}
             </span>
           </div>
@@ -23,7 +23,7 @@ export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
             variant="ghost"
             size="sm"
             onClick={() => disconnect()}
-            className="text-gray-400 hover:text-red-400 hover:bg-white/5 rounded-lg p-2"
+            className="text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg p-2 h-auto"
           >
             <LogOut className="w-4 h-4" />
           </Button>
@@ -36,10 +36,10 @@ export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
         <Button
           onClick={() => open()}
           size="sm"
-          className="gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white border-0 shadow-lg shadow-emerald-500/25"
+          className="gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white border-0 font-medium px-4"
         >
           <Wallet className="w-4 h-4" />
-          <span>Connect</span>
+          <span>Connect Wallet</span>
         </Button>
       </div>
     );
