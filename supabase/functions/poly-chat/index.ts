@@ -5074,12 +5074,23 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
       const researchData = await getDeepResearch(userQuery);
       
       if (researchData) {
-        // Format the research results with clickable source citations
-        let formattedResponse = `📊 **Deep Research Results**\n\n${researchData.answer || ''}`;
+        // Extract short summary (first 2-3 sentences) and key news
+        const fullAnswer = researchData.answer || '';
+        const sentences = fullAnswer.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim().length > 10);
+        const shortSummary = sentences.slice(0, 3).join(' ').trim();
+        const newsContent = sentences.slice(3).join(' ').trim();
         
+        // Format with structured sections
+        let formattedResponse = `📊 **Market Summary**\n\n${shortSummary}`;
+        
+        if (newsContent) {
+          formattedResponse += `\n\n📰 **Key News & Developments**\n\n${newsContent}`;
+        }
+        
+        // Show 10-15 sources for comprehensive coverage
         if (researchData.citations && researchData.citations.length > 0) {
           formattedResponse += '\n\n📚 **Sources:**\n';
-          researchData.citations.slice(0, 8).forEach((c: any, i: number) => {
+          researchData.citations.slice(0, 15).forEach((c: any, i: number) => {
             const url = c.url || c.link || '';
             const title = c.title || c.name || (url ? new URL(url).hostname : 'Source');
             if (url) {

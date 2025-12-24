@@ -707,19 +707,19 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
               <PolyfactualContent content={polyfactualResult.content} />
             </div>
             
-            {/* Source cards with favicons */}
+            {/* Source cards with favicons - 2 column grid */}
             {polyfactualResult.sources.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-white flex items-center gap-2">
                     <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-xs">📚</span>
-                    Verified Sources
+                    Sources & News
                   </h4>
                   <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded-full">
                     {polyfactualResult.sources.length} sources
                   </span>
                 </div>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {polyfactualResult.sources.map((source, i) => (
                     <PolyfactualSourceCard 
                       key={i} 

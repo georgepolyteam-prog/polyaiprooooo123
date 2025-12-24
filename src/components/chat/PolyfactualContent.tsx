@@ -124,6 +124,13 @@ const formatStatsInText = (text: string, keyPrefix: string): React.ReactNode[] =
 const getSectionInfo = (line: string): { icon: React.ReactNode; type: string; color: string } | null => {
   const lowerLine = line.toLowerCase();
   
+  // New structured sections from Deep Research
+  if (lowerLine.includes('market summary') || lowerLine.includes('📊')) {
+    return { icon: <Target className="w-4 h-4" />, type: 'Market Summary', color: 'cyan' };
+  }
+  if (lowerLine.includes('key news') || lowerLine.includes('developments') || lowerLine.includes('📰')) {
+    return { icon: <Lightbulb className="w-4 h-4" />, type: 'Key News', color: 'amber' };
+  }
   if (lowerLine.includes('key finding') || lowerLine.includes('summary') || lowerLine.includes('tldr') || lowerLine.includes('overview')) {
     return { icon: <Target className="w-4 h-4" />, type: 'summary', color: 'cyan' };
   }
