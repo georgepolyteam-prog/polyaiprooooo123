@@ -30,6 +30,7 @@ interface Trade {
   user: string;
   taker: string;
   image?: string;
+  resolved_url?: string; // Cached resolved URL
 }
 
 interface MarketContext {
@@ -822,13 +823,26 @@ export default function LiveTrades() {
             <MarketHeatmap 
               markets={marketVolumes}
               onMarketClick={(slug) => setMarketFilter(slug === marketFilter ? 'all' : slug)}
-              onAnalyze={(market) => {
+              onAnalyze={async (market) => {
+                // Resolve the correct URL before setting context
+                let resolvedUrl = `https://polymarket.com/event/${market.slug}`;
+                try {
+                  const { data } = await supabase.functions.invoke('resolve-market-url', {
+                    body: { marketSlug: market.slug }
+                  });
+                  if (data?.fullUrl) {
+                    resolvedUrl = data.fullUrl;
+                  }
+                } catch (err) {
+                  console.error('Error resolving market URL:', err);
+                }
+                
                 setAnalysisContext({
                   eventTitle: market.title || market.slug.replace(/-/g, ' '),
                   outcomeQuestion: market.title || market.slug.replace(/-/g, ' '),
                   currentOdds: 0.5,
                   volume: market.volume,
-                  url: `https://polymarket.com/event/${market.slug}`,
+                  url: resolvedUrl,
                   slug: market.slug,
                   eventSlug: market.slug,
                   image: market.image
@@ -854,13 +868,26 @@ export default function LiveTrades() {
           <MarketHeatmap 
             markets={marketVolumes}
             onMarketClick={(slug) => setMarketFilter(slug === marketFilter ? 'all' : slug)}
-            onAnalyze={(market) => {
+            onAnalyze={async (market) => {
+              // Resolve the correct URL before setting context
+              let resolvedUrl = `https://polymarket.com/event/${market.slug}`;
+              try {
+                const { data } = await supabase.functions.invoke('resolve-market-url', {
+                  body: { marketSlug: market.slug }
+                });
+                if (data?.fullUrl) {
+                  resolvedUrl = data.fullUrl;
+                }
+              } catch (err) {
+                console.error('Error resolving market URL:', err);
+              }
+              
               setAnalysisContext({
                 eventTitle: market.title || market.slug.replace(/-/g, ' '),
                 outcomeQuestion: market.title || market.slug.replace(/-/g, ' '),
                 currentOdds: 0.5,
                 volume: market.volume,
-                url: `https://polymarket.com/event/${market.slug}`,
+                url: resolvedUrl,
                 slug: market.slug,
                 eventSlug: market.slug,
                 image: market.image

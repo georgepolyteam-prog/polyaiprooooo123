@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.wallet-profile]
 verify_jwt = false
+
+[functions.resolve-market-url]
+verify_jwt = false
