@@ -83,8 +83,8 @@ serve(async (req) => {
       console.log(`[WalletAnalytics] Wallet fetch failed: ${walletResponse.status}`);
     }
 
-    // Calculate metrics from orders if wallet API didn't provide them
-    if (!walletMetrics && orders.length > 0) {
+    // Always calculate metrics from orders (more reliable than Dome wallet endpoint)
+    if (orders.length > 0) {
       let totalVolume = 0;
       const markets = new Set<string>();
       
@@ -95,6 +95,7 @@ serve(async (req) => {
         if (order.market_slug) markets.add(order.market_slug);
       });
 
+      // Override with calculated metrics (Dome wallet endpoint often returns zeros)
       walletMetrics = {
         total_volume: totalVolume,
         total_trades: orders.length,
