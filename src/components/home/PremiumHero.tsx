@@ -35,9 +35,29 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
         </div>
       </div>
 
-      {/* Logo - Clean and simple */}
-      <div className="flex justify-center mb-6 animate-fade-in">
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center shadow-lg">
+      {/* Logo with Reactor Effect */}
+      <div className="relative flex justify-center items-center mb-6 animate-fade-in">
+        {/* Outer rotating ring */}
+        <div 
+          className="absolute w-28 h-28 rounded-full border border-dashed border-primary/20"
+          style={{ animation: 'spin 20s linear infinite' }}
+        />
+        
+        {/* Pulsing rings */}
+        <div 
+          className="absolute w-24 h-24 rounded-full bg-primary/5"
+          style={{ animation: 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite' }}
+        />
+        <div 
+          className="absolute w-20 h-20 rounded-full bg-primary/10"
+          style={{ animation: 'ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite', animationDelay: '0.5s' }}
+        />
+        
+        {/* Core ambient glow */}
+        <div className="absolute w-20 h-20 rounded-full bg-primary/20 blur-xl animate-pulse" />
+        
+        {/* Logo container */}
+        <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30">
           <img src={polyLogo} alt="Poly" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
         </div>
       </div>
