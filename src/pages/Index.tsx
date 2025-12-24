@@ -14,7 +14,7 @@ import { AnimatedBackground } from "@/components/home/AnimatedBackground";
 import { PremiumHero } from "@/components/home/PremiumHero";
 import { PremiumCapabilities } from "@/components/home/PremiumCapabilities";
 import { PremiumMarketCards } from "@/components/home/PremiumMarketCards";
-import { PremiumQuickQuestions } from "@/components/home/PremiumQuickQuestions";
+
 
 import { usePolyChat } from "@/hooks/usePolyChat";
 import { useAuth } from "@/hooks/useAuth";
@@ -154,12 +154,6 @@ const defaultMarkets: ExampleMarket[] = [
   },
 ];
 
-const quickQuestions = [
-  "What's the edge on Trump Fed Chair?",
-  "Show me recent whale trades",
-  "Any arbitrage opportunities?",
-  "What's the latest news on Bitcoin markets?",
-];
 
 const Index = () => {
   const [searchParams] = useSearchParams();
@@ -482,12 +476,6 @@ const Index = () => {
                   isAuthenticated={isAuthenticated}
                   onMarketClick={handleMarketClick}
                   onImageError={(index) => setFailedImages(prev => new Set(prev).add(index))}
-                />
-                <PremiumQuickQuestions
-                  questions={quickQuestions}
-                  isAuthenticated={isAuthenticated}
-                  isProcessing={isProcessing}
-                  onQuestionClick={handleQuickQuestion}
                 />
               </div>
             </div>
