@@ -379,7 +379,10 @@ const Index = () => {
       };
     } | null;
     
-    if (state?.autoAnalyze && state?.marketContext && !hasAskedRef.current && messages.length === 0) {
+    // Use location.key to prevent re-triggering on the same navigation
+    const stateKey = state ? `${state.marketContext?.url}-${state.deepResearch}-${location.key}` : null;
+    
+    if (state?.autoAnalyze && state?.marketContext && !hasAskedRef.current) {
       hasAskedRef.current = true;
       const { marketContext } = state;
       
@@ -403,7 +406,7 @@ const Index = () => {
       sendMessage(state.initialMessage);
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, sendMessage, messages.length, deepResearch, toggleDeepResearch]);
+  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch]);
 
   useEffect(() => {
     const marketQuery = searchParams.get("market");

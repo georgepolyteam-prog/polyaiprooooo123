@@ -66,11 +66,13 @@ export function MarketTradeModal({ open, onOpenChange, marketData }: MarketTrade
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto overscroll-contain">
-        <DialogHeader>
+      <DialogContent className="max-w-md h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Trade Market</DialogTitle>
         </DialogHeader>
-        {content}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {content}
+        </div>
       </DialogContent>
     </Dialog>
   );

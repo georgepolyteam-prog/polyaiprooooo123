@@ -353,7 +353,7 @@ export default function MyTrades() {
   const handleTradeMarket = useCallback(async (market: TopMarket) => {
     const res = await fetchTradeableMarketData(`https://polymarket.com/event/${market.slug}`);
 
-    if (!res.ok) {
+    if (res.ok === false) {
       toast.error(res.message);
       return;
     }
