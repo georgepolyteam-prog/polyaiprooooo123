@@ -388,8 +388,14 @@ const Index = () => {
         toggleDeepResearch();
       }
       
+      // Build the message - for deep research, include the market question so backend has it for research query
+      const marketQuestion = marketContext.outcomeQuestion || marketContext.eventTitle;
+      const messageText = state.deepResearch && marketQuestion
+        ? `Analyze this market: "${marketQuestion}" ${marketContext.url}`
+        : `Analyze this market: ${marketContext.url}`;
+      
       // Pass deepResearch directly to sendMessage to avoid race condition
-      sendMessage(`Analyze this market: ${marketContext.url}`, false, false, state.deepResearch);
+      sendMessage(messageText, false, false, state.deepResearch);
       fetchMarketDataForSidebar(marketContext.url);
       window.history.replaceState({}, document.title);
     } else if (state?.initialMessage && !hasAskedRef.current && messages.length === 0) {
