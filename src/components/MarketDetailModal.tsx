@@ -13,6 +13,7 @@ import { PriceChart } from "@/components/dashboard/PriceChart";
 import { StatsGrid } from "@/components/dashboard/StatsGrid";
 import { TopTraders } from "@/components/dashboard/TopTraders";
 import { TradePanel } from "@/components/TradePanel";
+import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { useNavigate } from "react-router-dom";
 import { 
   ExternalLink, 
@@ -227,6 +228,16 @@ export function MarketDetailModal({
   const navigate = useNavigate();
   const [activeOutcome, setActiveOutcome] = useState<MarketOutcome | null>(null);
   const [showTradePanel, setShowTradePanel] = useState(false);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [analysisContext, setAnalysisContext] = useState<{
+    eventTitle: string;
+    outcomeQuestion: string;
+    currentOdds: number;
+    volume: number;
+    url: string;
+    slug: string;
+    eventSlug: string;
+  } | null>(null);
   const tradePanelRef = useRef<HTMLDivElement>(null);
 
   const scrollToTrade = () => {
@@ -260,7 +271,7 @@ export function MarketDetailModal({
   if (!event) return null;
 
   const handleAnalyze = (outcome: MarketOutcome) => {
-    const marketContext = {
+    const context = {
       eventTitle: event.title,
       outcomeQuestion: outcome.question,
       currentOdds: outcome.yesPrice,
@@ -270,10 +281,19 @@ export function MarketDetailModal({
       eventSlug: event.slug,
     };
     
+    setAnalysisContext(context);
+    setAnalysisModalOpen(true);
+  };
+
+  const handleAnalysisSelect = (type: 'quick' | 'deep') => {
+    if (!analysisContext) return;
+    
+    setAnalysisModalOpen(false);
     navigate('/chat', { 
       state: { 
         autoAnalyze: true,
-        marketContext 
+        deepResearch: type === 'deep',
+        marketContext: analysisContext
       }
     });
     onOpenChange(false);
@@ -659,34 +679,50 @@ export function MarketDetailModal({
 
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent 
-          side="bottom" 
-          className="h-[95vh] p-0 rounded-t-3xl overflow-hidden"
-          onPointerDownOutside={(e) => {
-            // Prevent closing when scrolling within the trade panel
-            if ((e.target as HTMLElement)?.closest?.('[data-trade-panel]')) {
-              e.preventDefault();
-            }
-          }}
-        >
-          <SheetHeader className="sr-only">
-            <SheetTitle>{event.title}</SheetTitle>
-          </SheetHeader>
-          {content}
-        </SheetContent>
-      </Sheet>
+      <>
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          <SheetContent 
+            side="bottom" 
+            className="h-[95vh] p-0 rounded-t-3xl overflow-hidden"
+            onPointerDownOutside={(e) => {
+              // Prevent closing when scrolling within the trade panel
+              if ((e.target as HTMLElement)?.closest?.('[data-trade-panel]')) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <SheetHeader className="sr-only">
+              <SheetTitle>{event.title}</SheetTitle>
+            </SheetHeader>
+            {content}
+          </SheetContent>
+        </Sheet>
+        <AnalysisSelectionModal
+          open={analysisModalOpen}
+          onOpenChange={setAnalysisModalOpen}
+          marketContext={analysisContext}
+          onSelect={handleAnalysisSelect}
+        />
+      </>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] p-0 overflow-hidden">
-        <DialogHeader className="sr-only">
-          <DialogTitle>{event.title}</DialogTitle>
-        </DialogHeader>
-        {content}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-5xl h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{event.title}</DialogTitle>
+          </DialogHeader>
+          {content}
+        </DialogContent>
+      </Dialog>
+      <AnalysisSelectionModal
+        open={analysisModalOpen}
+        onOpenChange={setAnalysisModalOpen}
+        marketContext={analysisContext}
+        onSelect={handleAnalysisSelect}
+      />
+    </>
   );
 }
