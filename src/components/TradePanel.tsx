@@ -877,15 +877,11 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   });
                   return;
                 }
+                // For Safe wallets, hasAllowances covers all approvals (set via Dome relay)
+                // For EOA wallets (non-Safe flow), check isFullyApproved
                 if (!hasAllowances) {
                   toast.error('Please set token allowances (Step 3)', {
                     description: 'Scroll up and click "Set Token Allowances"'
-                  });
-                  return;
-                }
-                if (!isFullyApproved) {
-                  toast.error('Please approve USDC (Step 4)', {
-                    description: 'Scroll up and click "Approve USDC for Trading"'
                   });
                   return;
                 }
