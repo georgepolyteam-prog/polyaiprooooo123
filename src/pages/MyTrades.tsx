@@ -426,7 +426,7 @@ export default function MyTrades() {
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden pb-24 md:pb-0">
       {/* Background effects */}
       <div className="fixed inset-0 cyber-grid opacity-20" />
       <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
