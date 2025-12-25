@@ -117,8 +117,11 @@ export function usePolymarketApiCreds() {
         throw new Error("Please switch to Polygon network first");
       }
 
-      const signatureType = usingSafe ? 2 : 0;
-      console.log("[API Creds] Creating ClobClient with signatureType:", signatureType, "context:", currentContext);
+      // CRITICAL: Always create credentials with EOA context (signatureType=0, no funder)
+      // API credentials belong to the EOA signer, NOT the Safe wallet
+      // The Safe is only used as funder when PLACING orders (in usePolymarketTrading.ts)
+      console.log("[API Creds] Creating ClobClient with signatureType: 0 (EOA) for credential creation");
+      console.log("[API Creds] Note: Safe funder will be used when placing orders, not for credential creation");
       
       toast.info("Polymarket setup: please sign to enable trading...");
 
@@ -127,8 +130,8 @@ export function usePolymarketApiCreds() {
         POLYGON_CHAIN_ID,
         signer,
         undefined,
-        signatureType,
-        usingSafe ? opts?.funderAddress : undefined
+        0,        // ALWAYS use signatureType=0 (EOA) for credential creation
+        undefined // NEVER use funder for credential creation - creds belong to EOA
       );
 
       let apiKeyCreds: { key: string; secret: string; passphrase: string } | null = null;
@@ -149,8 +152,8 @@ export function usePolymarketApiCreds() {
               POLYGON_CHAIN_ID,
               signer,
               { key: derivedCreds.key, secret: derivedCreds.secret, passphrase: derivedCreds.passphrase },
-              signatureType,
-              usingSafe ? opts?.funderAddress : undefined
+              0,        // EOA signatureType for deletion
+              undefined // No funder for deletion
             );
             await deleteClient.deleteApiKey();
             console.log("[API Creds] Successfully deleted existing API keys");
