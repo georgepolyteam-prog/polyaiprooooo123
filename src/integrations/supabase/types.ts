@@ -197,6 +197,36 @@ export type Database = {
         }
         Relationships: []
       }
+      polymarket_credentials: {
+        Row: {
+          api_key: string
+          api_passphrase: string
+          api_secret: string
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_address: string
+        }
+        Insert: {
+          api_key: string
+          api_passphrase: string
+          api_secret: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_address: string
+        }
+        Update: {
+          api_key?: string
+          api_passphrase?: string
+          api_secret?: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_address?: string
+        }
+        Relationships: []
+      }
       positions: {
         Row: {
           created_at: string

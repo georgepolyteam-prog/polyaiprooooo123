@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { buildPolymarketTradeUrl } from '@/lib/polymarket-trade';
-import { usePolymarketTrading } from '@/hooks/usePolymarketTrading';
+import { usePolymarketLink } from '@/hooks/usePolymarketLink';
+import { useDomeTrading } from '@/hooks/useDomeTrading';
 import { useUSDCBalance } from '@/hooks/useUSDCBalance';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,17 +41,18 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const [isMarketOrder, setIsMarketOrder] = useState(true);
   const [limitPrice, setLimitPrice] = useState('');
 
-  // Direct trading hooks
-  const { placeOrder, isPlacingOrder, isOnPolygon } = usePolymarketTrading();
+  // Dome trading hooks (no client-side signing required for orders!)
+  const { isLinked, isLinking, linkUser, checkLinkStatus } = usePolymarketLink();
+  const { placeOrder, isPlacingOrder } = useDomeTrading();
   const { balance, isFullyApproved, isApproving, approveUSDC, hasSufficientBalance, refetch } = useUSDCBalance();
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== POLYGON_CHAIN_ID;
 
-  // Check if direct trading is available
+  // Check if direct trading is available (requires linking)
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
-  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork;
+  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked;
 
   const handleSwitchNetwork = async () => {
     try {
@@ -60,6 +62,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     } catch (error) {
       console.error('Network switch error:', error);
       toast.error('Failed to switch network. Please switch manually in your wallet.');
+    }
+  };
+
+  // Handle wallet linking
+  const handleLinkWallet = async () => {
+    try {
+      await linkUser();
+    } catch (error) {
+      // Error already handled in hook
     }
   };
 
@@ -112,16 +123,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
     const tokenId = selectedSide === 'YES' ? yesToken : noToken;
 
-    console.log(`[Trade] Placing ${isMarketOrder ? 'market' : 'limit'} order: side=${selectedSide}, tokenId=${tokenId?.slice(0, 20)}..., price=${orderPrice}, amount=${amountNum}`);
+    console.log(`[Trade] Placing ${isMarketOrder ? 'market' : 'limit'} order via Dome: side=${selectedSide}, tokenId=${tokenId?.slice(0, 20)}..., price=${orderPrice}, size=${expectedShares}`);
 
+    // Use Dome trading - no signature required!
     const result = await placeOrder({
       tokenId: tokenId!,
       side: 'BUY',
-      amount: amountNum,
+      size: expectedShares,
       price: orderPrice,
-      marketSlug: marketData.marketSlug,
-      eventSlug: marketData.eventSlug,
-      isMarketOrder: isMarketOrder,
+      orderType: isMarketOrder ? 'FOK' : 'GTC',
     });
 
     if (result.success) {
@@ -256,9 +266,47 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
+        {/* Link wallet notice - required before trading */}
+        <AnimatePresence>
+          {isConnected && !isWrongNetwork && !isLinked && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex items-start gap-2 p-3 rounded-xl bg-primary/10 border border-primary/30 backdrop-blur-sm"
+            >
+              <Link2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-primary/80 mb-2">
+                  Link your wallet to enable trading. Sign once, trade forever!
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleLinkWallet}
+                  disabled={isLinking}
+                  className="text-xs border-primary/30 text-primary hover:bg-primary/20"
+                >
+                  {isLinking ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      Linking...
+                    </>
+                  ) : (
+                    <>
+                      <Link2 className="w-3 h-3 mr-1" />
+                      Link Wallet
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Approval required notice */}
         <AnimatePresence>
-          {isConnected && !isWrongNetwork && !isFullyApproved && (
+          {isConnected && !isWrongNetwork && isLinked && !isFullyApproved && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}

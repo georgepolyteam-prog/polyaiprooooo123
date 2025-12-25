@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.resolve-market-url]
 verify_jwt = false
+
+[functions.link-polymarket-user]
+verify_jwt = false
+
+[functions.dome-place-order]
+verify_jwt = false
