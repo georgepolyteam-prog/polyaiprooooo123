@@ -274,27 +274,46 @@ const Index = () => {
 
   const fetchMarketDataForSidebar = async (url: string) => {
     if (url === currentMarketUrl && marketData) return;
-    
+
     setMarketData(null);
     setLoadingMarket(true);
     setCurrentMarketUrl(url);
-    
+
     try {
       const { data, error } = await supabase.functions.invoke("market-dashboard", {
         body: { marketUrl: url }
       });
-      
+
       if (error) throw error;
       if (data.error) throw new Error(data.error);
-      
+
       if (data.needsMarketSelection) {
-        console.log(`[Sidebar] Multi-market event detected (${data.marketCount} markets), waiting for user selection`);
+        const marketsList = Array.isArray(data.markets) ? data.markets : [];
+        const best = marketsList
+          .slice()
+          .sort((a: any, b: any) => (Number(b?.volume) || 0) - (Number(a?.volume) || 0))[0];
+
+        if (best?.market_slug && data.eventSlug) {
+          const resolvedUrl = `https://polymarket.com/event/${data.eventSlug}/${best.market_slug}`;
+          console.log(
+            `[Sidebar] Auto-selecting market from multi-market event (${data.marketCount}) ->`,
+            resolvedUrl
+          );
+          userSelectedMarketUrlRef.current = resolvedUrl;
+          setUserSelectedMarketUrl(resolvedUrl);
+          await fetchMarketDataForSidebar(resolvedUrl);
+          return;
+        }
+
+        console.log(
+          `[Sidebar] Multi-market event detected (${data.marketCount}), but could not auto-select a market`
+        );
         setMarketData(null);
         setShowSidebar(false);
         setSidebarMarketData(null);
         return;
       }
-      
+
       setMarketData(data);
       setShowSidebar(true);
       setSidebarMarketData(data);
@@ -452,19 +471,57 @@ const Index = () => {
     }
   }, [searchParams, sendMessage, messages.length]);
 
-  const handleSubmit = useCallback((message: string, isVoice: boolean, audioBlob?: Blob) => {
+  const handleSubmit = useCallback(async (message: string, isVoice: boolean, audioBlob?: Blob) => {
     if (isVoice && audioBlob) {
       console.log("[Voice] Received audio blob for processing");
-    } else if (message.trim()) {
-      const url = detectMarketUrl(message);
-      if (url && urlHasMarketSlug(url)) {
-        fetchMarketDataForSidebar(url);
-      } else if (url) {
-        console.log('[Sidebar] Event-only URL detected, waiting for market selection');
-      }
-      sendMessage(message);
+      return;
     }
-  }, [sendMessage]);
+
+    if (!message.trim()) return;
+
+    const rawUrl = detectMarketUrl(message);
+    const url = rawUrl ? rawUrl.replace(/[.,;:!?\]\)]+$/, "") : null;
+
+    const resolveEventUrlToMarketUrl = async (eventUrl: string): Promise<string> => {
+      try {
+        const { data, error } = await supabase.functions.invoke("market-dashboard", {
+          body: { marketUrl: eventUrl },
+        });
+        if (error || !data) return eventUrl;
+
+        if (data.needsMarketSelection) {
+          const marketsList = Array.isArray(data.markets) ? data.markets : [];
+          const best = marketsList
+            .slice()
+            .sort((a: any, b: any) => (Number(b?.volume) || 0) - (Number(a?.volume) || 0))[0];
+
+          if (best?.market_slug && data.eventSlug) {
+            return `https://polymarket.com/event/${data.eventSlug}/${best.market_slug}`;
+          }
+        }
+
+        return eventUrl;
+      } catch {
+        return eventUrl;
+      }
+    };
+
+    if (url) {
+      if (urlHasMarketSlug(url)) {
+        fetchMarketDataForSidebar(url);
+        sendMessage(message);
+        return;
+      }
+
+      // Event-only URL: auto-resolve to a specific market so chat + sidebar both work.
+      const resolvedUrl = await resolveEventUrlToMarketUrl(url);
+      fetchMarketDataForSidebar(resolvedUrl);
+      sendMessage(resolvedUrl !== url ? message.replace(url, resolvedUrl) : message);
+      return;
+    }
+
+    sendMessage(message);
+  }, [sendMessage, fetchMarketDataForSidebar]);
 
   const handleQuickQuestion = (question: string) => {
     if (!isAuthenticated) {
