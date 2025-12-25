@@ -138,7 +138,7 @@ serve(async (req) => {
     console.log("[DOME-PLACE-ORDER] Dome API response status:", domeResponse.status);
     console.log("[DOME-PLACE-ORDER] Dome API response:", responseText);
 
-    let domeResult: { result?: DomeOrderResponse; error?: { message?: string; code?: number; data?: unknown } };
+    let domeResult: { result?: DomeOrderResponse; error?: { message?: string; code?: number; data?: { reason?: string; maker?: string; tokenId?: string } } };
     try {
       domeResult = JSON.parse(responseText);
     } catch {
@@ -148,10 +148,25 @@ serve(async (req) => {
 
     // Check for JSON-RPC error
     if (domeResult.error) {
-      console.error("[DOME-PLACE-ORDER] Dome API error:", domeResult.error);
-      return json(400, { 
-        error: domeResult.error.message || "Dome API error",
+      // Extract the most useful error message
+      const reason = domeResult.error.data?.reason || domeResult.error.message || "Dome API error";
+      const isAuthError = reason.toLowerCase().includes("unauthorized") || 
+                          reason.toLowerCase().includes("invalid api key") ||
+                          domeResult.error.code === 1006;
+      
+      console.error("[DOME-PLACE-ORDER] Dome API error:", {
+        reason,
         code: domeResult.error.code,
+        message: domeResult.error.message,
+        data: domeResult.error.data,
+      });
+      
+      return json(400, { 
+        error: reason,  // Surface the actual reason at top level
+        code: domeResult.error.code,
+        isAuthError,
+        maker: body.signedOrder.maker,
+        tokenId: body.signedOrder.tokenId,
         details: domeResult.error,
       });
     }
@@ -164,10 +179,17 @@ serve(async (req) => {
 
     // Check for order-level error
     if (result.errorMsg || result.error) {
-      console.error("[DOME-PLACE-ORDER] Order error:", result.errorMsg || result.error);
+      const errorMsg = result.errorMsg || result.error;
+      const isAuthError = errorMsg?.toLowerCase().includes("unauthorized") || 
+                          errorMsg?.toLowerCase().includes("invalid api key");
+      
+      console.error("[DOME-PLACE-ORDER] Order error:", errorMsg);
       return json(400, { 
-        error: result.errorMsg || result.error,
+        error: errorMsg,
+        isAuthError,
         orderID: result.orderID,
+        maker: body.signedOrder.maker,
+        tokenId: body.signedOrder.tokenId,
       });
     }
 
@@ -180,8 +202,8 @@ serve(async (req) => {
 
     return json(200, {
       success: true,
-      orderId: result.orderID,  // camelCase for client
-      orderID: result.orderID,  // Also keep original for compatibility
+      orderId: result.orderID,
+      orderID: result.orderID,
       status: result.status,
       takingAmount: result.takingAmount,
       makingAmount: result.makingAmount,
