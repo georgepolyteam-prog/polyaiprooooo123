@@ -42,52 +42,65 @@ serve(async (req) => {
     console.log(`[link-polymarket-user] Deriving credentials for wallet: ${walletAddress}`);
     console.log(`[link-polymarket-user] Timestamp: ${timestamp}, Nonce: ${nonce}`);
 
-    // Call Polymarket CLOB API to derive/create API credentials
-    // The API uses the EIP-712 signature to authenticate and derive credentials
-    const derivePayload = {
-      signature,
-      timestamp,
-      nonce,
+    // Polymarket CLOB auth endpoints expect auth data in headers (not JSON body).
+    // Flow:
+    // 1) Try to derive an existing API key via GET /auth/derive-api-key
+    // 2) If not found, create one via POST /auth/api-key
+
+    const polyAuthHeaders = {
+      'POLY_ADDRESS': walletAddress.toLowerCase(),
+      'POLY_SIGNATURE': signature,
+      'POLY_TIMESTAMP': String(timestamp),
+      'POLY_NONCE': String(nonce),
     };
-    
-    console.log('[link-polymarket-user] Calling CLOB derive API...');
-    
-    const deriveResponse = await fetch(`${CLOB_HOST}/auth/derive-api-key`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(derivePayload),
+
+    console.log('[link-polymarket-user] Trying GET /auth/derive-api-key ...');
+
+    let credentialsResponse = await fetch(`${CLOB_HOST}/auth/derive-api-key`, {
+      method: 'GET',
+      headers: polyAuthHeaders,
     });
 
-    const responseText = await deriveResponse.text();
-    
-    if (!deriveResponse.ok) {
-      console.error(`[link-polymarket-user] CLOB derive API error: ${deriveResponse.status}`);
-      console.error(`[link-polymarket-user] Response body: ${responseText}`);
-      
-      // Parse error for better user messaging
-      let errorMessage = 'Failed to derive API credentials';
-      try {
-        const errorJson = JSON.parse(responseText);
-        if (errorJson.message) {
-          errorMessage = errorJson.message;
-        } else if (errorJson.error) {
-          errorMessage = errorJson.error;
+    // If no existing key, create a new one
+    if (!credentialsResponse.ok) {
+      const deriveText = await credentialsResponse.text();
+      console.error(`[link-polymarket-user] Derive failed: ${credentialsResponse.status}`);
+      console.error(`[link-polymarket-user] Derive response body: ${deriveText}`);
+
+      console.log('[link-polymarket-user] Trying POST /auth/api-key ...');
+      credentialsResponse = await fetch(`${CLOB_HOST}/auth/api-key`, {
+        method: 'POST',
+        headers: polyAuthHeaders,
+      });
+
+      if (!credentialsResponse.ok) {
+        const createText = await credentialsResponse.text();
+        console.error(`[link-polymarket-user] Create API key failed: ${credentialsResponse.status}`);
+        console.error(`[link-polymarket-user] Create response body: ${createText}`);
+
+        let errorMessage = 'Failed to link wallet (CLOB auth failed)';
+        try {
+          const errorJson = JSON.parse(createText);
+          errorMessage = errorJson?.error || errorJson?.message || errorMessage;
+        } catch {
+          // ignore
         }
-      } catch {
-        // Use default message if not JSON
+
+        return new Response(
+          JSON.stringify({
+            error: errorMessage,
+            code: 'CLOB_AUTH_FAILED',
+            status: credentialsResponse.status,
+          }),
+          {
+            status: credentialsResponse.status,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
-      
-      return new Response(
-        JSON.stringify({ 
-          error: errorMessage,
-          code: 'DERIVE_FAILED',
-          status: deriveResponse.status 
-        }),
-        { status: deriveResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
+
+    const responseText = await credentialsResponse.text();
 
     let credentials;
     try {
