@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAccount } from "wagmi";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
@@ -6,7 +6,7 @@ import {
   RefreshCw, ExternalLink, Wallet, ArrowUpRight, ArrowDownRight, 
   Clock, Filter, Zap, TrendingUp, Activity, BarChart3, Sparkles,
   Package, ShoppingCart, XCircle, TrendingDown, DollarSign, Percent,
-  AlertCircle, Loader2
+  AlertCircle, Loader2, Gift
 } from "lucide-react";
 import { toast } from "sonner";
 import { TopBar } from "@/components/TopBar";
@@ -22,9 +22,11 @@ import { AnimatedNumber } from "@/components/dashboard/AnimatedNumber";
 import { SellPositionModal } from "@/components/SellPositionModal";
 import { MarketTradeModal } from "@/components/MarketTradeModal";
 import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
+import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
 import { fetchTradeableMarketData } from "@/lib/market-trade-data";
+import { ClaimablePosition } from "@/hooks/useClaimWinnings";
 
 interface Position {
   asset: string;
@@ -380,6 +382,24 @@ export default function MyTrades() {
 
   const maxVolume = topMarkets.length > 0 ? Math.max(...topMarkets.map(m => m.volume)) : 1;
 
+  // Compute claimable positions (redeemable = true means market is resolved and user has winning shares)
+  const claimablePositions: ClaimablePosition[] = useMemo(() => {
+    return positions
+      .filter(pos => pos.redeemable && pos.size > 0)
+      .map(pos => ({
+        conditionId: pos.conditionId,
+        title: pos.title || pos.eventTitle,
+        eventSlug: pos.eventSlug,
+        outcome: (pos.outcome === 'Yes' || pos.outcome === 'YES' ? 'YES' : 'NO') as 'YES' | 'NO',
+        winningShares: pos.size,
+        claimableUsdc: pos.size, // 1 winning share = 1 USDC
+        yesTokenId: pos.outcome === 'Yes' || pos.outcome === 'YES' ? pos.asset : undefined,
+        noTokenId: pos.outcome === 'No' || pos.outcome === 'NO' ? pos.asset : undefined,
+      }));
+  }, [positions]);
+
+  const totalClaimable = claimablePositions.reduce((sum, p) => sum + p.claimableUsdc, 0);
+
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden">
@@ -546,6 +566,15 @@ export default function MyTrades() {
               <Package className="w-4 h-4" />
               Positions
             </TabsTrigger>
+            <TabsTrigger value="claimable" className="gap-2 data-[state=active]:bg-[#BFFF0A]/20">
+              <Gift className="w-4 h-4" />
+              Claimable
+              {claimablePositions.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs bg-[#BFFF0A]/20 text-[#BFFF0A] border-[#BFFF0A]/30">
+                  {claimablePositions.length}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="orders" className="gap-2 data-[state=active]:bg-primary/20">
               <ShoppingCart className="w-4 h-4" />
               Open Orders
@@ -707,6 +736,37 @@ export default function MyTrades() {
                 )}
               </div>
             </GlassCard>
+          </TabsContent>
+
+          {/* Claimable Winnings Tab */}
+          <TabsContent value="claimable" className="space-y-4">
+            {claimablePositions.length > 0 && (
+              <ClaimableWinningsSummary positions={claimablePositions} />
+            )}
+            
+            {claimablePositions.length === 0 ? (
+              <GlassCard cyber className="p-12">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-[#BFFF0A]/20 to-[#BFFF0A]/5 flex items-center justify-center mb-4">
+                    <Gift className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <p className="text-muted-foreground text-lg">No claimable winnings</p>
+                  <p className="text-sm text-muted-foreground/60 mt-2">
+                    When your markets resolve in your favor, you can claim your USDC here
+                  </p>
+                </div>
+              </GlassCard>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {claimablePositions.map((position) => (
+                  <ClaimWinningsCard
+                    key={position.conditionId}
+                    position={position}
+                    onClaimSuccess={() => fetchPositions()}
+                  />
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* Open Orders Tab */}
