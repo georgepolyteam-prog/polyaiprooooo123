@@ -243,7 +243,19 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
 
           {/* Filter Buttons - Dashboard Style */}
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Live Trades</h3>
+            <h3 className="font-semibold text-sm flex items-center gap-1.5">
+              Live Data{" "}
+              <span className="text-xs font-normal text-muted-foreground">•</span>
+              <a
+                href="https://domeapi.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-normal text-poly-cyan hover:underline underline-offset-2 decoration-poly-cyan/50 hover:decoration-poly-cyan transition-colors flex items-center gap-1"
+              >
+                DOME
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </h3>
             <div className="flex items-center gap-1">
               <Filter className="w-3 h-3 text-muted-foreground mr-1" />
               {(['all', 'whales', 'yes', 'no'] as const).map((f) => (
