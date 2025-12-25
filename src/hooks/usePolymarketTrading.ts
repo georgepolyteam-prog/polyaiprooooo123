@@ -387,22 +387,60 @@ export function usePolymarketTrading() {
         }
 
         if (params.isMarketOrder) {
-          console.log("[Trade] Using createAndPostMarketOrder (FAK)...");
-
+          // Route FAK orders through Dome for builder attribution
+          console.log("[Trade] 🏗️ Creating FAK order via Dome API for builder attribution...");
+          
           const marketOrderAmount = params.side === "SELL" ? size : params.amount;
-
-          response = await client.createAndPostMarketOrder(
+          
+          // Use createMarketOrder to get a signed order for FAK
+          const signedOrder = await client.createMarketOrder(
             {
               tokenID: params.tokenId,
               amount: marketOrderAmount,
               side: params.side === "BUY" ? Side.BUY : Side.SELL,
             },
-            { tickSize, negRisk },
-            OrderType.FAK
+            { tickSize, negRisk }
           );
-
-          if (response && response.makingAmount) {
-            const filled = parseFloat(response.makingAmount);
+          
+          console.log("[Trade] 🏗️ Signed FAK order created:", signedOrder);
+          
+          // Submit to Dome API via edge function with FAK order type
+          const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              signedOrder,
+              orderType: "FAK",
+              credentials: {
+                apiKey: creds.apiKey,
+                apiSecret: creds.secret,
+                apiPassphrase: creds.passphrase,
+              },
+              clientOrderId: crypto.randomUUID(),
+            }),
+          });
+          
+          const domeResult = await domeResponse.json();
+          console.log("[Trade] 🏗️ Dome API FAK response:", domeResult);
+          
+          if (!domeResponse.ok || domeResult.error) {
+            throw new Error(domeResult.error || "Failed to place FAK order via Dome API");
+          }
+          
+          response = {
+            success: true,
+            orderID: domeResult.orderID,
+            id: domeResult.orderID,
+            status: domeResult.status,
+            makingAmount: domeResult.makingAmount,
+            takingAmount: domeResult.takingAmount,
+            transactionsHashes: domeResult.transactionsHashes,
+            builder: "dome",
+          };
+          
+          // Log partial fill info for FAK orders
+          if (domeResult.makingAmount) {
+            const filled = parseFloat(domeResult.makingAmount);
             if (filled > 0 && filled < marketOrderAmount) {
               toast.info(
                 `Partially filled: ${filled.toFixed(2)} of ${marketOrderAmount.toFixed(2)} shares`
@@ -466,7 +504,8 @@ export function usePolymarketTrading() {
         
         // Log attribution info for orders
         console.log("[Trade] 📊 Order Attribution Info:");
-        console.log("[Trade]   → Builder:", response.builder || "polymarket-clob");
+        console.log("[Trade]   → Builder:", response.builder || "dome");
+        console.log("[Trade]   → Routed via:", "Dome API (api.domeapi.io)");
         console.log("[Trade]   → Wallet Address:", address);
         console.log("[Trade]   → Order Type:", params.isMarketOrder ? "MARKET (FAK)" : "LIMIT (GTC)");
         console.log("[Trade]   → Side:", params.side);
