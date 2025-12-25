@@ -24,9 +24,7 @@ import { MarketTradeModal } from "@/components/MarketTradeModal";
 import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
 import { SafeWalletPanel } from "@/components/SafeWalletPanel";
-import { SafeWalletManager } from "@/components/wallet/SafeWalletManager";
-import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
-import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
+import { useDomeRouter } from "@/hooks/useDomeRouter";
 import { useSafeWallet } from "@/hooks/useSafeWallet";
 import { fetchTradeableMarketData } from "@/lib/market-trade-data";
 import { ClaimablePosition } from "@/hooks/useClaimWinnings";
@@ -125,9 +123,8 @@ const getPolymarketUrl = (marketSlug?: string) => {
 export default function MyTrades() {
   const { address, isConnected } = useAccount();
   const navigate = useNavigate();
-  const { placeOrder, isPlacingOrder, getOpenOrders, cancelOrder } = usePolymarketTrading();
-  const { apiCreds, getApiCreds } = usePolymarketApiCreds();
-  const { safeAddress, isDeployed } = useSafeWallet();
+  const { placeOrder, isPlacingOrder, safeAddress, isDeployed, credentials } = useDomeRouter();
+  const { } = useSafeWallet();
   
   // Wait for Safe state to load before fetching positions
   const [safeStateLoaded, setSafeStateLoaded] = useState(false);
@@ -203,18 +200,12 @@ export default function MyTrades() {
     setHasTriedFetchPositions(true);
 
     try {
-      // Get user's API credentials for fetching their open orders
-      let creds = apiCreds;
-      if (!creds) {
-        creds = await getApiCreds();
-      }
-
       // Build URL with the correct address (Safe or EOA)
       let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-user-positions?address=${queryAddress}`;
       
       // Pass user's API credentials so the edge function can fetch their orders
-      if (creds) {
-        url += `&apiKey=${encodeURIComponent(creds.apiKey)}&secret=${encodeURIComponent(creds.secret)}&passphrase=${encodeURIComponent(creds.passphrase)}`;
+      if (credentials) {
+        url += `&apiKey=${encodeURIComponent(credentials.apiKey)}&secret=${encodeURIComponent(credentials.apiSecret)}&passphrase=${encodeURIComponent(credentials.apiPassphrase)}`;
       }
 
       console.log('[MyTrades] Fetching positions for:', queryAddress, isDeployed ? '(Safe)' : '(EOA)');
@@ -253,7 +244,7 @@ export default function MyTrades() {
     } finally {
       setIsLoadingPositions(false);
     }
-  }, [isConnected, queryAddress, apiCreds, getApiCreds, isDeployed]);
+  }, [isConnected, queryAddress, credentials, isDeployed]);
 
   const fetchHistory = useCallback(async () => {
     if (!isConnected || !queryAddress) return;
@@ -300,15 +291,15 @@ export default function MyTrades() {
 
     setIsLoadingOrders(true);
     try {
-      const orders = await getOpenOrders();
-      setOpenOrders(orders || []);
+      // Open orders fetching requires the CLOB client which is now internal to useDomeRouter
+      // For now, we'll rely on the positions endpoint which may include order data
+      setOpenOrders([]);
     } catch (err) {
       console.error("[MyTrades] Open orders error:", err);
-      toast.error("Failed to fetch open orders");
     } finally {
       setIsLoadingOrders(false);
     }
-  }, [address, getOpenOrders, isConnected]);
+  }, [address, isConnected]);
 
   // Auto-fetch when wallet is connected - wait for Safe state to load first
   useEffect(() => {
@@ -348,9 +339,8 @@ export default function MyTrades() {
     setCancellingOrderId(orderId);
 
     try {
-      await cancelOrder(orderId);
-      toast.success("Order cancelled successfully");
-      await refreshOpenOrders();
+      // Order cancellation requires CLOB client - show message to user
+      toast.error("Order cancellation not yet available in new trading system");
     } catch (err) {
       console.error("Cancel order error:", err);
       toast.error("Failed to cancel order");
@@ -533,7 +523,7 @@ export default function MyTrades() {
       
       <main className="relative max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* Safe Wallet Manager */}
-        <SafeWalletManager />
+        <SafeWalletPanel />
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

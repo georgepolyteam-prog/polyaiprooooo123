@@ -4,8 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Bell, RefreshCw, Key, Trash2 } from "lucide-react";
-import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
-import { useAccount } from "wagmi";
+import { useDomeRouter } from "@/hooks/useDomeRouter";
 import { toast } from "sonner";
 
 interface SettingsModalProps {
@@ -19,8 +18,7 @@ interface Settings {
 }
 
 export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps) => {
-  const { address } = useAccount();
-  const { clearApiCreds } = usePolymarketApiCreds();
+  const { address, clearSession } = useDomeRouter();
   const [isClearing, setIsClearing] = useState(false);
   
   const [settings, setSettings] = useState<Settings>(() => {
@@ -44,7 +42,7 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps) => {
     
     setIsClearing(true);
     try {
-      clearApiCreds(address);
+      clearSession();
       toast.success("Trading credentials cleared. You'll be prompted to sign again on next trade.");
     } catch (e) {
       console.error("Failed to clear credentials:", e);
