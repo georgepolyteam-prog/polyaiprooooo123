@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { buildPolymarketTradeUrl } from '@/lib/polymarket-trade';
@@ -40,6 +41,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const [selectedSide, setSelectedSide] = useState<'YES' | 'NO'>(defaultSide);
   const [isMarketOrder, setIsMarketOrder] = useState(true);
   const [limitPrice, setLimitPrice] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   // Dome trading hooks (no client-side signing required for orders!)
   const { isLinked, isLinking, linkUser, checkLinkStatus } = usePolymarketLink();
@@ -74,24 +76,25 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     }
   };
 
-  const handleDirectTrade = async () => {
+  // Validate order before showing confirmation
+  const validateOrder = () => {
     const yesToken = marketData.yesTokenId || marketData.tokenId;
     const noToken = marketData.noTokenId;
     
     if (selectedSide === 'YES' && !yesToken) {
       toast.error('YES token ID not available for direct trading');
-      return;
+      return false;
     }
     
     if (selectedSide === 'NO' && !noToken) {
       toast.error('NO token ID not available for direct trading. Try trading on Polymarket directly.');
-      return;
+      return false;
     }
 
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
       toast.error('Please enter a valid amount');
-      return;
+      return false;
     }
 
     const marketPrice = selectedSide === 'YES' ? marketData.currentPrice : (1 - marketData.currentPrice);
@@ -103,7 +106,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
       const limitPriceNum = parseFloat(limitPrice);
       if (limitPriceNum < 1 || limitPriceNum > 99) {
         toast.error('Limit price must be between 1¢ and 99¢');
-        return;
+        return false;
       }
     }
 
@@ -113,15 +116,36 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     if (expectedShares < MIN_SHARES) {
       const minAmount = Math.ceil(MIN_SHARES * orderPrice * 100) / 100;
       toast.error(`Minimum order is ${MIN_SHARES} shares (~$${minAmount.toFixed(2)} at ${isMarketOrder ? 'current' : 'limit'} price)`);
-      return;
+      return false;
     }
 
     if (!hasSufficientBalance(amountNum)) {
       toast.error(`Insufficient USDC balance. You have $${balance.toFixed(2)}`);
-      return;
+      return false;
     }
 
+    return true;
+  };
+
+  const handleShowConfirmation = () => {
+    if (validateOrder()) {
+      setShowConfirmation(true);
+    }
+  };
+
+  const handleDirectTrade = async () => {
+    setShowConfirmation(false);
+    
+    const yesToken = marketData.yesTokenId || marketData.tokenId;
+    const noToken = marketData.noTokenId;
     const tokenId = selectedSide === 'YES' ? yesToken : noToken;
+    
+    const amountNum = parseFloat(amount);
+    const marketPrice = selectedSide === 'YES' ? marketData.currentPrice : (1 - marketData.currentPrice);
+    const orderPrice = isMarketOrder 
+      ? marketPrice 
+      : (limitPrice ? parseFloat(limitPrice) / 100 : marketPrice);
+    const expectedShares = amountNum / Math.max(orderPrice, 0.01);
 
     console.log(`[Trade] Placing ${isMarketOrder ? 'market' : 'limit'} order via Dome: side=${selectedSide}, tokenId=${tokenId?.slice(0, 20)}..., price=${orderPrice}, size=${expectedShares}`);
 
@@ -135,9 +159,28 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     });
 
     if (result.success) {
+      // Enhanced success toast with order details
+      toast.success(
+        `Order placed! ${expectedShares.toFixed(2)} ${selectedSide} shares @ ${(orderPrice * 100).toFixed(1)}¢`,
+        {
+          description: result.orderId 
+            ? `Order ID: ${result.orderId.slice(0, 12)}...` 
+            : 'Order submitted successfully',
+          icon: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
+          action: {
+            label: 'View Activity',
+            onClick: () => window.open('https://polymarket.com/activity', '_blank'),
+          },
+        }
+      );
       setAmount('');
       setLimitPrice('');
       refetch();
+    } else if (result.error) {
+      // Enhanced error with details
+      toast.error(result.error, {
+        description: result.details || 'Please try again or contact support.',
+      });
     }
   };
 
@@ -644,9 +687,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
+              {/* Insufficient balance warning */}
+              {amount && parseFloat(amount) > 0 && !hasSufficientBalance(parseFloat(amount)) && (
+                <p className="text-xs text-destructive mb-2 text-center">
+                  Insufficient balance. You need ${parseFloat(amount).toFixed(2)} USDC.
+                </p>
+              )}
               <motion.button
-                onClick={handleDirectTrade}
-                disabled={isPlacingOrder || !amount || parseFloat(amount) <= 0}
+                onClick={handleShowConfirmation}
+                disabled={isPlacingOrder || !amount || parseFloat(amount) <= 0 || !hasSufficientBalance(parseFloat(amount) || 0)}
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 className={cn(
@@ -680,6 +729,100 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Order Confirmation Dialog */}
+        <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {selectedSide === 'YES' ? (
+                  <TrendingUp className="w-5 h-5 text-emerald-400" />
+                ) : (
+                  <TrendingDown className="w-5 h-5 text-red-400" />
+                )}
+                Confirm {isMarketOrder ? 'Market' : 'Limit'} Order
+              </DialogTitle>
+              <DialogDescription>
+                Review your order details before placing.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Market</span>
+                  <span className="font-medium text-foreground text-right max-w-[200px] truncate">
+                    {marketData.title}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Side</span>
+                  <span className={cn(
+                    "font-bold",
+                    selectedSide === 'YES' ? "text-emerald-400" : "text-red-400"
+                  )}>
+                    {selectedSide}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Shares</span>
+                  <span className="font-mono font-medium text-foreground">{shares}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {isMarketOrder ? 'Est. Price' : 'Limit Price'}
+                  </span>
+                  <span className="font-mono text-foreground">{(displayPrice * 100).toFixed(1)}¢</span>
+                </div>
+                <div className="h-px bg-border" />
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Cost</span>
+                  <span className="font-mono font-bold text-foreground">${amount}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Potential Payout</span>
+                  <span className={cn(
+                    "font-mono font-bold",
+                    selectedSide === 'YES' ? "text-emerald-400" : "text-red-400"
+                  )}>
+                    ${payout}
+                  </span>
+                </div>
+              </div>
+              
+              <p className="text-xs text-muted-foreground text-center">
+                Order type: <span className="font-medium">{isMarketOrder ? 'Fill or Kill (FOK)' : 'Good Till Cancelled (GTC)'}</span>
+              </p>
+            </div>
+            
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmation(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDirectTrade}
+                disabled={isPlacingOrder}
+                className={cn(
+                  selectedSide === 'YES'
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-red-600 hover:bg-red-700"
+                )}
+              >
+                {isPlacingOrder ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Placing...
+                  </>
+                ) : (
+                  'Confirm Order'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Wallet connection */}
         {!isConnected && (
