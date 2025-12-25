@@ -27,7 +27,7 @@ function safeParseCreds(raw: string | null): PolymarketApiCreds | null {
 }
 
 export type GetApiCredsOptions = {
-  funderAddress?: string; // Safe address when using Safe wallet
+  funderAddress?: string; // Safe address when using Safe wallet (for ClobClient init only)
 };
 
 export function usePolymarketApiCreds() {
@@ -35,7 +35,8 @@ export function usePolymarketApiCreds() {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Cached credentials for EOA (default) - Safe credentials checked dynamically
+  // CRITICAL: Always cache credentials by EOA address (the signer)
+  // Polymarket API keys are linked to the signing address, not the funder/maker
   const cached = useMemo(() => {
     if (!address) return null;
     return safeParseCreds(localStorage.getItem(`${STORAGE_KEY}:${address.toLowerCase()}`));
@@ -54,17 +55,21 @@ export function usePolymarketApiCreds() {
       return null;
     }
 
-    // Determine target address: Safe address (if provided) or EOA
-    const targetAddress = opts?.funderAddress || address;
+    // CRITICAL FIX: Always cache/lookup by EOA address (the signer), NOT the Safe address
+    // Polymarket's auth system uses POLY_ADDRESS header which must match the API key owner
+    // The API key is derived from the EOA signature, so it's always linked to the EOA
+    const cacheKey = `${STORAGE_KEY}:${address.toLowerCase()}`;
     const usingSafe = !!opts?.funderAddress && opts.funderAddress.toLowerCase() !== address.toLowerCase();
-    const cacheKey = `${STORAGE_KEY}:${targetAddress.toLowerCase()}`;
 
-    console.log("[API Creds] Target address:", targetAddress, "Using Safe:", usingSafe);
+    console.log("[API Creds] EOA (signer):", address);
+    console.log("[API Creds] Funder address:", opts?.funderAddress || address);
+    console.log("[API Creds] Using Safe:", usingSafe);
+    console.log("[API Creds] Cache key (always EOA):", cacheKey);
 
-    // Check for existing cached credentials for this target
+    // Check for existing cached credentials for the EOA
     const existing = safeParseCreds(localStorage.getItem(cacheKey));
     if (existing) {
-      console.log("[API Creds] Using cached credentials for:", targetAddress);
+      console.log("[API Creds] Using cached credentials for EOA:", address);
       return existing;
     }
 
@@ -86,30 +91,28 @@ export function usePolymarketApiCreds() {
         throw new Error("Please switch to Polygon network first");
       }
 
-      const signatureType = usingSafe ? 2 : 0; // 2 = POLY_GNOSIS_SAFE, 0 = EOA
+      // signatureType 2 = POLY_GNOSIS_SAFE (for Safe wallet orders)
+      // signatureType 0 = EOA (direct wallet orders)
+      // NOTE: signatureType affects order signing, but API credentials are still derived for EOA
+      const signatureType = usingSafe ? 2 : 0;
       console.log("[API Creds] Creating ClobClient with signatureType:", signatureType);
       
-      if (usingSafe) {
-        toast.info("Polymarket setup: please sign to enable trading for your Safe wallet");
-      } else {
-        toast.info("Polymarket setup: please sign to enable trading (one-time per wallet)");
-      }
+      toast.info("Polymarket setup: please sign to enable trading (one-time per wallet)");
 
-      // Create ClobClient with correct signatureType and funderAddress
-      // For Safe wallets (signatureType 2), the funderAddress is the Safe address
-      // The EOA signs to derive API keys linked to the Safe address
+      // Create ClobClient - API credentials are derived for the EOA (signer)
+      // The funderAddress is only used for order signing (maker field), not for API auth
       const client = new ClobClient(
         CLOB_HOST,
         POLYGON_CHAIN_ID,
         signer,
         undefined, // No existing creds - will derive
         signatureType,
-        usingSafe ? targetAddress : undefined // funderAddress for Safe
+        usingSafe ? opts?.funderAddress : undefined // funderAddress for Safe order signing only
       );
 
-      // Use ClobClient's built-in method to create or derive API credentials
-      // For Safe wallets, this derives keys linked to the Safe address
-      console.log("[API Creds] Calling createOrDeriveApiKey for:", targetAddress);
+      // createOrDeriveApiKey derives credentials linked to the SIGNER (EOA)
+      // The POLY_ADDRESS header in API calls will use this EOA address
+      console.log("[API Creds] Calling createOrDeriveApiKey (credentials linked to EOA)...");
       const apiKeyCreds = await client.createOrDeriveApiKey();
 
       // ClobClient returns ApiKeyCreds with { key, secret, passphrase }
@@ -117,7 +120,8 @@ export function usePolymarketApiCreds() {
         throw new Error("Failed to create/derive API credentials - empty response");
       }
 
-      console.log("[API Creds] Successfully created/derived API credentials for:", targetAddress);
+      console.log("[API Creds] Successfully created/derived API credentials for EOA:", address);
+      console.log("[API Creds] API Key prefix:", apiKeyCreds.key.slice(0, 8) + "...");
 
       // Map to our internal format (key -> apiKey)
       const creds: PolymarketApiCreds = {
@@ -126,10 +130,10 @@ export function usePolymarketApiCreds() {
         passphrase: apiKeyCreds.passphrase,
       };
 
-      // Cache credentials keyed by target address (Safe or EOA)
+      // CRITICAL: Cache credentials by EOA address, NOT Safe address
       localStorage.setItem(cacheKey, JSON.stringify(creds));
 
-      toast.success(usingSafe ? "Trading enabled for Safe wallet" : "Trading enabled for this wallet");
+      toast.success("Trading enabled for this wallet");
       return creds;
     } catch (e: unknown) {
       console.error("[API Creds] Error:", e);
@@ -140,7 +144,14 @@ export function usePolymarketApiCreds() {
         return null;
       }
       
-      toast.error(msg);
+      // Handle "Could not create api key" - try derive fallback
+      if (msg.includes("Could not create api key")) {
+        console.log("[API Creds] Create failed, attempting derive fallback...");
+        toast.error("API key creation failed. Please try again.");
+      } else {
+        toast.error(msg);
+      }
+      
       return null;
     } finally {
       setIsLoading(false);
@@ -150,9 +161,9 @@ export function usePolymarketApiCreds() {
   // Force refresh credentials (clear cache and re-derive)
   const refreshApiCreds = useCallback(async (opts?: GetApiCredsOptions): Promise<PolymarketApiCreds | null> => {
     if (!address) return null;
-    const targetAddress = opts?.funderAddress || address;
-    console.log("[API Creds] Forcing credential refresh for:", targetAddress);
-    localStorage.removeItem(`${STORAGE_KEY}:${targetAddress.toLowerCase()}`);
+    // Always clear by EOA address
+    console.log("[API Creds] Forcing credential refresh for EOA:", address);
+    localStorage.removeItem(`${STORAGE_KEY}:${address.toLowerCase()}`);
     return await getApiCreds(opts);
   }, [address, getApiCreds]);
 

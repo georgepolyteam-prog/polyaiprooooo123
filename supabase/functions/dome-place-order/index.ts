@@ -18,7 +18,7 @@ interface SignedOrder {
   expiration: string;
   nonce: string;
   feeRateBps: string;
-  side: number;
+  side: "BUY" | "SELL" | number; // Accept both string and number for compatibility
   signatureType: number;
   signature: string;
 }
@@ -49,6 +49,12 @@ function json(status: number, body: unknown) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// Convert side to human-readable string
+function sideToString(side: "BUY" | "SELL" | number): string {
+  if (typeof side === "string") return side;
+  return side === 0 ? "BUY" : "SELL";
 }
 
 serve(async (req) => {
@@ -85,6 +91,13 @@ serve(async (req) => {
     const clientOrderId = body.clientOrderId || crypto.randomUUID();
     const orderType = body.orderType || "GTC";
 
+    // Log order identity info for debugging
+    console.log("[DOME-PLACE-ORDER] 🔑 Order Identity:");
+    console.log("[DOME-PLACE-ORDER]   → Maker:", body.signedOrder.maker);
+    console.log("[DOME-PLACE-ORDER]   → Signer:", body.signedOrder.signer);
+    console.log("[DOME-PLACE-ORDER]   → Signature Type:", body.signedOrder.signatureType);
+    console.log("[DOME-PLACE-ORDER]   → API Key prefix:", body.credentials.apiKey.slice(0, 8) + "...");
+
     // Build Dome API request (per Dome SDK lines 1539-1552)
     const domeRequest = {
       jsonrpc: "2.0",
@@ -101,7 +114,7 @@ serve(async (req) => {
     console.log("[DOME-PLACE-ORDER] 🏗️ Submitting order via Dome API for builder attribution");
     console.log("[DOME-PLACE-ORDER] Order type:", orderType);
     console.log("[DOME-PLACE-ORDER] Token ID:", body.signedOrder.tokenId);
-    console.log("[DOME-PLACE-ORDER] Side:", body.signedOrder.side === 0 ? "BUY" : "SELL");
+    console.log("[DOME-PLACE-ORDER] Side:", sideToString(body.signedOrder.side));
     console.log("[DOME-PLACE-ORDER] Maker amount:", body.signedOrder.makerAmount);
     console.log("[DOME-PLACE-ORDER] Taker amount:", body.signedOrder.takerAmount);
 
@@ -119,7 +132,7 @@ serve(async (req) => {
     console.log("[DOME-PLACE-ORDER] Dome API response status:", domeResponse.status);
     console.log("[DOME-PLACE-ORDER] Dome API response:", responseText);
 
-    let domeResult: { result?: DomeOrderResponse; error?: { message?: string; code?: number } };
+    let domeResult: { result?: DomeOrderResponse; error?: { message?: string; code?: number; data?: unknown } };
     try {
       domeResult = JSON.parse(responseText);
     } catch {
