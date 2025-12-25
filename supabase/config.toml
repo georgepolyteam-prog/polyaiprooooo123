@@ -30,5 +30,8 @@ verify_jwt = false
 [functions.resolve-market-url]
 verify_jwt = false
 
+[functions.builder-sign]
+verify_jwt = false
+
 [functions.link-polymarket-user]
 verify_jwt = false
