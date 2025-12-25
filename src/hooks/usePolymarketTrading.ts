@@ -480,19 +480,27 @@ export function usePolymarketTrading() {
             }
           );
 
-          if (submitError) {
-            const message = submitError.message || "Failed to submit order via Dome";
-            throw new Error(message);
-          }
-
-          if (!submitData?.success) {
-            const err = submitData?.error || "Order rejected";
+          // CRITICAL: When edge function returns non-2xx, submitError is set but submitData may contain actual error details
+          // Parse the actual error from submitData first, then fall back to submitError
+          const errorInfo = submitData as { error?: string; isAuthError?: boolean; code?: number; details?: unknown } | null;
+          
+          if (submitError || !submitData?.success) {
+            const err = errorInfo?.error || (submitError?.message) || "Order rejected";
+            const isAuthError = errorInfo?.isAuthError || 
+              (typeof err === "string" && (err.toLowerCase().includes("invalid api key") || err.toLowerCase().includes("unauthorized")));
+            
+            console.log("[Trade] Order error details:", { error: err, code: errorInfo?.code, isAuthError, details: errorInfo?.details });
+            
             // Retry once if auth error by refreshing credentials
-            if (typeof err === "string" && (err.includes("Invalid api key") || err.includes("Unauthorized"))) {
+            if (isAuthError) {
               console.log("[Trade] Auth error detected, refreshing credentials and retrying...");
               updateStage("refreshing-credentials");
               const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
               if (!refreshedCreds) throw new Error("Failed to refresh trading credentials. Please try again.");
+
+              // Add delay to allow Polymarket backend to propagate new credentials
+              console.log("[Trade] Waiting for credential propagation...");
+              await new Promise(resolve => setTimeout(resolve, 1500));
 
               updateStage("submitting-order");
               const { data: retryData, error: retryError } = await supabase.functions.invoke(
@@ -509,8 +517,13 @@ export function usePolymarketTrading() {
                   },
                 }
               );
-              if (retryError) throw new Error(retryError.message || "Failed to submit order via Dome");
-              if (!retryData?.success) throw new Error(retryData?.error || "Order rejected");
+              
+              // Parse retry response the same way
+              const retryErrorInfo = retryData as { error?: string; isAuthError?: boolean } | null;
+              if (retryError || !retryData?.success) {
+                const retryErr = retryErrorInfo?.error || retryError?.message || "Order rejected after retry";
+                throw new Error(retryErr);
+              }
 
               response = { success: true, orderID: retryData.orderId, id: retryData.orderId, builder: "dome" };
             } else {
@@ -551,18 +564,25 @@ export function usePolymarketTrading() {
             }
           );
 
-          if (submitError) {
-            const message = submitError.message || "Failed to submit order via Dome";
-            throw new Error(message);
-          }
-
-          if (!submitData?.success) {
-            const err = submitData?.error || "Order rejected";
-            if (typeof err === "string" && (err.includes("Invalid api key") || err.includes("Unauthorized"))) {
+          // CRITICAL: When edge function returns non-2xx, submitError is set but submitData may contain actual error details
+          const errorInfo = submitData as { error?: string; isAuthError?: boolean; code?: number; details?: unknown } | null;
+          
+          if (submitError || !submitData?.success) {
+            const err = errorInfo?.error || (submitError?.message) || "Order rejected";
+            const isAuthError = errorInfo?.isAuthError || 
+              (typeof err === "string" && (err.toLowerCase().includes("invalid api key") || err.toLowerCase().includes("unauthorized")));
+            
+            console.log("[Trade] Order error details:", { error: err, code: errorInfo?.code, isAuthError, details: errorInfo?.details });
+            
+            if (isAuthError) {
               console.log("[Trade] Auth error detected, refreshing credentials and retrying...");
               updateStage("refreshing-credentials");
               const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
               if (!refreshedCreds) throw new Error("Failed to refresh trading credentials. Please try again.");
+
+              // Add delay to allow Polymarket backend to propagate new credentials
+              console.log("[Trade] Waiting for credential propagation...");
+              await new Promise(resolve => setTimeout(resolve, 1500));
 
               updateStage("submitting-order");
               const { data: retryData, error: retryError } = await supabase.functions.invoke(
@@ -579,8 +599,13 @@ export function usePolymarketTrading() {
                   },
                 }
               );
-              if (retryError) throw new Error(retryError.message || "Failed to submit order via Dome");
-              if (!retryData?.success) throw new Error(retryData?.error || "Order rejected");
+              
+              // Parse retry response the same way
+              const retryErrorInfo = retryData as { error?: string; isAuthError?: boolean } | null;
+              if (retryError || !retryData?.success) {
+                const retryErr = retryErrorInfo?.error || retryError?.message || "Order rejected after retry";
+                throw new Error(retryErr);
+              }
 
               response = { success: true, orderID: retryData.orderId, id: retryData.orderId, builder: "dome" };
             } else {

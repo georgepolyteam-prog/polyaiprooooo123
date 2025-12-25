@@ -142,41 +142,51 @@ export function usePolymarketApiCreds() {
 
       // For Safe wallets OR when forcing new keys: delete old keys first, then create fresh
       if (usingSafe || forceNewKeys) {
-        console.log("[API Creds] Safe wallet or force refresh: deleting old keys and creating fresh ones...");
+        console.log("[API Creds] Safe wallet or force refresh: handling credential refresh...");
         
-        // Step 1: Try to delete existing keys (they may be stale/wrong context)
+        // Step 1: Try deriving first (preferred - doesn't require signature for existing keys)
         try {
-          // For deletion, we need to derive first using the correct context
-          // Then delete using those derived credentials
+          console.log("[API Creds] Attempting to derive existing API key...");
           const derivedCreds = await client.deriveApiKey();
-          if (derivedCreds?.key) {
-            console.log("[API Creds] Derived existing key, now deleting...");
-            // Use the same client that derived (with correct context) to delete
-            const deleteClient = new ClobClient(
-              CLOB_HOST,
-              POLYGON_CHAIN_ID,
-              signer,
-              { key: derivedCreds.key, secret: derivedCreds.secret, passphrase: derivedCreds.passphrase },
-              signatureType,  // Use same signature type as creation
-              funderAddress   // Use same funder as creation
-            );
-            await deleteClient.deleteApiKey();
-            console.log("[API Creds] Successfully deleted existing API keys");
+          if (derivedCreds?.key && derivedCreds?.secret && derivedCreds?.passphrase) {
+            // If forcing new keys, delete derived and create fresh
+            if (forceNewKeys) {
+              console.log("[API Creds] Derived existing key, deleting for fresh creation...");
+              const deleteClient = new ClobClient(
+                CLOB_HOST,
+                POLYGON_CHAIN_ID,
+                signer,
+                { key: derivedCreds.key, secret: derivedCreds.secret, passphrase: derivedCreds.passphrase },
+                signatureType,
+                funderAddress
+              );
+              await deleteClient.deleteApiKey();
+              console.log("[API Creds] Successfully deleted existing API keys");
+            } else {
+              // For Safe without forceNewKeys, use derived credentials
+              console.log("[API Creds] Using derived credentials (no fresh creation needed)");
+              apiKeyCreds = derivedCreds;
+            }
           }
-        } catch (deleteError) {
-          // Might not have any keys to delete, or deletion failed - continue anyway
-          console.log("[API Creds] Could not delete existing keys (may not exist):", deleteError);
+        } catch (deriveError) {
+          console.log("[API Creds] Could not derive existing keys (may not exist):", deriveError);
         }
 
-        // Step 2: Create fresh new keys
-        try {
-          console.log("[API Creds] Creating fresh API key...");
-          apiKeyCreds = await client.createApiKey();
-          createdFresh = true;
-          console.log("[API Creds] Fresh API key created successfully");
-        } catch (createError) {
-          console.log("[API Creds] createApiKey failed, falling back to derive:", createError);
-          apiKeyCreds = await client.deriveApiKey();
+        // Step 2: If we don't have creds yet (forceNewKeys or derive failed), create fresh
+        if (!apiKeyCreds) {
+          try {
+            console.log("[API Creds] Creating fresh API key...");
+            apiKeyCreds = await client.createApiKey();
+            createdFresh = true;
+            console.log("[API Creds] Fresh API key created successfully");
+            
+            // Add delay after creation to allow backend propagation
+            console.log("[API Creds] Waiting for key propagation (1.5s)...");
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          } catch (createError) {
+            console.log("[API Creds] createApiKey failed, falling back to derive:", createError);
+            apiKeyCreds = await client.deriveApiKey();
+          }
         }
       } else {
         // For EOA without force: use standard createOrDeriveApiKey
