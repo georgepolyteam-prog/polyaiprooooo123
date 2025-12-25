@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createHmac } from "node:crypto";
-import { Buffer } from "node:buffer";
 
-const POLY_API_KEY = Deno.env.get("POLY_API_KEY");
-const POLY_API_SECRET = Deno.env.get("POLY_API_SECRET");
-const POLY_API_PASSPHRASE = Deno.env.get("POLY_API_PASSPHRASE");
 const CLOB_BASE_URL = "https://clob.polymarket.com";
+const DOME_BUILDER_SIGNER_URL = "https://builder-signer.domeapi.io/builder-signer/sign";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,7 +16,6 @@ type ApiCredsPayload = {
   nonce?: string;
 };
 
-// RemoteBuilderConfig payload from @polymarket/builder-signing-sdk
 type BuilderSignPayload = {
   method: string;
   path: string;
@@ -45,7 +40,7 @@ serve(async (req) => {
     
     console.log("[BUILDER-SIGN] Request received:", JSON.stringify(payload).slice(0, 200));
 
-    // 1) L1: create/derive user API credentials
+    // 1) L1: create/derive user API credentials - keep this as-is
     if (payload.action === "l1_create_or_derive_api_creds") {
       const { address, signature, timestamp, nonce } = payload as ApiCredsPayload;
       
@@ -93,41 +88,32 @@ serve(async (req) => {
       return json(200, { creds });
     }
 
-    // 2) Builder program: generate HMAC headers for CLOB API requests
-    // This is called by BuilderConfig.remoteBuilderConfig from @polymarket/builder-signing-sdk
-    const { method, path, body, timestamp: providedTimestamp } = payload as BuilderSignPayload;
+    // 2) Builder program: proxy to Dome's official builder-signer service
+    const { method, path, body, timestamp } = payload as BuilderSignPayload;
     
     if (!method || !path) {
       return json(400, { error: "Missing method or path" });
     }
 
-    if (!POLY_API_KEY || !POLY_API_SECRET || !POLY_API_PASSPHRASE) {
-      console.error("[BUILDER-SIGN] Missing builder env vars");
-      return json(500, { error: "Server configuration error" });
+    console.log("[BUILDER-SIGN] Proxying to Dome builder-signer:", method, path);
+
+    // Forward the request to Dome's builder-signer
+    const domeResponse = await fetch(DOME_BUILDER_SIGNER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method, path, body, timestamp }),
+    });
+
+    if (!domeResponse.ok) {
+      const errorText = await domeResponse.text();
+      console.error("[BUILDER-SIGN] Dome builder-signer error:", domeResponse.status, errorText);
+      return json(domeResponse.status, { error: errorText || "Dome builder-signer error" });
     }
 
-    // Use provided timestamp or generate new one - MUST be in SECONDS, not milliseconds
-    const timestamp = (providedTimestamp || Math.floor(Date.now() / 1000)).toString();
-    
-    // HMAC signature: timestamp + method + path + body
-    // Secret must be base64-decoded before use
-    const message = timestamp + method + path + (body || "");
-    const base64Secret = Buffer.from(POLY_API_SECRET, "base64");
-    const signature = createHmac("sha256", base64Secret)
-      .update(message)
-      .digest("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
+    const domeHeaders = await domeResponse.json();
+    console.log("[BUILDER-SIGN] Dome builder-signer success, headers received");
 
-    console.log("[BUILDER-SIGN] Generated HMAC for:", method, path);
-
-    // Return BuilderHeaderPayload format expected by SDK
-    return json(200, {
-      POLY_BUILDER_SIGNATURE: signature,
-      POLY_BUILDER_TIMESTAMP: timestamp,
-      POLY_BUILDER_API_KEY: POLY_API_KEY,
-      POLY_BUILDER_PASSPHRASE: POLY_API_PASSPHRASE,
-    });
+    return json(200, domeHeaders);
   } catch (error: unknown) {
     console.error("[BUILDER-SIGN] Error:", error);
     return json(500, { error: "Internal server error" });
