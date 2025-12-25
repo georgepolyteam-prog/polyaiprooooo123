@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useWaitForTransactionReceipt } from 'wagmi';
-import { Wallet, Loader2, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, ExternalLink, Gift, Clock } from 'lucide-react';
+import { Wallet, Loader2, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, ExternalLink, Gift, Clock, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GlassCard } from '@/components/dashboard/GlassCard';
 import { AnimatedNumber } from '@/components/dashboard/AnimatedNumber';
-import { useClaimWinnings, ClaimablePosition, usePayoutSettled } from '@/hooks/useClaimWinnings';
+import { useClaimWinnings, ClaimablePosition, usePayoutStatus, verifyUsdcTransfer } from '@/hooks/useClaimWinnings';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,27 +18,61 @@ interface ClaimWinningsCardProps {
 export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCardProps) {
   const { claimWinnings, getClaimState, updateClaimState, isWritePending } = useClaimWinnings();
   const claimState = getClaimState(position.conditionId);
+  const [verifiedAmount, setVerifiedAmount] = useState<number | null>(null);
+  const [usdcVerified, setUsdcVerified] = useState<boolean | null>(null);
   
-  // Check if payouts are settled before allowing redemption
-  const { isSettled, isLoading: isCheckingSettlement } = usePayoutSettled(position.conditionId);
+  // Check if payouts are settled before allowing redemption (comprehensive check)
+  const { 
+    readyForRedemption, 
+    payoutsReported, 
+    winningOutcome, 
+    denominator, 
+    numerators,
+    isLoading: isCheckingSettlement 
+  } = usePayoutStatus(position.conditionId);
   
   // Watch for transaction confirmation
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+  const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({
     hash: claimState.hash,
   });
 
-  // Update state when transaction confirms
+  // Verify USDC transfer when transaction confirms
   useEffect(() => {
-    if (isSuccess && claimState.status === 'confirming') {
-      updateClaimState(position.conditionId, { status: 'success' });
-      toast.success(`Successfully claimed ${position.claimableUsdc.toFixed(2)} USDC!`);
-      onClaimSuccess?.();
+    if (isSuccess && receipt && claimState.status === 'confirming') {
+      updateClaimState(position.conditionId, { status: 'verifying' });
+      
+      // Verify USDC was actually transferred
+      const usdcAmount = verifyUsdcTransfer(receipt.logs);
+      
+      if (usdcAmount !== null && usdcAmount > 0) {
+        // SUCCESS - USDC transfer verified
+        setVerifiedAmount(usdcAmount);
+        setUsdcVerified(true);
+        updateClaimState(position.conditionId, { 
+          status: 'success', 
+          verifiedAmount: usdcAmount,
+          usdcTransferred: true 
+        });
+        toast.success(`Successfully claimed $${usdcAmount.toFixed(2)} USDC!`);
+        onClaimSuccess?.();
+      } else {
+        // FAILED - Transaction succeeded but no USDC transferred
+        setVerifiedAmount(0);
+        setUsdcVerified(false);
+        updateClaimState(position.conditionId, { 
+          status: 'failed',
+          verifiedAmount: 0,
+          usdcTransferred: false,
+          error: 'Transaction completed but no USDC was received. Your tokens may have been burned.'
+        });
+        toast.error('Claim failed - no USDC received');
+      }
     }
-  }, [isSuccess, claimState.status, position.conditionId, position.claimableUsdc, updateClaimState, onClaimSuccess]);
+  }, [isSuccess, receipt, claimState.status, position.conditionId, updateClaimState, onClaimSuccess]);
 
   const handleClaim = async () => {
-    if (!isSettled) {
-      toast.error('Market resolved but payouts not settled yet. Please try again later.');
+    if (!readyForRedemption) {
+      toast.error('Payouts not settled yet. Please try again later.');
       return;
     }
     await claimWinnings(position);
@@ -46,9 +80,13 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
 
   const isPending = claimState.status === 'pending' || isWritePending;
   const isConfirmingTx = claimState.status === 'confirming' || isConfirming;
+  const isVerifying = claimState.status === 'verifying';
   const isClaimSuccess = claimState.status === 'success';
+  const isClaimFailed = claimState.status === 'failed';
   const isError = claimState.status === 'error';
-  const isNotSettled = !isCheckingSettlement && !isSettled;
+  
+  // Not settled: denominator is 0 OR both numerators are 0
+  const isNotSettled = !isCheckingSettlement && !readyForRedemption;
 
   const polymarketUrl = `https://polymarket.com/event/${position.eventSlug}`;
 
@@ -64,7 +102,8 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
         glow 
         className={cn(
           "p-4 transition-all duration-300",
-          isClaimSuccess && "border-emerald-500/50 bg-emerald-500/5"
+          isClaimSuccess && "border-emerald-500/50 bg-emerald-500/5",
+          isClaimFailed && "border-rose-500/50 bg-rose-500/5"
         )}
       >
         <div className="flex flex-col gap-4">
@@ -90,6 +129,11 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                 <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
                   ✅ Resolved: {position.outcome}
                 </Badge>
+                {winningOutcome && readyForRedemption && (
+                  <Badge variant="secondary" className="bg-[#BFFF0A]/20 text-[#BFFF0A] border-[#BFFF0A]/30 text-xs">
+                    Winner: {winningOutcome}
+                  </Badge>
+                )}
               </div>
               <a 
                 href={polymarketUrl}
@@ -126,20 +170,72 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                 key="success"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                className="space-y-2"
               >
-                <CheckCircle2 className="w-5 h-5" />
-                <span className="font-semibold">Claimed ${position.claimableUsdc.toFixed(2)} USDC</span>
+                <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <div className="text-center">
+                    <span className="font-semibold block">
+                      Successfully claimed ${(verifiedAmount ?? position.claimableUsdc).toFixed(2)} USDC
+                    </span>
+                    <span className="text-xs opacity-80">✓ USDC transfer verified on-chain</span>
+                  </div>
+                </div>
+              </motion.div>
+            ) : isClaimFailed ? (
+              <motion.div
+                key="failed"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="space-y-3"
+              >
+                <div className="flex items-start gap-3 py-3 px-4 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                  <XCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+                  <div className="text-rose-400">
+                    <p className="font-semibold text-sm">Claim Failed - No USDC Received</p>
+                    <p className="text-xs opacity-80 mt-1">
+                      Transaction completed but no USDC was transferred. Your tokens may have been burned.
+                    </p>
+                    <ul className="text-xs opacity-70 mt-2 space-y-1 list-disc list-inside">
+                      <li>Payouts may not have been properly reported</li>
+                      <li>You may have held the losing outcome</li>
+                      <li>Shares may have already been redeemed</li>
+                    </ul>
+                  </div>
+                </div>
+                <a
+                  href="https://t.me/veraaiapp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-muted/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  Contact Support
+                </a>
               </motion.div>
             ) : isNotSettled ? (
               <motion.div
                 key="not-settled"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                className="space-y-2"
               >
-                <Clock className="w-5 h-5" />
-                <span className="font-medium text-sm">Market resolved but payouts not settled yet</span>
+                <div className="flex items-start gap-3 py-3 px-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="text-amber-400">
+                    <p className="font-semibold text-sm">⚠️ Payouts Not Settled Yet</p>
+                    <p className="text-xs opacity-80 mt-1">
+                      This market has resolved but payouts haven't been reported on-chain yet. 
+                      Your {position.winningShares.toFixed(2)} shares are safe - check back in a few hours.
+                    </p>
+                    <p className="text-xs opacity-60 mt-2 font-mono">
+                      Status: Denominator = {denominator}, Numerators = [{numerators.join(', ')}]
+                    </p>
+                    <p className="text-xs text-amber-500 mt-2 font-medium">
+                      ⛔ DO NOT claim yet - tokens will be burned with no USDC received
+                    </p>
+                  </div>
+                </div>
               </motion.div>
             ) : isError ? (
               <motion.div
@@ -154,7 +250,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                 </div>
                 <Button
                   onClick={handleClaim}
-                  disabled={!isSettled}
+                  disabled={!readyForRedemption}
                   className="w-full bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black font-semibold py-3 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Gift className="w-4 h-4 mr-2" />
@@ -171,14 +267,59 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   Checking payout status...
                 </Button>
               </motion.div>
+            ) : isVerifying ? (
+              <motion.div key="verifying" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <Button
+                  disabled
+                  className="w-full bg-zinc-700 text-zinc-400 cursor-not-allowed font-semibold py-3 rounded-lg"
+                >
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Verifying USDC transfer...
+                </Button>
+              </motion.div>
+            ) : readyForRedemption ? (
+              <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+                {/* Ready indicator */}
+                <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>✓ Ready to claim - Payouts confirmed on-chain</span>
+                </div>
+                <Button
+                  onClick={handleClaim}
+                  disabled={isPending || isConfirmingTx}
+                  className={cn(
+                    "w-full font-semibold py-3 rounded-lg transition-all duration-200",
+                    isPending || isConfirmingTx
+                      ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
+                      : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]"
+                  )}
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Confirming in wallet...
+                    </>
+                  ) : isConfirmingTx ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing claim...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-4 h-4 mr-2" />
+                      Claim ${position.claimableUsdc.toFixed(2)} USDC
+                    </>
+                  )}
+                </Button>
+              </motion.div>
             ) : (
               <motion.div key="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <Button
                   onClick={handleClaim}
-                  disabled={isPending || isConfirmingTx || !isSettled}
+                  disabled={isPending || isConfirmingTx || !readyForRedemption}
                   className={cn(
                     "w-full font-semibold py-3 rounded-lg transition-all duration-200",
-                    isPending || isConfirmingTx || !isSettled
+                    isPending || isConfirmingTx || !readyForRedemption
                       ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
                       : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]"
                   )}
