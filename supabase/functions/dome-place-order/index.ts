@@ -6,8 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Polymarket CLOB API for order submission
-const CLOB_API_URL = 'https://clob.polymarket.com';
+// Dome API for order routing with builder attribution
+const DOME_API_URL = 'https://api.domeapi.io/v1';
 
 interface OrderParams {
   walletAddress: string;
@@ -124,32 +124,49 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[dome-place-order] Found credentials for ${walletAddress}, submitting to Polymarket CLOB`);
+    console.log(`[dome-place-order] Found credentials for ${walletAddress}, submitting to Dome API`);
 
-    // Submit order directly to Polymarket CLOB API using the stored credentials
-    const clobResponse = await fetch(`${CLOB_API_URL}/order`, {
+    // Get Dome API key
+    const domeApiKey = Deno.env.get('DOME_API_KEY');
+    if (!domeApiKey) {
+      console.error('[dome-place-order] DOME_API_KEY not configured');
+      return new Response(
+        JSON.stringify({ error: 'Dome API not configured', code: 'CONFIG_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Route order through Dome API for builder attribution
+    // Try both header formats - some APIs use X-API-KEY, others use Authorization: Bearer
+    console.log(`[dome-place-order] Using Dome API key (first 8 chars): ${domeApiKey.substring(0, 8)}...`);
+    
+    const domeResponse = await fetch(`${DOME_API_URL}/polymarket/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'POLY_API_KEY': creds.api_key,
-        'POLY_API_SECRET': creds.api_secret,
-        'POLY_API_PASSPHRASE': creds.api_passphrase,
+        'Authorization': `Bearer ${domeApiKey}`,
+        'X-API-KEY': domeApiKey,
+        'x-api-key': domeApiKey,
+        'POLY-API-KEY': creds.api_key,
+        'POLY-API-SECRET': creds.api_secret,
+        'POLY-API-PASSPHRASE': creds.api_passphrase,
       },
       body: JSON.stringify({
-        tokenID: tokenId,
-        side: side.toUpperCase(),
-        size: size,
-        price: price,
-        type: orderType,
-        funderAddress: walletAddress.toLowerCase(),
+        token_id: tokenId,
+        side: side.toLowerCase(),
+        size: size.toString(),
+        price: price.toString(),
+        order_type: orderType,
+        // Include funder address (the wallet that holds USDC)
+        funder_address: walletAddress,
       }),
     });
 
-    const responseText = await clobResponse.text();
-    console.log(`[dome-place-order] CLOB API response status: ${clobResponse.status}`);
-    console.log(`[dome-place-order] CLOB API response: ${responseText}`);
+    const responseText = await domeResponse.text();
+    console.log(`[dome-place-order] Dome API response status: ${domeResponse.status}`);
+    console.log(`[dome-place-order] Dome API response: ${responseText}`);
 
-    if (!clobResponse.ok) {
+    if (!domeResponse.ok) {
       let errorData;
       try {
         errorData = JSON.parse(responseText);
@@ -158,11 +175,11 @@ serve(async (req) => {
       }
       
       const { message, code } = mapErrorMessage(errorData.error || errorData.message || responseText);
-      console.error(`[dome-place-order] CLOB API error: ${message}`);
+      console.error(`[dome-place-order] Dome API error: ${message}`);
       
       return new Response(
         JSON.stringify({ error: message, code, details: errorData }),
-        { status: clobResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: domeResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
