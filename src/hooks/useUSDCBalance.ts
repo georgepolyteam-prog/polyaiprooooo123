@@ -70,11 +70,19 @@ const erc1155Abi = [
   },
 ] as const;
 
-export function useUSDCBalance() {
-  const { address, isConnected } = useAccount();
+interface UseUSDCBalanceOptions {
+  /** Address to check balance for (defaults to connected wallet) */
+  targetAddress?: `0x${string}` | string;
+}
+
+export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
+  const { address: connectedAddress, isConnected } = useAccount();
   const [isApproving, setIsApproving] = useState(false);
 
-  // Read USDC balance
+  // Use targetAddress if provided, otherwise use connected address
+  const address = (options.targetAddress as `0x${string}`) || connectedAddress;
+
+  // Read USDC balance for target address
   const { 
     data: balanceData, 
     isLoading: isLoadingBalance,

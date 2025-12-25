@@ -50,7 +50,6 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   // Trading hooks
   const { isLinked, isLinking, linkUser, checkLinkStatus } = usePolymarketLink();
   const { placeOrder, isPlacingOrder } = usePolymarketTrading();
-  const { balance, isFullyApproved, isApproving, approveUSDC, hasSufficientBalance, refetch } = useUSDCBalance();
   
   // Safe wallet hooks
   const { 
@@ -63,6 +62,12 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     setAllowances 
   } = useSafeWallet();
 
+  // Use Safe balance when deployed, otherwise EOA balance
+  const balanceTargetAddress = isDeployed && safeAddress ? safeAddress : undefined;
+  const { balance, isFullyApproved, isApproving, approveUSDC, hasSufficientBalance, refetch } = useUSDCBalance({
+    targetAddress: balanceTargetAddress,
+  });
+
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== POLYGON_CHAIN_ID;
 
@@ -70,18 +75,20 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
   
-  // Safe session status - trading requires: linked + Safe deployed + allowances set + USDC approved
+  // Safe session status - trading requires: linked + Safe deployed + funded + allowances set + USDC approved
   const isSafeReady = isDeployed && hasAllowances;
-  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isSafeReady && isFullyApproved;
+  const isSafeFunded = balance > 0;
+  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isSafeReady && isFullyApproved && isSafeFunded;
 
   // Debug logging for trading state
   useEffect(() => {
     console.log('[TradePanel] State:', { 
       isConnected, isWrongNetwork, isLinked, isFullyApproved, 
       hasYesToken, hasNoToken, selectedSide, canDirectTrade,
-      amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady
+      amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady,
+      isSafeFunded, balanceTargetAddress
     });
-  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady]);
+  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady, isSafeFunded, balanceTargetAddress]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -296,7 +303,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           <div className="flex items-center gap-3">
             {isConnected && !isWrongNetwork && (
               <span className="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted/50">
-                ${balance.toFixed(2)} USDC
+                ${balance.toFixed(2)} USDC {isDeployed && safeAddress && <span className="text-primary/70">(Safe)</span>}
               </span>
             )}
             {marketData.url && (
@@ -361,7 +368,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <Link2 className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-semibold text-primary text-sm">Step 1 of 4: Link Wallet</p>
+                  <p className="font-semibold text-primary text-sm">Step 1 of 5: Link Wallet</p>
                   <p className="text-xs text-primary/70">Sign once to create API credentials</p>
                 </div>
               </div>
@@ -401,7 +408,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <Shield className="w-5 h-5 text-violet-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-violet-200 text-sm">Step 2 of 4: Deploy Safe Wallet</p>
+                  <p className="font-semibold text-violet-200 text-sm">Step 2 of 5: Deploy Safe Wallet</p>
                   <p className="text-xs text-violet-300/70">Create your smart contract trading wallet</p>
                 </div>
               </div>
@@ -445,9 +452,53 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Step 3: Set token allowances */}
+        {/* Step 3: Fund Safe Wallet */}
         <AnimatePresence>
-          {isConnected && !isWrongNetwork && isLinked && isDeployed && !hasAllowances && (
+          {isConnected && !isWrongNetwork && isLinked && isDeployed && !isSafeFunded && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/10 border-2 border-emerald-500/50 backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-emerald-200 text-sm">Step 3 of 5: Fund Safe Wallet</p>
+                  <p className="text-xs text-emerald-300/70">Send USDC to your Safe to start trading</p>
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-muted/30 border border-border/30 mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Send USDC to:</span>
+                  <button 
+                    onClick={() => {
+                      if (safeAddress) {
+                        navigator.clipboard.writeText(safeAddress);
+                        toast.success('Copied Safe address!');
+                      }
+                    }}
+                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copy
+                  </button>
+                </div>
+                <p className="font-mono text-xs text-foreground truncate">{safeAddress}</p>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>💡 Transfer USDC (Polygon) from your exchange or wallet</p>
+                <p className="opacity-70">Contract: <span className="font-mono text-emerald-400/80">{USDC_ADDRESS.slice(0, 10)}...{USDC_ADDRESS.slice(-6)}</span></p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Step 4: Set token allowances */}
+        <AnimatePresence>
+          {isConnected && !isWrongNetwork && isLinked && isDeployed && isSafeFunded && !hasAllowances && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -459,7 +510,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <CheckCircle2 className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-cyan-200 text-sm">Step 3 of 4: Set Allowances</p>
+                  <p className="font-semibold text-cyan-200 text-sm">Step 4 of 5: Set Allowances</p>
                   <p className="text-xs text-cyan-300/70">Approve tokens for Polymarket contracts</p>
                 </div>
               </div>
@@ -485,9 +536,9 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Step 4: Approve USDC (existing flow) */}
+        {/* Step 5: Approve USDC (existing flow) */}
         <AnimatePresence>
-          {isConnected && !isWrongNetwork && isLinked && isSafeReady && !isFullyApproved && (
+          {isConnected && !isWrongNetwork && isLinked && isSafeReady && isSafeFunded && !isFullyApproved && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -499,7 +550,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <Coins className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-amber-200 text-sm">Step 4 of 4: Approve USDC</p>
+                  <p className="font-semibold text-amber-200 text-sm">Step 5 of 5: Approve USDC</p>
                   <p className="text-xs text-amber-300/70">Final approval to enable trading</p>
                 </div>
               </div>
@@ -521,47 +572,6 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   </>
                 )}
               </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Fund Safe reminder - show when all setup is complete but balance is 0 */}
-        <AnimatePresence>
-          {isConnected && !isWrongNetwork && canDirectTrade && balance === 0 && safeAddress && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/10 border-2 border-emerald-500/50 backdrop-blur-sm"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-emerald-200 text-sm">Fund Your Safe Wallet</p>
-                  <p className="text-xs text-emerald-300/70">Send USDC to start trading</p>
-                </div>
-              </div>
-              <div className="p-2 rounded-lg bg-muted/30 border border-border/30 mb-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Send USDC to:</span>
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(safeAddress);
-                      toast.success('Copied Safe address!');
-                    }}
-                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
-                  >
-                    <Copy className="w-3 h-3" />
-                    Copy
-                  </button>
-                </div>
-                <p className="font-mono text-xs text-foreground truncate">{safeAddress}</p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                USDC Contract: <span className="font-mono text-emerald-400/80">{USDC_ADDRESS.slice(0, 10)}...</span>
-              </p>
             </motion.div>
           )}
         </AnimatePresence>
