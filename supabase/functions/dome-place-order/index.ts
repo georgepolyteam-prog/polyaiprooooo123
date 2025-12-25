@@ -1,16 +1,14 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { ClobClient, Side, OrderType } from 'npm:@polymarket/clob-client@4.22.8';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Polymarket CLOB API host
-const CLOB_HOST = 'https://clob.polymarket.com';
-
-// Dome Builder API
-const DOME_API_HOST = 'https://api.dome.xyz';
+// Dome Builder API for attribution tracking
+const DOME_BUILDER_API = 'https://builder-signer.domeapi.io';
 
 interface OrderParams {
   walletAddress: string;
@@ -19,27 +17,6 @@ interface OrderParams {
   size: number;
   price: number;
   orderType?: 'GTC' | 'FOK' | 'FAK' | 'GTD';
-  expirationTimestamp?: number;
-}
-
-// Generate HMAC signature for CLOB API authentication
-async function generateHmacSignature(
-  secret: string,
-  timestamp: string,
-  method: string,
-  path: string,
-  body: string
-): Promise<string> {
-  const message = timestamp + method + path + body;
-  const key = await crypto.subtle.importKey(
-    'raw',
-    Uint8Array.from(atob(secret), c => c.charCodeAt(0)),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
 serve(async (req) => {
@@ -51,12 +28,22 @@ serve(async (req) => {
     const params: OrderParams = await req.json();
     const { walletAddress, tokenId, side, size, price, orderType = 'GTC' } = params;
 
+    // Validate required fields
     if (!walletAddress || !tokenId || !side || !size || !price) {
-      console.error('[dome-place-order] Missing required fields:', params);
-      throw new Error('Missing required fields');
+      console.error('[dome-place-order] Missing required fields:', { 
+        walletAddress: !!walletAddress, 
+        tokenId: !!tokenId, 
+        side: !!side, 
+        size: !!size, 
+        price: !!price 
+      });
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: walletAddress, tokenId, side, size, price' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log(`[dome-place-order] Placing order for ${walletAddress}: ${side} ${size} @ ${price}`);
+    console.log(`[dome-place-order] Placing order for ${walletAddress}: ${side} ${size} @ ${price} on token ${tokenId}`);
 
     // Get credentials from database
     const supabase = createClient(
@@ -64,77 +51,112 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: creds, error } = await supabase
+    const { data: creds, error: credsError } = await supabase
       .from('polymarket_credentials')
       .select('*')
       .eq('user_address', walletAddress.toLowerCase())
       .single();
 
-    if (error || !creds) {
-      console.error('[dome-place-order] Credentials not found:', error);
-      throw new Error('User not linked to Polymarket. Please link your wallet first.');
+    if (credsError || !creds) {
+      console.error('[dome-place-order] Credentials not found:', credsError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Wallet not linked to Polymarket. Please link your wallet first.',
+          code: 'NOT_LINKED'
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`[dome-place-order] Found credentials for ${walletAddress}`);
 
-    // Build order payload for CLOB API
-    const orderPayload = {
-      tokenId,
-      side,
-      size: size.toString(),
-      price: price.toString(),
-      type: orderType,
-      feeRateBps: '0', // Will be set by the system
-    };
-
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const path = '/order';
-    const body = JSON.stringify(orderPayload);
-
-    // Generate HMAC signature
-    const signature = await generateHmacSignature(
-      creds.api_secret,
-      timestamp,
-      'POST',
-      path,
-      body
+    // Create ClobClient with stored API credentials
+    const clobClient = new ClobClient(
+      'https://clob.polymarket.com',
+      137, // Polygon chainId
+      undefined, // No signer needed - using API key auth
+      {
+        key: creds.api_key,
+        secret: creds.api_secret,
+        passphrase: creds.api_passphrase,
+      }
     );
 
-    // Place order via CLOB API
-    const orderResponse = await fetch(`${CLOB_HOST}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'POLY_ADDRESS': walletAddress,
-        'POLY_SIGNATURE': signature,
-        'POLY_TIMESTAMP': timestamp,
-        'POLY_API_KEY': creds.api_key,
-        'POLY_PASSPHRASE': creds.api_passphrase,
-      },
-      body,
-    });
+    // Build order arguments with proper types
+    const orderArgs = {
+      tokenID: tokenId,
+      price: Number(price),
+      size: Number(size),
+      side: side.toUpperCase() === 'BUY' ? Side.BUY : Side.SELL,
+      feeRateBps: 0,
+      nonce: Date.now(),
+      expiration: Math.floor(Date.now() / 1000) + 86400, // 24 hours
+    };
 
-    if (!orderResponse.ok) {
-      const errorText = await orderResponse.text();
-      console.error(`[dome-place-order] CLOB order error: ${orderResponse.status} - ${errorText}`);
-      throw new Error(`Order failed: ${errorText}`);
+    console.log('[dome-place-order] Creating order with args:', JSON.stringify(orderArgs));
+
+    // Create signed order
+    let signedOrder;
+    try {
+      signedOrder = await clobClient.createOrder(orderArgs);
+      console.log('[dome-place-order] Order created successfully');
+    } catch (createError: any) {
+      console.error('[dome-place-order] Failed to create order:', createError);
+      return new Response(
+        JSON.stringify({ 
+          error: `Failed to create order: ${createError.message}`,
+          code: 'ORDER_CREATION_FAILED'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const orderResult = await orderResponse.json();
-    console.log(`[dome-place-order] Order placed successfully:`, orderResult);
+    // Post order to CLOB with order type
+    let orderResponse;
+    try {
+      // Map order type string to OrderType enum
+      let orderTypeEnum: OrderType = OrderType.GTC;
+      if (orderType === 'FOK') orderTypeEnum = OrderType.FOK;
+      else if (orderType === 'GTD') orderTypeEnum = OrderType.GTD;
+      
+      orderResponse = await clobClient.postOrder(signedOrder, orderTypeEnum);
+      console.log('[dome-place-order] Order posted successfully:', JSON.stringify(orderResponse));
+    } catch (postError: any) {
+      console.error('[dome-place-order] Failed to post order:', postError);
+      
+      // Parse common error messages
+      let errorMessage = postError.message || 'Failed to post order';
+      let errorCode = 'ORDER_POST_FAILED';
+      
+      if (errorMessage.includes('insufficient')) {
+        errorCode = 'INSUFFICIENT_BALANCE';
+        errorMessage = 'Insufficient balance to place this order';
+      } else if (errorMessage.includes('market') && errorMessage.includes('closed')) {
+        errorCode = 'MARKET_CLOSED';
+        errorMessage = 'This market is closed for trading';
+      } else if (errorMessage.includes('price')) {
+        errorCode = 'INVALID_PRICE';
+        errorMessage = 'Invalid price for this market';
+      }
+      
+      return new Response(
+        JSON.stringify({ error: errorMessage, code: errorCode }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Optionally track with Dome for builder attribution
+    // Track with Dome builder attribution (non-blocking)
     const domeApiKey = Deno.env.get('DOME_API_KEY');
-    if (domeApiKey) {
+    if (domeApiKey && orderResponse?.orderID) {
       try {
-        await fetch(`${DOME_API_HOST}/v1/builder/track`, {
+        const trackResponse = await fetch(`${DOME_BUILDER_API}/builder-signer/track`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${domeApiKey}`,
           },
           body: JSON.stringify({
-            orderId: orderResult.orderId || orderResult.id,
+            orderId: orderResponse.orderID,
             walletAddress,
             tokenId,
             side,
@@ -142,7 +164,12 @@ serve(async (req) => {
             price,
           }),
         });
-        console.log(`[dome-place-order] Order tracked with Dome builder`);
+        
+        if (trackResponse.ok) {
+          console.log(`[dome-place-order] Order tracked with Dome builder`);
+        } else {
+          console.warn('[dome-place-order] Dome tracking response:', await trackResponse.text());
+        }
       } catch (trackError) {
         // Non-blocking - just log the error
         console.warn('[dome-place-order] Failed to track with Dome:', trackError);
@@ -152,15 +179,18 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        orderId: orderResult.orderId || orderResult.id,
-        ...orderResult,
+        orderId: orderResponse?.orderID || orderResponse?.id,
+        ...orderResponse,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('[dome-place-order] Error:', error);
+    console.error('[dome-place-order] Unexpected error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message || 'An unexpected error occurred',
+        code: 'INTERNAL_ERROR'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

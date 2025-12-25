@@ -9,11 +9,11 @@ const corsHeaders = {
 // Polymarket CLOB API host
 const CLOB_HOST = 'https://clob.polymarket.com';
 
-interface DeriveCredentialsPayload {
-  address: string;
+interface LinkRequest {
+  walletAddress: string;
+  signature: string;
   timestamp: number;
   nonce: number;
-  message: string;
 }
 
 serve(async (req) => {
@@ -22,36 +22,93 @@ serve(async (req) => {
   }
 
   try {
-    const { walletAddress, signature, timestamp, nonce } = await req.json();
+    const body: LinkRequest = await req.json();
+    const { walletAddress, signature, timestamp, nonce } = body;
 
+    // Validate required fields
     if (!walletAddress || !signature || !timestamp || !nonce) {
-      console.error('[link-polymarket-user] Missing required fields:', { walletAddress: !!walletAddress, signature: !!signature, timestamp: !!timestamp, nonce: !!nonce });
-      throw new Error('Missing required fields: walletAddress, signature, timestamp, nonce');
+      console.error('[link-polymarket-user] Missing required fields:', { 
+        walletAddress: !!walletAddress, 
+        signature: !!signature, 
+        timestamp: !!timestamp, 
+        nonce: !!nonce 
+      });
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: walletAddress, signature, timestamp, nonce' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`[link-polymarket-user] Deriving credentials for wallet: ${walletAddress}`);
+    console.log(`[link-polymarket-user] Timestamp: ${timestamp}, Nonce: ${nonce}`);
 
     // Call Polymarket CLOB API to derive/create API credentials
-    // The API uses the signature to authenticate and derive credentials
+    // The API uses the EIP-712 signature to authenticate and derive credentials
+    const derivePayload = {
+      signature,
+      timestamp,
+      nonce,
+    };
+    
+    console.log('[link-polymarket-user] Calling CLOB derive API...');
+    
     const deriveResponse = await fetch(`${CLOB_HOST}/auth/derive-api-key`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        signature,
-        timestamp,
-        nonce,
-      }),
+      body: JSON.stringify(derivePayload),
     });
 
+    const responseText = await deriveResponse.text();
+    
     if (!deriveResponse.ok) {
-      const errorText = await deriveResponse.text();
-      console.error(`[link-polymarket-user] CLOB derive API error: ${deriveResponse.status} - ${errorText}`);
-      throw new Error(`Failed to derive API credentials: ${deriveResponse.status}`);
+      console.error(`[link-polymarket-user] CLOB derive API error: ${deriveResponse.status}`);
+      console.error(`[link-polymarket-user] Response body: ${responseText}`);
+      
+      // Parse error for better user messaging
+      let errorMessage = 'Failed to derive API credentials';
+      try {
+        const errorJson = JSON.parse(responseText);
+        if (errorJson.message) {
+          errorMessage = errorJson.message;
+        } else if (errorJson.error) {
+          errorMessage = errorJson.error;
+        }
+      } catch {
+        // Use default message if not JSON
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          error: errorMessage,
+          code: 'DERIVE_FAILED',
+          status: deriveResponse.status 
+        }),
+        { status: deriveResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const credentials = await deriveResponse.json();
+    let credentials;
+    try {
+      credentials = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[link-polymarket-user] Failed to parse credentials response:', responseText);
+      return new Response(
+        JSON.stringify({ error: 'Invalid response from Polymarket API', code: 'PARSE_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate credentials structure
+    if (!credentials.apiKey || !credentials.secret || !credentials.passphrase) {
+      console.error('[link-polymarket-user] Invalid credentials structure:', Object.keys(credentials));
+      return new Response(
+        JSON.stringify({ error: 'Invalid credentials received from Polymarket', code: 'INVALID_CREDS' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`[link-polymarket-user] Successfully derived credentials for ${walletAddress}`);
 
     // Store credentials in Supabase
@@ -74,19 +131,25 @@ serve(async (req) => {
 
     if (upsertError) {
       console.error('[link-polymarket-user] Database upsert error:', upsertError);
-      throw new Error('Failed to store credentials');
+      return new Response(
+        JSON.stringify({ error: 'Failed to store credentials', code: 'DB_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log(`[link-polymarket-user] Credentials stored for ${walletAddress}`);
+    console.log(`[link-polymarket-user] Credentials stored successfully for ${walletAddress}`);
 
     return new Response(
       JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('[link-polymarket-user] Error:', error);
+    console.error('[link-polymarket-user] Unexpected error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message || 'An unexpected error occurred',
+        code: 'INTERNAL_ERROR'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
