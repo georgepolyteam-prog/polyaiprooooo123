@@ -120,18 +120,20 @@ export function usePolymarketTrading() {
     );
     const signer = provider.getSigner();
 
-    console.log("[Trade] Initializing API credentials...");
-    const creds = await getApiCreds();
-
-    if (!creds || !creds.apiKey || !creds.secret || !creds.passphrase) {
-      throw new Error("Failed to initialize trading. Please try again.");
-    }
-
     // For EOA (signatureType 0), funderAddress should be the EOA itself
     // For Safe (signatureType 2), funderAddress is the Safe address
     const useSafe = isDeployed && safeAddress;
     const signatureType = useSafe ? 2 : 0;
     const funderAddress = useSafe ? safeAddress : address;
+
+    // CRITICAL: Get API credentials for the MAKER address (Safe or EOA)
+    // When using Safe, credentials must be derived for the Safe address, not the EOA
+    console.log("[Trade] Initializing API credentials for:", funderAddress);
+    const creds = await getApiCreds({ funderAddress: useSafe ? safeAddress : undefined });
+
+    if (!creds || !creds.apiKey || !creds.secret || !creds.passphrase) {
+      throw new Error("Failed to initialize trading. Please try again.");
+    }
 
     const apiKeyCreds = {
       key: creds.apiKey,
@@ -381,7 +383,9 @@ export function usePolymarketTrading() {
         let response;
 
         // Get API credentials for Dome order placement
-        const creds = await getApiCreds();
+        // CRITICAL: Use Safe address as funderAddress when using Safe wallet
+        const useSafeWallet = isDeployed && safeAddress;
+        const creds = await getApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
         if (!creds || !creds.apiKey || !creds.secret || !creds.passphrase) {
           throw new Error("Failed to get API credentials");
         }
@@ -468,14 +472,22 @@ export function usePolymarketTrading() {
             { tickSize, negRisk }
           );
           
-          console.log("[Trade] 🏗️ Signed order created:", signedOrder);
+          ;
+          
+          // Convert numeric side to string for Dome API (0 = BUY, 1 = SELL)
+          const domeSignedOrder = {
+            ...signedOrder,
+            side: signedOrder.side === 0 ? "BUY" : "SELL",
+          };
+          
+          console.log("[Trade] 🏗️ Signed GTC order created:", domeSignedOrder);
           
           // Step 2: Submit to Dome API via edge function
           const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              signedOrder,
+              signedOrder: domeSignedOrder,
               orderType: "GTC",
               credentials: {
                 apiKey: creds.apiKey,
