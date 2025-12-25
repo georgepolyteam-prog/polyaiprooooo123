@@ -4,13 +4,14 @@ import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2 } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, Shield, Copy, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { buildPolymarketTradeUrl } from '@/lib/polymarket-trade';
 import { usePolymarketLink } from '@/hooks/usePolymarketLink';
-import { useDomeTrading } from '@/hooks/useDomeTrading';
+import { usePolymarketTrading } from '@/hooks/usePolymarketTrading';
 import { useUSDCBalance } from '@/hooks/useUSDCBalance';
+import { useSafeWallet } from '@/hooks/useSafeWallet';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TradePanelProps {
@@ -31,6 +32,9 @@ interface TradePanelProps {
 // Polygon mainnet chain ID
 const POLYGON_CHAIN_ID = 137;
 
+// USDC contract on Polygon
+const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+
 export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps) {
   const { address, isConnected } = useAccount();
   const { open } = useWeb3Modal();
@@ -43,27 +47,41 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const [limitPrice, setLimitPrice] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
 
-  // Dome trading hooks (no client-side signing required for orders!)
+  // Trading hooks
   const { isLinked, isLinking, linkUser, checkLinkStatus } = usePolymarketLink();
-  const { placeOrder, isPlacingOrder } = useDomeTrading();
+  const { placeOrder, isPlacingOrder } = usePolymarketTrading();
   const { balance, isFullyApproved, isApproving, approveUSDC, hasSufficientBalance, refetch } = useUSDCBalance();
+  
+  // Safe wallet hooks
+  const { 
+    safeAddress, 
+    isDeployed, 
+    isDeploying, 
+    deploySafe, 
+    hasAllowances, 
+    isSettingAllowances, 
+    setAllowances 
+  } = useSafeWallet();
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== POLYGON_CHAIN_ID;
 
-  // Check if direct trading is available (requires linking)
+  // Check if direct trading is available
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
-  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked;
+  
+  // Safe session status - trading requires: linked + Safe deployed + allowances set + USDC approved
+  const isSafeReady = isDeployed && hasAllowances;
+  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isSafeReady && isFullyApproved;
 
   // Debug logging for trading state
   useEffect(() => {
     console.log('[TradePanel] State:', { 
       isConnected, isWrongNetwork, isLinked, isFullyApproved, 
       hasYesToken, hasNoToken, selectedSide, canDirectTrade,
-      amount, balance
+      amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady
     });
-  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance]);
+  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -167,15 +185,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
       : (limitPrice ? parseFloat(limitPrice) / 100 : marketPrice);
     const expectedShares = amountNum / Math.max(orderPrice, 0.01);
 
-    console.log(`[Trade] Placing ${isMarketOrder ? 'market' : 'limit'} order via Dome: side=${selectedSide}, tokenId=${tokenId?.slice(0, 20)}..., price=${orderPrice}, size=${expectedShares}`);
+    console.log(`[Trade] Placing ${isMarketOrder ? 'market' : 'limit'} order: side=${selectedSide}, tokenId=${tokenId?.slice(0, 20)}..., price=${orderPrice}, amount=${amountNum}`);
 
-    // Use Dome trading - no signature required!
+    // Use usePolymarketTrading which handles Safe wallet signing
     const result = await placeOrder({
       tokenId: tokenId!,
       side: 'BUY',
-      size: expectedShares,
+      amount: amountNum,
       price: orderPrice,
-      orderType: isMarketOrder ? 'FOK' : 'GTC',
+      isMarketOrder: isMarketOrder,
     });
 
     if (result.success) {
@@ -199,7 +217,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     } else if (result.error) {
       // Enhanced error with details
       toast.error(result.error, {
-        description: result.details || 'Please try again or contact support.',
+        description: 'Please try again or contact support.',
       });
     }
   };
@@ -329,7 +347,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Link wallet notice - required before trading - PROMINENT */}
+        {/* Step 1: Link wallet notice */}
         <AnimatePresence>
           {isConnected && !isWrongNetwork && !isLinked && (
             <motion.div
@@ -343,8 +361,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <Link2 className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-semibold text-primary text-sm">Step 1 of 3: Link Wallet</p>
-                  <p className="text-xs text-primary/70">Sign once to enable trading forever</p>
+                  <p className="font-semibold text-primary text-sm">Step 1 of 4: Link Wallet</p>
+                  <p className="text-xs text-primary/70">Sign once to create API credentials</p>
                 </div>
               </div>
               <Button
@@ -369,9 +387,107 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Approval required notice - PROMINENT */}
+        {/* Step 2: Deploy Safe wallet */}
         <AnimatePresence>
-          {isConnected && !isWrongNetwork && isLinked && !isFullyApproved && (
+          {isConnected && !isWrongNetwork && isLinked && !isDeployed && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="p-4 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/10 border-2 border-violet-500/50 backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-violet-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-violet-200 text-sm">Step 2 of 4: Deploy Safe Wallet</p>
+                  <p className="text-xs text-violet-300/70">Create your smart contract trading wallet</p>
+                </div>
+              </div>
+              {safeAddress && (
+                <div className="mb-3 p-2 rounded-lg bg-muted/30 border border-border/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Your Safe address:</span>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(safeAddress);
+                        toast.success('Copied Safe address!');
+                      }}
+                      className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
+                    >
+                      <Copy className="w-3 h-3" />
+                      Copy
+                    </button>
+                  </div>
+                  <p className="font-mono text-xs text-foreground mt-1 truncate">{safeAddress}</p>
+                </div>
+              )}
+              <Button
+                size="default"
+                onClick={deploySafe}
+                disabled={isDeploying}
+                className="w-full bg-violet-500 hover:bg-violet-600 text-white font-semibold"
+              >
+                {isDeploying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deploying Safe...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Deploy Safe Wallet
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Step 3: Set token allowances */}
+        <AnimatePresence>
+          {isConnected && !isWrongNetwork && isLinked && isDeployed && !hasAllowances && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="p-4 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border-2 border-cyan-500/50 backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-cyan-200 text-sm">Step 3 of 4: Set Allowances</p>
+                  <p className="text-xs text-cyan-300/70">Approve tokens for Polymarket contracts</p>
+                </div>
+              </div>
+              <Button
+                size="default"
+                onClick={setAllowances}
+                disabled={isSettingAllowances}
+                className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold"
+              >
+                {isSettingAllowances ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Setting Allowances...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Set Token Allowances
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Step 4: Approve USDC (existing flow) */}
+        <AnimatePresence>
+          {isConnected && !isWrongNetwork && isLinked && isSafeReady && !isFullyApproved && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -380,11 +496,11 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                  <AlertCircle className="w-5 h-5 text-amber-400" />
+                  <Coins className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-amber-200 text-sm">Step 2 of 3: Approve USDC</p>
-                  <p className="text-xs text-amber-300/70">One-time approval to enable trading</p>
+                  <p className="font-semibold text-amber-200 text-sm">Step 4 of 4: Approve USDC</p>
+                  <p className="text-xs text-amber-300/70">Final approval to enable trading</p>
                 </div>
               </div>
               <Button
@@ -400,11 +516,52 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    <Coins className="w-4 h-4 mr-2" />
                     Approve USDC for Trading
                   </>
                 )}
               </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Fund Safe reminder - show when all setup is complete but balance is 0 */}
+        <AnimatePresence>
+          {isConnected && !isWrongNetwork && canDirectTrade && balance === 0 && safeAddress && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/10 border-2 border-emerald-500/50 backdrop-blur-sm"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-emerald-200 text-sm">Fund Your Safe Wallet</p>
+                  <p className="text-xs text-emerald-300/70">Send USDC to start trading</p>
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-muted/30 border border-border/30 mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">Send USDC to:</span>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(safeAddress);
+                      toast.success('Copied Safe address!');
+                    }}
+                    className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copy
+                  </button>
+                </div>
+                <p className="font-mono text-xs text-foreground truncate">{safeAddress}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                USDC Contract: <span className="font-mono text-emerald-400/80">{USDC_ADDRESS.slice(0, 10)}...</span>
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -714,12 +871,14 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               const amountNum = parseFloat(amount) || 0;
               const hasAmount = amountNum > 0;
               const hasBalance = hasSufficientBalance(amountNum);
-              const canTrade = isLinked && isFullyApproved && hasAmount && hasBalance && (selectedSide === 'YES' || hasNoToken);
+              const canTrade = isLinked && isSafeReady && isFullyApproved && hasAmount && hasBalance && (selectedSide === 'YES' || hasNoToken);
               
-              // Determine disabled reason
+              // Determine disabled reason - updated for 4-step Safe flow
               let disabledReason = '';
               if (!isLinked) disabledReason = 'Link wallet first (Step 1)';
-              else if (!isFullyApproved) disabledReason = 'Approve USDC first (Step 2)';
+              else if (!isDeployed) disabledReason = 'Deploy Safe first (Step 2)';
+              else if (!hasAllowances) disabledReason = 'Set allowances first (Step 3)';
+              else if (!isFullyApproved) disabledReason = 'Approve USDC first (Step 4)';
               else if (!hasAmount) disabledReason = 'Enter an amount';
               else if (!hasBalance) disabledReason = `Insufficient balance ($${balance.toFixed(2)} available)`;
               else if (selectedSide === 'NO' && !hasNoToken) disabledReason = 'NO token not available';
@@ -727,8 +886,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               // Always-clickable handler with feedback
               const handleOrderButtonClick = () => {
                 console.log('[TradePanel] Button clicked, state:', {
-                  isLinked, isFullyApproved, amount, balance,
-                  hasYesToken, hasNoToken, selectedSide, canTrade
+                  isLinked, isDeployed, hasAllowances, isFullyApproved, amount, balance,
+                  hasYesToken, hasNoToken, selectedSide, canTrade, safeAddress
                 });
                 
                 if (!isLinked) {
@@ -737,8 +896,20 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   });
                   return;
                 }
+                if (!isDeployed) {
+                  toast.error('Please deploy your Safe wallet (Step 2)', {
+                    description: 'Scroll up and click "Deploy Safe Wallet"'
+                  });
+                  return;
+                }
+                if (!hasAllowances) {
+                  toast.error('Please set token allowances (Step 3)', {
+                    description: 'Scroll up and click "Set Token Allowances"'
+                  });
+                  return;
+                }
                 if (!isFullyApproved) {
-                  toast.error('Please approve USDC first (Step 2)', {
+                  toast.error('Please approve USDC (Step 4)', {
                     description: 'Scroll up and click "Approve USDC for Trading"'
                   });
                   return;
