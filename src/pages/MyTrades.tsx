@@ -6,7 +6,7 @@ import {
   RefreshCw, ExternalLink, Wallet, ArrowUpRight, ArrowDownRight, 
   Clock, Filter, Zap, TrendingUp, Activity, BarChart3, Sparkles,
   Package, ShoppingCart, XCircle, TrendingDown, DollarSign, Percent,
-  AlertCircle, Loader2, Gift
+  AlertCircle, Loader2, Gift, Copy, CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
 import { TopBar } from "@/components/TopBar";
@@ -25,6 +25,7 @@ import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
+import { useSafeWallet } from "@/hooks/useSafeWallet";
 import { fetchTradeableMarketData } from "@/lib/market-trade-data";
 import { ClaimablePosition } from "@/hooks/useClaimWinnings";
 
@@ -124,6 +125,20 @@ export default function MyTrades() {
   const navigate = useNavigate();
   const { placeOrder, isPlacingOrder, getOpenOrders, cancelOrder } = usePolymarketTrading();
   const { apiCreds, getApiCreds } = usePolymarketApiCreds();
+  const { safeAddress, isDeployed } = useSafeWallet();
+  
+  // Determine which address to query - use Safe if deployed, otherwise EOA
+  const queryAddress = useMemo(() => {
+    if (isDeployed && safeAddress) {
+      console.log('[MyTrades] Using Safe address for queries:', safeAddress);
+      return safeAddress;
+    }
+    console.log('[MyTrades] Using EOA address for queries:', address);
+    return address;
+  }, [isDeployed, safeAddress, address]);
+  
+  // State for copy button feedback
+  const [copiedAddress, setCopiedAddress] = useState(false);
   
   // Positions tab state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -152,7 +167,7 @@ export default function MyTrades() {
   const [activeTab, setActiveTab] = useState("positions");
 
   const fetchPositions = useCallback(async () => {
-    if (!isConnected || !address) {
+    if (!isConnected || !queryAddress) {
       toast.error("Please connect your wallet first");
       return;
     }
@@ -167,13 +182,15 @@ export default function MyTrades() {
         creds = await getApiCreds();
       }
 
-      // Build URL with optional API creds
-      let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-user-positions?address=${address}`;
+      // Build URL with the correct address (Safe or EOA)
+      let url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-user-positions?address=${queryAddress}`;
       
       // Pass user's API credentials so the edge function can fetch their orders
       if (creds) {
         url += `&apiKey=${encodeURIComponent(creds.apiKey)}&secret=${encodeURIComponent(creds.secret)}&passphrase=${encodeURIComponent(creds.passphrase)}`;
       }
+
+      console.log('[MyTrades] Fetching positions for:', queryAddress, isDeployed ? '(Safe)' : '(EOA)');
 
       const response = await fetch(url, {
         headers: {
@@ -209,17 +226,19 @@ export default function MyTrades() {
     } finally {
       setIsLoadingPositions(false);
     }
-  }, [isConnected, address, apiCreds, getApiCreds]);
+  }, [isConnected, queryAddress, apiCreds, getApiCreds, isDeployed]);
 
   const fetchHistory = useCallback(async () => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !queryAddress) return;
 
     setIsLoadingHistory(true);
     setHasTriedFetchHistory(true);
 
     try {
+      console.log('[MyTrades] Fetching history for:', queryAddress, isDeployed ? '(Safe)' : '(EOA)');
+      
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-profile?address=${address}&timeframe=${timeFilter}`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-profile?address=${queryAddress}&timeframe=${timeFilter}`,
         {
           headers: {
             "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
@@ -247,7 +266,7 @@ export default function MyTrades() {
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [isConnected, address, timeFilter]);
+  }, [isConnected, queryAddress, timeFilter, isDeployed]);
 
   const refreshOpenOrders = useCallback(async () => {
     if (!isConnected || !address) return;
@@ -475,10 +494,30 @@ export default function MyTrades() {
               <Package className="w-8 h-8 text-primary animate-pulse" />
               My Positions
             </h1>
-            <p className="text-muted-foreground flex items-center gap-2">
+            <div className="text-muted-foreground flex items-center gap-2 flex-wrap">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Real-time portfolio from Polymarket
-            </p>
+              <span>
+                {isDeployed ? 'Safe Wallet' : 'EOA Wallet'}:
+              </span>
+              <button
+                onClick={() => {
+                  if (queryAddress) {
+                    navigator.clipboard.writeText(queryAddress);
+                    setCopiedAddress(true);
+                    setTimeout(() => setCopiedAddress(false), 2000);
+                    toast.success('Address copied!');
+                  }
+                }}
+                className="font-mono text-xs bg-background/50 px-2 py-0.5 rounded border border-border/30 hover:border-primary/50 transition-colors flex items-center gap-1"
+              >
+                {queryAddress?.slice(0, 6)}...{queryAddress?.slice(-4)}
+                {copiedAddress ? (
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+              </button>
+            </div>
           </div>
           
           <Button
