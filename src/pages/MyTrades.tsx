@@ -25,7 +25,7 @@ import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
 import { fetchTradeableMarketData } from "@/lib/market-trade-data";
-import domeLogo from "@/assets/dome-logo.png";
+
 interface Position {
   asset: string;
   conditionId: string;
@@ -927,24 +927,6 @@ export default function MyTrades() {
           </TabsContent>
         </Tabs>
 
-        {/* Powered by DOME Attribution */}
-        <div className="mt-8 flex items-center justify-center">
-          <a 
-            href="https://domeapi.io" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-background/80 to-muted/30 border border-border/50 hover:border-primary/40 transition-all group backdrop-blur-sm"
-          >
-            <span className="text-xs text-muted-foreground/70">Powered by</span>
-            <div className="flex items-center gap-1.5">
-              <img src={domeLogo} alt="DOME" className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
-                DOME
-              </span>
-            </div>
-            <ExternalLink className="w-3 h-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
-          </a>
-        </div>
       </main>
 
       {/* Sell Modal */}
