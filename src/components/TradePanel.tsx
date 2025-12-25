@@ -4,8 +4,9 @@ import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, Shield, Copy, Coins, RotateCcw } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, Shield, Copy, Coins, RotateCcw, ArrowDown } from 'lucide-react';
 import { TradeProgressOverlay } from './TradeProgressOverlay';
+import { DepositDialog } from './wallet/DepositDialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { buildPolymarketTradeUrl } from '@/lib/polymarket-trade';
@@ -46,6 +47,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const [selectedSide, setSelectedSide] = useState<'YES' | 'NO'>(defaultSide);
   const [isMarketOrder, setIsMarketOrder] = useState(true);
   const [limitPrice, setLimitPrice] = useState('');
+  const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   // Trading hooks
@@ -65,9 +67,17 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
   // Use Safe balance when deployed, otherwise EOA balance
   const balanceTargetAddress = isDeployed && safeAddress ? safeAddress : undefined;
-  const { balance, isFullyApproved, isApproving, approveUSDC, hasSufficientBalance, refetch } = useUSDCBalance({
+  const { balance, isFullyApproved, isApproving, approveUSDC, hasSufficientBalance, refetch: refetchSafeBalance } = useUSDCBalance({
     targetAddress: balanceTargetAddress,
   });
+  
+  // EOA balance for deposits (always tracks the connected wallet)
+  const { balance: eoaBalance, refetch: refetchEoaBalance } = useUSDCBalance();
+  
+  // Combined refetch function
+  const refetch = async () => {
+    await Promise.all([refetchSafeBalance(), refetchEoaBalance()]);
+  };
 
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== POLYGON_CHAIN_ID;
@@ -491,12 +501,24 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                 </div>
                 <div>
                   <p className="font-semibold text-emerald-200 text-sm">Step 3 of 4: Fund Safe Wallet</p>
-                  <p className="text-xs text-emerald-300/70">Send USDC to your Safe to start trading</p>
+                  <p className="text-xs text-emerald-300/70">Deposit USDC to your Safe to start trading</p>
                 </div>
               </div>
+              
+              {/* Quick deposit from connected wallet */}
+              {eoaBalance > 0.1 && (
+                <Button
+                  onClick={() => setShowDepositDialog(true)}
+                  className="w-full mb-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+                >
+                  <ArrowDown className="w-4 h-4 mr-2" />
+                  Deposit from Wallet (${eoaBalance.toFixed(2)} available)
+                </Button>
+              )}
+              
               <div className="p-2 rounded-lg bg-muted/30 border border-border/30 mb-3">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Send USDC to:</span>
+                  <span className="text-xs text-muted-foreground">Or send USDC to:</span>
                   <button 
                     onClick={() => {
                       if (safeAddress) {
@@ -513,7 +535,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                 <p className="font-mono text-xs text-foreground truncate">{safeAddress}</p>
               </div>
               <div className="text-xs text-muted-foreground space-y-1">
-                <p>💡 Transfer USDC (Polygon) from your exchange or wallet</p>
+                <p>💡 Transfer USDC (Polygon) from your exchange or external wallet</p>
                 <p className="opacity-70">Contract: <span className="font-mono text-emerald-400/80">{USDC_ADDRESS.slice(0, 10)}...{USDC_ADDRESS.slice(-6)}</span></p>
               </div>
             </motion.div>
@@ -1088,13 +1110,27 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           </Button>
         )}
 
-        {canDirectTrade && isFullyApproved && (
+        {canDirectTrade && allApprovalsComplete && (
           <p className="text-xs text-center text-muted-foreground">
             Trades attributed to builder program
           </p>
         )}
       </div>
     </div>
+    
+    {/* Deposit Dialog */}
+    {safeAddress && (
+      <DepositDialog
+        open={showDepositDialog}
+        onOpenChange={setShowDepositDialog}
+        safeAddress={safeAddress}
+        eoaBalance={eoaBalance}
+        onSuccess={() => {
+          // Auto-refresh balances after successful deposit
+          refetch();
+        }}
+      />
+    )}
     </>
   );
 }

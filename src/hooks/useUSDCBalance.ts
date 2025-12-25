@@ -98,15 +98,8 @@ export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
     },
   });
 
-  // Read USDC allowances for all 4 required spenders
-  const { data: ctfContractAllowance, refetch: refetchCtfContractAllowance } = useReadContract({
-    address: USDC_POLYGON,
-    abi: erc20Abi,
-    functionName: 'allowance',
-    args: address ? [address, CTF_CONTRACT] : undefined,
-    chainId: polygon.id,
-    query: { enabled: !!address && isConnected },
-  });
+  // Read USDC allowances for 3 required spenders (matching Safe relay approvals)
+  // Note: CTF_CONTRACT USDC approval is NOT required for trading - only ERC1155 operators need it
 
   const { data: ctfExchangeAllowance, refetch: refetchCtfExchangeAllowance } = useReadContract({
     address: USDC_POLYGON,
@@ -176,8 +169,8 @@ export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
   });
 
   // Check USDC approvals (need at least 1M USDC threshold)
+  // Only 3 USDC spenders required (matching Safe relay approvals): CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER
   const APPROVAL_THRESHOLD = BigInt(1e12); // 1M USDC
-  const isApprovedCtfContract = ctfContractAllowance ? ctfContractAllowance >= APPROVAL_THRESHOLD : false;
   const isApprovedCtfExchange = ctfExchangeAllowance ? ctfExchangeAllowance >= APPROVAL_THRESHOLD : false;
   const isApprovedNegRiskExchange = negRiskExchangeAllowance ? negRiskExchangeAllowance >= APPROVAL_THRESHOLD : false;
   const isApprovedNegRiskAdapter = negRiskAdapterAllowance ? negRiskAdapterAllowance >= APPROVAL_THRESHOLD : false;
@@ -187,9 +180,8 @@ export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
   const isErc1155NegRiskExchangeApproved = !!negRiskExchangeErc1155Approved;
   const isErc1155NegRiskAdapterApproved = !!negRiskAdapterErc1155Approved;
 
-  // All approvals required for trading
+  // All approvals required for trading (3 USDC + 3 ERC1155 = 6 total, matching Safe relay)
   const isFullyApproved = 
-    isApprovedCtfContract && 
     isApprovedCtfExchange && 
     isApprovedNegRiskExchange && 
     isApprovedNegRiskAdapter &&
@@ -246,9 +238,8 @@ export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
     setIsApproving(true);
 
     try {
-      // USDC ERC20 approvals (4 spenders)
+      // USDC ERC20 approvals (3 spenders - matching Safe relay approvals)
       const usdcSpenders = [
-        { name: 'CTF Contract', address: CTF_CONTRACT, approved: isApprovedCtfContract },
         { name: 'CTF Exchange', address: CTF_EXCHANGE, approved: isApprovedCtfExchange },
         { name: 'Neg Risk Exchange', address: NEG_RISK_CTF_EXCHANGE, approved: isApprovedNegRiskExchange },
         { name: 'Neg Risk Adapter', address: NEG_RISK_ADAPTER, approved: isApprovedNegRiskAdapter },
@@ -295,7 +286,6 @@ export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
 
       // Refetch all allowances after confirmations
       await Promise.all([
-        refetchCtfContractAllowance(),
         refetchCtfExchangeAllowance(),
         refetchNegRiskExchangeAllowance(),
         refetchNegRiskAdapterAllowance(),
@@ -317,17 +307,16 @@ export function useUSDCBalance(options: UseUSDCBalanceOptions = {}) {
   }, [
     address, 
     publicClient,
-    isApprovedCtfContract, isApprovedCtfExchange, isApprovedNegRiskExchange, isApprovedNegRiskAdapter,
+    isApprovedCtfExchange, isApprovedNegRiskExchange, isApprovedNegRiskAdapter,
     isErc1155CtfExchangeApproved, isErc1155NegRiskExchangeApproved, isErc1155NegRiskAdapterApproved,
     writeContractAsync,
-    refetchCtfContractAllowance, refetchCtfExchangeAllowance, refetchNegRiskExchangeAllowance, refetchNegRiskAdapterAllowance,
+    refetchCtfExchangeAllowance, refetchNegRiskExchangeAllowance, refetchNegRiskAdapterAllowance,
     refetchCtfExchangeErc1155, refetchNegRiskExchangeErc1155, refetchNegRiskAdapterErc1155,
   ]);
   // Refetch all data
   const refetch = async () => {
     await Promise.all([
       refetchBalance(),
-      refetchCtfContractAllowance(),
       refetchCtfExchangeAllowance(),
       refetchNegRiskExchangeAllowance(),
       refetchNegRiskAdapterAllowance(),
