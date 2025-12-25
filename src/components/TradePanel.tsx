@@ -713,6 +713,46 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               else if (!hasBalance) disabledReason = `Insufficient balance ($${balance.toFixed(2)} available)`;
               else if (selectedSide === 'NO' && !hasNoToken) disabledReason = 'NO token not available';
               
+              // Always-clickable handler with feedback
+              const handleOrderButtonClick = () => {
+                console.log('[TradePanel] Button clicked, state:', {
+                  isLinked, isFullyApproved, amount, balance,
+                  hasYesToken, hasNoToken, selectedSide, canTrade
+                });
+                
+                if (!isLinked) {
+                  toast.error('Please link your wallet first (Step 1)', {
+                    description: 'Scroll up and click "Link Wallet to Trade"'
+                  });
+                  return;
+                }
+                if (!isFullyApproved) {
+                  toast.error('Please approve USDC first (Step 2)', {
+                    description: 'Scroll up and click "Approve USDC for Trading"'
+                  });
+                  return;
+                }
+                if (!hasAmount) {
+                  toast.error('Please enter an amount');
+                  return;
+                }
+                if (!hasBalance) {
+                  toast.error(`Insufficient USDC balance`, {
+                    description: `You have $${balance.toFixed(2)} but need $${amountNum.toFixed(2)}`
+                  });
+                  return;
+                }
+                if (selectedSide === 'NO' && !hasNoToken) {
+                  toast.error('NO token not available for this market', {
+                    description: 'Try trading YES instead, or use Polymarket directly'
+                  });
+                  return;
+                }
+                
+                // All conditions met - show confirmation
+                handleShowConfirmation();
+              };
+              
               return (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -726,17 +766,16 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   )}
                   
                   <motion.button
-                    onClick={canTrade ? handleShowConfirmation : undefined}
-                    disabled={!canTrade || isPlacingOrder}
+                    onClick={handleOrderButtonClick}
+                    disabled={isPlacingOrder}
                     whileHover={canTrade ? { scale: 1.01 } : {}}
                     whileTap={canTrade ? { scale: 0.99 } : {}}
                     className={cn(
                       "relative w-full py-4 rounded-xl font-bold text-lg overflow-hidden",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
                       "transition-all duration-300",
                       canTrade 
                         ? (selectedSide === 'YES' ? "trade-cta-yes text-white" : "trade-cta-no text-white")
-                        : "bg-muted/50 border border-border/50 text-muted-foreground"
+                        : "bg-muted/50 border border-border/50 text-muted-foreground hover:bg-muted/70 cursor-pointer"
                     )}
                   >
                     {/* Animated shimmer - only when enabled */}
