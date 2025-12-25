@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target, Copy, Sparkles, ArrowRightLeft, Check } from 'lucide-react';
+import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target, Copy, Sparkles, Check, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetClose } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 interface Trade {
   token_id: string;
   token_label: string;
@@ -42,7 +43,7 @@ interface WalletMetrics {
 interface TradeDetailModalProps {
   trade: Trade;
   onClose: () => void;
-  onTrade?: (marketUrl: string, trade: Trade) => void;
+  onTrade?: (marketUrl: string, trade: Trade, side: 'YES' | 'NO') => void;
   onAnalyze?: (trade: Trade, resolvedUrl: string) => void;
 }
 
@@ -55,6 +56,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   const [copied, setCopied] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(trade.resolved_url || null);
   const [resolvingUrl, setResolvingUrl] = useState(false);
+  const [loadingSide, setLoadingSide] = useState<'YES' | 'NO' | null>(null);
   // Resolve correct market URL on mount
   useEffect(() => {
     async function resolveMarketUrl() {
@@ -123,10 +125,14 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleTrade = () => {
+  const handleTrade = (side: 'YES' | 'NO') => {
+    setLoadingSide(side);
     const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
-    // Don't close - let the new modal stack on top
-    onTrade?.(marketUrl, trade);
+    // Small delay for loading state visibility
+    setTimeout(() => {
+      onTrade?.(marketUrl, trade, side);
+      setLoadingSide(null);
+    }, 150);
   };
 
   const handleAnalyze = () => {
@@ -211,23 +217,57 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
-        {/* Action Buttons - Epic Styling */}
-        <div className="flex gap-3">
+        {/* Action Buttons - BUY YES/NO + Analyze */}
+        <div className="flex gap-2">
+          {/* BUY YES Button */}
           <Button
             variant="outline"
-            className="flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl border-primary/30 hover:border-primary hover:bg-primary/10 transition-all duration-300 min-h-[48px]"
-            onClick={handleTrade}
+            className={cn(
+              "flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl transition-all duration-200 min-h-[48px]",
+              "bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+            )}
+            onClick={() => handleTrade('YES')}
+            disabled={loadingSide !== null}
           >
-            <ArrowRightLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Trade</span>
+            {loadingSide === 'YES' ? (
+              <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+            ) : (
+              <>
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">BUY YES</span>
+                <span className="sm:hidden">YES</span>
+              </>
+            )}
           </Button>
+          
+          {/* BUY NO Button */}
+          <Button
+            variant="outline"
+            className={cn(
+              "flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl transition-all duration-200 min-h-[48px]",
+              "bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/20 hover:border-rose-500/50 hover:shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+            )}
+            onClick={() => handleTrade('NO')}
+            disabled={loadingSide !== null}
+          >
+            {loadingSide === 'NO' ? (
+              <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+            ) : (
+              <>
+                <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">BUY NO</span>
+                <span className="sm:hidden">NO</span>
+              </>
+            )}
+          </Button>
+          
+          {/* Analyze Button */}
           <Button
             className="flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all duration-300 min-h-[48px]"
             onClick={handleAnalyze}
           >
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Analyze Market</span>
-            <span className="sm:hidden">Analyze</span>
+            <span className="hidden sm:inline">Analyze</span>
           </Button>
         </div>
 
@@ -436,6 +476,21 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     return (
       <Sheet open={true} onOpenChange={(open) => !open && onClose()}>
         <SheetContent side="bottom" className="h-[95vh] p-0 rounded-t-2xl">
+          {/* Drag handle indicator */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-muted-foreground/30 z-10" />
+          
+          {/* Close button for mobile */}
+          <SheetClose asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute right-3 top-3 h-8 w-8 rounded-full bg-muted/50 z-10"
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </SheetClose>
+          
           {modalContent}
         </SheetContent>
       </Sheet>
