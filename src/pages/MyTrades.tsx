@@ -597,57 +597,111 @@ export default function MyTrades() {
                   positions.map((pos, i) => (
                     <div 
                       key={i} 
-                      className="p-4 flex items-center gap-4 hover:bg-primary/5 transition-colors group"
+                      className="p-4 hover:bg-primary/5 transition-colors group"
                     >
-                      {/* Outcome badge */}
-                      <div className={`w-12 h-12 rounded-lg bg-gradient-to-br flex items-center justify-center border font-bold text-sm ${
-                        pos.outcome === 'Yes' || pos.outcome === 'YES'
-                          ? 'from-emerald-500/30 to-emerald-400/10 text-emerald-400 border-emerald-500/50'
-                          : 'from-rose-500/30 to-rose-400/10 text-rose-400 border-rose-500/50'
-                      }`}>
-                        {pos.outcome === 'Yes' || pos.outcome === 'YES' ? 'YES' : 'NO'}
-                      </div>
-                      
-                      {/* Position info */}
-                      <div className="flex-1 min-w-0">
-                        <a 
-                          href={getPolymarketUrl(pos.eventSlug)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-foreground truncate group-hover:text-primary transition-colors flex items-center gap-2"
-                        >
-                          {pos.title || pos.eventTitle}
-                          <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </a>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                      {/* Mobile: Stack layout */}
+                      <div className="flex flex-col gap-3 sm:hidden">
+                        <div className="flex items-start gap-3">
+                          {/* Outcome badge */}
+                          <div className={`w-10 h-10 shrink-0 rounded-lg bg-gradient-to-br flex items-center justify-center border font-bold text-xs ${
+                            pos.outcome === 'Yes' || pos.outcome === 'YES'
+                              ? 'from-emerald-500/30 to-emerald-400/10 text-emerald-400 border-emerald-500/50'
+                              : 'from-rose-500/30 to-rose-400/10 text-rose-400 border-rose-500/50'
+                          }`}>
+                            {pos.outcome === 'Yes' || pos.outcome === 'YES' ? 'YES' : 'NO'}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <a 
+                              href={getPolymarketUrl(pos.eventSlug)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors"
+                            >
+                              {pos.title || pos.eventTitle}
+                            </a>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{pos.size.toFixed(2)} shares</span>
-                          <span>•</span>
                           <span>Avg: {(pos.avgPrice * 100).toFixed(1)}¢</span>
-                          <span>•</span>
                           <span>Now: {(pos.curPrice * 100).toFixed(1)}¢</span>
                         </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className={`text-lg font-bold ${pos.cashPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {pos.cashPnl >= 0 ? '+' : ''}${pos.cashPnl.toFixed(2)}
+                            </div>
+                            <div className={`text-xs ${pos.percentPnl >= 0 ? 'text-emerald-400/70' : 'text-rose-400/70'}`}>
+                              {pos.percentPnl >= 0 ? '+' : ''}{pos.percentPnl.toFixed(1)}%
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSellModalPosition(pos)}
+                            className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                          >
+                            <TrendingDown className="w-4 h-4" />
+                            Sell
+                          </Button>
+                        </div>
                       </div>
                       
-                      {/* P&L */}
-                      <div className="text-right mr-4">
-                        <div className={`text-lg font-bold ${pos.cashPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {pos.cashPnl >= 0 ? '+' : ''}${pos.cashPnl.toFixed(2)}
+                      {/* Desktop: Row layout */}
+                      <div className="hidden sm:flex items-center gap-4">
+                        {/* Outcome badge */}
+                        <div className={`w-12 h-12 rounded-lg bg-gradient-to-br flex items-center justify-center border font-bold text-sm ${
+                          pos.outcome === 'Yes' || pos.outcome === 'YES'
+                            ? 'from-emerald-500/30 to-emerald-400/10 text-emerald-400 border-emerald-500/50'
+                            : 'from-rose-500/30 to-rose-400/10 text-rose-400 border-rose-500/50'
+                        }`}>
+                          {pos.outcome === 'Yes' || pos.outcome === 'YES' ? 'YES' : 'NO'}
                         </div>
-                        <div className={`text-sm ${pos.percentPnl >= 0 ? 'text-emerald-400/70' : 'text-rose-400/70'}`}>
-                          {pos.percentPnl >= 0 ? '+' : ''}{pos.percentPnl.toFixed(1)}%
+                        
+                        {/* Position info */}
+                        <div className="flex-1 min-w-0">
+                          <a 
+                            href={getPolymarketUrl(pos.eventSlug)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-foreground truncate group-hover:text-primary transition-colors flex items-center gap-2"
+                          >
+                            {pos.title || pos.eventTitle}
+                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </a>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                            <span>{pos.size.toFixed(2)} shares</span>
+                            <span>•</span>
+                            <span>Avg: {(pos.avgPrice * 100).toFixed(1)}¢</span>
+                            <span>•</span>
+                            <span>Now: {(pos.curPrice * 100).toFixed(1)}¢</span>
+                          </div>
                         </div>
+                        
+                        {/* P&L */}
+                        <div className="text-right mr-4">
+                          <div className={`text-lg font-bold ${pos.cashPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {pos.cashPnl >= 0 ? '+' : ''}${pos.cashPnl.toFixed(2)}
+                          </div>
+                          <div className={`text-sm ${pos.percentPnl >= 0 ? 'text-emerald-400/70' : 'text-rose-400/70'}`}>
+                            {pos.percentPnl >= 0 ? '+' : ''}{pos.percentPnl.toFixed(1)}%
+                          </div>
+                        </div>
+                        
+                        {/* Actions */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSellModalPosition(pos)}
+                          className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                        >
+                          <TrendingDown className="w-4 h-4" />
+                          Sell
+                        </Button>
                       </div>
-                      
-                      {/* Actions */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSellModalPosition(pos)}
-                        className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
-                      >
-                        <TrendingDown className="w-4 h-4" />
-                        Sell
-                      </Button>
                     </div>
                   ))
                 )}
@@ -691,51 +745,95 @@ export default function MyTrades() {
                   openOrders.map((order) => (
                     <div 
                       key={order.id} 
-                      className="p-4 flex items-center gap-4 hover:bg-primary/5 transition-colors"
+                      className="p-4 hover:bg-primary/5 transition-colors"
                     >
-                      {/* Side */}
-                      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center border ${getSideColor(order.side)}`}>
-                        {order.side?.toUpperCase() === "BUY" ? (
-                          <ArrowUpRight className="w-5 h-5" />
-                        ) : (
-                          <ArrowDownRight className="w-5 h-5" />
-                        )}
-                      </div>
-                      
-                      {/* Order info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">
-                          {order.outcome || order.market || 'Order'}
-                        </p>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                          <Badge variant="outline" className={`${getSideColor(order.side)} border`}>
-                            {order.side}
+                      {/* Mobile: Stack layout */}
+                      <div className="flex flex-col gap-3 sm:hidden">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-10 h-10 shrink-0 rounded-lg bg-gradient-to-br flex items-center justify-center border ${getSideColor(order.side)}`}>
+                            {order.side?.toUpperCase() === "BUY" ? (
+                              <ArrowUpRight className="w-5 h-5" />
+                            ) : (
+                              <ArrowDownRight className="w-5 h-5" />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-foreground line-clamp-2">
+                              {order.outcome || order.market || 'Order'}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                              <Badge variant="outline" className={`${getSideColor(order.side)} border text-xs`}>
+                                {order.side}
+                              </Badge>
+                              <span>{parseFloat(order.original_size).toFixed(2)} @ {(parseFloat(order.price) * 100).toFixed(1)}¢</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                            {order.status || 'LIVE'}
                           </Badge>
-                          <span>{parseFloat(order.original_size).toFixed(2)} shares</span>
-                          <span>@ {(parseFloat(order.price) * 100).toFixed(1)}¢</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelOrder(order.id)}
+                            disabled={cancellingOrderId === order.id}
+                            className="gap-2 text-rose-400 hover:bg-rose-500/20"
+                          >
+                            {cancellingOrderId === order.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <XCircle className="w-4 h-4" />
+                            )}
+                            Cancel
+                          </Button>
                         </div>
                       </div>
                       
-                      {/* Status */}
-                      <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-                        {order.status || 'LIVE'}
-                      </Badge>
-                      
-                      {/* Cancel button */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCancelOrder(order.id)}
-                        disabled={cancellingOrderId === order.id}
-                        className="gap-2 text-rose-400 hover:bg-rose-500/20"
-                      >
-                        {cancellingOrderId === order.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <XCircle className="w-4 h-4" />
-                        )}
-                        Cancel
-                      </Button>
+                      {/* Desktop: Row layout */}
+                      <div className="hidden sm:flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-lg bg-gradient-to-br flex items-center justify-center border ${getSideColor(order.side)}`}>
+                          {order.side?.toUpperCase() === "BUY" ? (
+                            <ArrowUpRight className="w-5 h-5" />
+                          ) : (
+                            <ArrowDownRight className="w-5 h-5" />
+                          )}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">
+                            {order.outcome || order.market || 'Order'}
+                          </p>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                            <Badge variant="outline" className={`${getSideColor(order.side)} border`}>
+                              {order.side}
+                            </Badge>
+                            <span>{parseFloat(order.original_size).toFixed(2)} shares</span>
+                            <span>@ {(parseFloat(order.price) * 100).toFixed(1)}¢</span>
+                          </div>
+                        </div>
+                        
+                        <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                          {order.status || 'LIVE'}
+                        </Badge>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCancelOrder(order.id)}
+                          disabled={cancellingOrderId === order.id}
+                          className="gap-2 text-rose-400 hover:bg-rose-500/20"
+                        >
+                          {cancellingOrderId === order.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -828,33 +926,65 @@ export default function MyTrades() {
                       trades.map((trade, i) => (
                         <div 
                           key={i} 
-                          className="p-4 flex items-center gap-4 hover:bg-primary/5 transition-colors group"
+                          className="p-4 hover:bg-primary/5 transition-colors group"
                         >
-                          <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getSideColor(trade.side)} flex items-center justify-center border`}>
-                            {trade.side?.toUpperCase() === "BUY" ? (
-                              <ArrowUpRight className="w-5 h-5" />
-                            ) : (
-                              <ArrowDownRight className="w-5 h-5" />
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                              {trade.marketTitle || trade.marketSlug}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <span>{trade.shares?.toFixed(2)} shares @ {(trade.price * 100).toFixed(1)}¢</span>
+                          {/* Mobile: Stack layout */}
+                          <div className="flex flex-col gap-2 sm:hidden">
+                            <div className="flex items-start gap-3">
+                              <div className={`w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br ${getSideColor(trade.side)} flex items-center justify-center border`}>
+                                {trade.side?.toUpperCase() === "BUY" ? (
+                                  <ArrowUpRight className="w-4 h-4" />
+                                ) : (
+                                  <ArrowDownRight className="w-4 h-4" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm text-foreground line-clamp-2">
+                                  {trade.marketTitle || trade.marketSlug}
+                                </p>
+                              </div>
+                              <Badge 
+                                variant="outline" 
+                                className={`bg-gradient-to-r ${getSideColor(trade.side)} border font-mono text-xs shrink-0`}
+                              >
+                                ${trade.volume?.toFixed(2)}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground pl-11">
+                              <span>{trade.shares?.toFixed(2)} @ {(trade.price * 100).toFixed(1)}¢</span>
                               <span>•</span>
                               <span>{formatTime(trade.timestamp)}</span>
                             </div>
                           </div>
                           
-                          <Badge 
-                            variant="outline" 
-                            className={`bg-gradient-to-r ${getSideColor(trade.side)} border font-mono`}
-                          >
-                            ${trade.volume?.toFixed(2)}
-                          </Badge>
+                          {/* Desktop: Row layout */}
+                          <div className="hidden sm:flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getSideColor(trade.side)} flex items-center justify-center border`}>
+                              {trade.side?.toUpperCase() === "BUY" ? (
+                                <ArrowUpRight className="w-5 h-5" />
+                              ) : (
+                                <ArrowDownRight className="w-5 h-5" />
+                              )}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                                {trade.marketTitle || trade.marketSlug}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{trade.shares?.toFixed(2)} shares @ {(trade.price * 100).toFixed(1)}¢</span>
+                                <span>•</span>
+                                <span>{formatTime(trade.timestamp)}</span>
+                              </div>
+                            </div>
+                            
+                            <Badge 
+                              variant="outline" 
+                              className={`bg-gradient-to-r ${getSideColor(trade.side)} border font-mono`}
+                            >
+                              ${trade.volume?.toFixed(2)}
+                            </Badge>
+                          </div>
                         </div>
                       ))
                     )}
