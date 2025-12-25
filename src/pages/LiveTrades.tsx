@@ -113,9 +113,23 @@ export default function LiveTrades() {
   const imageFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs to track loading/connected state for timeout callbacks (avoid stale closures)
+  const loadingRef = useRef(loading);
+  const connectedRef = useRef(connected);
+  const isConnectingRef = useRef(false);
 
   // Connection timeout constant (10 seconds)
   const CONNECTION_TIMEOUT_MS = 10000;
+  
+  // Sync refs with state
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+  
+  useEffect(() => {
+    connectedRef.current = connected;
+  }, [connected]);
 
   // Initialize audio
   useEffect(() => {
@@ -221,7 +235,9 @@ export default function LiveTrades() {
   }, [soundEnabled]);
 
   const connectWebSocket = useCallback(async () => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.OPEN) return;
+    isConnectingRef.current = true;
 
     // Clear any existing connection timeout
     if (connectionTimeoutRef.current) {
@@ -234,12 +250,13 @@ export default function LiveTrades() {
         setLoading(true);
         setError(null);
         
-        // Set connection timeout
+        // Set connection timeout - use refs to avoid stale closure
         connectionTimeoutRef.current = setTimeout(() => {
-          if (loading && !connected) {
+          if (loadingRef.current && !connectedRef.current) {
             console.log('Connection timeout reached');
             setLoading(false);
             setError('Connection timed out. Please try again.');
+            isConnectingRef.current = false;
           }
         }, CONNECTION_TIMEOUT_MS);
         
@@ -249,6 +266,7 @@ export default function LiveTrades() {
           console.error('Failed to get WebSocket URL:', error);
           setError('Failed to connect to trade feed. Please try again.');
           setLoading(false);
+          isConnectingRef.current = false;
           if (connectionTimeoutRef.current) {
             clearTimeout(connectionTimeoutRef.current);
           }
@@ -264,6 +282,7 @@ export default function LiveTrades() {
         setConnected(true);
         setLoading(false);
         setError(null);
+        isConnectingRef.current = false;
         
         // Clear connection timeout on successful connection
         if (connectionTimeoutRef.current) {
@@ -316,8 +335,6 @@ export default function LiveTrades() {
             showWhaleAlert(newTrade, volume);
           }
           
-          const tradeId = newTrade.order_hash || `${newTrade.tx_hash}-${newTrade.timestamp}-${newTrade.token_id}`;
-          
           if (paused) {
             pausedTradesRef.current.unshift(newTrade);
             setQueuedCount(pausedTradesRef.current.length);
@@ -328,7 +345,7 @@ export default function LiveTrades() {
                 (t.tx_hash === newTrade.tx_hash && t.timestamp === newTrade.timestamp && t.token_id === newTrade.token_id)
               );
               if (exists) return prev;
-              return [newTrade, ...prev.slice(0, 499)]; // Keep 500 for better stats
+              return [newTrade, ...prev.slice(0, 499)];
             });
           }
         }
@@ -336,25 +353,21 @@ export default function LiveTrades() {
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setConnected(false);
-        setLoading(false);
-        setError('WebSocket connection error. Retrying...');
+        isConnectingRef.current = false;
       };
 
       ws.onclose = (event) => {
         console.log('WebSocket disconnected, code:', event.code);
         setConnected(false);
         wsRef.current = null;
+        isConnectingRef.current = false;
         
-        // Only set error if it wasn't a clean close
-        if (event.code !== 1000 && event.code !== 4000) {
-          setError('Connection lost. Reconnecting...');
+        // Only attempt reconnect if not a forced close
+        if (event.code !== 1000) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, 2000);
         }
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          setError(null);
-          connectWebSocket();
-        }, 2000);
       };
 
       wsRef.current = ws;
@@ -362,13 +375,14 @@ export default function LiveTrades() {
       console.error('Error connecting to WebSocket:', err);
       setError('Failed to connect to trade feed. Please try again.');
       setLoading(false);
+      isConnectingRef.current = false;
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [paused, loading, connected, queueImageFetch, showWhaleAlert]);
+  }, [paused, queueImageFetch, showWhaleAlert]);
 
-  // Watchdog
+  // Watchdog - check connection health
   useEffect(() => {
     watchdogIntervalRef.current = setInterval(() => {
       const now = Date.now();
@@ -381,7 +395,8 @@ export default function LiveTrades() {
         setTradesPerMinute(Math.round(tradeCounterRef.current.count / elapsed));
       }
       
-      if (connected && timeSinceLastMessage > STALE_THRESHOLD_MS) {
+      // Only force reconnect if WebSocket is actually open but stale
+      if (wsRef.current?.readyState === WebSocket.OPEN && timeSinceLastMessage > STALE_THRESHOLD_MS) {
         console.log(`Connection stale (${Math.floor(timeSinceLastMessage / 1000)}s), forcing reconnect...`);
         forceReconnect();
       }
@@ -392,7 +407,7 @@ export default function LiveTrades() {
         clearInterval(watchdogIntervalRef.current);
       }
     };
-  }, [connected, forceReconnect]);
+  }, [forceReconnect]);
 
   // Hard reconnect every 5 minutes
   useEffect(() => {
