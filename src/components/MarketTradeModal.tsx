@@ -1,8 +1,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { TradePanel } from "@/components/TradePanel";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface MarketTradeModalProps {
   open: boolean;
@@ -56,8 +57,17 @@ export function MarketTradeModal({ open, onOpenChange, defaultSide, marketData }
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="bottom" elevated className="h-[85vh] rounded-t-3xl">
-          <SheetHeader className="pb-4">
+          {/* Drag handle indicator */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-muted-foreground/30" />
+          
+          <SheetHeader className="pb-4 flex flex-row items-center justify-between">
             <SheetTitle className="text-left">Trade Market</SheetTitle>
+            <SheetClose asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                <X className="h-5 w-5" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </SheetClose>
           </SheetHeader>
           {content}
         </SheetContent>
