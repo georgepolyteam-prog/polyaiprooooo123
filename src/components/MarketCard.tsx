@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, MessageSquare, ExternalLink, ChevronDown, Users, Flame, Crown, ArrowRightLeft, Sparkles } from "lucide-react";
+import { TrendingUp, TrendingDown, MessageSquare, ExternalLink, ChevronDown, Users, Flame, Crown, ArrowRightLeft, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { MarketTradeModal } from "@/components/MarketTradeModal";
-
 interface MarketOutcome {
   id: string;
   question: string;
@@ -57,6 +56,8 @@ export const MarketCard = ({ event }: MarketCardProps) => {
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<MarketOutcome | null>(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [loadingSide, setLoadingSide] = useState<'YES' | 'NO' | null>(null);
+  const [defaultTradeSide, setDefaultTradeSide] = useState<'YES' | 'NO'>('YES');
   
   const isSingleOutcome = event.outcomes.length === 1;
   const hasMultipleOutcomes = event.outcomes.length > 1;
@@ -82,10 +83,16 @@ export const MarketCard = ({ event }: MarketCardProps) => {
     setTradeModalOpen(true);
   };
 
-  const openTradeForSingleOutcome = () => {
+  const openTradeForSingleOutcome = (side: 'YES' | 'NO') => {
     if (sortedOutcomes.length > 0) {
-      setSelectedOutcome(sortedOutcomes[0]);
-      setTradeModalOpen(true);
+      setLoadingSide(side);
+      setDefaultTradeSide(side);
+      // Small delay for loading state visibility
+      setTimeout(() => {
+        setSelectedOutcome(sortedOutcomes[0]);
+        setTradeModalOpen(true);
+        setLoadingSide(null);
+      }, 150);
     }
   };
 
@@ -251,22 +258,54 @@ export const MarketCard = ({ event }: MarketCardProps) => {
           )}
         </div>
 
-        {/* Footer CTAs - Epic Styling */}
+        {/* Footer CTAs - Inline BUY YES/NO */}
         <div className="p-4 pt-0 border-t border-border/30 flex gap-2">
+          {/* BUY YES Button */}
           <Button
             variant="outline"
-            className="btn-epic-trade flex-1 h-11 gap-2 font-semibold rounded-xl text-foreground"
-            onClick={openTradeForSingleOutcome}
+            className={cn(
+              "flex-1 h-11 gap-1.5 font-semibold rounded-xl transition-all duration-200",
+              "bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+            )}
+            onClick={() => openTradeForSingleOutcome('YES')}
+            disabled={loadingSide !== null}
           >
-            <ArrowRightLeft className="w-4 h-4" />
-            Trade
+            {loadingSide === 'YES' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <TrendingUp className="w-4 h-4" />
+                YES {Math.round(sortedOutcomes[0]?.yesPrice * 100 || 0)}¢
+              </>
+            )}
           </Button>
+          
+          {/* BUY NO Button */}
           <Button
-            className="btn-epic-analyze flex-1 h-11 gap-2 text-primary-foreground font-semibold rounded-xl border-0"
+            variant="outline"
+            className={cn(
+              "flex-1 h-11 gap-1.5 font-semibold rounded-xl transition-all duration-200",
+              "bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/20 hover:border-rose-500/50 hover:shadow-[0_0_15px_rgba(244,63,94,0.2)]"
+            )}
+            onClick={() => openTradeForSingleOutcome('NO')}
+            disabled={loadingSide !== null}
+          >
+            {loadingSide === 'NO' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <TrendingDown className="w-4 h-4" />
+                NO {Math.round((1 - (sortedOutcomes[0]?.yesPrice || 0)) * 100)}¢
+              </>
+            )}
+          </Button>
+
+          {/* Analyze Button */}
+          <Button
+            className="h-11 px-4 gap-2 text-primary-foreground font-semibold rounded-xl border-0 btn-epic-analyze"
             onClick={askAboutEvent}
           >
             <Sparkles className="w-4 h-4" />
-            {hasMultipleOutcomes ? "Analyze" : "Ask Poly"}
           </Button>
         </div>
       </div>
@@ -276,6 +315,7 @@ export const MarketCard = ({ event }: MarketCardProps) => {
         <MarketTradeModal
           open={tradeModalOpen}
           onOpenChange={setTradeModalOpen}
+          defaultSide={defaultTradeSide}
           marketData={{
             yesTokenId: selectedOutcome.yesTokenId,
             noTokenId: selectedOutcome.noTokenId,
