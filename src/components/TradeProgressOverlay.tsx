@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Circle, Loader2, XCircle, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { TradeStage } from '@/hooks/usePolymarketTrading';
+import type { TradeStage } from '@/hooks/useDomeRouter';
 
 interface TradeProgressOverlayProps {
   tradeStage: TradeStage;
@@ -11,8 +11,8 @@ interface TradeProgressOverlayProps {
 
 const TRADE_STEPS = [
   { id: 'network', label: 'Network Check', stages: ['switching-network'] },
-  { id: 'balance', label: 'Balance & Approvals', stages: ['checking-balance'] },
-  { id: 'credentials', label: 'Trading Session', stages: ['getting-credentials', 'refreshing-credentials', 'fetching-market'] },
+  { id: 'balance', label: 'Balance Check', stages: ['checking-balance'] },
+  { id: 'link', label: 'Wallet Setup', stages: ['linking-wallet', 'deploying-safe', 'setting-allowances'] },
   { id: 'sign', label: 'Sign Order', stages: ['signing-order'] },
   { id: 'submit', label: 'Submit to Market', stages: ['submitting-order'] },
 ];
