@@ -6,7 +6,7 @@ import {
   RefreshCw, ExternalLink, Wallet, ArrowUpRight, ArrowDownRight, 
   Clock, Filter, Zap, TrendingUp, Activity, BarChart3, Sparkles,
   Package, ShoppingCart, XCircle, TrendingDown, DollarSign, Percent,
-  AlertCircle, Loader2, Gift, Copy, CheckCircle2
+  AlertCircle, Loader2, Gift, Copy, CheckCircle2, Shield
 } from "lucide-react";
 import { toast } from "sonner";
 import { TopBar } from "@/components/TopBar";
@@ -23,6 +23,7 @@ import { SellPositionModal } from "@/components/SellPositionModal";
 import { MarketTradeModal } from "@/components/MarketTradeModal";
 import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
+import { SafeWalletPanel } from "@/components/SafeWalletPanel";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
 import { useSafeWallet } from "@/hooks/useSafeWallet";
@@ -399,6 +400,23 @@ export default function MyTrades() {
     });
   };
 
+  // Handle trading from a position
+  const handleTradeFromPosition = useCallback(async (pos: Position) => {
+    const url = getPolymarketUrl(pos.eventSlug);
+    const res = await fetchTradeableMarketData(url);
+
+    if (res.ok === false) {
+      toast.error(res.message);
+      return;
+    }
+
+    setSelectedMarketForTrade(null);
+    setTimeout(() => {
+      setSelectedMarketForTrade(res.data);
+      setTradeModalOpen(true);
+    }, 0);
+  }, []);
+
   const maxVolume = topMarkets.length > 0 ? Math.max(...topMarkets.map(m => m.volume)) : 1;
 
   // Compute claimable positions (redeemable = true means market is resolved and user has winning shares)
@@ -600,7 +618,7 @@ export default function MyTrades() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="bg-background/50 border border-white/10">
+          <TabsList className="bg-background/50 border border-white/10 flex-wrap h-auto">
             <TabsTrigger value="positions" className="gap-2 data-[state=active]:bg-primary/20">
               <Package className="w-4 h-4" />
               Positions
@@ -626,6 +644,10 @@ export default function MyTrades() {
             <TabsTrigger value="history" className="gap-2 data-[state=active]:bg-primary/20">
               <Clock className="w-4 h-4" />
               History
+            </TabsTrigger>
+            <TabsTrigger value="wallet" className="gap-2 data-[state=active]:bg-secondary/20">
+              <Shield className="w-4 h-4" />
+              Wallet
             </TabsTrigger>
           </TabsList>
 
@@ -706,15 +728,26 @@ export default function MyTrades() {
                               {pos.percentPnl >= 0 ? '+' : ''}{pos.percentPnl.toFixed(1)}%
                             </div>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSellModalPosition(pos)}
-                            className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
-                          >
-                            <TrendingDown className="w-4 h-4" />
-                            Sell
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleTradeFromPosition(pos)}
+                              className="gap-2 border-primary/50 text-primary hover:bg-primary/20"
+                            >
+                              <TrendingUp className="w-4 h-4" />
+                              Trade
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSellModalPosition(pos)}
+                              className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                            >
+                              <TrendingDown className="w-4 h-4" />
+                              Sell
+                            </Button>
+                          </div>
                         </div>
                       </div>
                       
@@ -760,15 +793,26 @@ export default function MyTrades() {
                         </div>
                         
                         {/* Actions */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSellModalPosition(pos)}
-                          className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
-                        >
-                          <TrendingDown className="w-4 h-4" />
-                          Sell
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTradeFromPosition(pos)}
+                            className="gap-2 border-primary/50 text-primary hover:bg-primary/20"
+                          >
+                            <TrendingUp className="w-4 h-4" />
+                            Trade
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSellModalPosition(pos)}
+                            className="gap-2 border-rose-500/50 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                          >
+                            <TrendingDown className="w-4 h-4" />
+                            Sell
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1153,6 +1197,11 @@ export default function MyTrades() {
                 </GlassCard>
               </div>
             </div>
+          </TabsContent>
+
+          {/* Wallet Tab */}
+          <TabsContent value="wallet" className="space-y-4">
+            <SafeWalletPanel />
           </TabsContent>
         </Tabs>
 

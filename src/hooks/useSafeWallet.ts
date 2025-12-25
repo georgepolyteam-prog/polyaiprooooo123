@@ -32,6 +32,7 @@ export function useSafeWallet() {
   const [isDeployed, setIsDeployed] = useState(false);
   const [isSettingAllowances, setIsSettingAllowances] = useState(false);
   const [hasAllowances, setHasAllowances] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [relayClient, setRelayClient] = useState<RelayClient | null>(null);
 
   // Derive Safe address deterministically using official Polymarket derivation
@@ -323,6 +324,73 @@ export function useSafeWallet() {
     return checkDeployment();
   }, [safeAddress, relayClient, createRelayClient, checkDeployment]);
 
+  // Withdraw USDC from Safe to EOA
+  const withdrawUSDC = useCallback(async (amount: number, toAddress: string): Promise<boolean> => {
+    if (!safeAddress) {
+      toast.error('Safe address not available');
+      return false;
+    }
+
+    const deployed = await checkDeployment();
+    if (!deployed) {
+      toast.error('Safe wallet not deployed');
+      return false;
+    }
+
+    setIsWithdrawing(true);
+    try {
+      toast.info('Initiating withdrawal...', {
+        description: `Withdrawing ${amount} USDC to ${toAddress.slice(0, 8)}...`
+      });
+
+      let client = relayClient;
+      if (!client) {
+        client = await createRelayClient();
+      }
+
+      if (!client) {
+        throw new Error('Failed to create relay client');
+      }
+
+      // Convert amount to USDC units (6 decimals)
+      const amountInUnits = Math.floor(amount * 1e6);
+
+      // Build transfer transaction
+      const ERC20_TRANSFER_INTERFACE = new ethers.utils.Interface([
+        'function transfer(address to, uint256 amount)'
+      ]);
+
+      const transaction = {
+        to: USDC_ADDRESS,
+        data: ERC20_TRANSFER_INTERFACE.encodeFunctionData('transfer', [toAddress, amountInUnits]),
+        value: '0'
+      };
+
+      console.log('[Safe] Executing USDC transfer:', { amount, amountInUnits, toAddress });
+      const response = await client.execute([transaction]);
+      const result = await response.wait();
+
+      if (!result) {
+        throw new Error('Withdrawal transaction failed');
+      }
+
+      console.log('[Safe] Withdrawal successful');
+      toast.success('Withdrawal successful!', {
+        description: `${amount} USDC sent to your wallet`
+      });
+
+      return true;
+    } catch (error: any) {
+      console.error('[Safe] Withdrawal error:', error);
+      toast.error('Failed to withdraw USDC', {
+        description: error.message || 'Please try again'
+      });
+      return false;
+    } finally {
+      setIsWithdrawing(false);
+    }
+  }, [safeAddress, relayClient, createRelayClient, checkDeployment]);
+
   return {
     safeAddress,
     isDeployed,
@@ -332,6 +400,8 @@ export function useSafeWallet() {
     hasAllowances,
     isSettingAllowances,
     setAllowances,
+    isWithdrawing,
+    withdrawUSDC,
     createRelayClient,
   };
 }
