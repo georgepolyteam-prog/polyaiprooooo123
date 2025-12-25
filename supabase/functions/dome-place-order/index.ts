@@ -174,7 +174,8 @@ serve(async (req) => {
 
     return json(200, {
       success: true,
-      orderID: result.orderID,
+      orderId: result.orderID,  // camelCase for client
+      orderID: result.orderID,  // Also keep original for compatibility
       status: result.status,
       takingAmount: result.takingAmount,
       makingAmount: result.makingAmount,

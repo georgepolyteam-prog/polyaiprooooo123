@@ -38,6 +38,3 @@ verify_jwt = false
 
 [functions.dome-place-order]
 verify_jwt = false
-
-[functions.submit-order]
-verify_jwt = false

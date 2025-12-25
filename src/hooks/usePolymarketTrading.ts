@@ -453,22 +453,25 @@ export function usePolymarketTrading() {
 
           console.log("[Trade] Signed FAK order created:", signedOrder);
 
-          // Submit via backend (matches @polymarket/clob-client signing rules)
+          // Submit via Dome API
           updateStage("submitting-order");
           const { data: submitData, error: submitError } = await supabase.functions.invoke(
-            "submit-order",
+            "dome-place-order",
             {
               body: {
                 signedOrder,
                 orderType: "FAK",
-                apiCreds: creds,
-                signerAddress: address,
+                credentials: {
+                  apiKey: creds.apiKey,
+                  apiSecret: creds.secret,
+                  apiPassphrase: creds.passphrase,
+                },
               },
             }
           );
 
           if (submitError) {
-            const message = submitError.message || "Failed to submit order";
+            const message = submitError.message || "Failed to submit order via Dome";
             throw new Error(message);
           }
 
@@ -483,25 +486,28 @@ export function usePolymarketTrading() {
 
               updateStage("submitting-order");
               const { data: retryData, error: retryError } = await supabase.functions.invoke(
-                "submit-order",
+                "dome-place-order",
                 {
                   body: {
                     signedOrder,
                     orderType: "FAK",
-                    apiCreds: refreshedCreds,
-                    signerAddress: address,
+                    credentials: {
+                      apiKey: refreshedCreds.apiKey,
+                      apiSecret: refreshedCreds.secret,
+                      apiPassphrase: refreshedCreds.passphrase,
+                    },
                   },
                 }
               );
-              if (retryError) throw new Error(retryError.message || "Failed to submit order");
+              if (retryError) throw new Error(retryError.message || "Failed to submit order via Dome");
               if (!retryData?.success) throw new Error(retryData?.error || "Order rejected");
 
-              response = { success: true, orderID: retryData.orderID, id: retryData.orderID, builder: "direct" };
+              response = { success: true, orderID: retryData.orderId, id: retryData.orderId, builder: "dome" };
             } else {
               throw new Error(err);
             }
           } else {
-            response = { success: true, orderID: submitData.orderID, id: submitData.orderID, builder: "direct" };
+            response = { success: true, orderID: submitData.orderId, id: submitData.orderId, builder: "dome" };
           }
         } else {
           // GTC limit orders
@@ -521,19 +527,22 @@ export function usePolymarketTrading() {
 
           updateStage("submitting-order");
           const { data: submitData, error: submitError } = await supabase.functions.invoke(
-            "submit-order",
+            "dome-place-order",
             {
               body: {
                 signedOrder,
                 orderType: "GTC",
-                apiCreds: creds,
-                signerAddress: address,
+                credentials: {
+                  apiKey: creds.apiKey,
+                  apiSecret: creds.secret,
+                  apiPassphrase: creds.passphrase,
+                },
               },
             }
           );
 
           if (submitError) {
-            const message = submitError.message || "Failed to submit order";
+            const message = submitError.message || "Failed to submit order via Dome";
             throw new Error(message);
           }
 
@@ -547,25 +556,28 @@ export function usePolymarketTrading() {
 
               updateStage("submitting-order");
               const { data: retryData, error: retryError } = await supabase.functions.invoke(
-                "submit-order",
+                "dome-place-order",
                 {
                   body: {
                     signedOrder,
                     orderType: "GTC",
-                    apiCreds: refreshedCreds,
-                    signerAddress: address,
+                    credentials: {
+                      apiKey: refreshedCreds.apiKey,
+                      apiSecret: refreshedCreds.secret,
+                      apiPassphrase: refreshedCreds.passphrase,
+                    },
                   },
                 }
               );
-              if (retryError) throw new Error(retryError.message || "Failed to submit order");
+              if (retryError) throw new Error(retryError.message || "Failed to submit order via Dome");
               if (!retryData?.success) throw new Error(retryData?.error || "Order rejected");
 
-              response = { success: true, orderID: retryData.orderID, id: retryData.orderID, builder: "direct" };
+              response = { success: true, orderID: retryData.orderId, id: retryData.orderId, builder: "dome" };
             } else {
               throw new Error(err);
             }
           } else {
-            response = { success: true, orderID: submitData.orderID, id: submitData.orderID, builder: "direct" };
+            response = { success: true, orderID: submitData.orderId, id: submitData.orderId, builder: "dome" };
           }
         }
 
