@@ -7,6 +7,7 @@ import { ExternalLink } from "lucide-react";
 interface MarketTradeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultSide?: 'YES' | 'NO';
   marketData: {
     yesTokenId?: string;
     noTokenId?: string;
@@ -19,7 +20,7 @@ interface MarketTradeModalProps {
   };
 }
 
-export function MarketTradeModal({ open, onOpenChange, marketData }: MarketTradeModalProps) {
+export function MarketTradeModal({ open, onOpenChange, defaultSide, marketData }: MarketTradeModalProps) {
   const isMobile = useIsMobile();
 
   // Guard against null marketData
@@ -47,7 +48,7 @@ export function MarketTradeModal({ open, onOpenChange, marketData }: MarketTrade
       </div>
 
       {/* Trade Panel */}
-      <TradePanel marketData={marketData} />
+      <TradePanel marketData={marketData} defaultSide={defaultSide} />
     </div>
   );
 

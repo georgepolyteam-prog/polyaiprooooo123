@@ -23,19 +23,20 @@ interface TradePanelProps {
     eventSlug?: string;
     marketSlug?: string;
   };
+  defaultSide?: 'YES' | 'NO';
 }
 
 // Polygon mainnet chain ID
 const POLYGON_CHAIN_ID = 137;
 
-export function TradePanel({ marketData }: TradePanelProps) {
+export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps) {
   const { address, isConnected } = useAccount();
   const { open } = useWeb3Modal();
   const chainId = useChainId();
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
   
   const [amount, setAmount] = useState('');
-  const [selectedSide, setSelectedSide] = useState<'YES' | 'NO'>('YES');
+  const [selectedSide, setSelectedSide] = useState<'YES' | 'NO'>(defaultSide);
   const [isMarketOrder, setIsMarketOrder] = useState(true);
   const [limitPrice, setLimitPrice] = useState('');
 
