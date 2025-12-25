@@ -26,32 +26,45 @@ function safeParseCreds(raw: string | null): PolymarketApiCreds | null {
   }
 }
 
+export type GetApiCredsOptions = {
+  funderAddress?: string; // Safe address when using Safe wallet
+};
+
 export function usePolymarketApiCreds() {
   const { address } = useAccount();
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // Cached credentials for EOA (default) - Safe credentials checked dynamically
   const cached = useMemo(() => {
     if (!address) return null;
     return safeParseCreds(localStorage.getItem(`${STORAGE_KEY}:${address.toLowerCase()}`));
   }, [address]);
 
-  const clearApiCreds = useCallback(() => {
-    if (!address) return;
-    localStorage.removeItem(`${STORAGE_KEY}:${address.toLowerCase()}`);
-    toast.message("Cleared Polymarket API credentials for this wallet");
+  const clearApiCreds = useCallback((targetAddress?: string) => {
+    const addrToClear = targetAddress || address;
+    if (!addrToClear) return;
+    localStorage.removeItem(`${STORAGE_KEY}:${addrToClear.toLowerCase()}`);
+    toast.message("Cleared Polymarket API credentials");
   }, [address]);
 
-  const getApiCreds = useCallback(async (): Promise<PolymarketApiCreds | null> => {
+  const getApiCreds = useCallback(async (opts?: GetApiCredsOptions): Promise<PolymarketApiCreds | null> => {
     if (!address) {
       toast.error("Connect your wallet first");
       return null;
     }
 
-    // Check for existing cached credentials
-    const existing = safeParseCreds(localStorage.getItem(`${STORAGE_KEY}:${address.toLowerCase()}`));
+    // Determine target address: Safe address (if provided) or EOA
+    const targetAddress = opts?.funderAddress || address;
+    const usingSafe = !!opts?.funderAddress && opts.funderAddress.toLowerCase() !== address.toLowerCase();
+    const cacheKey = `${STORAGE_KEY}:${targetAddress.toLowerCase()}`;
+
+    console.log("[API Creds] Target address:", targetAddress, "Using Safe:", usingSafe);
+
+    // Check for existing cached credentials for this target
+    const existing = safeParseCreds(localStorage.getItem(cacheKey));
     if (existing) {
-      console.log("[API Creds] Using cached credentials for:", address);
+      console.log("[API Creds] Using cached credentials for:", targetAddress);
       return existing;
     }
 
@@ -73,29 +86,38 @@ export function usePolymarketApiCreds() {
         throw new Error("Please switch to Polygon network first");
       }
 
-      console.log("[API Creds] Creating ClobClient for L1 auth...");
-      toast.info("Polymarket setup: please sign to enable trading (one-time per wallet)");
+      const signatureType = usingSafe ? 2 : 0; // 2 = POLY_GNOSIS_SAFE, 0 = EOA
+      console.log("[API Creds] Creating ClobClient with signatureType:", signatureType);
+      
+      if (usingSafe) {
+        toast.info("Polymarket setup: please sign to enable trading for your Safe wallet");
+      } else {
+        toast.info("Polymarket setup: please sign to enable trading (one-time per wallet)");
+      }
 
-      // Create ClobClient without credentials - it will use L1 auth
-      // The ClobClient uses ethers internally which produces correct EIP-712 signatures
+      // Create ClobClient with correct signatureType and funderAddress
+      // For Safe wallets (signatureType 2), the funderAddress is the Safe address
+      // The EOA signs to derive API keys linked to the Safe address
       const client = new ClobClient(
         CLOB_HOST,
         POLYGON_CHAIN_ID,
-        signer
+        signer,
+        undefined, // No existing creds - will derive
+        signatureType,
+        usingSafe ? targetAddress : undefined // funderAddress for Safe
       );
 
       // Use ClobClient's built-in method to create or derive API credentials
-      // This handles all the EIP-712 signing correctly using ethers
-      console.log("[API Creds] Calling createOrDeriveApiKey...");
+      // For Safe wallets, this derives keys linked to the Safe address
+      console.log("[API Creds] Calling createOrDeriveApiKey for:", targetAddress);
       const apiKeyCreds = await client.createOrDeriveApiKey();
 
       // ClobClient returns ApiKeyCreds with { key, secret, passphrase }
-      // We map to our internal format { apiKey, secret, passphrase }
       if (!apiKeyCreds || !apiKeyCreds.key || !apiKeyCreds.secret || !apiKeyCreds.passphrase) {
         throw new Error("Failed to create/derive API credentials - empty response");
       }
 
-      console.log("[API Creds] Successfully created/derived API credentials");
+      console.log("[API Creds] Successfully created/derived API credentials for:", targetAddress);
 
       // Map to our internal format (key -> apiKey)
       const creds: PolymarketApiCreds = {
@@ -104,13 +126,10 @@ export function usePolymarketApiCreds() {
         passphrase: apiKeyCreds.passphrase,
       };
 
-      // Cache the credentials
-      localStorage.setItem(
-        `${STORAGE_KEY}:${address.toLowerCase()}`, 
-        JSON.stringify(creds)
-      );
+      // Cache credentials keyed by target address (Safe or EOA)
+      localStorage.setItem(cacheKey, JSON.stringify(creds));
 
-      toast.success("Trading enabled for this wallet");
+      toast.success(usingSafe ? "Trading enabled for Safe wallet" : "Trading enabled for this wallet");
       return creds;
     } catch (e: unknown) {
       console.error("[API Creds] Error:", e);
@@ -129,11 +148,12 @@ export function usePolymarketApiCreds() {
   }, [address]);
 
   // Force refresh credentials (clear cache and re-derive)
-  const refreshApiCreds = useCallback(async (): Promise<PolymarketApiCreds | null> => {
+  const refreshApiCreds = useCallback(async (opts?: GetApiCredsOptions): Promise<PolymarketApiCreds | null> => {
     if (!address) return null;
-    console.log("[API Creds] Forcing credential refresh for:", address);
-    localStorage.removeItem(`${STORAGE_KEY}:${address.toLowerCase()}`);
-    return await getApiCreds();
+    const targetAddress = opts?.funderAddress || address;
+    console.log("[API Creds] Forcing credential refresh for:", targetAddress);
+    localStorage.removeItem(`${STORAGE_KEY}:${targetAddress.toLowerCase()}`);
+    return await getApiCreds(opts);
   }, [address, getApiCreds]);
 
   return {
