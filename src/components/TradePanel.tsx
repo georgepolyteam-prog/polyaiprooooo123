@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, Shield, Copy, Coins } from 'lucide-react';
+import { TradeProgressOverlay } from './TradeProgressOverlay';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { buildPolymarketTradeUrl } from '@/lib/polymarket-trade';
@@ -49,7 +50,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
   // Trading hooks
   const { isLinked, isLinking, linkUser, checkLinkStatus } = usePolymarketLink();
-  const { placeOrder, isPlacingOrder } = usePolymarketTrading();
+  const { placeOrder, isPlacingOrder, tradeStage, tradeStageMessage } = usePolymarketTrading();
   
   // Safe wallet hooks
   const { 
@@ -282,7 +283,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const noPrice = ((1 - marketData.currentPrice) * 100).toFixed(1);
 
   return (
-    <div className="relative rounded-2xl overflow-hidden">
+    <>
+      {/* Trade Progress Overlay */}
+      <TradeProgressOverlay 
+        tradeStage={tradeStage} 
+        tradeStageMessage={tradeStageMessage}
+        selectedSide={selectedSide}
+      />
+      
+      <div className="relative rounded-2xl overflow-hidden">
       {/* Animated background gradient */}
       <div className={cn(
         "absolute inset-0 opacity-30 transition-all duration-500",
@@ -1073,5 +1082,6 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -43,6 +43,30 @@ const erc1155BalanceAbi = [
 
 const MIN_ORDER_SIZE = 5; // Polymarket minimum order size
 
+// Trade stage state machine for progress UI
+export type TradeStage = 
+  | "idle" 
+  | "switching-network" 
+  | "checking-balance" 
+  | "getting-credentials"
+  | "fetching-market"
+  | "signing-order" 
+  | "submitting-order" 
+  | "completed" 
+  | "error";
+
+const TRADE_STAGE_MESSAGES: Record<TradeStage, string> = {
+  "idle": "",
+  "switching-network": "Switching to Polygon network...",
+  "checking-balance": "Checking balances and approvals...",
+  "getting-credentials": "Initializing trading session...",
+  "fetching-market": "Fetching market parameters...",
+  "signing-order": "Please sign the order in your wallet...",
+  "submitting-order": "Submitting order to Polymarket...",
+  "completed": "Order placed successfully!",
+  "error": "Order failed",
+};
+
 export type TradeParams = {
   tokenId: string;
   side: "BUY" | "SELL";
@@ -94,8 +118,18 @@ export function usePolymarketTrading() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
   const [clobClient, setClobClient] = useState<ClobClient | null>(null);
+  
+  // Trade stage state for progress UI
+  const [tradeStage, setTradeStage] = useState<TradeStage>("idle");
+  const [tradeStageMessage, setTradeStageMessage] = useState("");
 
   const isOnPolygon = chainId === POLYGON_CHAIN_ID;
+
+  // Helper to update trade stage
+  const updateStage = useCallback((stage: TradeStage, customMessage?: string) => {
+    setTradeStage(stage);
+    setTradeStageMessage(customMessage || TRADE_STAGE_MESSAGES[stage]);
+  }, []);
 
   const switchToPolygon = useCallback(async () => {
     try {
@@ -126,9 +160,10 @@ export function usePolymarketTrading() {
     const signatureType = useSafe ? 2 : 0;
     const funderAddress = useSafe ? safeAddress : address;
 
-    // CRITICAL: Get API credentials for the MAKER address (Safe or EOA)
-    // When using Safe, credentials must be derived for the Safe address, not the EOA
-    console.log("[Trade] Initializing API credentials for:", funderAddress);
+    // Get API credentials - ALWAYS derived for EOA (the signer)
+    // The funderAddress is only passed for ClobClient initialization context
+    console.log("[Trade] Initializing API credentials for EOA:", address);
+    console.log("[Trade] Funder (maker) address:", funderAddress);
     const creds = await getApiCreds({ funderAddress: useSafe ? safeAddress : undefined });
 
     if (!creds || !creds.apiKey || !creds.secret || !creds.passphrase) {
@@ -203,19 +238,23 @@ export function usePolymarketTrading() {
 
       setIsPlacingOrder(true);
       setLastOrderResult(null);
+      updateStage("idle");
 
       try {
         // Step 1: Switch network if needed (placing orders requires Polygon)
         if (!isOnPolygon) {
-          toast.info("Switching to Polygon network...");
+          updateStage("switching-network");
           const switched = await switchToPolygon();
           if (!switched) {
+            updateStage("error", "Failed to switch network");
             return { success: false, error: "Failed to switch network" };
           }
         }
 
         // Step 2: Check balance (only for BUY orders - selling doesn't require USDC)
+        updateStage("checking-balance");
         if (params.side === "BUY" && !hasSufficientBalance(params.amount)) {
+          updateStage("error", "Insufficient USDC balance");
           toast.error("Insufficient USDC balance");
           return { success: false, error: "Insufficient balance" };
         }
@@ -223,6 +262,7 @@ export function usePolymarketTrading() {
         // Step 2b: Check minimum order size
         const estimatedSize = params.amount / params.price;
         if (estimatedSize < MIN_ORDER_SIZE) {
+          updateStage("error", `Minimum order size is ${MIN_ORDER_SIZE} shares`);
           toast.error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
           return {
             success: false,
@@ -238,6 +278,7 @@ export function usePolymarketTrading() {
         if (!allApprovalsComplete) {
           // For Safe wallets, this shouldn't happen as allowances are set via relay
           if (isDeployed) {
+            updateStage("error", "Please set allowances first");
             toast.error("Please set allowances first (Step 4 in TradePanel)");
             return { success: false, error: "Allowances not set" };
           }
@@ -245,14 +286,17 @@ export function usePolymarketTrading() {
           toast.info("Approving tokens...");
           const approved = await approveUSDC();
           if (!approved) {
+            updateStage("error", "Approval failed");
             return { success: false, error: "Approval failed" };
           }
         }
 
         // Step 4: Create/reuse CLOB client
+        updateStage("getting-credentials");
         const client = await getOrCreateClient();
 
         // Step 5: Fetch market parameters dynamically (CRITICAL for correct signatures)
+        updateStage("fetching-market");
         console.log("[Trade] Fetching market parameters for tokenId:", params.tokenId);
         const [negRisk, tickSize] = await Promise.all([
           client.getNegRisk(params.tokenId),
@@ -265,6 +309,7 @@ export function usePolymarketTrading() {
         let size = Math.round((params.amount / validatedPrice) * 100) / 100;
 
         if (size < MIN_ORDER_SIZE) {
+          updateStage("error", `Order size ${size.toFixed(2)} is below minimum`);
           throw new Error(
             `Order size ${size.toFixed(2)} is below minimum of ${MIN_ORDER_SIZE} shares`
           );
@@ -272,7 +317,7 @@ export function usePolymarketTrading() {
 
         // Step 7: SELL-specific checks (on-chain balance + allowance sync)
         if (params.side === "SELL") {
-          toast.info("Checking share balance...");
+          updateStage("checking-balance", "Checking share balance...");
 
           // Verify actual on-chain ERC1155 balance for this conditional token
           // CRITICAL: Use the correct contract based on negRisk status
@@ -369,8 +414,6 @@ export function usePolymarketTrading() {
               throw new Error(`Not enough shares to sell. Have: ${balanceShares.toFixed(2)}, Need: ${size.toFixed(2)}`);
             }
           }
-          
-          toast.info("Balance confirmed, placing sell order...");
         }
 
         console.log(
@@ -378,15 +421,16 @@ export function usePolymarketTrading() {
         );
 
         // Step 8: Use SDK methods which handle signing + posting
-        toast.info("Please sign the order in your wallet...");
+        updateStage("signing-order");
 
         let response;
 
         // Get API credentials for Dome order placement
-        // CRITICAL: Use Safe address as funderAddress when using Safe wallet
+        // CRITICAL: Credentials are always for EOA (the signer), funderAddress is for context only
         const useSafeWallet = isDeployed && safeAddress;
         const creds = await getApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
         if (!creds || !creds.apiKey || !creds.secret || !creds.passphrase) {
+          updateStage("error", "Failed to get API credentials");
           throw new Error("Failed to get API credentials");
         }
 
@@ -415,6 +459,7 @@ export function usePolymarketTrading() {
           console.log("[Trade] 🏗️ Signed FAK order created:", domeSignedOrder);
           
           // Submit to Dome API via edge function with FAK order type
+          updateStage("submitting-order");
           const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -472,8 +517,6 @@ export function usePolymarketTrading() {
             { tickSize, negRisk }
           );
           
-          ;
-          
           // Convert numeric side to string for Dome API (0 = BUY, 1 = SELL)
           const domeSignedOrder = {
             ...signedOrder,
@@ -483,6 +526,7 @@ export function usePolymarketTrading() {
           console.log("[Trade] 🏗️ Signed GTC order created:", domeSignedOrder);
           
           // Step 2: Submit to Dome API via edge function
+          updateStage("submitting-order");
           const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -580,6 +624,7 @@ export function usePolymarketTrading() {
         };
 
         setLastOrderResult(orderResult);
+        updateStage("completed");
         toast.success(`Order placed! ID: ${orderResult.orderId?.slice(0, 10)}...`);
 
         // Fetch and log builder trades for attribution tracking
@@ -608,6 +653,7 @@ export function usePolymarketTrading() {
             "No buyers available at current price. Try a limit order instead.";
         }
 
+        updateStage("error", errorMessage);
         toast.error(errorMessage);
 
         const result: OrderResult = { success: false, error: errorMessage };
@@ -615,6 +661,12 @@ export function usePolymarketTrading() {
         return result;
       } finally {
         setIsPlacingOrder(false);
+        // Reset stage after a short delay so user can see the result
+        setTimeout(() => {
+          if (tradeStage === "completed" || tradeStage === "error") {
+            updateStage("idle");
+          }
+        }, 2000);
       }
     },
     [
@@ -630,6 +682,10 @@ export function usePolymarketTrading() {
       publicClient,
       isDeployed,
       safeAddress,
+      updateStage,
+      tradeStage,
+      getApiCreds,
+      hasAllowances,
     ]
   );
 
@@ -645,5 +701,8 @@ export function usePolymarketTrading() {
     address,
     safeAddress,
     deploySafe,
+    // Trade progress state for UI
+    tradeStage,
+    tradeStageMessage,
   };
 }
