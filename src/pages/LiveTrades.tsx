@@ -112,6 +112,10 @@ export default function LiveTrades() {
   const pendingSlugsRef = useRef<Set<string>>(new Set());
   const imageFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Connection timeout constant (10 seconds)
+  const CONNECTION_TIMEOUT_MS = 10000;
 
   // Initialize audio
   useEffect(() => {
@@ -219,28 +223,54 @@ export default function LiveTrades() {
   const connectWebSocket = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+    // Clear any existing connection timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+
     try {
       if (!wsUrlRef.current) {
         setLoading(true);
+        setError(null);
+        
+        // Set connection timeout
+        connectionTimeoutRef.current = setTimeout(() => {
+          if (loading && !connected) {
+            console.log('Connection timeout reached');
+            setLoading(false);
+            setError('Connection timed out. Please try again.');
+          }
+        }, CONNECTION_TIMEOUT_MS);
+        
         const { data, error } = await supabase.functions.invoke('dome-ws-url');
         
         if (error || !data?.wsUrl) {
           console.error('Failed to get WebSocket URL:', error);
-          setError('Failed to connect to trade feed');
+          setError('Failed to connect to trade feed. Please try again.');
           setLoading(false);
+          if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+          }
           return;
         }
         wsUrlRef.current = data.wsUrl;
       }
 
-      setLoading(false);
-      setError(null);
-      
       const ws = new WebSocket(wsUrlRef.current);
 
       ws.onopen = () => {
         console.log('WebSocket connected to Dome');
         setConnected(true);
+        setLoading(false);
+        setError(null);
+        
+        // Clear connection timeout on successful connection
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        
         lastMessageTimeRef.current = Date.now();
         tradeCounterRef.current = { count: 0, startTime: Date.now() };
         
@@ -307,6 +337,8 @@ export default function LiveTrades() {
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         setConnected(false);
+        setLoading(false);
+        setError('WebSocket connection error. Retrying...');
       };
 
       ws.onclose = (event) => {
@@ -314,7 +346,13 @@ export default function LiveTrades() {
         setConnected(false);
         wsRef.current = null;
         
+        // Only set error if it wasn't a clean close
+        if (event.code !== 1000 && event.code !== 4000) {
+          setError('Connection lost. Reconnecting...');
+        }
+        
         reconnectTimeoutRef.current = setTimeout(() => {
+          setError(null);
           connectWebSocket();
         }, 2000);
       };
@@ -322,10 +360,13 @@ export default function LiveTrades() {
       wsRef.current = ws;
     } catch (err) {
       console.error('Error connecting to WebSocket:', err);
-      setError('Failed to connect to trade feed');
+      setError('Failed to connect to trade feed. Please try again.');
       setLoading(false);
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
     }
-  }, [paused, queueImageFetch, showWhaleAlert]);
+  }, [paused, loading, connected, queueImageFetch, showWhaleAlert]);
 
   // Watchdog
   useEffect(() => {
@@ -378,6 +419,9 @@ export default function LiveTrades() {
       }
       if (imageFetchTimeoutRef.current) {
         clearTimeout(imageFetchTimeoutRef.current);
+      }
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
       }
     };
   }, [connectWebSocket]);
@@ -866,10 +910,27 @@ export default function LiveTrades() {
             )}
 
             {/* Loading State */}
-            {loading && (
+            {loading && !error && (
               <div className="text-center py-20">
                 <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-muted-foreground">Connecting to live feed...</p>
+                <p className="text-muted-foreground/60 text-xs mt-2">This may take a few seconds</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="text-center py-20">
+                <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
+                <p className="text-destructive font-medium">{error}</p>
+                <Button onClick={() => {
+                  wsUrlRef.current = null;
+                  setError(null);
+                  connectWebSocket();
+                }} variant="outline" className="mt-4 gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  Try Again
+                </Button>
               </div>
             )}
           </div>
