@@ -137,11 +137,16 @@ serve(async (req) => {
     }
 
     // Route order through Dome API for builder attribution
+    // Try both header formats - some APIs use X-API-KEY, others use Authorization: Bearer
+    console.log(`[dome-place-order] Using Dome API key (first 8 chars): ${domeApiKey.substring(0, 8)}...`);
+    
     const domeResponse = await fetch(`${DOME_API_URL}/polymarket/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${domeApiKey}`,
         'X-API-KEY': domeApiKey,
+        'x-api-key': domeApiKey,
         'POLY-API-KEY': creds.api_key,
         'POLY-API-SECRET': creds.api_secret,
         'POLY-API-PASSPHRASE': creds.api_passphrase,
@@ -152,6 +157,8 @@ serve(async (req) => {
         size: size.toString(),
         price: price.toString(),
         order_type: orderType,
+        // Include funder address (the wallet that holds USDC)
+        funder_address: walletAddress,
       }),
     });
 
