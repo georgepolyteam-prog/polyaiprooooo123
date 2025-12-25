@@ -178,6 +178,7 @@ serve(async (req) => {
       orderID: result.orderID || result.id,
       order: result,
     });
+  } catch (error) {
     console.error("[Submit Order] Error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
     return json(500, { error: message, success: false });
