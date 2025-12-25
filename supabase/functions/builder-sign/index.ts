@@ -89,6 +89,8 @@ serve(async (req) => {
     }
 
     // 2) Builder program: proxy to Dome's official builder-signer service
+    // NOTE: This is OPTIONAL and non-blocking for trades. 
+    // If this fails (401), trades still work - builder attribution just won't be recorded.
     const { method, path, body, timestamp } = payload as BuilderSignPayload;
     
     if (!method || !path) {
@@ -97,23 +99,42 @@ serve(async (req) => {
 
     console.log("[BUILDER-SIGN] Proxying to Dome builder-signer:", method, path);
 
-    // Forward the request to Dome's builder-signer
-    const domeResponse = await fetch(DOME_BUILDER_SIGNER_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method, path, body, timestamp }),
-    });
+    try {
+      // Forward the request to Dome's builder-signer
+      const domeResponse = await fetch(DOME_BUILDER_SIGNER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method, path, body, timestamp }),
+      });
 
-    if (!domeResponse.ok) {
-      const errorText = await domeResponse.text();
-      console.error("[BUILDER-SIGN] Dome builder-signer error:", domeResponse.status, errorText);
-      return json(domeResponse.status, { error: errorText || "Dome builder-signer error" });
+      if (!domeResponse.ok) {
+        const errorText = await domeResponse.text();
+        // Log the error but return a graceful response
+        // This is non-blocking - trades will still work without builder attribution
+        console.warn("[BUILDER-SIGN] Dome builder-signer returned", domeResponse.status, ":", errorText.slice(0, 200));
+        console.warn("[BUILDER-SIGN] Builder attribution skipped - this is non-blocking, trades will still work");
+        
+        // Return empty headers so the calling code can proceed without builder attribution
+        return json(200, { 
+          skipped: true, 
+          reason: `Dome returned ${domeResponse.status}`,
+          message: "Builder attribution skipped - trades will still work"
+        });
+      }
+
+      const domeHeaders = await domeResponse.json();
+      console.log("[BUILDER-SIGN] Dome builder-signer success, headers received");
+
+      return json(200, domeHeaders);
+    } catch (domeError: unknown) {
+      // Network or other error - log and return graceful response
+      console.warn("[BUILDER-SIGN] Dome builder-signer error (non-blocking):", domeError);
+      return json(200, { 
+        skipped: true, 
+        reason: "Network error",
+        message: "Builder attribution skipped - trades will still work"
+      });
     }
-
-    const domeHeaders = await domeResponse.json();
-    console.log("[BUILDER-SIGN] Dome builder-signer success, headers received");
-
-    return json(200, domeHeaders);
   } catch (error: unknown) {
     console.error("[BUILDER-SIGN] Error:", error);
     return json(500, { error: "Internal server error" });

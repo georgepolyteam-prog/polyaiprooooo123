@@ -101,7 +101,8 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[Positions] Fetching data for: ${address}`);
+    // Log which type of address is being queried
+    console.log(`[Positions] Fetching data for address: ${address}`);
     
     // Build user creds object if provided
     const userCreds: UserApiCreds | null = (userApiKey && userSecret && userPassphrase) 
@@ -115,6 +116,7 @@ serve(async (req) => {
     }
 
     // Fetch positions from Data API (public, no auth required)
+    // This works for both EOA and Safe addresses
     const positionsPromise = fetchPositions(address);
     
     // Fetch open orders from CLOB API (requires user's auth)
@@ -127,7 +129,7 @@ serve(async (req) => {
     const totalUnrealizedPnl = positions.reduce((sum, p) => sum + (p.cashPnl || 0), 0);
     const totalRealizedPnl = positions.reduce((sum, p) => sum + (p.realizedPnl || 0), 0);
 
-    console.log(`[Positions] Found ${positions.length} positions, ${openOrders.length} open orders`);
+    console.log(`[Positions] Found ${positions.length} positions, ${openOrders.length} open orders for ${address}`);
 
     return new Response(
       JSON.stringify({
