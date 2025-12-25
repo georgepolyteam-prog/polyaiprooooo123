@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
   const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked;
+
+  // Debug logging for trading state
+  useEffect(() => {
+    console.log('[TradePanel] State:', { 
+      isConnected, isWrongNetwork, isLinked, isFullyApproved, 
+      hasYesToken, hasNoToken, selectedSide, canDirectTrade,
+      amount, balance
+    });
+  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -309,75 +318,82 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Link wallet notice - required before trading */}
+        {/* Link wallet notice - required before trading - PROMINENT */}
         <AnimatePresence>
           {isConnected && !isWrongNetwork && !isLinked && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="flex items-start gap-2 p-3 rounded-xl bg-primary/10 border border-primary/30 backdrop-blur-sm"
+              className="p-4 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border-2 border-primary/50 backdrop-blur-sm"
             >
-              <Link2 className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs text-primary/80 mb-2">
-                  Link your wallet to enable trading. Sign once, trade forever!
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleLinkWallet}
-                  disabled={isLinking}
-                  className="text-xs border-primary/30 text-primary hover:bg-primary/20"
-                >
-                  {isLinking ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                      Linking...
-                    </>
-                  ) : (
-                    <>
-                      <Link2 className="w-3 h-3 mr-1" />
-                      Link Wallet
-                    </>
-                  )}
-                </Button>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Link2 className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-primary text-sm">Step 1 of 3: Link Wallet</p>
+                  <p className="text-xs text-primary/70">Sign once to enable trading forever</p>
+                </div>
               </div>
+              <Button
+                size="default"
+                onClick={handleLinkWallet}
+                disabled={isLinking}
+                className="w-full"
+              >
+                {isLinking ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Linking Wallet...
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-4 h-4 mr-2" />
+                    Link Wallet to Trade
+                  </>
+                )}
+              </Button>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Approval required notice */}
+        {/* Approval required notice - PROMINENT */}
         <AnimatePresence>
           {isConnected && !isWrongNetwork && isLinked && !isFullyApproved && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="flex items-start gap-2 p-3 rounded-xl bg-primary/10 border border-primary/30 backdrop-blur-sm"
+              className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border-2 border-amber-500/50 backdrop-blur-sm"
             >
-              <AlertCircle className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs text-primary/80 mb-2">
-                  USDC approval required for trading.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={approveUSDC}
-                  disabled={isApproving}
-                  className="text-xs border-primary/30 text-primary hover:bg-primary/20"
-                >
-                  {isApproving ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                      Approving...
-                    </>
-                  ) : (
-                    'Approve USDC'
-                  )}
-                </Button>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-200 text-sm">Step 2 of 3: Approve USDC</p>
+                  <p className="text-xs text-amber-300/70">One-time approval to enable trading</p>
+                </div>
               </div>
+              <Button
+                size="default"
+                onClick={approveUSDC}
+                disabled={isApproving}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+              >
+                {isApproving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Approving USDC...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Approve USDC for Trading
+                  </>
+                )}
+              </Button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -679,56 +695,78 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Direct Trade Button */}
-        <AnimatePresence>
-          {canDirectTrade && isFullyApproved && (selectedSide === 'YES' || hasNoToken) && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              {/* Insufficient balance warning */}
-              {amount && parseFloat(amount) > 0 && !hasSufficientBalance(parseFloat(amount)) && (
-                <p className="text-xs text-destructive mb-2 text-center">
-                  Insufficient balance. You need ${parseFloat(amount).toFixed(2)} USDC.
-                </p>
-              )}
-              <motion.button
-                onClick={handleShowConfirmation}
-                disabled={isPlacingOrder || !amount || parseFloat(amount) <= 0 || !hasSufficientBalance(parseFloat(amount) || 0)}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className={cn(
-                  "relative w-full py-4 rounded-xl font-bold text-lg text-white overflow-hidden",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                  "transition-all duration-300",
-                  selectedSide === 'YES'
-                    ? "trade-cta-yes"
-                    : "trade-cta-no"
-                )}
-              >
-                {/* Animated shimmer */}
-                <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" />
-                </div>
-                
-                <span className="relative flex items-center justify-center gap-2">
-                  {isPlacingOrder ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Placing Order...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-5 h-5" />
-                      {isMarketOrder ? 'Market' : 'Limit'} {selectedSide}
-                    </>
+        {/* Direct Trade Button - ALWAYS VISIBLE when connected */}
+        {isConnected && !isWrongNetwork && (
+          <div>
+            {/* Determine button state */}
+            {(() => {
+              const amountNum = parseFloat(amount) || 0;
+              const hasAmount = amountNum > 0;
+              const hasBalance = hasSufficientBalance(amountNum);
+              const canTrade = isLinked && isFullyApproved && hasAmount && hasBalance && (selectedSide === 'YES' || hasNoToken);
+              
+              // Determine disabled reason
+              let disabledReason = '';
+              if (!isLinked) disabledReason = 'Link wallet first (Step 1)';
+              else if (!isFullyApproved) disabledReason = 'Approve USDC first (Step 2)';
+              else if (!hasAmount) disabledReason = 'Enter an amount';
+              else if (!hasBalance) disabledReason = `Insufficient balance ($${balance.toFixed(2)} available)`;
+              else if (selectedSide === 'NO' && !hasNoToken) disabledReason = 'NO token not available';
+              
+              return (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  {/* Insufficient balance warning */}
+                  {hasAmount && !hasBalance && isLinked && isFullyApproved && (
+                    <p className="text-xs text-destructive mb-2 text-center">
+                      Insufficient balance. You need ${amountNum.toFixed(2)} USDC.
+                    </p>
                   )}
-                </span>
-              </motion.button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  
+                  <motion.button
+                    onClick={canTrade ? handleShowConfirmation : undefined}
+                    disabled={!canTrade || isPlacingOrder}
+                    whileHover={canTrade ? { scale: 1.01 } : {}}
+                    whileTap={canTrade ? { scale: 0.99 } : {}}
+                    className={cn(
+                      "relative w-full py-4 rounded-xl font-bold text-lg overflow-hidden",
+                      "disabled:opacity-50 disabled:cursor-not-allowed",
+                      "transition-all duration-300",
+                      canTrade 
+                        ? (selectedSide === 'YES' ? "trade-cta-yes text-white" : "trade-cta-no text-white")
+                        : "bg-muted/50 border border-border/50 text-muted-foreground"
+                    )}
+                  >
+                    {/* Animated shimmer - only when enabled */}
+                    {canTrade && (
+                      <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" />
+                      </div>
+                    )}
+                    
+                    <span className="relative flex items-center justify-center gap-2">
+                      {isPlacingOrder ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Placing Order...
+                        </>
+                      ) : canTrade ? (
+                        <>
+                          <Zap className="w-5 h-5" />
+                          {isMarketOrder ? 'Market' : 'Limit'} {selectedSide}
+                        </>
+                      ) : (
+                        <span className="text-sm">{disabledReason || 'Place Order'}</span>
+                      )}
+                    </span>
+                  </motion.button>
+                </motion.div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Order Confirmation Dialog */}
         <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
