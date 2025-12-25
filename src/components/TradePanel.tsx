@@ -87,8 +87,12 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
   // Validate order before showing confirmation
   const validateOrder = () => {
+    console.log('[TradePanel] validateOrder called', { selectedSide, marketData });
+    
     const yesToken = marketData.yesTokenId || marketData.tokenId;
     const noToken = marketData.noTokenId;
+    
+    console.log('[TradePanel] Token check:', { yesToken, noToken, selectedSide });
     
     if (selectedSide === 'YES' && !yesToken) {
       toast.error('YES token ID not available for direct trading');
@@ -122,6 +126,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     const expectedShares = amountNum / Math.max(orderPrice, 0.01);
     const MIN_SHARES = 5;
     
+    console.log('[TradePanel] Share calculation:', { expectedShares, MIN_SHARES, orderPrice, amountNum });
+    
     if (expectedShares < MIN_SHARES) {
       const minAmount = Math.ceil(MIN_SHARES * orderPrice * 100) / 100;
       toast.error(`Minimum order is ${MIN_SHARES} shares (~$${minAmount.toFixed(2)} at ${isMarketOrder ? 'current' : 'limit'} price)`);
@@ -133,11 +139,16 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
       return false;
     }
 
+    console.log('[TradePanel] Validation passed!');
     return true;
   };
 
   const handleShowConfirmation = () => {
-    if (validateOrder()) {
+    console.log('[TradePanel] handleShowConfirmation called');
+    const isValid = validateOrder();
+    console.log('[TradePanel] Validation result:', isValid);
+    if (isValid) {
+      console.log('[TradePanel] Setting showConfirmation to true');
       setShowConfirmation(true);
     }
   };
@@ -807,9 +818,9 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           </div>
         )}
 
-        {/* Order Confirmation Dialog */}
-        <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-          <DialogContent className="sm:max-w-md">
+        {/* Order Confirmation Dialog - Portal to body with high z-index */}
+        <Dialog open={showConfirmation} onOpenChange={setShowConfirmation} modal={true}>
+          <DialogContent className="sm:max-w-md" elevated>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 {selectedSide === 'YES' ? (
