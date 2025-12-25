@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, TrendingUp, MessageSquare, Wallet, Menu, X, Settings, HelpCircle, FileText } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Settings, HelpCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
-  { id: "live-trades", label: "Live", icon: TrendingUp, path: "/live-trades" },
+  { id: "traders", label: "Traders", icon: Users, path: "/leaderboard" },
   { id: "chat", label: "Chat", icon: MessageSquare, path: "/", isCenter: true },
   { id: "my-trades", label: "Trades", icon: Wallet, path: "/my-trades" },
   { id: "menu", label: "Menu", icon: Menu, path: null },
@@ -13,7 +13,7 @@ const navItems = [
 
 const menuItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
-  { id: "live-trades", label: "Live Trades", icon: TrendingUp, path: "/live-trades" },
+  { id: "traders", label: "Traders", icon: Users, path: "/leaderboard" },
   { id: "chat", label: "Chat (Home)", icon: MessageSquare, path: "/" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
 ];

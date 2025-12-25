@@ -114,15 +114,15 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               {/* Markets Dropdown - includes Dashboard */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`text-sm gap-2 rounded-lg transition-all ${
-                      isActive("/markets") || isActive("/my-trades") || isActive("/dashboard") || isActive("/trades")
-                        ? "text-black bg-white"
-                        : "text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`text-sm gap-2 rounded-lg transition-all ${
+                        isActive("/markets") || isActive("/my-trades") || isActive("/dashboard")
+                          ? "text-black bg-white"
+                          : "text-gray-400 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
                     <Store className="w-4 h-4" />
                     Markets
                     <ChevronDown className="w-3 h-3" />
@@ -135,14 +135,6 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                     >
                       <Store className="w-4 h-4" />
                       Browse Markets
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link to="/trades">
-                    <DropdownMenuItem
-                      className={`gap-2 cursor-pointer ${isActive("/trades") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
-                    >
-                      <Activity className="w-4 h-4" />
-                      Live Trades
                     </DropdownMenuItem>
                   </Link>
                   <Link to="/dashboard">
@@ -395,17 +387,6 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   >
                     <Store className="w-5 h-5" />
                     Browse Markets
-                  </Button>
-                </Link>
-                <Link to="/trades" onClick={() => setMobileMenuOpen(false)}>
-                  <Button
-                    variant="ghost"
-                    className={`w-full justify-start gap-3 pl-8 ${
-                      isActive("/trades") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <Activity className="w-5 h-5" />
-                    Live Trades
                   </Button>
                 </Link>
                 <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
