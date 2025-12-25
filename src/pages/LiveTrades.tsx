@@ -94,6 +94,7 @@ export default function LiveTrades() {
   // Trade modal state (lifted from TradeDetailModal)
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [tradeMarketData, setTradeMarketData] = useState<TradeableMarketData | null>(null);
+  const [tradeDefaultSide, setTradeDefaultSide] = useState<'YES' | 'NO'>('YES');
   
   // Analysis modal for trade detail (lifted from TradeDetailModal)
   const [tradeAnalysisModalOpen, setTradeAnalysisModalOpen] = useState(false);
@@ -971,7 +972,7 @@ export default function LiveTrades() {
           <TradeDetailModal
             trade={selectedTrade}
             onClose={() => setSelectedTrade(null)}
-            onTrade={async (marketUrl) => {
+            onTrade={async (marketUrl, trade, side) => {
               const res = await fetchTradeableMarketData(marketUrl);
               if (res.ok === false) {
                 if (res.reason === 'needs_market_selection') {
@@ -987,6 +988,7 @@ export default function LiveTrades() {
                 return;
               }
               setTradeMarketData(res.data);
+              setTradeDefaultSide(side);
               setTradeModalOpen(true);
             }}
             onAnalyze={(trade, resolvedUrl) => {
@@ -1012,6 +1014,7 @@ export default function LiveTrades() {
         <MarketTradeModal
           open={tradeModalOpen}
           onOpenChange={setTradeModalOpen}
+          defaultSide={tradeDefaultSide}
           marketData={tradeMarketData}
         />
       )}
