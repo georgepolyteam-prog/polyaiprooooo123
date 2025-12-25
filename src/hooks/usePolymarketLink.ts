@@ -3,7 +3,15 @@ import { useAccount, useSignTypedData } from 'wagmi';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// EIP-712 domain for Polymarket CLOB auth (must match Polymarket's expected format)
+/**
+ * EIP-712 domain for Polymarket CLOB authentication.
+ * 
+ * IMPORTANT: The domain name 'ClobAuthDomain' is the expected format for Polymarket's
+ * derive-api-key endpoint. This matches what the official Polymarket CLOB client uses.
+ * If signature verification fails, verify this matches the current Polymarket API docs.
+ * 
+ * Reference: https://docs.polymarket.com/#derive-api-key
+ */
 const CLOB_AUTH_DOMAIN = {
   name: 'ClobAuthDomain',
   version: '1',
