@@ -24,6 +24,7 @@ import { MarketTradeModal } from "@/components/MarketTradeModal";
 import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
 import { SafeWalletPanel } from "@/components/SafeWalletPanel";
+import { SafeWalletManager } from "@/components/wallet/SafeWalletManager";
 import { usePolymarketTrading } from "@/hooks/usePolymarketTrading";
 import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
 import { useSafeWallet } from "@/hooks/useSafeWallet";
@@ -531,6 +532,9 @@ export default function MyTrades() {
       <TopBar />
       
       <main className="relative max-w-7xl mx-auto px-4 py-8 space-y-6">
+        {/* Safe Wallet Manager */}
+        <SafeWalletManager />
+        
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
