@@ -12,7 +12,7 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
       {/* Professional Tagline with Learn More Link */}
       <div className="flex items-center justify-center gap-2 mb-8 animate-fade-in px-4">
         <span className="text-sm text-muted-foreground">AI-Powered Market Intelligence</span>
-        <Link to="/about" className="text-sm text-primary hover:underline flex items-center gap-0.5 transition-colors">
+        <Link to="/docs" className="text-sm text-primary hover:underline flex items-center gap-0.5 transition-colors">
           Learn more <ChevronRight className="w-3.5 h-3.5" />
         </Link>
       </div>

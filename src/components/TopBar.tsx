@@ -164,19 +164,42 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* About Link */}
-              <Link to="/about">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`text-sm gap-2 rounded-lg transition-all ${
-                    isActive("/about") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
-                  }`}
-                >
-                  <Info className="w-4 h-4" />
-                  About
-                </Button>
-              </Link>
+              {/* Docs Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`text-sm gap-2 rounded-lg transition-all ${
+                      isActive("/docs") || isActive("/about")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Docs
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-[#1a1525] border-white/10 min-w-[160px]">
+                  <Link to="/docs">
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/docs") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      Documentation
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link to="/about">
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/about") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
+                      <Info className="w-4 h-4" />
+                      About Poly
+                    </DropdownMenuItem>
+                  </Link>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Leaderboard Dropdown */}
               <DropdownMenu>
