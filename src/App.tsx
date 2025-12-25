@@ -25,6 +25,7 @@ import Help from "./pages/Help";
 import AdminPanel from "./pages/AdminPanel";
 import About from "./pages/About";
 import Capabilities from "./pages/Capabilities";
+import Documentation from "./pages/Documentation";
 
 const AppContent = () => {
   const { isHighTraffic } = useUserPresence();
@@ -54,6 +55,7 @@ const AppContent = () => {
           <Route path="/status" element={<Status />} />
           <Route path="/about" element={<About />} />
           <Route path="/capabilities" element={<Capabilities />} />
+          <Route path="/docs" element={<Documentation />} />
           <Route path="/adminpanel" element={<AdminPanel />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

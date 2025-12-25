@@ -44,7 +44,10 @@ export const Footer = () => {
 
           {/* Legal links */}
           <nav className="flex items-center gap-6 text-sm flex-wrap justify-center sm:justify-end">
-            <Link to="/help" className="text-poly-cyan hover:text-poly-cyan/80 transition-colors font-medium">
+            <Link to="/docs" className="text-primary hover:text-primary/80 transition-colors font-medium">
+              Documentation
+            </Link>
+            <Link to="/help" className="text-muted-foreground hover:text-foreground transition-colors">
               Help & Support
             </Link>
             <Link to="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">

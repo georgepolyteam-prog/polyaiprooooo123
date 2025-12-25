@@ -17,6 +17,7 @@ import {
   Info,
   Activity,
   Radio,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
@@ -306,6 +307,14 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   >
                     <HelpCircle className="w-4 h-4" />
                     Support
+                  </DropdownMenuItem>
+                </Link>
+                <Link to="/docs">
+                  <DropdownMenuItem
+                    className={`gap-2 cursor-pointer ${isActive("/docs") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Documentation
                   </DropdownMenuItem>
                 </Link>
                 <Link to="/status">
