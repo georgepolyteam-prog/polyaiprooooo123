@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useWaitForTransactionReceipt } from 'wagmi';
-import { Wallet, Loader2, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, ExternalLink, Gift } from 'lucide-react';
+import { Wallet, Loader2, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, ExternalLink, Gift, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GlassCard } from '@/components/dashboard/GlassCard';
 import { AnimatedNumber } from '@/components/dashboard/AnimatedNumber';
-import { useClaimWinnings, ClaimablePosition } from '@/hooks/useClaimWinnings';
+import { useClaimWinnings, ClaimablePosition, usePayoutSettled } from '@/hooks/useClaimWinnings';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +18,9 @@ interface ClaimWinningsCardProps {
 export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCardProps) {
   const { claimWinnings, getClaimState, updateClaimState, isWritePending } = useClaimWinnings();
   const claimState = getClaimState(position.conditionId);
+  
+  // Check if payouts are settled before allowing redemption
+  const { isSettled, isLoading: isCheckingSettlement } = usePayoutSettled(position.conditionId);
   
   // Watch for transaction confirmation
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
@@ -34,6 +37,10 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
   }, [isSuccess, claimState.status, position.conditionId, position.claimableUsdc, updateClaimState, onClaimSuccess]);
 
   const handleClaim = async () => {
+    if (!isSettled) {
+      toast.error('Market resolved but payouts not settled yet. Please try again later.');
+      return;
+    }
     await claimWinnings(position);
   };
 
@@ -41,6 +48,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
   const isConfirmingTx = claimState.status === 'confirming' || isConfirming;
   const isClaimSuccess = claimState.status === 'success';
   const isError = claimState.status === 'error';
+  const isNotSettled = !isCheckingSettlement && !isSettled;
 
   const polymarketUrl = `https://polymarket.com/event/${position.eventSlug}`;
 
@@ -123,6 +131,16 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                 <CheckCircle2 className="w-5 h-5" />
                 <span className="font-semibold">Claimed ${position.claimableUsdc.toFixed(2)} USDC</span>
               </motion.div>
+            ) : isNotSettled ? (
+              <motion.div
+                key="not-settled"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400"
+              >
+                <Clock className="w-5 h-5" />
+                <span className="font-medium text-sm">Market resolved but payouts not settled yet</span>
+              </motion.div>
             ) : isError ? (
               <motion.div
                 key="error"
@@ -136,20 +154,31 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                 </div>
                 <Button
                   onClick={handleClaim}
+                  disabled={!isSettled}
                   className="w-full bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black font-semibold py-3 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Gift className="w-4 h-4 mr-2" />
                   Try Again
                 </Button>
               </motion.div>
+            ) : isCheckingSettlement ? (
+              <motion.div key="checking" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <Button
+                  disabled
+                  className="w-full bg-zinc-700 text-zinc-400 cursor-not-allowed font-semibold py-3 rounded-lg"
+                >
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Checking payout status...
+                </Button>
+              </motion.div>
             ) : (
               <motion.div key="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <Button
                   onClick={handleClaim}
-                  disabled={isPending || isConfirmingTx}
+                  disabled={isPending || isConfirmingTx || !isSettled}
                   className={cn(
                     "w-full font-semibold py-3 rounded-lg transition-all duration-200",
-                    isPending || isConfirmingTx
+                    isPending || isConfirmingTx || !isSettled
                       ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
                       : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]"
                   )}

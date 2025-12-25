@@ -42,6 +42,13 @@ const CTF_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [{ name: 'conditionId', type: 'bytes32' }],
+    name: 'payoutDenominator',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 export interface ClaimablePosition {
@@ -162,6 +169,28 @@ export function useTokenBalance(tokenId: string | undefined, enabled: boolean = 
 
   return {
     balance: balance ? Number(balance) / 1e6 : 0, // Convert from USDC decimals
+    isLoading,
+    refetch,
+  };
+}
+
+// Helper hook to check if payouts are settled (payoutDenominator > 0)
+export function usePayoutSettled(conditionId: string | undefined, enabled: boolean = true) {
+  const { data: denominator, isLoading, refetch } = useReadContract({
+    address: CTF_CONTRACT,
+    abi: CTF_ABI,
+    functionName: 'payoutDenominator',
+    args: conditionId ? [conditionId as `0x${string}`] : undefined,
+    query: {
+      enabled: enabled && !!conditionId,
+    },
+  });
+
+  const isSettled = denominator !== undefined && denominator > BigInt(0);
+
+  return {
+    isSettled,
+    denominator: denominator ? Number(denominator) : 0,
     isLoading,
     refetch,
   };
