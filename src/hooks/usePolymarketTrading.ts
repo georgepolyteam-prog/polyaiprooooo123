@@ -81,7 +81,7 @@ export function usePolymarketTrading() {
   const publicClient = usePublicClient({ chainId: POLYGON_CHAIN_ID });
   const { hasSufficientBalance, isFullyApproved, approveUSDC } = useUSDCBalance();
   const { getApiCreds, clearApiCreds, isLoadingApiCreds } = usePolymarketApiCreds();
-  const { safeAddress, isDeployed, deploySafe, isDeploying } = useSafeWallet();
+  const { safeAddress, isDeployed, hasAllowances, deploySafe, isDeploying } = useSafeWallet();
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
@@ -218,7 +218,17 @@ export function usePolymarketTrading() {
         }
 
         // Step 3: Check/request approval
-        if (!isFullyApproved) {
+        // For Safe wallets, use hasAllowances from relay (already set in TradePanel Step 4)
+        // For EOA wallets, use isFullyApproved from wagmi
+        const allApprovalsComplete = isDeployed ? hasAllowances : isFullyApproved;
+        
+        if (!allApprovalsComplete) {
+          // For Safe wallets, this shouldn't happen as allowances are set via relay
+          if (isDeployed) {
+            toast.error("Please set allowances first (Step 4 in TradePanel)");
+            return { success: false, error: "Allowances not set" };
+          }
+          // For EOA wallets, try wagmi approval
           toast.info("Approving tokens...");
           const approved = await approveUSDC();
           if (!approved) {
