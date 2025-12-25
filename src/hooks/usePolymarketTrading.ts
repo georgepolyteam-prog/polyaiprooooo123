@@ -274,8 +274,18 @@ export function usePolymarketTrading() {
 
         // Step 3: Check/request approval
         // For Safe wallets, use hasAllowances from relay (already set in TradePanel Step 4)
+        // CRITICAL: Also check localStorage to avoid stale hook state between instances
         // For EOA wallets, use isFullyApproved from wagmi
-        const allApprovalsComplete = isDeployed ? hasAllowances : isFullyApproved;
+        const cachedSafeAllowances = safeAddress 
+          ? localStorage.getItem(`safe_allowances:${safeAddress.toLowerCase()}`) === 'true' 
+          : false;
+        const effectiveHasAllowances = hasAllowances || cachedSafeAllowances;
+        const allApprovalsComplete = isDeployed ? effectiveHasAllowances : isFullyApproved;
+        
+        console.log('[Trade] Allowance check:', { 
+          isDeployed, hasAllowances, cachedSafeAllowances, effectiveHasAllowances, 
+          isFullyApproved, allApprovalsComplete, safeAddress 
+        });
         
         if (!allApprovalsComplete) {
           // For Safe wallets, this shouldn't happen as allowances are set via relay

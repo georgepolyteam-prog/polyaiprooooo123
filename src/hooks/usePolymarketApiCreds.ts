@@ -117,11 +117,14 @@ export function usePolymarketApiCreds() {
         throw new Error("Please switch to Polygon network first");
       }
 
-      // CRITICAL: Always create credentials with EOA context (signatureType=0, no funder)
-      // API credentials belong to the EOA signer, NOT the Safe wallet
-      // The Safe is only used as funder when PLACING orders (in usePolymarketTrading.ts)
-      console.log("[API Creds] Creating ClobClient with signatureType: 0 (EOA) for credential creation");
-      console.log("[API Creds] Note: Safe funder will be used when placing orders, not for credential creation");
+      // CRITICAL: For Safe wallets, we need to create credentials with signatureType=2 and funderAddress
+      // This matches how the Dome SDK's linkUserWithSafe function works
+      // For EOA wallets, use signatureType=0 with no funder
+      const signatureType = usingSafe ? 2 : 0;
+      const funderAddress = usingSafe ? opts?.funderAddress : undefined;
+      
+      console.log("[API Creds] Creating ClobClient with signatureType:", signatureType, usingSafe ? "(Safe)" : "(EOA)");
+      console.log("[API Creds] Funder address for credential context:", funderAddress || "none");
       
       toast.info("Polymarket setup: please sign to enable trading...");
 
@@ -130,8 +133,8 @@ export function usePolymarketApiCreds() {
         POLYGON_CHAIN_ID,
         signer,
         undefined,
-        0,        // ALWAYS use signatureType=0 (EOA) for credential creation
-        undefined // NEVER use funder for credential creation - creds belong to EOA
+        signatureType,       // Use Safe signatureType (2) when trading with Safe
+        funderAddress        // Use Safe address as funder when trading with Safe
       );
 
       let apiKeyCreds: { key: string; secret: string; passphrase: string } | null = null;
@@ -143,17 +146,19 @@ export function usePolymarketApiCreds() {
         
         // Step 1: Try to delete existing keys (they may be stale/wrong context)
         try {
-          // Need to derive first to have creds to delete with
+          // For deletion, we need to derive first using the correct context
+          // Then delete using those derived credentials
           const derivedCreds = await client.deriveApiKey();
           if (derivedCreds?.key) {
             console.log("[API Creds] Derived existing key, now deleting...");
+            // Use the same client that derived (with correct context) to delete
             const deleteClient = new ClobClient(
               CLOB_HOST,
               POLYGON_CHAIN_ID,
               signer,
               { key: derivedCreds.key, secret: derivedCreds.secret, passphrase: derivedCreds.passphrase },
-              0,        // EOA signatureType for deletion
-              undefined // No funder for deletion
+              signatureType,  // Use same signature type as creation
+              funderAddress   // Use same funder as creation
             );
             await deleteClient.deleteApiKey();
             console.log("[API Creds] Successfully deleted existing API keys");
