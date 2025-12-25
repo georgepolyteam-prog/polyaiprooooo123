@@ -480,55 +480,30 @@ export function usePolymarketTrading() {
             }
           );
 
-          // CRITICAL: When edge function returns non-2xx, submitError is set but submitData may contain actual error details
-          // Parse the actual error from submitData first, then fall back to submitError
-          const errorInfo = submitData as { error?: string; isAuthError?: boolean; code?: number; details?: unknown } | null;
+          // === DEBUG MODE: Show actual error without retry ===
+          // Parse the actual error from submitData (edge function puts error details here even on non-2xx)
+          const errorInfo = submitData as { error?: string; isAuthError?: boolean; code?: number; maker?: string; tokenId?: string; details?: unknown } | null;
+          
+          console.log("[Trade] === DOME RESPONSE DEBUG ===");
+          console.log("[Trade] submitError:", submitError);
+          console.log("[Trade] submitData:", JSON.stringify(submitData, null, 2));
+          console.log("[Trade] errorInfo parsed:", errorInfo);
+          console.log("[Trade] === END DEBUG ===");
           
           if (submitError || !submitData?.success) {
-            const err = errorInfo?.error || (submitError?.message) || "Order rejected";
-            const isAuthError = errorInfo?.isAuthError || 
-              (typeof err === "string" && (err.toLowerCase().includes("invalid api key") || err.toLowerCase().includes("unauthorized")));
+            const err = errorInfo?.error || submitError?.message || "Order rejected";
+            const isAuthError = errorInfo?.isAuthError;
             
-            console.log("[Trade] Order error details:", { error: err, code: errorInfo?.code, isAuthError, details: errorInfo?.details });
+            console.log("[Trade] ❌ Order FAILED:", { 
+              error: err, 
+              code: errorInfo?.code, 
+              isAuthError,
+              maker: errorInfo?.maker,
+              details: errorInfo?.details 
+            });
             
-            // Retry once if auth error by refreshing credentials
-            if (isAuthError) {
-              console.log("[Trade] Auth error detected, refreshing credentials and retrying...");
-              updateStage("refreshing-credentials");
-              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
-              if (!refreshedCreds) throw new Error("Failed to refresh trading credentials. Please try again.");
-
-              // Add delay to allow Polymarket backend to propagate new credentials
-              console.log("[Trade] Waiting for credential propagation...");
-              await new Promise(resolve => setTimeout(resolve, 1500));
-
-              updateStage("submitting-order");
-              const { data: retryData, error: retryError } = await supabase.functions.invoke(
-                "dome-place-order",
-                {
-                  body: {
-                    signedOrder,
-                    orderType: "FAK",
-                    credentials: {
-                      apiKey: refreshedCreds.apiKey,
-                      apiSecret: refreshedCreds.secret,
-                      apiPassphrase: refreshedCreds.passphrase,
-                    },
-                  },
-                }
-              );
-              
-              // Parse retry response the same way
-              const retryErrorInfo = retryData as { error?: string; isAuthError?: boolean } | null;
-              if (retryError || !retryData?.success) {
-                const retryErr = retryErrorInfo?.error || retryError?.message || "Order rejected after retry";
-                throw new Error(retryErr);
-              }
-
-              response = { success: true, orderID: retryData.orderId, id: retryData.orderId, builder: "dome" };
-            } else {
-              throw new Error(err);
-            }
+            // For now, just throw the error without retry to see what's happening
+            throw new Error(`Dome error: ${err}`);
           } else {
             response = { success: true, orderID: submitData.orderId, id: submitData.orderId, builder: "dome" };
           }
@@ -564,53 +539,29 @@ export function usePolymarketTrading() {
             }
           );
 
-          // CRITICAL: When edge function returns non-2xx, submitError is set but submitData may contain actual error details
-          const errorInfo = submitData as { error?: string; isAuthError?: boolean; code?: number; details?: unknown } | null;
+          // === DEBUG MODE: Show actual error without retry ===
+          const errorInfo = submitData as { error?: string; isAuthError?: boolean; code?: number; maker?: string; tokenId?: string; details?: unknown } | null;
+          
+          console.log("[Trade] === DOME GTC RESPONSE DEBUG ===");
+          console.log("[Trade] submitError:", submitError);
+          console.log("[Trade] submitData:", JSON.stringify(submitData, null, 2));
+          console.log("[Trade] errorInfo parsed:", errorInfo);
+          console.log("[Trade] === END DEBUG ===");
           
           if (submitError || !submitData?.success) {
-            const err = errorInfo?.error || (submitError?.message) || "Order rejected";
-            const isAuthError = errorInfo?.isAuthError || 
-              (typeof err === "string" && (err.toLowerCase().includes("invalid api key") || err.toLowerCase().includes("unauthorized")));
+            const err = errorInfo?.error || submitError?.message || "Order rejected";
+            const isAuthError = errorInfo?.isAuthError;
             
-            console.log("[Trade] Order error details:", { error: err, code: errorInfo?.code, isAuthError, details: errorInfo?.details });
+            console.log("[Trade] ❌ GTC Order FAILED:", { 
+              error: err, 
+              code: errorInfo?.code, 
+              isAuthError,
+              maker: errorInfo?.maker,
+              details: errorInfo?.details 
+            });
             
-            if (isAuthError) {
-              console.log("[Trade] Auth error detected, refreshing credentials and retrying...");
-              updateStage("refreshing-credentials");
-              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
-              if (!refreshedCreds) throw new Error("Failed to refresh trading credentials. Please try again.");
-
-              // Add delay to allow Polymarket backend to propagate new credentials
-              console.log("[Trade] Waiting for credential propagation...");
-              await new Promise(resolve => setTimeout(resolve, 1500));
-
-              updateStage("submitting-order");
-              const { data: retryData, error: retryError } = await supabase.functions.invoke(
-                "dome-place-order",
-                {
-                  body: {
-                    signedOrder,
-                    orderType: "GTC",
-                    credentials: {
-                      apiKey: refreshedCreds.apiKey,
-                      apiSecret: refreshedCreds.secret,
-                      apiPassphrase: refreshedCreds.passphrase,
-                    },
-                  },
-                }
-              );
-              
-              // Parse retry response the same way
-              const retryErrorInfo = retryData as { error?: string; isAuthError?: boolean } | null;
-              if (retryError || !retryData?.success) {
-                const retryErr = retryErrorInfo?.error || retryError?.message || "Order rejected after retry";
-                throw new Error(retryErr);
-              }
-
-              response = { success: true, orderID: retryData.orderId, id: retryData.orderId, builder: "dome" };
-            } else {
-              throw new Error(err);
-            }
+            // For now, just throw the error without retry to see what's happening
+            throw new Error(`Dome error: ${err}`);
           } else {
             response = { success: true, orderID: submitData.orderId, id: submitData.orderId, builder: "dome" };
           }
