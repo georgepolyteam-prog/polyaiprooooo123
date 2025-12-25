@@ -75,20 +75,22 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
   
-  // Safe session status - trading requires: linked + Safe deployed + funded + allowances set + USDC approved
+  // Safe session status - trading requires: linked + Safe deployed + funded + allowances set
+  // For Safe wallets, hasAllowances from relay is sufficient (no separate isFullyApproved needed)
   const isSafeReady = isDeployed && hasAllowances;
   const isSafeFunded = balance > 0;
-  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isSafeReady && isFullyApproved && isSafeFunded;
+  const allApprovalsComplete = isDeployed ? hasAllowances : isFullyApproved; // Safe uses relay approvals, EOA uses wagmi
+  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isSafeReady && isSafeFunded;
 
   // Debug logging for trading state
   useEffect(() => {
     console.log('[TradePanel] State:', { 
-      isConnected, isWrongNetwork, isLinked, isFullyApproved, 
+      isConnected, isWrongNetwork, isLinked, allApprovalsComplete, 
       hasYesToken, hasNoToken, selectedSide, canDirectTrade,
       amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady,
       isSafeFunded, balanceTargetAddress
     });
-  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady, isSafeFunded, balanceTargetAddress]);
+  }, [isConnected, isWrongNetwork, isLinked, allApprovalsComplete, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeReady, isSafeFunded, balanceTargetAddress]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -408,7 +410,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <Shield className="w-5 h-5 text-violet-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-violet-200 text-sm">Step 2 of 5: Deploy Safe Wallet</p>
+                  <p className="font-semibold text-violet-200 text-sm">Step 2 of 4: Deploy Safe Wallet</p>
                   <p className="text-xs text-violet-300/70">Create your smart contract trading wallet</p>
                 </div>
               </div>
@@ -466,7 +468,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <Wallet className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-emerald-200 text-sm">Step 3 of 5: Fund Safe Wallet</p>
+                  <p className="font-semibold text-emerald-200 text-sm">Step 3 of 4: Fund Safe Wallet</p>
                   <p className="text-xs text-emerald-300/70">Send USDC to your Safe to start trading</p>
                 </div>
               </div>
@@ -510,7 +512,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                   <CheckCircle2 className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-cyan-200 text-sm">Step 4 of 5: Set Allowances</p>
+                  <p className="font-semibold text-cyan-200 text-sm">Step 4 of 4: Set Allowances</p>
                   <p className="text-xs text-cyan-300/70">Approve tokens for Polymarket contracts</p>
                 </div>
               </div>
@@ -536,45 +538,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
           )}
         </AnimatePresence>
 
-        {/* Step 5: Approve USDC (existing flow) */}
-        <AnimatePresence>
-          {isConnected && !isWrongNetwork && isLinked && isSafeReady && isSafeFunded && !isFullyApproved && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border-2 border-amber-500/50 backdrop-blur-sm"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                  <Coins className="w-5 h-5 text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-amber-200 text-sm">Step 5 of 5: Approve USDC</p>
-                  <p className="text-xs text-amber-300/70">Final approval to enable trading</p>
-                </div>
-              </div>
-              <Button
-                size="default"
-                onClick={approveUSDC}
-                disabled={isApproving}
-                className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold"
-              >
-                {isApproving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Approving USDC...
-                  </>
-                ) : (
-                  <>
-                    <Coins className="w-4 h-4 mr-2" />
-                    Approve USDC for Trading
-                  </>
-                )}
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Step 5: Approve USDC - Only shown for EOA wallets (non-Safe flow) */}
+        {/* For Safe wallets, Step 4 (setAllowances) already handles all approvals via relay */}
 
         {/* Epic Side Selector */}
         <div className="grid grid-cols-2 gap-3">
@@ -701,7 +666,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
         {/* Order type toggle */}
         <AnimatePresence>
-          {canDirectTrade && isFullyApproved && (
+          {canDirectTrade && allApprovalsComplete && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -755,7 +720,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
         {/* Limit price input */}
         <AnimatePresence>
-          {canDirectTrade && isFullyApproved && !isMarketOrder && (
+          {canDirectTrade && allApprovalsComplete && !isMarketOrder && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -881,14 +846,14 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               const amountNum = parseFloat(amount) || 0;
               const hasAmount = amountNum > 0;
               const hasBalance = hasSufficientBalance(amountNum);
-              const canTrade = isLinked && isSafeReady && isFullyApproved && hasAmount && hasBalance && (selectedSide === 'YES' || hasNoToken);
+              const canTrade = isLinked && isSafeReady && hasAmount && hasBalance && (selectedSide === 'YES' || hasNoToken);
               
-              // Determine disabled reason - updated for 4-step Safe flow
+              // Determine disabled reason - 4-step Safe flow
               let disabledReason = '';
               if (!isLinked) disabledReason = 'Link wallet first (Step 1)';
               else if (!isDeployed) disabledReason = 'Deploy Safe first (Step 2)';
-              else if (!hasAllowances) disabledReason = 'Set allowances first (Step 3)';
-              else if (!isFullyApproved) disabledReason = 'Approve USDC first (Step 4)';
+              else if (!isSafeFunded) disabledReason = 'Fund Safe first (Step 3)';
+              else if (!hasAllowances) disabledReason = 'Set allowances first (Step 4)';
               else if (!hasAmount) disabledReason = 'Enter an amount';
               else if (!hasBalance) disabledReason = `Insufficient balance ($${balance.toFixed(2)} available)`;
               else if (selectedSide === 'NO' && !hasNoToken) disabledReason = 'NO token not available';
