@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { X, ExternalLink, TrendingUp, TrendingDown, Activity, BarChart3, Clock, Wallet, Target, Copy, Sparkles, Check, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from '@/hooks/use-toast';
@@ -478,18 +478,6 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
         <SheetContent side="bottom" className="h-[95vh] p-0 rounded-t-2xl">
           {/* Drag handle indicator */}
           <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-muted-foreground/30 z-10" />
-          
-          {/* Close button for mobile */}
-          <SheetClose asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="absolute right-3 top-3 h-8 w-8 rounded-full bg-muted/50 z-10"
-            >
-              <X className="h-5 w-5" />
-              <span className="sr-only">Close</span>
-            </Button>
-          </SheetClose>
           
           {modalContent}
         </SheetContent>
