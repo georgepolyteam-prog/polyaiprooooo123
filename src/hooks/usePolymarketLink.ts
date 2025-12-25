@@ -3,11 +3,11 @@ import { useAccount, useSignTypedData } from 'wagmi';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// EIP-712 domain for Polymarket CLOB auth
+// EIP-712 domain for Polymarket CLOB auth (must match Polymarket's expected format)
 const CLOB_AUTH_DOMAIN = {
   name: 'ClobAuthDomain',
   version: '1',
-  chainId: 137, // Polygon
+  chainId: 137, // Polygon mainnet
 } as const;
 
 // EIP-712 types for CLOB auth
