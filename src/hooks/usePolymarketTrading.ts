@@ -79,9 +79,14 @@ export function usePolymarketTrading() {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const publicClient = usePublicClient({ chainId: POLYGON_CHAIN_ID });
-  const { hasSufficientBalance, isFullyApproved, approveUSDC } = useUSDCBalance();
   const { getApiCreds, clearApiCreds, isLoadingApiCreds } = usePolymarketApiCreds();
   const { safeAddress, isDeployed, hasAllowances, deploySafe, isDeploying } = useSafeWallet();
+  
+  // Use Safe balance when deployed, otherwise EOA balance
+  const balanceTargetAddress = isDeployed && safeAddress ? safeAddress : undefined;
+  const { hasSufficientBalance, isFullyApproved, approveUSDC } = useUSDCBalance({
+    targetAddress: balanceTargetAddress,
+  });
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
