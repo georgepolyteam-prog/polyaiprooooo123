@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Bell, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Bell, RefreshCw, Key, Trash2 } from "lucide-react";
+import { usePolymarketApiCreds } from "@/hooks/usePolymarketApiCreds";
+import { useAccount } from "wagmi";
+import { toast } from "sonner";
 
 interface SettingsModalProps {
   open: boolean;
@@ -15,6 +19,10 @@ interface Settings {
 }
 
 export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps) => {
+  const { address } = useAccount();
+  const { clearApiCreds } = usePolymarketApiCreds();
+  const [isClearing, setIsClearing] = useState(false);
+  
   const [settings, setSettings] = useState<Settings>(() => {
     const stored = localStorage.getItem("poly-ai-settings");
     return stored ? JSON.parse(stored) : { notifications: true, autoRefresh: true };
@@ -26,6 +34,24 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps) => {
 
   const updateSetting = (key: keyof Settings, value: boolean) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleClearCredentials = async () => {
+    if (!address) {
+      toast.error("Connect wallet first");
+      return;
+    }
+    
+    setIsClearing(true);
+    try {
+      clearApiCreds(address);
+      toast.success("Trading credentials cleared. You'll be prompted to sign again on next trade.");
+    } catch (e) {
+      console.error("Failed to clear credentials:", e);
+      toast.error("Failed to clear credentials");
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   return (
@@ -66,6 +92,27 @@ export const SettingsModal = ({ open, onOpenChange }: SettingsModalProps) => {
               checked={settings.autoRefresh}
               onCheckedChange={(checked) => updateSetting("autoRefresh", checked)}
             />
+          </div>
+
+          {/* Clear Trading Credentials */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Key className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <Label className="font-medium">Trading Credentials</Label>
+                <p className="text-sm text-muted-foreground">Clear cached API keys to re-authenticate</p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearCredentials}
+              disabled={!address || isClearing}
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              {isClearing ? "Clearing..." : "Clear"}
+            </Button>
           </div>
         </div>
 
