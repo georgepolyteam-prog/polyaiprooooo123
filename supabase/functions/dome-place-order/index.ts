@@ -69,7 +69,25 @@ serve(async (req) => {
 
   try {
     const body: PlaceOrderRequest = await req.json();
-    console.log("[DOME-PLACE-ORDER] Received order request");
+    
+    // === DEBUG: Log received credentials ===
+    console.log("[DOME] ========== CREDENTIALS DEBUG ==========");
+    console.log("[DOME] Received credentials:", {
+      apiKeyPrefix: body.credentials?.apiKey?.substring(0, 12) + "...",
+      apiKeyLength: body.credentials?.apiKey?.length,
+      hasSecret: !!body.credentials?.apiSecret,
+      secretLength: body.credentials?.apiSecret?.length,
+      hasPassphrase: !!body.credentials?.apiPassphrase,
+      passphraseLength: body.credentials?.apiPassphrase?.length,
+    });
+    console.log("[DOME] Signed order details:", {
+      maker: body.signedOrder?.maker,
+      signer: body.signedOrder?.signer,
+      signatureType: body.signedOrder?.signatureType,
+      side: body.signedOrder?.side,
+      tokenIdPrefix: body.signedOrder?.tokenId?.substring(0, 20) + "...",
+    });
+    console.log("[DOME] =========================================");
 
     // Validate required fields
     if (!body.signedOrder) {
@@ -91,12 +109,17 @@ serve(async (req) => {
     const clientOrderId = body.clientOrderId || crypto.randomUUID();
     const orderType = body.orderType || "GTC";
 
-    // Log order identity info for debugging
-    console.log("[DOME-PLACE-ORDER] 🔑 Order Identity:");
-    console.log("[DOME-PLACE-ORDER]   → Maker:", body.signedOrder.maker);
-    console.log("[DOME-PLACE-ORDER]   → Signer:", body.signedOrder.signer);
-    console.log("[DOME-PLACE-ORDER]   → Signature Type:", body.signedOrder.signatureType);
-    console.log("[DOME-PLACE-ORDER]   → API Key prefix:", body.credentials.apiKey.slice(0, 8) + "...");
+    // === DEBUG: Log what we're sending to Dome ===
+    console.log("[DOME] ========== SENDING TO DOME API ==========");
+    console.log("[DOME] Endpoint:", DOME_API_URL);
+    console.log("[DOME] Has DOME_API_KEY:", !!DOME_API_KEY);
+    console.log("[DOME] DOME_API_KEY prefix:", DOME_API_KEY.substring(0, 8) + "...");
+    console.log("[DOME] Poly API Key prefix:", body.credentials.apiKey.substring(0, 12) + "...");
+    console.log("[DOME] Maker:", body.signedOrder.maker);
+    console.log("[DOME] Signer:", body.signedOrder.signer);
+    console.log("[DOME] Signature Type:", body.signedOrder.signatureType, body.signedOrder.signatureType === 2 ? "(SAFE)" : "(EOA)");
+    console.log("[DOME] Order Type:", orderType);
+    console.log("[DOME] ==========================================");
 
     // Transform signedOrder: convert side from number to string for Dome API
     const transformedSignedOrder = {
