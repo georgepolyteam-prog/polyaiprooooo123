@@ -26,4 +26,12 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      external: ["@privy-io/server-auth"],
+    },
+  },
+  optimizeDeps: {
+    exclude: ["@privy-io/server-auth"],
+  },
 }));
