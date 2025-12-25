@@ -98,13 +98,19 @@ serve(async (req) => {
     console.log("[DOME-PLACE-ORDER]   → Signature Type:", body.signedOrder.signatureType);
     console.log("[DOME-PLACE-ORDER]   → API Key prefix:", body.credentials.apiKey.slice(0, 8) + "...");
 
+    // Transform signedOrder: convert side from number to string for Dome API
+    const transformedSignedOrder = {
+      ...body.signedOrder,
+      side: sideToString(body.signedOrder.side), // Convert 0 -> "BUY", 1 -> "SELL"
+    };
+
     // Build Dome API request (per Dome SDK lines 1539-1552)
     const domeRequest = {
       jsonrpc: "2.0",
       method: "placeOrder",
       id: clientOrderId,
       params: {
-        signedOrder: body.signedOrder,
+        signedOrder: transformedSignedOrder,
         orderType,
         credentials: body.credentials,
         clientOrderId,
