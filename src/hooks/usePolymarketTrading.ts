@@ -402,14 +402,20 @@ export function usePolymarketTrading() {
             { tickSize, negRisk }
           );
           
-          console.log("[Trade] 🏗️ Signed FAK order created:", signedOrder);
+          // Convert numeric side to string for Dome API (0 = BUY, 1 = SELL)
+          const domeSignedOrder = {
+            ...signedOrder,
+            side: signedOrder.side === 0 ? "BUY" : "SELL",
+          };
+          
+          console.log("[Trade] 🏗️ Signed FAK order created:", domeSignedOrder);
           
           // Submit to Dome API via edge function with FAK order type
           const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              signedOrder,
+              signedOrder: domeSignedOrder,
               orderType: "FAK",
               credentials: {
                 apiKey: creds.apiKey,
