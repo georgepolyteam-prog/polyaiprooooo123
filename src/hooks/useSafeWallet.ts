@@ -11,6 +11,20 @@ const POLYGON_CHAIN_ID = 137;
 const BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
 const RELAYER_URL = 'https://relayer-v2.polymarket.com/';
 
+// Polymarket contract addresses on Polygon
+const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const CTF_ADDRESS = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
+const CTF_EXCHANGE = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
+const NEG_RISK_CTF_EXCHANGE = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
+const NEG_RISK_ADAPTER = '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296';
+
+// ABI interfaces for approval transactions
+const ERC20_INTERFACE = new ethers.utils.Interface([
+  'function approve(address spender, uint256 amount)'
+]);
+const ERC1155_INTERFACE = new ethers.utils.Interface([
+  'function setApprovalForAll(address operator, bool approved)'
+]);
 export function useSafeWallet() {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -48,6 +62,29 @@ export function useSafeWallet() {
     }
   }, [safeAddress]);
 
+  // Check deployment status on mount/wallet change
+  useEffect(() => {
+    if (safeAddress && address && window.ethereum) {
+      // Verify deployment via RPC on mount
+      const verifyDeployment = async () => {
+        try {
+          const provider = new ethers.providers.Web3Provider(
+            window.ethereum as ethers.providers.ExternalProvider
+          );
+          const code = await provider.getCode(safeAddress);
+          const deployed = code !== '0x' && code !== '0x0';
+          setIsDeployed(deployed);
+          if (deployed) {
+            localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
+          }
+          console.log('[Safe] Deployment status:', deployed);
+        } catch (e) {
+          console.error('[Safe] RPC check failed:', e);
+        }
+      };
+      verifyDeployment();
+    }
+  }, [safeAddress, address]);
   // Create RelayClient when wallet is available
   const createRelayClient = useCallback(async (): Promise<RelayClient | null> => {
     if (!walletClient || !address) {
@@ -182,7 +219,7 @@ export function useSafeWallet() {
     setIsSettingAllowances(true);
     try {
       toast.info('Setting token allowances...', {
-        description: 'This requires 6 approval transactions'
+        description: 'Batching 6 approvals into one transaction'
       });
 
       let client = relayClient;
@@ -194,13 +231,53 @@ export function useSafeWallet() {
         throw new Error('Failed to create relay client');
       }
 
-      // RelayClient handles setting USDC approvals for all Polymarket contracts:
-      // - CTF Exchange
-      // - Neg Risk CTF Exchange  
-      // - Neg Risk Adapter
-      console.log('[Safe] Setting allowances...');
-      await (client as any).setAllowances();
+      const MAX_UINT256 = ethers.constants.MaxUint256;
 
+      // Build 6 approval transactions to batch execute via Safe
+      const transactions = [
+        // USDC approvals (3)
+        {
+          to: USDC_ADDRESS,
+          data: ERC20_INTERFACE.encodeFunctionData('approve', [CTF_EXCHANGE, MAX_UINT256]),
+          value: '0'
+        },
+        {
+          to: USDC_ADDRESS,
+          data: ERC20_INTERFACE.encodeFunctionData('approve', [NEG_RISK_CTF_EXCHANGE, MAX_UINT256]),
+          value: '0'
+        },
+        {
+          to: USDC_ADDRESS,
+          data: ERC20_INTERFACE.encodeFunctionData('approve', [NEG_RISK_ADAPTER, MAX_UINT256]),
+          value: '0'
+        },
+        // CTF (ERC1155) approvals (3)
+        {
+          to: CTF_ADDRESS,
+          data: ERC1155_INTERFACE.encodeFunctionData('setApprovalForAll', [CTF_EXCHANGE, true]),
+          value: '0'
+        },
+        {
+          to: CTF_ADDRESS,
+          data: ERC1155_INTERFACE.encodeFunctionData('setApprovalForAll', [NEG_RISK_CTF_EXCHANGE, true]),
+          value: '0'
+        },
+        {
+          to: CTF_ADDRESS,
+          data: ERC1155_INTERFACE.encodeFunctionData('setApprovalForAll', [NEG_RISK_ADAPTER, true]),
+          value: '0'
+        },
+      ];
+
+      console.log('[Safe] Executing 6 approval transactions via Safe...');
+      const response = await client.execute(transactions);
+      const result = await response.wait();
+
+      if (!result) {
+        throw new Error('Allowance transaction failed');
+      }
+
+      console.log('[Safe] Allowances set successfully');
       setHasAllowances(true);
       localStorage.setItem(`safe_allowances:${safeAddress.toLowerCase()}`, 'true');
       
