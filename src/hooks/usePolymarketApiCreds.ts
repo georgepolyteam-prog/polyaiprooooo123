@@ -18,6 +18,7 @@ export type PolymarketApiCreds = {
 // Extended type with context tracking
 type StoredCreds = PolymarketApiCreds & {
   context: "eoa" | "safe";
+  createdFresh?: boolean; // Track if key was freshly created (not derived)
 };
 
 function safeParseCreds(raw: string | null): StoredCreds | null {
@@ -29,7 +30,8 @@ function safeParseCreds(raw: string | null): StoredCreds | null {
       apiKey: obj.apiKey, 
       secret: obj.secret, 
       passphrase: obj.passphrase,
-      context: obj.context || "eoa" // Default to EOA for old cached creds
+      context: obj.context || "eoa", // Default to EOA for old cached creds
+      createdFresh: obj.createdFresh || false,
     };
   } catch {
     return null;
@@ -38,6 +40,7 @@ function safeParseCreds(raw: string | null): StoredCreds | null {
 
 export type GetApiCredsOptions = {
   funderAddress?: string; // Safe address when using Safe wallet (for ClobClient init only)
+  forceNewKeys?: boolean; // Force delete + create new keys (for retry after auth errors)
 };
 
 export function usePolymarketApiCreds() {
@@ -68,37 +71,38 @@ export function usePolymarketApiCreds() {
       return null;
     }
 
-    // CRITICAL FIX: Always cache/lookup by EOA address (the signer), NOT the Safe address
-    // Polymarket's auth system uses POLY_ADDRESS header which must match the API key owner
-    // The API key is derived from the EOA signature, so it's always linked to the EOA
     const cacheKey = `${STORAGE_KEY}:${address.toLowerCase()}`;
     const usingSafe = !!opts?.funderAddress && opts.funderAddress.toLowerCase() !== address.toLowerCase();
     const currentContext: "eoa" | "safe" = usingSafe ? "safe" : "eoa";
+    const forceNewKeys = opts?.forceNewKeys || false;
 
     console.log("[API Creds] EOA (signer):", address);
     console.log("[API Creds] Funder address:", opts?.funderAddress || address);
     console.log("[API Creds] Using Safe:", usingSafe);
     console.log("[API Creds] Current context:", currentContext);
+    console.log("[API Creds] Force new keys:", forceNewKeys);
     console.log("[API Creds] Cache key (always EOA):", cacheKey);
 
     // Check for existing cached credentials for the EOA
     const existing = safeParseCreds(localStorage.getItem(cacheKey));
     
-    // CRITICAL: Check if context changed (EOA -> Safe or Safe -> EOA)
-    if (existing) {
-      if (existing.context !== currentContext) {
-        console.log(`[API Creds] Context changed from ${existing.context} to ${currentContext}, refreshing credentials...`);
-        localStorage.removeItem(cacheKey);
-        // Continue to re-derive below
-      } else {
-        console.log("[API Creds] Using cached credentials for EOA:", address, "context:", existing.context);
-        return { apiKey: existing.apiKey, secret: existing.secret, passphrase: existing.passphrase };
-      }
+    // CRITICAL: Check if context changed, forceNewKeys requested, or Safe without fresh keys
+    const needsNewKeys = forceNewKeys || 
+      (existing && existing.context !== currentContext) ||
+      (usingSafe && existing && !existing.createdFresh);
+    
+    if (existing && !needsNewKeys) {
+      console.log("[API Creds] Using cached credentials for EOA:", address, "context:", existing.context);
+      return { apiKey: existing.apiKey, secret: existing.secret, passphrase: existing.passphrase };
+    }
+    
+    if (needsNewKeys) {
+      console.log(`[API Creds] Need fresh keys - forceNew:${forceNewKeys}, contextChanged:${existing?.context !== currentContext}, safeMissingFresh:${usingSafe && existing && !existing.createdFresh}`);
+      localStorage.removeItem(cacheKey);
     }
 
     setIsLoading(true);
     try {
-      // Get ethers signer from window.ethereum
       if (!window.ethereum) {
         throw new Error("No wallet provider found");
       }
@@ -108,53 +112,85 @@ export function usePolymarketApiCreds() {
       );
       const signer = provider.getSigner();
 
-      // Verify we're on Polygon
       const network = await provider.getNetwork();
       if (network.chainId !== POLYGON_CHAIN_ID) {
         throw new Error("Please switch to Polygon network first");
       }
 
-      // signatureType 2 = POLY_GNOSIS_SAFE (for Safe wallet orders)
-      // signatureType 0 = EOA (direct wallet orders)
-      // NOTE: signatureType affects order signing, but API credentials are still derived for EOA
       const signatureType = usingSafe ? 2 : 0;
       console.log("[API Creds] Creating ClobClient with signatureType:", signatureType, "context:", currentContext);
       
-      toast.info("Polymarket setup: please sign to enable trading (one-time per wallet)");
+      toast.info("Polymarket setup: please sign to enable trading...");
 
-      // Create ClobClient - API credentials are derived for the EOA (signer)
-      // The funderAddress is only used for order signing (maker field), not for API auth
       const client = new ClobClient(
         CLOB_HOST,
         POLYGON_CHAIN_ID,
         signer,
-        undefined, // No existing creds - will derive
+        undefined,
         signatureType,
-        usingSafe ? opts?.funderAddress : undefined // funderAddress for Safe order signing only
+        usingSafe ? opts?.funderAddress : undefined
       );
 
-      // createOrDeriveApiKey derives credentials linked to the SIGNER (EOA)
-      // The POLY_ADDRESS header in API calls will use this EOA address
-      console.log("[API Creds] Calling createOrDeriveApiKey (credentials linked to EOA)...");
-      const apiKeyCreds = await client.createOrDeriveApiKey();
+      let apiKeyCreds: { key: string; secret: string; passphrase: string } | null = null;
+      let createdFresh = false;
 
-      // ClobClient returns ApiKeyCreds with { key, secret, passphrase }
+      // For Safe wallets OR when forcing new keys: delete old keys first, then create fresh
+      if (usingSafe || forceNewKeys) {
+        console.log("[API Creds] Safe wallet or force refresh: deleting old keys and creating fresh ones...");
+        
+        // Step 1: Try to delete existing keys (they may be stale/wrong context)
+        try {
+          // Need to derive first to have creds to delete with
+          const derivedCreds = await client.deriveApiKey();
+          if (derivedCreds?.key) {
+            console.log("[API Creds] Derived existing key, now deleting...");
+            const deleteClient = new ClobClient(
+              CLOB_HOST,
+              POLYGON_CHAIN_ID,
+              signer,
+              { key: derivedCreds.key, secret: derivedCreds.secret, passphrase: derivedCreds.passphrase },
+              signatureType,
+              usingSafe ? opts?.funderAddress : undefined
+            );
+            await deleteClient.deleteApiKey();
+            console.log("[API Creds] Successfully deleted existing API keys");
+          }
+        } catch (deleteError) {
+          // Might not have any keys to delete, or deletion failed - continue anyway
+          console.log("[API Creds] Could not delete existing keys (may not exist):", deleteError);
+        }
+
+        // Step 2: Create fresh new keys
+        try {
+          console.log("[API Creds] Creating fresh API key...");
+          apiKeyCreds = await client.createApiKey();
+          createdFresh = true;
+          console.log("[API Creds] Fresh API key created successfully");
+        } catch (createError) {
+          console.log("[API Creds] createApiKey failed, falling back to derive:", createError);
+          apiKeyCreds = await client.deriveApiKey();
+        }
+      } else {
+        // For EOA without force: use standard createOrDeriveApiKey
+        console.log("[API Creds] EOA mode: using createOrDeriveApiKey...");
+        apiKeyCreds = await client.createOrDeriveApiKey();
+      }
+
       if (!apiKeyCreds || !apiKeyCreds.key || !apiKeyCreds.secret || !apiKeyCreds.passphrase) {
         throw new Error("Failed to create/derive API credentials - empty response");
       }
 
-      console.log("[API Creds] Successfully created/derived API credentials for EOA:", address, "context:", currentContext);
+      console.log("[API Creds] Successfully got API credentials for EOA:", address, "context:", currentContext, "fresh:", createdFresh);
       console.log("[API Creds] API Key prefix:", apiKeyCreds.key.slice(0, 8) + "...");
 
-      // Map to our internal format (key -> apiKey) with context
       const storedCreds: StoredCreds = {
         apiKey: apiKeyCreds.key,
         secret: apiKeyCreds.secret,
         passphrase: apiKeyCreds.passphrase,
         context: currentContext,
+        createdFresh,
       };
 
-      // CRITICAL: Cache credentials by EOA address with context
       localStorage.setItem(cacheKey, JSON.stringify(storedCreds));
 
       toast.success("Trading enabled for this wallet");
@@ -168,10 +204,9 @@ export function usePolymarketApiCreds() {
         return null;
       }
       
-      // Handle "Could not create api key" - try derive fallback
       if (msg.includes("Could not create api key")) {
-        console.log("[API Creds] Create failed, attempting derive fallback...");
-        toast.error("API key creation failed. Please try again.");
+        console.log("[API Creds] Create failed - too many keys exist");
+        toast.error("Too many API keys exist. Please try 'Reset Trading Keys'.");
       } else {
         toast.error(msg);
       }
@@ -182,15 +217,14 @@ export function usePolymarketApiCreds() {
     }
   }, [address]);
 
-  // Force refresh credentials (clear cache and re-derive)
+  // Force refresh credentials (clear cache and re-create fresh keys)
   const refreshApiCreds = useCallback(async (opts?: GetApiCredsOptions): Promise<PolymarketApiCreds | null> => {
     if (!address) return null;
-    // Always clear by EOA address
-    console.log("[API Creds] Forcing credential refresh for EOA:", address);
+    console.log("[API Creds] Forcing credential refresh with forceNewKeys for EOA:", address);
     localStorage.removeItem(`${STORAGE_KEY}:${address.toLowerCase()}`);
-    // Also clear old version
     localStorage.removeItem(`polymarket_api_creds_v1:${address.toLowerCase()}`);
-    return await getApiCreds(opts);
+    // Pass forceNewKeys to ensure delete+create flow
+    return await getApiCreds({ ...opts, forceNewKeys: true });
   }, [address, getApiCreds]);
 
   return {
