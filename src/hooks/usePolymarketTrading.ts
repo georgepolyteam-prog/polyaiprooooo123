@@ -19,6 +19,9 @@ const POLYGON_CHAIN_ID = 137;
 const CLOB_HOST = "https://clob.polymarket.com";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
+// Direct Dome builder-signer URL (per Dome SDK docs - no auth needed for signing)
+const BUILDER_SIGNER_URL = "https://builder-signer.domeapi.io/builder-signer/sign";
+
 // Conditional Tokens (ERC1155) contracts on Polygon
 // Regular markets use CTF_CONTRACT, negative risk markets use NEG_RISK_ADAPTER
 const CTF_CONTRACT = "0x4d97dcd97ec945f40cf65f87097ace5ea0476045" as const;
@@ -136,10 +139,13 @@ export function usePolymarketTrading() {
       passphrase: creds.passphrase,
     };
 
-    // Keep builder config for attribution; only remove testing utilities.
+    // Use direct Dome builder-signer URL for builder attribution
+    console.log("[Trade] 🏗️ Using Dome Builder for order attribution");
+    console.log("[Trade] 🏗️ Builder URL:", BUILDER_SIGNER_URL);
+    
     const builderConfig = new BuilderConfig({
       remoteBuilderConfig: {
-        url: `${SUPABASE_URL}/functions/v1/builder-sign`,
+        url: BUILDER_SIGNER_URL,
       },
     });
 
@@ -374,6 +380,12 @@ export function usePolymarketTrading() {
 
         let response;
 
+        // Get API credentials for Dome order placement
+        const creds = await getApiCreds();
+        if (!creds || !creds.apiKey || !creds.secret || !creds.passphrase) {
+          throw new Error("Failed to get API credentials");
+        }
+
         if (params.isMarketOrder) {
           console.log("[Trade] Using createAndPostMarketOrder (FAK)...");
 
@@ -398,23 +410,63 @@ export function usePolymarketTrading() {
             }
           }
         } else {
-          console.log("[Trade] Using createAndPostOrder (GTC limit order)...");
-          response = await client.createAndPostOrder(
+          // For GTC limit orders, use createOrder() + Dome API for builder attribution
+          console.log("[Trade] 🏗️ Creating order via Dome API for builder attribution...");
+          
+          // Step 1: Create the signed order locally using ClobClient
+          const signedOrder = await client.createOrder(
             {
               tokenID: params.tokenId,
               price: validatedPrice,
               size: size,
               side: params.side === "BUY" ? Side.BUY : Side.SELL,
             },
-            { tickSize, negRisk },
-            OrderType.GTC
+            { tickSize, negRisk }
           );
+          
+          console.log("[Trade] 🏗️ Signed order created:", signedOrder);
+          
+          // Step 2: Submit to Dome API via edge function
+          const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              signedOrder,
+              orderType: "GTC",
+              credentials: {
+                apiKey: creds.apiKey,
+                apiSecret: creds.secret,
+                apiPassphrase: creds.passphrase,
+              },
+              clientOrderId: crypto.randomUUID(),
+            }),
+          });
+          
+          const domeResult = await domeResponse.json();
+          console.log("[Trade] 🏗️ Dome API response:", domeResult);
+          
+          if (!domeResponse.ok || domeResult.error) {
+            throw new Error(domeResult.error || "Failed to place order via Dome API");
+          }
+          
+          // Transform Dome response to match expected format
+          response = {
+            success: true,
+            orderID: domeResult.orderID,
+            id: domeResult.orderID,
+            status: domeResult.status,
+            makingAmount: domeResult.makingAmount,
+            takingAmount: domeResult.takingAmount,
+            transactionsHashes: domeResult.transactionsHashes,
+            builder: "dome",
+          };
         }
 
         console.log("[Trade] Order response:", response);
         
         // Log attribution info for orders
         console.log("[Trade] 📊 Order Attribution Info:");
+        console.log("[Trade]   → Builder:", response.builder || "polymarket-clob");
         console.log("[Trade]   → Wallet Address:", address);
         console.log("[Trade]   → Order Type:", params.isMarketOrder ? "MARKET (FAK)" : "LIMIT (GTC)");
         console.log("[Trade]   → Side:", params.side);
@@ -425,6 +477,9 @@ export function usePolymarketTrading() {
         console.log("[Trade]   → Neg Risk:", negRisk);
         if (response.orderID || response.id) {
           console.log("[Trade]   → Order ID:", response.orderID || response.id);
+        }
+        if (response.transactionsHashes?.length) {
+          console.log("[Trade]   → Tx Hashes:", response.transactionsHashes);
         }
 
         const errorMessage = response.errorMsg || response.error;
