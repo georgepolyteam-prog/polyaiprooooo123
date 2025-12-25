@@ -12,7 +12,7 @@ interface TradeProgressOverlayProps {
 const TRADE_STEPS = [
   { id: 'network', label: 'Network Check', stages: ['switching-network'] },
   { id: 'balance', label: 'Balance & Approvals', stages: ['checking-balance'] },
-  { id: 'credentials', label: 'Trading Session', stages: ['getting-credentials', 'fetching-market'] },
+  { id: 'credentials', label: 'Trading Session', stages: ['getting-credentials', 'refreshing-credentials', 'fetching-market'] },
   { id: 'sign', label: 'Sign Order', stages: ['signing-order'] },
   { id: 'submit', label: 'Submit to Market', stages: ['submitting-order'] },
 ];

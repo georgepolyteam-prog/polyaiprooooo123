@@ -49,6 +49,7 @@ export type TradeStage =
   | "switching-network" 
   | "checking-balance" 
   | "getting-credentials"
+  | "refreshing-credentials"
   | "fetching-market"
   | "signing-order" 
   | "submitting-order" 
@@ -60,6 +61,7 @@ const TRADE_STAGE_MESSAGES: Record<TradeStage, string> = {
   "switching-network": "Switching to Polygon network...",
   "checking-balance": "Checking balances and approvals...",
   "getting-credentials": "Initializing trading session...",
+  "refreshing-credentials": "Refreshing trading credentials...",
   "fetching-market": "Fetching market parameters...",
   "signing-order": "Please sign the order in your wallet...",
   "submitting-order": "Submitting order to Polymarket...",
@@ -106,7 +108,7 @@ export function usePolymarketTrading() {
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const publicClient = usePublicClient({ chainId: POLYGON_CHAIN_ID });
-  const { getApiCreds, clearApiCreds, isLoadingApiCreds } = usePolymarketApiCreds();
+  const { getApiCreds, clearApiCreds, refreshApiCreds, isLoadingApiCreds } = usePolymarketApiCreds();
   const { safeAddress, isDeployed, hasAllowances, deploySafe, isDeploying } = useSafeWallet();
   
   // Use Safe balance when deployed, otherwise EOA balance
@@ -475,11 +477,51 @@ export function usePolymarketTrading() {
             }),
           });
           
-          const domeResult = await domeResponse.json();
+          let domeResult = await domeResponse.json();
           console.log("[Trade] 🏗️ Dome API FAK response:", domeResult);
           
           if (!domeResponse.ok || domeResult.error) {
-            throw new Error(domeResult.error || "Failed to place FAK order via Dome API");
+            // Check for credential mismatch error - retry once with refreshed credentials
+            const errorReason = domeResult.details?.data?.reason || domeResult.error || "";
+            if (errorReason.includes("Invalid api key") || errorReason.includes("Unauthorized")) {
+              console.log("[Trade] Credential mismatch detected, refreshing and retrying...");
+              updateStage("refreshing-credentials");
+              
+              // Force refresh credentials
+              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
+              if (!refreshedCreds) {
+                throw new Error("Failed to refresh trading credentials. Please try again.");
+              }
+              
+              // Retry the order with new credentials
+              console.log("[Trade] Retrying FAK order with refreshed credentials...");
+              updateStage("submitting-order");
+              const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  signedOrder: domeSignedOrder,
+                  orderType: "FAK",
+                  credentials: {
+                    apiKey: refreshedCreds.apiKey,
+                    apiSecret: refreshedCreds.secret,
+                    apiPassphrase: refreshedCreds.passphrase,
+                  },
+                  clientOrderId: crypto.randomUUID(),
+                }),
+              });
+              
+              const retryResult = await retryResponse.json();
+              console.log("[Trade] 🏗️ Dome API FAK retry response:", retryResult);
+              
+              if (!retryResponse.ok || retryResult.error) {
+                throw new Error(retryResult.error || "Failed to place FAK order via Dome API");
+              }
+              
+              domeResult = retryResult;
+            } else {
+              throw new Error(domeResult.error || "Failed to place FAK order via Dome API");
+            }
           }
           
           response = {
@@ -542,11 +584,51 @@ export function usePolymarketTrading() {
             }),
           });
           
-          const domeResult = await domeResponse.json();
+          let domeResult = await domeResponse.json();
           console.log("[Trade] 🏗️ Dome API response:", domeResult);
           
           if (!domeResponse.ok || domeResult.error) {
-            throw new Error(domeResult.error || "Failed to place order via Dome API");
+            // Check for credential mismatch error - retry once with refreshed credentials
+            const errorReason = domeResult.details?.data?.reason || domeResult.error || "";
+            if (errorReason.includes("Invalid api key") || errorReason.includes("Unauthorized")) {
+              console.log("[Trade] Credential mismatch detected, refreshing and retrying...");
+              updateStage("refreshing-credentials");
+              
+              // Force refresh credentials
+              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
+              if (!refreshedCreds) {
+                throw new Error("Failed to refresh trading credentials. Please try again.");
+              }
+              
+              // Retry the order with new credentials
+              console.log("[Trade] Retrying GTC order with refreshed credentials...");
+              updateStage("submitting-order");
+              const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  signedOrder: domeSignedOrder,
+                  orderType: "GTC",
+                  credentials: {
+                    apiKey: refreshedCreds.apiKey,
+                    apiSecret: refreshedCreds.secret,
+                    apiPassphrase: refreshedCreds.passphrase,
+                  },
+                  clientOrderId: crypto.randomUUID(),
+                }),
+              });
+              
+              const retryResult = await retryResponse.json();
+              console.log("[Trade] 🏗️ Dome API GTC retry response:", retryResult);
+              
+              if (!retryResponse.ok || retryResult.error) {
+                throw new Error(retryResult.error || "Failed to place order via Dome API");
+              }
+              
+              domeResult = retryResult;
+            } else {
+              throw new Error(domeResult.error || "Failed to place order via Dome API");
+            }
           }
           
           // Transform Dome response to match expected format
@@ -685,6 +767,7 @@ export function usePolymarketTrading() {
       updateStage,
       tradeStage,
       getApiCreds,
+      refreshApiCreds,
       hasAllowances,
     ]
   );
@@ -701,6 +784,7 @@ export function usePolymarketTrading() {
     address,
     safeAddress,
     deploySafe,
+    clearApiCreds,
     // Trade progress state for UI
     tradeStage,
     tradeStageMessage,

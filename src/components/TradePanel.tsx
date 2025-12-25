@@ -4,7 +4,7 @@ import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, Shield, Copy, Coins } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, Shield, Copy, Coins, RotateCcw } from 'lucide-react';
 import { TradeProgressOverlay } from './TradeProgressOverlay';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -50,7 +50,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
   // Trading hooks
   const { isLinked, isLinking, linkUser, checkLinkStatus } = usePolymarketLink();
-  const { placeOrder, isPlacingOrder, tradeStage, tradeStageMessage } = usePolymarketTrading();
+  const { placeOrder, isPlacingOrder, tradeStage, tradeStageMessage, clearApiCreds } = usePolymarketTrading();
   
   // Safe wallet hooks
   const { 
@@ -311,7 +311,20 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
             )} />
             <h3 className="font-semibold text-foreground">Trade</h3>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Reset Trading Keys button - only show when linked */}
+            {isConnected && !isWrongNetwork && isLinked && (
+              <button
+                onClick={() => {
+                  clearApiCreds();
+                  toast.success('Trading keys cleared. They will be re-created on next trade.');
+                }}
+                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors p-1 rounded hover:bg-muted/50"
+                title="Reset trading credentials if having issues"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            )}
             {isConnected && !isWrongNetwork && (
               <span className="text-xs text-muted-foreground px-2 py-1 rounded-full bg-muted/50">
                 ${balance.toFixed(2)} USDC {isDeployed && safeAddress && <span className="text-primary/70">(Safe)</span>}

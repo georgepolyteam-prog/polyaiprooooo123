@@ -5,7 +5,7 @@ import { ethers } from "ethers";
 import { ClobClient } from "@polymarket/clob-client";
 
 const POLYGON_CHAIN_ID = 137;
-const STORAGE_KEY = "polymarket_api_creds_v1";
+const STORAGE_KEY = "polymarket_api_creds_v2"; // Bumped version for context tracking
 const CLOB_HOST = "https://clob.polymarket.com";
 
 // Our internal type uses apiKey (for consistency with how we store/use them)
@@ -15,12 +15,22 @@ export type PolymarketApiCreds = {
   passphrase: string;
 };
 
-function safeParseCreds(raw: string | null): PolymarketApiCreds | null {
+// Extended type with context tracking
+type StoredCreds = PolymarketApiCreds & {
+  context: "eoa" | "safe";
+};
+
+function safeParseCreds(raw: string | null): StoredCreds | null {
   if (!raw) return null;
   try {
-    const obj = JSON.parse(raw) as Partial<PolymarketApiCreds>;
+    const obj = JSON.parse(raw) as Partial<StoredCreds>;
     if (!obj.apiKey || !obj.secret || !obj.passphrase) return null;
-    return { apiKey: obj.apiKey, secret: obj.secret, passphrase: obj.passphrase };
+    return { 
+      apiKey: obj.apiKey, 
+      secret: obj.secret, 
+      passphrase: obj.passphrase,
+      context: obj.context || "eoa" // Default to EOA for old cached creds
+    };
   } catch {
     return null;
   }
@@ -46,7 +56,10 @@ export function usePolymarketApiCreds() {
     const addrToClear = targetAddress || address;
     if (!addrToClear) return;
     localStorage.removeItem(`${STORAGE_KEY}:${addrToClear.toLowerCase()}`);
-    toast.message("Cleared Polymarket API credentials");
+    // Also clear old version keys
+    localStorage.removeItem(`polymarket_api_creds_v1:${addrToClear.toLowerCase()}`);
+    console.log("[API Creds] Cleared credentials for:", addrToClear);
+    toast.message("Cleared trading credentials");
   }, [address]);
 
   const getApiCreds = useCallback(async (opts?: GetApiCredsOptions): Promise<PolymarketApiCreds | null> => {
@@ -60,17 +73,27 @@ export function usePolymarketApiCreds() {
     // The API key is derived from the EOA signature, so it's always linked to the EOA
     const cacheKey = `${STORAGE_KEY}:${address.toLowerCase()}`;
     const usingSafe = !!opts?.funderAddress && opts.funderAddress.toLowerCase() !== address.toLowerCase();
+    const currentContext: "eoa" | "safe" = usingSafe ? "safe" : "eoa";
 
     console.log("[API Creds] EOA (signer):", address);
     console.log("[API Creds] Funder address:", opts?.funderAddress || address);
     console.log("[API Creds] Using Safe:", usingSafe);
+    console.log("[API Creds] Current context:", currentContext);
     console.log("[API Creds] Cache key (always EOA):", cacheKey);
 
     // Check for existing cached credentials for the EOA
     const existing = safeParseCreds(localStorage.getItem(cacheKey));
+    
+    // CRITICAL: Check if context changed (EOA -> Safe or Safe -> EOA)
     if (existing) {
-      console.log("[API Creds] Using cached credentials for EOA:", address);
-      return existing;
+      if (existing.context !== currentContext) {
+        console.log(`[API Creds] Context changed from ${existing.context} to ${currentContext}, refreshing credentials...`);
+        localStorage.removeItem(cacheKey);
+        // Continue to re-derive below
+      } else {
+        console.log("[API Creds] Using cached credentials for EOA:", address, "context:", existing.context);
+        return { apiKey: existing.apiKey, secret: existing.secret, passphrase: existing.passphrase };
+      }
     }
 
     setIsLoading(true);
@@ -95,7 +118,7 @@ export function usePolymarketApiCreds() {
       // signatureType 0 = EOA (direct wallet orders)
       // NOTE: signatureType affects order signing, but API credentials are still derived for EOA
       const signatureType = usingSafe ? 2 : 0;
-      console.log("[API Creds] Creating ClobClient with signatureType:", signatureType);
+      console.log("[API Creds] Creating ClobClient with signatureType:", signatureType, "context:", currentContext);
       
       toast.info("Polymarket setup: please sign to enable trading (one-time per wallet)");
 
@@ -120,21 +143,22 @@ export function usePolymarketApiCreds() {
         throw new Error("Failed to create/derive API credentials - empty response");
       }
 
-      console.log("[API Creds] Successfully created/derived API credentials for EOA:", address);
+      console.log("[API Creds] Successfully created/derived API credentials for EOA:", address, "context:", currentContext);
       console.log("[API Creds] API Key prefix:", apiKeyCreds.key.slice(0, 8) + "...");
 
-      // Map to our internal format (key -> apiKey)
-      const creds: PolymarketApiCreds = {
+      // Map to our internal format (key -> apiKey) with context
+      const storedCreds: StoredCreds = {
         apiKey: apiKeyCreds.key,
         secret: apiKeyCreds.secret,
         passphrase: apiKeyCreds.passphrase,
+        context: currentContext,
       };
 
-      // CRITICAL: Cache credentials by EOA address, NOT Safe address
-      localStorage.setItem(cacheKey, JSON.stringify(creds));
+      // CRITICAL: Cache credentials by EOA address with context
+      localStorage.setItem(cacheKey, JSON.stringify(storedCreds));
 
       toast.success("Trading enabled for this wallet");
-      return creds;
+      return { apiKey: storedCreds.apiKey, secret: storedCreds.secret, passphrase: storedCreds.passphrase };
     } catch (e: unknown) {
       console.error("[API Creds] Error:", e);
       const msg = e instanceof Error ? e.message : "Failed to enable trading";
@@ -164,11 +188,13 @@ export function usePolymarketApiCreds() {
     // Always clear by EOA address
     console.log("[API Creds] Forcing credential refresh for EOA:", address);
     localStorage.removeItem(`${STORAGE_KEY}:${address.toLowerCase()}`);
+    // Also clear old version
+    localStorage.removeItem(`polymarket_api_creds_v1:${address.toLowerCase()}`);
     return await getApiCreds(opts);
   }, [address, getApiCreds]);
 
   return {
-    apiCreds: cached,
+    apiCreds: cached ? { apiKey: cached.apiKey, secret: cached.secret, passphrase: cached.passphrase } : null,
     getApiCreds,
     clearApiCreds,
     refreshApiCreds,
