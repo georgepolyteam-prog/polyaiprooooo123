@@ -189,14 +189,30 @@ export default function LiveTrades() {
       }
     }
     
-    toast(`🐋 ${volume >= MEGA_WHALE_THRESHOLD ? 'MEGA ' : ''}Whale Alert!`, {
-      description: `$${volume.toFixed(0)} ${trade.side} on ${trade.title?.slice(0, 50)}...`,
-      duration: 5000,
-      action: {
-        label: 'View',
-        onClick: () => setSelectedTrade(trade),
-      },
-    });
+    toast.custom(
+      (t) => (
+        <div
+          onClick={() => {
+            setSelectedTrade(trade);
+            toast.dismiss(t);
+          }}
+          className="cursor-pointer bg-card border border-border rounded-lg p-4 shadow-lg flex items-start gap-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="text-2xl">🐋</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-foreground">
+              {volume >= MEGA_WHALE_THRESHOLD ? 'MEGA ' : ''}Whale Alert!
+            </p>
+            <p className="text-sm text-muted-foreground truncate">
+              ${volume.toFixed(0)} {trade.side} on {trade.title?.slice(0, 50)}...
+            </p>
+          </div>
+        </div>
+      ),
+      {
+        duration: 5000,
+      }
+    );
   }, [soundEnabled]);
 
   const connectWebSocket = useCallback(async () => {
