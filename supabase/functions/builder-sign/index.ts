@@ -97,25 +97,16 @@ serve(async (req) => {
       return json(400, { error: "Missing method or path" });
     }
 
-    const DOME_API_KEY = Deno.env.get("DOME_API_KEY");
-    if (!DOME_API_KEY) {
-      console.warn("[BUILDER-SIGN] DOME_API_KEY not configured - builder attribution will be skipped");
-      return json(200, { 
-        skipped: true, 
-        reason: "DOME_API_KEY not configured",
-        message: "Builder attribution skipped - trades will still work"
-      });
-    }
-
     console.log("[BUILDER-SIGN] Proxying to Dome builder-signer:", method, path);
 
     try {
-      // Forward the request to Dome's builder-signer with Authorization header
+      // Forward the request to Dome's builder-signer
+      // NOTE: Per Dome SDK docs, builder-signer does NOT require Authorization header
+      // The DOME_API_KEY is only needed for order placement via api.domeapi.io
       const domeResponse = await fetch(DOME_BUILDER_SIGNER_URL, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${DOME_API_KEY}`,
         },
         body: JSON.stringify({ method, path, body, timestamp }),
       });
