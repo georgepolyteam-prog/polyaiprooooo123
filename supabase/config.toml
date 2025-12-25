@@ -33,8 +33,8 @@ verify_jwt = false
 [functions.builder-sign]
 verify_jwt = false
 
-[functions.link-polymarket-user]
+[functions.get-dome-api-key]
 verify_jwt = false
 
-[functions.dome-place-order]
+[functions.dome-router]
 verify_jwt = false

@@ -53,7 +53,6 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     safeAddress,
     isDeployed,
     hasAllowances,
-    setAllowances,
     isPlacingOrder,
     placeOrder,
     tradeStage,
