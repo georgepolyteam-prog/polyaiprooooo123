@@ -38,10 +38,18 @@ serve(async (req) => {
   }
 
   try {
-    const { signedOrder, makerAddress, apiCreds } = await req.json();
+    const { signedOrder, orderType = "GTC", apiCreds, signerAddress } = await req.json();
 
-    if (!signedOrder || !makerAddress) {
-      return json(400, { error: "Missing signedOrder or makerAddress" });
+    if (!signedOrder) {
+      return json(400, { error: "Missing signedOrder" });
+    }
+
+    // For Polymarket CLOB L2 auth, POLY_ADDRESS MUST be the EOA signer address
+    const eoaAddress: string | undefined =
+      signerAddress || signedOrder.signer || signedOrder.signerAddress;
+
+    if (!eoaAddress) {
+      return json(400, { error: "Missing signerAddress (EOA)" });
     }
 
     // Use user's API creds if provided, otherwise use builder creds
@@ -49,7 +57,6 @@ serve(async (req) => {
     const userSecret = apiCreds?.secret;
     const userPassphrase = apiCreds?.passphrase;
 
-    // Validate we have some credentials to use
     const hasUserCreds = userApiKey && userSecret && userPassphrase;
     const hasBuilderCreds = POLY_API_KEY && POLY_API_SECRET && POLY_API_PASSPHRASE;
 
@@ -58,49 +65,70 @@ serve(async (req) => {
       return json(500, { error: "Server configuration error - no credentials" });
     }
 
-    console.log("[Submit Order] Submitting order for maker:", makerAddress);
-    console.log("[Submit Order] Using:", hasUserCreds ? "user credentials" : "builder credentials");
-    console.log("[Submit Order] Order:", JSON.stringify(signedOrder, null, 2));
+    console.log("[Submit Order] Submitting order");
+    console.log("[Submit Order]   → EOA (POLY_ADDRESS):", eoaAddress);
+    console.log("[Submit Order]   → Maker:", signedOrder.maker);
+    console.log("[Submit Order]   → SignatureType:", signedOrder.signatureType);
+    console.log("[Submit Order]   → Using:", hasUserCreds ? "user credentials" : "builder credentials");
 
-    // The signedOrder from ClobClient.createOrder() contains the order struct
-    // We need to wrap it in the expected API format
     const path = "/order";
-    const orderPayload = {
-      order: signedOrder,
-      owner: makerAddress,
-      orderType: "GTC",
+
+    // Normalize minimal fields to match CLOB expectations
+    const normalizedSide =
+      typeof signedOrder.side === "string"
+        ? signedOrder.side.toUpperCase() === "BUY"
+          ? 0
+          : 1
+        : signedOrder.side;
+
+    const normalizedOrder = {
+      salt: typeof signedOrder.salt === "number" ? signedOrder.salt : Number(signedOrder.salt),
+      maker: signedOrder.maker,
+      signer: signedOrder.signer,
+      taker: signedOrder.taker,
+      tokenId: signedOrder.tokenId,
+      makerAmount: signedOrder.makerAmount,
+      takerAmount: signedOrder.takerAmount,
+      side: normalizedSide,
+      expiration: signedOrder.expiration,
+      nonce: signedOrder.nonce,
+      feeRateBps: signedOrder.feeRateBps,
+      signatureType: signedOrder.signatureType,
+      signature: signedOrder.signature,
     };
-    const body = JSON.stringify(orderPayload);
 
-    // Generate timestamp for L2 auth (milliseconds)
-    const timestamp = Date.now().toString();
-
-    // Use user's credentials for L2 auth
+    // IMPORTANT: body format must match @polymarket/clob-client orderToJson()
+    // owner = apiKey (NOT an address)
     const apiKey = hasUserCreds ? userApiKey : POLY_API_KEY!;
     const secret = hasUserCreds ? userSecret : POLY_API_SECRET!;
     const passphrase = hasUserCreds ? userPassphrase : POLY_API_PASSPHRASE!;
 
-    // Generate L2 HMAC signature
-    const signature = generateL2Signature(secret, timestamp, "POST", path, body);
-
-    console.log("[Submit Order] Generated L2 signature");
-    console.log("[Submit Order] Timestamp:", timestamp);
-    console.log("[Submit Order] API Key:", apiKey.substring(0, 8) + "...");
-
-    // Build headers for L2 authenticated request
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "POLY-ADDRESS": makerAddress,
-      "POLY-SIGNATURE": signature,
-      "POLY-TIMESTAMP": timestamp,
-      "POLY-API-KEY": apiKey,
-      "POLY-PASSPHRASE": passphrase,
+    const orderPayload = {
+      deferExec: false,
+      order: normalizedOrder,
+      owner: apiKey,
+      orderType,
     };
 
-    // Add builder attribution headers if we have builder credentials
+    const body = JSON.stringify(orderPayload);
+
+    // CRITICAL: Polymarket uses seconds timestamps (matches @polymarket/clob-client)
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+
+    const signature = generateL2Signature(secret, timestamp, "POST", path, body);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "POLY_ADDRESS": eoaAddress,
+      "POLY_SIGNATURE": signature,
+      "POLY_TIMESTAMP": timestamp,
+      "POLY_API_KEY": apiKey,
+      "POLY_PASSPHRASE": passphrase,
+    };
+
+    // Builder attribution headers (optional)
     if (hasBuilderCreds && hasUserCreds) {
-      // When using user creds, add builder headers separately for attribution
-      const builderTimestamp = Date.now().toString();
+      const builderTimestamp = Math.floor(Date.now() / 1000).toString();
       const builderSignature = generateL2Signature(
         POLY_API_SECRET!,
         builderTimestamp,
@@ -108,16 +136,14 @@ serve(async (req) => {
         path,
         body
       );
-      
+
       headers["POLY_BUILDER_SIGNATURE"] = builderSignature;
       headers["POLY_BUILDER_TIMESTAMP"] = builderTimestamp;
       headers["POLY_BUILDER_API_KEY"] = POLY_API_KEY!;
       headers["POLY_BUILDER_PASSPHRASE"] = POLY_API_PASSPHRASE!;
-      
       console.log("[Submit Order] Added builder attribution headers");
     }
 
-    // Submit to CLOB API
     const response = await fetch(`${CLOB_BASE_URL}${path}`, {
       method: "POST",
       headers,
@@ -129,7 +155,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error("[Submit Order] CLOB API error:", responseText);
-      
+
       let errorMessage = responseText;
       try {
         const errorJson = JSON.parse(responseText);
@@ -137,22 +163,21 @@ serve(async (req) => {
       } catch {
         // Keep original text
       }
-      
-      return json(response.status, { 
+
+      return json(response.status, {
         error: errorMessage,
-        success: false 
+        success: false,
       });
     }
 
     const result = JSON.parse(responseText);
     console.log("[Submit Order] ✅ Order placed successfully:", result);
 
-    return json(200, { 
-      success: true, 
+    return json(200, {
+      success: true,
       orderID: result.orderID || result.id,
-      order: result 
+      order: result,
     });
-  } catch (error: unknown) {
     console.error("[Submit Order] Error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
     return json(500, { error: message, success: false });

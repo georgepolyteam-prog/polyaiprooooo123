@@ -11,13 +11,13 @@ import {
   type BalanceAllowanceResponse,
 } from "@polymarket/clob-client";
 import { BuilderConfig } from "@polymarket/builder-signing-sdk";
+import { supabase } from "@/integrations/supabase/client";
 import { useUSDCBalance } from "./useUSDCBalance";
 import { usePolymarketApiCreds } from "./usePolymarketApiCreds";
 import { useSafeWallet } from "./useSafeWallet";
 
 const POLYGON_CHAIN_ID = 137;
 const CLOB_HOST = "https://clob.polymarket.com";
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // Direct Dome builder-signer URL (per Dome SDK docs - no auth needed for signing)
 const BUILDER_SIGNER_URL = "https://builder-signer.domeapi.io/builder-signer/sign";
@@ -437,12 +437,11 @@ export function usePolymarketTrading() {
         }
 
         if (params.isMarketOrder) {
-          // Route FAK orders through Dome for builder attribution
-          console.log("[Trade] 🏗️ Creating FAK order via Dome API for builder attribution...");
-          
+          // FAK market orders
+          console.log("[Trade] 🏗️ Creating FAK order...");
+
           const marketOrderAmount = params.side === "SELL" ? size : params.amount;
-          
-          // Use createMarketOrder to get a signed order for FAK
+
           const signedOrder = await client.createMarketOrder(
             {
               tokenID: params.tokenId,
@@ -451,104 +450,63 @@ export function usePolymarketTrading() {
             },
             { tickSize, negRisk }
           );
-          
-          // Convert numeric side to string for Dome API (0 = BUY, 1 = SELL)
-          const domeSignedOrder = {
-            ...signedOrder,
-            side: signedOrder.side === 0 ? "BUY" : "SELL",
-          };
-          
-          console.log("[Trade] 🏗️ Signed FAK order created:", domeSignedOrder);
-          
-          // Submit to Dome API via edge function with FAK order type
+
+          console.log("[Trade] Signed FAK order created:", signedOrder);
+
+          // Submit via backend (matches @polymarket/clob-client signing rules)
           updateStage("submitting-order");
-          const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              signedOrder: domeSignedOrder,
-              orderType: "FAK",
-              credentials: {
-                apiKey: creds.apiKey,
-                apiSecret: creds.secret,
-                apiPassphrase: creds.passphrase,
+          const { data: submitData, error: submitError } = await supabase.functions.invoke(
+            "submit-order",
+            {
+              body: {
+                signedOrder,
+                orderType: "FAK",
+                apiCreds: creds,
+                signerAddress: address,
               },
-              clientOrderId: crypto.randomUUID(),
-            }),
-          });
-          
-          let domeResult = await domeResponse.json();
-          console.log("[Trade] 🏗️ Dome API FAK response:", domeResult);
-          
-          if (!domeResponse.ok || domeResult.error) {
-            // Check for credential mismatch error - retry once with refreshed credentials
-            const errorReason = domeResult.details?.data?.reason || domeResult.error || "";
-            if (errorReason.includes("Invalid api key") || errorReason.includes("Unauthorized")) {
-              console.log("[Trade] Credential mismatch detected, refreshing and retrying...");
-              updateStage("refreshing-credentials");
-              
-              // Force refresh credentials
-              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
-              if (!refreshedCreds) {
-                throw new Error("Failed to refresh trading credentials. Please try again.");
-              }
-              
-              // Retry the order with new credentials
-              console.log("[Trade] Retrying FAK order with refreshed credentials...");
-              updateStage("submitting-order");
-              const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  signedOrder: domeSignedOrder,
-                  orderType: "FAK",
-                  credentials: {
-                    apiKey: refreshedCreds.apiKey,
-                    apiSecret: refreshedCreds.secret,
-                    apiPassphrase: refreshedCreds.passphrase,
-                  },
-                  clientOrderId: crypto.randomUUID(),
-                }),
-              });
-              
-              const retryResult = await retryResponse.json();
-              console.log("[Trade] 🏗️ Dome API FAK retry response:", retryResult);
-              
-              if (!retryResponse.ok || retryResult.error) {
-                throw new Error(retryResult.error || "Failed to place FAK order via Dome API");
-              }
-              
-              domeResult = retryResult;
-            } else {
-              throw new Error(domeResult.error || "Failed to place FAK order via Dome API");
             }
+          );
+
+          if (submitError) {
+            const message = submitError.message || "Failed to submit order";
+            throw new Error(message);
           }
-          
-          response = {
-            success: true,
-            orderID: domeResult.orderID,
-            id: domeResult.orderID,
-            status: domeResult.status,
-            makingAmount: domeResult.makingAmount,
-            takingAmount: domeResult.takingAmount,
-            transactionsHashes: domeResult.transactionsHashes,
-            builder: "dome",
-          };
-          
-          // Log partial fill info for FAK orders
-          if (domeResult.makingAmount) {
-            const filled = parseFloat(domeResult.makingAmount);
-            if (filled > 0 && filled < marketOrderAmount) {
-              toast.info(
-                `Partially filled: ${filled.toFixed(2)} of ${marketOrderAmount.toFixed(2)} shares`
+
+          if (!submitData?.success) {
+            const err = submitData?.error || "Order rejected";
+            // Retry once if auth error by refreshing credentials
+            if (typeof err === "string" && (err.includes("Invalid api key") || err.includes("Unauthorized"))) {
+              console.log("[Trade] Auth error detected, refreshing credentials and retrying...");
+              updateStage("refreshing-credentials");
+              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
+              if (!refreshedCreds) throw new Error("Failed to refresh trading credentials. Please try again.");
+
+              updateStage("submitting-order");
+              const { data: retryData, error: retryError } = await supabase.functions.invoke(
+                "submit-order",
+                {
+                  body: {
+                    signedOrder,
+                    orderType: "FAK",
+                    apiCreds: refreshedCreds,
+                    signerAddress: address,
+                  },
+                }
               );
+              if (retryError) throw new Error(retryError.message || "Failed to submit order");
+              if (!retryData?.success) throw new Error(retryData?.error || "Order rejected");
+
+              response = { success: true, orderID: retryData.orderID, id: retryData.orderID, builder: "direct" };
+            } else {
+              throw new Error(err);
             }
+          } else {
+            response = { success: true, orderID: submitData.orderID, id: submitData.orderID, builder: "direct" };
           }
         } else {
-          // For GTC limit orders, use createOrder() + Dome API for builder attribution
-          console.log("[Trade] 🏗️ Creating order via Dome API for builder attribution...");
-          
-          // Step 1: Create the signed order locally using ClobClient
+          // GTC limit orders
+          console.log("[Trade] 🏗️ Creating GTC order...");
+
           const signedOrder = await client.createOrder(
             {
               tokenID: params.tokenId,
@@ -558,90 +516,57 @@ export function usePolymarketTrading() {
             },
             { tickSize, negRisk }
           );
-          
-          // Convert numeric side to string for Dome API (0 = BUY, 1 = SELL)
-          const domeSignedOrder = {
-            ...signedOrder,
-            side: signedOrder.side === 0 ? "BUY" : "SELL",
-          };
-          
-          console.log("[Trade] 🏗️ Signed GTC order created:", domeSignedOrder);
-          
-          // Step 2: Submit to Dome API via edge function
+
+          console.log("[Trade] Signed GTC order created:", signedOrder);
+
           updateStage("submitting-order");
-          const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              signedOrder: domeSignedOrder,
-              orderType: "GTC",
-              credentials: {
-                apiKey: creds.apiKey,
-                apiSecret: creds.secret,
-                apiPassphrase: creds.passphrase,
+          const { data: submitData, error: submitError } = await supabase.functions.invoke(
+            "submit-order",
+            {
+              body: {
+                signedOrder,
+                orderType: "GTC",
+                apiCreds: creds,
+                signerAddress: address,
               },
-              clientOrderId: crypto.randomUUID(),
-            }),
-          });
-          
-          let domeResult = await domeResponse.json();
-          console.log("[Trade] 🏗️ Dome API response:", domeResult);
-          
-          if (!domeResponse.ok || domeResult.error) {
-            // Check for credential mismatch error - retry once with refreshed credentials
-            const errorReason = domeResult.details?.data?.reason || domeResult.error || "";
-            if (errorReason.includes("Invalid api key") || errorReason.includes("Unauthorized")) {
-              console.log("[Trade] Credential mismatch detected, refreshing and retrying...");
-              updateStage("refreshing-credentials");
-              
-              // Force refresh credentials
-              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
-              if (!refreshedCreds) {
-                throw new Error("Failed to refresh trading credentials. Please try again.");
-              }
-              
-              // Retry the order with new credentials
-              console.log("[Trade] Retrying GTC order with refreshed credentials...");
-              updateStage("submitting-order");
-              const retryResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  signedOrder: domeSignedOrder,
-                  orderType: "GTC",
-                  credentials: {
-                    apiKey: refreshedCreds.apiKey,
-                    apiSecret: refreshedCreds.secret,
-                    apiPassphrase: refreshedCreds.passphrase,
-                  },
-                  clientOrderId: crypto.randomUUID(),
-                }),
-              });
-              
-              const retryResult = await retryResponse.json();
-              console.log("[Trade] 🏗️ Dome API GTC retry response:", retryResult);
-              
-              if (!retryResponse.ok || retryResult.error) {
-                throw new Error(retryResult.error || "Failed to place order via Dome API");
-              }
-              
-              domeResult = retryResult;
-            } else {
-              throw new Error(domeResult.error || "Failed to place order via Dome API");
             }
+          );
+
+          if (submitError) {
+            const message = submitError.message || "Failed to submit order";
+            throw new Error(message);
           }
-          
-          // Transform Dome response to match expected format
-          response = {
-            success: true,
-            orderID: domeResult.orderID,
-            id: domeResult.orderID,
-            status: domeResult.status,
-            makingAmount: domeResult.makingAmount,
-            takingAmount: domeResult.takingAmount,
-            transactionsHashes: domeResult.transactionsHashes,
-            builder: "dome",
-          };
+
+          if (!submitData?.success) {
+            const err = submitData?.error || "Order rejected";
+            if (typeof err === "string" && (err.includes("Invalid api key") || err.includes("Unauthorized"))) {
+              console.log("[Trade] Auth error detected, refreshing credentials and retrying...");
+              updateStage("refreshing-credentials");
+              const refreshedCreds = await refreshApiCreds({ funderAddress: useSafeWallet ? safeAddress : undefined });
+              if (!refreshedCreds) throw new Error("Failed to refresh trading credentials. Please try again.");
+
+              updateStage("submitting-order");
+              const { data: retryData, error: retryError } = await supabase.functions.invoke(
+                "submit-order",
+                {
+                  body: {
+                    signedOrder,
+                    orderType: "GTC",
+                    apiCreds: refreshedCreds,
+                    signerAddress: address,
+                  },
+                }
+              );
+              if (retryError) throw new Error(retryError.message || "Failed to submit order");
+              if (!retryData?.success) throw new Error(retryData?.error || "Order rejected");
+
+              response = { success: true, orderID: retryData.orderID, id: retryData.orderID, builder: "direct" };
+            } else {
+              throw new Error(err);
+            }
+          } else {
+            response = { success: true, orderID: submitData.orderID, id: submitData.orderID, builder: "direct" };
+          }
         }
 
         console.log("[Trade] Order response:", response);
