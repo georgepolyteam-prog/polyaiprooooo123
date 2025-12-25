@@ -128,15 +128,40 @@ export default function MyTrades() {
   const { apiCreds, getApiCreds } = usePolymarketApiCreds();
   const { safeAddress, isDeployed } = useSafeWallet();
   
+  // Wait for Safe state to load before fetching positions
+  const [safeStateLoaded, setSafeStateLoaded] = useState(false);
+  
+  useEffect(() => {
+    // Give Safe state a moment to load from localStorage + verify on-chain
+    const timer = setTimeout(() => {
+      console.log('[MyTrades] Safe state loaded - isDeployed:', isDeployed, 'safeAddress:', safeAddress);
+      setSafeStateLoaded(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+  
   // Determine which address to query - use Safe if deployed, otherwise EOA
+  // Also check localStorage for cached Safe deployment status
   const queryAddress = useMemo(() => {
-    if (isDeployed && safeAddress) {
-      console.log('[MyTrades] Using Safe address for queries:', safeAddress);
+    // Check localStorage cache for Safe deployment
+    const cachedSafeDeployed = safeAddress ? 
+      localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`) === 'true' : false;
+    const isSafeActive = isDeployed || cachedSafeDeployed;
+    
+    if (isSafeActive && safeAddress) {
+      console.log('[MyTrades] Using Safe address for queries:', safeAddress, '(cached:', cachedSafeDeployed, ')');
       return safeAddress;
     }
     console.log('[MyTrades] Using EOA address for queries:', address);
     return address;
   }, [isDeployed, safeAddress, address]);
+  
+  // Determine wallet type for display
+  const walletType = useMemo(() => {
+    const cachedSafeDeployed = safeAddress ? 
+      localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`) === 'true' : false;
+    return (isDeployed || cachedSafeDeployed) && safeAddress ? 'safe' : 'eoa';
+  }, [isDeployed, safeAddress]);
   
   // State for copy button feedback
   const [copiedAddress, setCopiedAddress] = useState(false);
@@ -284,12 +309,13 @@ export default function MyTrades() {
     }
   }, [address, getOpenOrders, isConnected]);
 
-  // Auto-fetch when wallet is connected
+  // Auto-fetch when wallet is connected - wait for Safe state to load first
   useEffect(() => {
-    if (isConnected && address && !hasTriedFetchPositions) {
+    if (isConnected && address && !hasTriedFetchPositions && safeStateLoaded) {
+      console.log('[MyTrades] Safe state ready, fetching positions...');
       fetchPositions();
     }
-  }, [isConnected, address, hasTriedFetchPositions, fetchPositions]);
+  }, [isConnected, address, hasTriedFetchPositions, fetchPositions, safeStateLoaded]);
 
   // Poll open orders every 10s
   useEffect(() => {
@@ -514,9 +540,17 @@ export default function MyTrades() {
             </h1>
             <div className="text-muted-foreground flex items-center gap-2 flex-wrap">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>
-                {isDeployed ? 'Safe Wallet' : 'EOA Wallet'}:
-              </span>
+              {walletType === 'safe' ? (
+                <Badge variant="outline" className="bg-violet-500/20 border-violet-500/50 text-violet-300 gap-1">
+                  <Shield className="w-3 h-3" />
+                  Safe Wallet
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-blue-500/20 border-blue-500/50 text-blue-300 gap-1">
+                  <Wallet className="w-3 h-3" />
+                  EOA Wallet
+                </Badge>
+              )}
               <button
                 onClick={() => {
                   if (queryAddress) {

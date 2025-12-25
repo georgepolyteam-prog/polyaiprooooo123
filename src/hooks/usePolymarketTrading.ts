@@ -272,7 +272,23 @@ export function usePolymarketTrading() {
           // Negative risk markets: NEG_RISK_ADAPTER
           if (publicClient) {
             try {
-              const funderAddress = isDeployed && safeAddress ? safeAddress : address;
+              // Re-check Safe deployment status from localStorage to avoid stale hook state
+              const cachedSafeDeployed = safeAddress ? 
+                localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`) === 'true' : false;
+              const currentlyDeployed = isDeployed || cachedSafeDeployed;
+              const funderAddress = currentlyDeployed && safeAddress ? safeAddress : address;
+              
+              // Debug logging for SELL balance check
+              console.log('[Trade] SELL balance check using:', {
+                funderAddress,
+                isDeployed,
+                cachedSafeDeployed,
+                currentlyDeployed,
+                safeAddress,
+                eoaAddress: address,
+                usingType: currentlyDeployed && safeAddress ? 'SAFE' : 'EOA'
+              });
+              
               const tokenContract = negRisk ? NEG_RISK_ADAPTER : CTF_CONTRACT;
               
               console.log(`[Trade] Checking balance on ${negRisk ? 'NEG_RISK_ADAPTER' : 'CTF_CONTRACT'}: ${tokenContract}`);
