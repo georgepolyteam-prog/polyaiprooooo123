@@ -38,3 +38,45 @@ verify_jwt = false
 
 [functions.dome-router]
 verify_jwt = false
+
+[functions.dome-ws-url]
+verify_jwt = false
+
+[functions.polymarket-live]
+verify_jwt = false
+
+[functions.get-user-positions]
+verify_jwt = false
+
+[functions.get-user-trades]
+verify_jwt = false
+
+[functions.poly-trade]
+verify_jwt = false
+
+[functions.generate-hmac]
+verify_jwt = false
+
+[functions.queue-status]
+verify_jwt = false
+
+[functions.wallet-analytics]
+verify_jwt = false
+
+[functions.text-to-voice]
+verify_jwt = false
+
+[functions.voice-to-text]
+verify_jwt = false
+
+[functions.update-cache]
+verify_jwt = false
+
+[functions.update-leaderboard-cache]
+verify_jwt = false
+
+[functions.telegram-bot]
+verify_jwt = false
+
+[functions.twitter-poll-mentions]
+verify_jwt = false
