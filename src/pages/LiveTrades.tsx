@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trade-data';
+import domeLogo from '@/assets/dome-logo.png';
 
 interface Trade {
   token_id: string;
@@ -554,6 +555,25 @@ export default function LiveTrades() {
       </div>
 
       <main className="flex-1 relative z-10 container mx-auto px-4 py-8">
+        {/* Powered by DOME Attribution */}
+        <div className="mb-6 flex items-center justify-center">
+          <a 
+            href="https://domeapi.io" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-background/80 to-muted/30 border border-border/50 hover:border-primary/40 transition-all group backdrop-blur-sm"
+          >
+            <span className="text-xs text-muted-foreground/70">Powered by</span>
+            <div className="flex items-center gap-1.5">
+              <img src={domeLogo} alt="DOME" className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
+                DOME
+              </span>
+            </div>
+            <ExternalLink className="w-3 h-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
+          </a>
+        </div>
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
@@ -561,16 +581,7 @@ export default function LiveTrades() {
               Live Trade Feed
             </h1>
             <p className="text-muted-foreground text-sm flex items-center gap-1 flex-wrap">
-              Real-time Polymarket activity • Powered by{" "}
-              <a 
-                href="https://domeapi.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-poly-cyan font-semibold hover:underline transition-colors"
-              >
-                DOME
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              Real-time Polymarket activity
             </p>
           </div>
 
