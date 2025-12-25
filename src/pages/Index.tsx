@@ -505,7 +505,7 @@ const Index = () => {
 
       <div className="flex flex-1 relative overflow-hidden">
         {/* Main Chat Area */}
-        <main className={`relative flex-1 flex flex-col pb-36 sm:pb-32 overflow-y-auto ${showSidebar && marketData ? 'lg:pr-[40%]' : ''}`}>
+        <main className={`relative flex-1 flex flex-col pb-44 md:pb-32 overflow-y-auto ${showSidebar && marketData ? 'lg:pr-[40%]' : ''}`}>
           {!hasMessages ? (
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-5xl mx-auto px-4 py-8 sm:py-16">

@@ -546,7 +546,7 @@ export default function LiveTrades() {
   const isStale = lastUpdateAgo > 10;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-24 md:pb-0">
       <TopBar />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
