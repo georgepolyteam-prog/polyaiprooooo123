@@ -21,7 +21,7 @@ const menuItems = [
 const additionalMenuItems = [
   { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
   { id: "help", label: "Help & Support", icon: HelpCircle, path: "/help" },
-  { id: "docs", label: "Documentation", icon: FileText, path: "/about" },
+  { id: "docs", label: "Documentation", icon: FileText, path: "/docs" },
 ];
 
 export function MobileBottomNav() {

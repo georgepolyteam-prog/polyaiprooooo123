@@ -802,8 +802,19 @@ const About = () => {
         </div>
       </section>
 
+      {/* Quick Links */}
+      <section className="py-8 px-4 border-t border-white/10">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-gray-400 mb-4">Need more details?</p>
+          <Link to="/docs" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors">
+            <BookOpen className="w-4 h-4" />
+            View Full Documentation
+          </Link>
+        </div>
+      </section>
+
       {/* Floating CTA for Mobile */}
-      <div className="fixed bottom-6 left-4 right-4 z-40 md:hidden">
+      <div className="fixed bottom-24 left-4 right-4 z-40 md:hidden">
         <Link to="/chat">
           <Button className="w-full py-4 text-base font-bold bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 hover:from-blue-600 hover:via-purple-600 hover:to-blue-600 shadow-2xl shadow-blue-500/30 rounded-xl">
             <MessageSquare className="w-5 h-5 mr-2" />

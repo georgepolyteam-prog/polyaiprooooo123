@@ -562,8 +562,8 @@ const Index = () => {
             </div>
           )}
 
-          {/* Input Area */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
+          {/* Input Area - positioned above MobileBottomNav on mobile */}
+          <div className="fixed bottom-24 md:bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none z-40">
             <div className={`max-w-4xl mx-auto pointer-events-auto ${showSidebar && marketData ? 'lg:mr-[40%]' : ''}`}>
               {isAuthenticated ? (
                 <UnifiedInput
