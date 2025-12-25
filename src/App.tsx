@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -39,6 +40,7 @@ const AppContent = () => {
           <Route path="/chat" element={<Index />} />
           <Route path="/markets" element={<Markets />} />
           <Route path="/trades" element={<LiveTrades />} />
+          <Route path="/live-trades" element={<LiveTrades />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
@@ -55,6 +57,7 @@ const AppContent = () => {
           <Route path="/adminpanel" element={<AdminPanel />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <MobileBottomNav />
       </BrowserRouter>
     </>
   );
