@@ -1,12 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { PolymarketRouter } from "npm:@dome-api/sdk@^0.17.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const POLYGON_CHAIN_ID = 137;
 const DOME_API_URL = 'https://api.domeapi.io/v1';
 
 serve(async (req) => {
@@ -26,18 +24,7 @@ serve(async (req) => {
       orderType,
     });
 
-    // DEBUG: Log credentials presence
-    console.log("[dome-place-order] Credentials check:", {
-      hasApiKey: !!credentials?.apiKey,
-      hasApiSecret: !!credentials?.apiSecret,
-      hasApiPassphrase: !!credentials?.apiPassphrase,
-      apiKeyLength: credentials?.apiKey?.length,
-      apiSecretLength: credentials?.apiSecret?.length,
-      apiPassphraseLength: credentials?.apiPassphrase?.length,
-      apiKeyPrefix: credentials?.apiKey?.substring(0, 8),
-    });
-
-    // Validate credentials before proceeding
+    // Validate credentials
     if (!credentials?.apiKey || !credentials?.apiSecret || !credentials?.apiPassphrase) {
       console.error('[dome-place-order] Missing credential fields');
       return new Response(
@@ -60,40 +47,35 @@ serve(async (req) => {
       );
     }
 
-    // Validate required fields
-    if (!signedOrder || !credentials) {
-      console.error('[dome-place-order] Missing required fields');
+    // Validate signed order
+    if (!signedOrder) {
+      console.error('[dome-place-order] Missing signed order');
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing required fields: signedOrder and credentials are required' 
-        }),
+        JSON.stringify({ success: false, error: 'Missing signed order' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Initialize PolymarketRouter with API key for server-side operations
-    console.log('[dome-place-order] Initializing PolymarketRouter...');
-    const router = new PolymarketRouter({
-      chainId: POLYGON_CHAIN_ID,
-      apiKey: DOME_API_KEY,
-    });
 
     // Generate unique IDs for JSON-RPC
     const requestId = crypto.randomUUID();
     const clientOrderId = crypto.randomUUID();
 
-    // Convert side from number to string (ClobClient returns 0=BUY, 1=SELL)
-    const sideString = signedOrder.side === 0 ? 'BUY' : signedOrder.side === 1 ? 'SELL' : signedOrder.side;
+    // Convert side from number to string if needed (ClobClient returns 0=BUY, 1=SELL)
+    let sideString = signedOrder.side;
+    if (typeof signedOrder.side === 'number') {
+      sideString = signedOrder.side === 0 ? 'BUY' : 'SELL';
+    }
+    
     const transformedSignedOrder = {
       ...signedOrder,
       side: sideString,
     };
 
-    console.log('[dome-place-order] Transformed order:', {
+    console.log('[dome-place-order] Order details:', {
       originalSide: signedOrder.side,
       transformedSide: sideString,
       maker: signedOrder.maker?.slice(0, 10),
+      signer: signedOrder.signer?.slice(0, 10),
       tokenId: signedOrder.tokenId?.slice(0, 20),
       funder: orderParams?.funderAddress?.slice(0, 10),
     });
@@ -111,12 +93,7 @@ serve(async (req) => {
           apiSecret: credentials.apiSecret,
           apiPassphrase: credentials.apiPassphrase,
         },
-        clientOrderId: clientOrderId,
-        // Include additional params if provided
-        ...(orderParams && {
-          funderAddress: orderParams.funderAddress,
-          negRisk: orderParams.negRisk,
-        }),
+        clientOrderId,
       },
     };
 
@@ -126,7 +103,7 @@ serve(async (req) => {
       clientOrderId,
     });
 
-    // Submit to Dome API
+    // Submit directly to Dome API (no SDK needed)
     const response = await fetch(`${DOME_API_URL}/polymarket/placeOrder`, {
       method: 'POST',
       headers: {
@@ -169,7 +146,7 @@ serve(async (req) => {
       );
     }
 
-    // Handle non-2xx HTTP status (but valid JSON)
+    // Handle non-2xx HTTP status
     if (!response.ok && !result.result) {
       console.error('[dome-place-order] Dome API HTTP error:', result);
       return new Response(
@@ -182,7 +159,7 @@ serve(async (req) => {
       );
     }
 
-    // Handle JSON-RPC success response
+    // Success
     const orderId = result.result?.orderId || result.result?.orderID || result.result?.id;
     console.log('[dome-place-order] Order placed successfully:', {
       orderId,
