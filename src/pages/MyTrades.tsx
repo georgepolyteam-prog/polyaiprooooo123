@@ -219,7 +219,34 @@ export default function MyTrades() {
     try {
       console.log('[MyTrades] Fetching history for:', queryAddress);
       
-      const response = await fetch(
+      // Calculate time filters based on selected filter
+      const now = Math.floor(Date.now() / 1000);
+      let start_time: number | undefined;
+      if (timeFilter === "24h") start_time = now - 86400;
+      else if (timeFilter === "7d") start_time = now - 7 * 86400;
+      else if (timeFilter === "30d") start_time = now - 30 * 86400;
+      // "all" = no start_time filter
+
+      // Fetch from Dome API for trade history
+      const domePromise = fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dome-user-data`,
+        {
+          method: 'POST',
+          headers: {
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user: queryAddress,
+            type: "all",
+            start_time,
+            limit: 100,
+          }),
+        }
+      );
+
+      // Also fetch wallet profile for stats (legacy endpoint still useful for aggregated stats)
+      const profilePromise = fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-profile?address=${queryAddress}&timeframe=${timeFilter}`,
         {
           headers: {
@@ -229,26 +256,55 @@ export default function MyTrades() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`);
+      const [domeResponse, profileResponse] = await Promise.all([domePromise, profilePromise]);
+
+      // Process Dome response for orders/activity
+      if (domeResponse.ok) {
+        const domeResult = await domeResponse.json();
+        console.log('[MyTrades] Dome data:', domeResult);
+        
+        // Map Dome orders to our Trade interface
+        const domeOrders = domeResult.orders || [];
+        const mappedTrades: Trade[] = domeOrders.map((order: {
+          market_slug?: string;
+          market_title?: string;
+          side?: string;
+          price?: number | string;
+          size?: number | string;
+          timestamp?: number | string;
+        }) => ({
+          marketSlug: order.market_slug || '',
+          marketTitle: order.market_title || 'Unknown Market',
+          side: order.side || 'BUY',
+          volume: parseFloat(String(order.price || 0)) * parseFloat(String(order.size || 0)),
+          price: parseFloat(String(order.price || 0)),
+          shares: parseFloat(String(order.size || 0)),
+          timestamp: typeof order.timestamp === 'string' ? parseInt(order.timestamp) : (order.timestamp || 0),
+        }));
+
+        if (mappedTrades.length > 0) {
+          setTrades(mappedTrades);
+        }
       }
 
-      const result = await response.json();
-
-      if (result.error) {
-        console.error("[MyTrades] API error:", result.error);
-        return;
+      // Process profile response for stats
+      if (profileResponse.ok) {
+        const result = await profileResponse.json();
+        if (!result.error) {
+          setStats(result.stats || null);
+          // Only use wallet-profile trades if Dome didn't return any
+          if (trades.length === 0 && result.recentTrades?.length > 0) {
+            setTrades(result.recentTrades);
+          }
+          setTopMarkets(result.topMarkets || []);
+        }
       }
-
-      setStats(result.stats || null);
-      setTrades(result.recentTrades || []);
-      setTopMarkets(result.topMarkets || []);
     } catch (err) {
       console.error("[MyTrades] Error:", err);
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [isConnected, queryAddress, timeFilter]);
+  }, [isConnected, queryAddress, timeFilter, trades.length]);
 
   const refreshOpenOrders = useCallback(async () => {
     if (!isConnected || !address || !credentials) return;

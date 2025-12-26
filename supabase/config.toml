@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.generate-hmac]
 verify_jwt = false
+
+[functions.dome-user-data]
+verify_jwt = false
