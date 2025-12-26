@@ -3,7 +3,7 @@ import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+// Removed Dialog imports - using inline overlay instead
 import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, RotateCcw, Shield } from 'lucide-react';
 import { TradeProgressOverlay } from './TradeProgressOverlay';
 import { toast } from 'sonner';
@@ -550,40 +550,57 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-        <DialogContent elevated className="z-[200] bg-card border-border">
-          <DialogHeader>
-            <DialogTitle>Confirm Order</DialogTitle>
-            <DialogDescription>Review your order details before confirming.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-4">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Side</span>
-              <span className={selectedSide === 'YES' ? "text-emerald-400" : "text-red-400"}>{selectedSide}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Amount</span>
-              <span>${amount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Price</span>
-              <span>{(displayPrice * 100).toFixed(1)}¢</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Shares</span>
-              <span>{shares}</span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmation(false)}>Cancel</Button>
-            <Button onClick={handleDirectTrade} className={selectedSide === 'YES' ? "bg-emerald-500" : "bg-red-500"}>
-              <ArrowRight className="w-4 h-4 mr-2" />
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Inline Confirmation Overlay */}
+      <AnimatePresence>
+        {showConfirmation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-20 flex items-center justify-center backdrop-blur-sm bg-background/80 rounded-2xl"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm mx-4 p-5 rounded-xl bg-card border border-border shadow-xl"
+            >
+              <h3 className="text-lg font-semibold mb-4">Confirm Order</h3>
+              <p className="text-sm text-muted-foreground mb-4">Review your order details before confirming.</p>
+              <div className="space-y-3 py-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Side</span>
+                  <span className={selectedSide === 'YES' ? "text-emerald-400" : "text-red-400"}>{selectedSide}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span>${amount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Price</span>
+                  <span>{(displayPrice * 100).toFixed(1)}¢</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Shares</span>
+                  <span>{shares}</span>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <Button variant="outline" onClick={() => setShowConfirmation(false)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleDirectTrade} 
+                  className={cn("flex-1", selectedSide === 'YES' ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-500 hover:bg-red-600")}
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Confirm
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

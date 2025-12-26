@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { TradePanel } from "@/components/TradePanel";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -81,6 +81,7 @@ export function MarketTradeModal({ open, onOpenChange, defaultSide, marketData }
       <DialogContent elevated className="max-w-md h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Trade Market</DialogTitle>
+          <DialogDescription>Review and place an order on this market.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {content}

@@ -323,14 +323,24 @@ export function useDomeRouter() {
     try {
       updateStage('signing-order');
 
-      // Calculate size from amount and price
-      const roundedPrice = Math.round(params.price * 100) / 100;
-      const size = params.amount / Math.max(roundedPrice, 0.01);
+      // Round amounts to satisfy Dome precision constraints:
+      // - Maker amount (USDC) ≤ 2 decimals
+      // - Size (shares) ≤ 4 decimals
+      // - Price ≤ 2 decimals
+      const roundTo = (n: number, decimals: number) => Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals);
+      
+      const roundedAmount = roundTo(params.amount, 2); // USDC: 2 decimals
+      const roundedPrice = roundTo(params.price, 2); // Price: 2 decimals
+      const sizeRaw = roundedAmount / Math.max(roundedPrice, 0.01);
+      const size = roundTo(sizeRaw, 4); // Shares: 4 decimals
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
       console.log('[DomeRouter] Order params:', {
         tokenId: params.tokenId,
+        originalAmount: params.amount,
+        roundedAmount,
         price: roundedPrice,
+        sizeRaw,
         size,
         side: params.side,
         negRisk: params.negRisk,
