@@ -16,11 +16,12 @@ export const DEFAULT_RPC_URL = 'https://polygon-rpc.com';
 export const DEFAULT_RELAYER_URL = 'https://relayer-v2.polymarket.com/';
 export const DEFAULT_BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
 
+// Use ethers.utils.getAddress() to ensure proper checksums
 export const POLYGON_ADDRESSES = {
-  USDC: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
-  CTF_EXCHANGE: '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8DB438C',
-  NEG_RISK_CTF_EXCHANGE: '0xC5d563A36AE78145C45a50134d48A1215220f80a',
-  NEG_RISK_ADAPTER: '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296',
+  USDC: ethers.utils.getAddress('0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'),
+  CTF_EXCHANGE: ethers.utils.getAddress('0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8DB438C'),
+  NEG_RISK_CTF_EXCHANGE: ethers.utils.getAddress('0xC5d563A36AE78145C45a50134d48A1215220f80a'),
+  NEG_RISK_ADAPTER: ethers.utils.getAddress('0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296'),
 };
 
 // ============================================================================
@@ -307,7 +308,8 @@ export async function checkSafeAllowances(
 }
 
 /**
- * Set USDC approvals via RelayClient (from Safe, not EOA)
+ * Set USDC approvals via RelayClient.execute() (from Safe, not EOA)
+ * Manually encodes approve() calls since RelayClient doesn't have setAllowances()
  */
 export async function setSafeUsdcApproval(
   relayClient: RelayClient,
@@ -315,24 +317,53 @@ export async function setSafeUsdcApproval(
 ): Promise<boolean> {
   try {
     onProgress?.('Setting USDC approvals...');
-    console.log('[Safe] Setting allowances via RelayClient (from Safe)...');
+    console.log('[Safe] Setting allowances via RelayClient.execute()...');
 
-    // Use RelayClient.setAllowances() with fallbacks for different method names
-    const client = relayClient as any;
-    if (typeof client.setAllowances === 'function') {
-      await client.setAllowances();
-    } else if (typeof client.approveAll === 'function') {
-      await client.approveAll();
-    } else if (typeof client.setApprovals === 'function') {
-      await client.setApprovals();
-    } else {
-      console.warn('[Safe] RelayClient setAllowances method not found');
-      return false;
+    const MAX_APPROVAL = ethers.constants.MaxUint256;
+
+    // Encode approve(spender, amount) call data
+    const erc20Interface = new ethers.utils.Interface([
+      'function approve(address spender, uint256 amount) returns (bool)'
+    ]);
+
+    // Create approve transactions for all required spenders
+    const transactions = [
+      {
+        to: POLYGON_ADDRESSES.USDC,
+        data: erc20Interface.encodeFunctionData('approve', [POLYGON_ADDRESSES.CTF_EXCHANGE, MAX_APPROVAL]),
+        value: '0',
+      },
+      {
+        to: POLYGON_ADDRESSES.USDC,
+        data: erc20Interface.encodeFunctionData('approve', [POLYGON_ADDRESSES.NEG_RISK_CTF_EXCHANGE, MAX_APPROVAL]),
+        value: '0',
+      },
+      {
+        to: POLYGON_ADDRESSES.USDC,
+        data: erc20Interface.encodeFunctionData('approve', [POLYGON_ADDRESSES.NEG_RISK_ADAPTER, MAX_APPROVAL]),
+        value: '0',
+      },
+    ];
+
+    console.log('[Safe] Submitting approve transactions:', transactions.map(t => ({
+      to: t.to,
+      spender: erc20Interface.decodeFunctionData('approve', t.data)[0],
+    })));
+
+    onProgress?.('Submitting approval transactions...');
+
+    // Execute via RelayClient (this signs and relays through the Safe)
+    const response = await relayClient.execute(transactions);
+    const result = await response.wait();
+
+    if (result) {
+      console.log('[Safe] Allowances set successfully, tx:', result.transactionHash);
+      onProgress?.('Allowances set');
+      return true;
     }
 
-    console.log('[Safe] Allowances set successfully');
-    onProgress?.('Allowances set');
-    return true;
+    console.warn('[Safe] Allowance transaction returned no result');
+    return false;
   } catch (e) {
     console.error('[Safe] Failed to set allowances:', e);
     return false;
