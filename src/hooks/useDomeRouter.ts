@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient, Side } from '@polymarket/clob-client';
+import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
 import { ethers } from 'ethers';
 import { supabase } from '@/integrations/supabase/client';
 import { polygon } from 'wagmi/chains';
@@ -35,6 +35,13 @@ const TRADE_STAGE_MESSAGES: Record<TradeStage, string> = {
 export interface TradeParams {
   tokenId: string;
   side: 'BUY' | 'SELL';
+  /**
+   * For MARKET orders:
+   *   - BUY: USDC amount to spend
+   *   - SELL: Number of shares to sell
+   * For LIMIT orders:
+   *   - Both: USDC value (amount = price × size)
+   */
   amount: number;
   price: number;
   isMarketOrder?: boolean;
@@ -442,13 +449,6 @@ export function useDomeRouter() {
     try {
       console.log('[DomeRouter] Checking user position for token:', tokenId?.slice(0, 20));
       
-      const { data, error } = await supabase.functions.invoke('get-user-positions', {
-        body: null,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
       // Use query params for GET request
       const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-user-positions`);
       url.searchParams.set('address', address);
@@ -562,17 +562,6 @@ export function useDomeRouter() {
 
       // Round amounts properly
       const roundTo = (n: number, decimals: number) => Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals);
-      
-      const price = roundTo(params.price, 2);
-      const size = roundTo(params.amount / Math.max(price, 0.01), 2);
-
-      console.log('[DomeRouter] Building signed order:', {
-        tokenId: params.tokenId?.slice(0, 20),
-        side: params.side,
-        price,
-        size,
-        negRisk: params.negRisk,
-      });
 
       // Create ClobClient with credentials for order signing
       // signatureType = 0 for order building (Direct EOA)
@@ -589,25 +578,61 @@ export function useDomeRouter() {
         undefined
       );
 
-      // Create the order using ClobClient
-      const orderArgs = {
-        tokenID: params.tokenId,
-        price,
-        size,
-        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
-        feeRateBps: 0, // No fees
-        nonce: 0, // Let library handle nonce
-        expiration: 0, // No expiration
-      };
+      let signedOrder: Awaited<ReturnType<typeof clobClient.createOrder>>;
+      let orderDescription: string;
 
-      console.log('[DomeRouter] Creating order with args:', orderArgs);
+      if (params.isMarketOrder) {
+        // MARKET ORDER: Use createMarketOrder for FOK (Fill-or-Kill) execution
+        // UserMarketOrder: { tokenID, amount, side, price? }
+        // BUY: amount = USDC to spend
+        // SELL: amount = shares to sell
+        const marketAmount = roundTo(params.amount, 2);
+        
+        console.log('[DomeRouter] Creating MARKET order:', {
+          tokenId: params.tokenId?.slice(0, 20),
+          side: params.side,
+          amount: marketAmount,
+          negRisk: params.negRisk,
+        });
 
-      // createOrder returns the signed order ready for submission
-      const signedOrder = await clobClient.createOrder(orderArgs);
+        signedOrder = await clobClient.createMarketOrder({
+          tokenID: params.tokenId,
+          amount: marketAmount,
+          side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+          feeRateBps: 0,
+          nonce: 0,
+        });
+        orderDescription = params.side === 'BUY' 
+          ? `Market BUY $${marketAmount} USDC`
+          : `Market SELL ${marketAmount} shares`;
+      } else {
+        // LIMIT ORDER: Use regular createOrder with price
+        const price = roundTo(params.price, 2);
+        const size = roundTo(params.amount / Math.max(price, 0.01), 2);
+
+        console.log('[DomeRouter] Creating LIMIT order:', {
+          tokenId: params.tokenId?.slice(0, 20),
+          side: params.side,
+          price,
+          size,
+          negRisk: params.negRisk,
+        });
+
+        const orderArgs = {
+          tokenID: params.tokenId,
+          price,
+          size,
+          side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+          feeRateBps: 0,
+          nonce: 0,
+          expiration: 0,
+        };
+
+        signedOrder = await clobClient.createOrder(orderArgs);
+        orderDescription = `Limit ${params.side} ${size} shares @ ${(price * 100).toFixed(0)}¢`;
+      }
 
       // Transform numeric side to string for Dome API
-      // ClobClient returns side: 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
-      // Generate clientOrderId separately - Dome expects it at params level, NOT inside signedOrder
       const clientOrderId = crypto.randomUUID();
       const transformedOrder = {
         ...signedOrder,
@@ -616,10 +641,10 @@ export function useDomeRouter() {
 
       console.log('[DomeRouter] Signed order created:', {
         clientOrderId,
+        orderDescription,
         hasSignature: !!signedOrder?.signature,
         orderType: signedOrder?.orderType,
-        originalSide: (signedOrder as Record<string, unknown>).side,
-        transformedSide: params.side,
+        isMarketOrder: params.isMarketOrder,
         fullOrderKeys: Object.keys(transformedOrder),
       });
 

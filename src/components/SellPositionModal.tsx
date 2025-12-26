@@ -26,7 +26,12 @@ interface Position {
 interface SellPositionModalProps {
   position: Position;
   onClose: () => void;
-  onSell: (amount: number, price: number, isMarketOrder?: boolean) => Promise<void>;
+  /**
+   * @param shares - Number of shares to sell
+   * @param price - Price per share (used for limit orders, informational for market orders)
+   * @param isMarketOrder - If true, executes at market price immediately
+   */
+  onSell: (shares: number, price: number, isMarketOrder?: boolean) => Promise<void>;
 }
 
 export function SellPositionModal({ position, onClose, onSell }: SellPositionModalProps) {
