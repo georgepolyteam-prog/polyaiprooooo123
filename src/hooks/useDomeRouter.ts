@@ -36,6 +36,7 @@ export interface TradeParams {
   isMarketOrder?: boolean;
   negRisk?: boolean;
   tickSize?: string;
+  conditionId?: string; // For position verification on SELL
 }
 
 interface OrderResult {
@@ -43,6 +44,7 @@ interface OrderResult {
   orderId?: string;
   error?: string;
   result?: unknown;
+  status?: 'live' | 'matched' | 'filled' | 'unknown'; // Order execution status
 }
 
 interface PolymarketCredentials {
@@ -292,6 +294,63 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, saveSession, updateStage]);
 
   /**
+   * Check if user has position in a specific token (for SELL verification)
+   */
+  const checkUserPosition = useCallback(async (tokenId: string): Promise<{ hasPosition: boolean; size: number }> => {
+    if (!address || !credentials) {
+      return { hasPosition: false, size: 0 };
+    }
+
+    try {
+      console.log('[DomeRouter] Checking user position for token:', tokenId?.slice(0, 20));
+      
+      const { data, error } = await supabase.functions.invoke('get-user-positions', {
+        body: null,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Use query params for GET request
+      const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-user-positions`);
+      url.searchParams.set('address', address);
+      url.searchParams.set('apiKey', credentials.apiKey);
+      url.searchParams.set('secret', credentials.apiSecret);
+      url.searchParams.set('passphrase', credentials.apiPassphrase);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('[DomeRouter] Failed to fetch positions:', response.status);
+        return { hasPosition: false, size: 0 };
+      }
+
+      const positionsData = await response.json();
+      console.log('[DomeRouter] User positions:', positionsData?.positions?.length || 0);
+
+      // Find position matching the tokenId
+      const position = positionsData?.positions?.find((p: { asset: string; size: number }) => 
+        p.asset?.toLowerCase() === tokenId?.toLowerCase()
+      );
+
+      if (position && position.size > 0) {
+        console.log('[DomeRouter] Found position:', { tokenId: tokenId?.slice(0, 20), size: position.size });
+        return { hasPosition: true, size: position.size };
+      }
+
+      return { hasPosition: false, size: 0 };
+    } catch (error) {
+      console.error('[DomeRouter] Error checking position:', error);
+      return { hasPosition: false, size: 0 };
+    }
+  }, [address, credentials]);
+
+  /**
    * Place order - Build and sign order client-side using ClobClient, then submit
    * 
    * Flow:
@@ -327,6 +386,27 @@ export function useDomeRouter() {
     setLastOrderResult(null);
 
     try {
+      // For SELL orders, verify user has the position first
+      if (params.side === 'SELL') {
+        updateStage('signing-order', 'Verifying position...');
+        const { hasPosition, size } = await checkUserPosition(params.tokenId);
+        
+        if (!hasPosition) {
+          const errorMsg = "You don't own shares in this market. Buy shares first before selling.";
+          toast.error(errorMsg);
+          updateStage('error', errorMsg);
+          return { success: false, error: errorMsg };
+        }
+
+        const requestedSize = params.amount / Math.max(params.price, 0.01);
+        if (size < requestedSize * 0.99) { // 1% tolerance for rounding
+          const errorMsg = `Insufficient shares. You have ${size.toFixed(2)} but trying to sell ${requestedSize.toFixed(2)}`;
+          toast.error(errorMsg);
+          updateStage('error', errorMsg);
+          return { success: false, error: errorMsg };
+        }
+      }
+
       updateStage('signing-order', 'Building and signing order...');
 
       // Create ethers signer from wagmi walletClient
@@ -425,21 +505,57 @@ export function useDomeRouter() {
           details: response?.details,
           rawResponse: response,
         });
-        const errorMessage = response?.details?.reason || response?.error || 'Order rejected';
+        
+        // Handle specific rejection reasons with user-friendly messages
+        const errorCode = response?.code;
+        const rawReason = response?.details?.reason || response?.error || 'Order rejected';
+        
+        let errorMessage = rawReason;
+        if (rawReason.includes('not enough balance') || rawReason.includes('allowance')) {
+          if (params.side === 'SELL') {
+            errorMessage = "You don't have enough shares to sell. Make sure your buy order was filled first.";
+          } else {
+            errorMessage = "Insufficient USDC balance. Please deposit more funds.";
+          }
+        } else if (errorCode === 1006) {
+          errorMessage = params.side === 'SELL' 
+            ? "Order rejected - you may not own these shares yet (previous buy order may still be pending)"
+            : "Order rejected by exchange";
+        }
+        
         throw new Error(errorMessage);
       }
 
-      console.log('[DomeRouter] Order placed successfully:', response);
+      console.log('[DomeRouter] Order response:', JSON.stringify(response, null, 2));
 
+      // Determine order status from response
+      const orderStatus = response.status?.toLowerCase() || 
+                         (response.matched ? 'matched' : 
+                          response.orderId ? 'live' : 'unknown');
+      
       const result: OrderResult = {
         success: true,
         orderId: response.orderId,
         result: response,
+        status: orderStatus as OrderResult['status'],
       };
 
       setLastOrderResult(result);
-      updateStage('completed');
-      toast.success('Order placed successfully!');
+      
+      // Show appropriate toast based on order status
+      if (orderStatus === 'matched' || orderStatus === 'filled') {
+        updateStage('completed', 'Order filled!');
+        toast.success('Order filled successfully!');
+      } else if (orderStatus === 'live') {
+        updateStage('completed', 'Order placed on order book');
+        toast.info('Order placed on order book (waiting to be filled)', {
+          description: 'Your limit order is active. It will execute when the market price matches.',
+          duration: 5000,
+        });
+      } else {
+        updateStage('completed');
+        toast.success('Order submitted successfully!');
+      }
 
       return result;
     } catch (error: unknown) {
@@ -469,7 +585,7 @@ export function useDomeRouter() {
       setIsPlacingOrder(false);
       setTimeout(() => updateStage('idle'), 2000);
     }
-  }, [address, walletClient, chainId, switchChainAsync, isLinked, credentials, updateStage, clearSession]);
+  }, [address, walletClient, chainId, switchChainAsync, isLinked, credentials, updateStage, clearSession, checkUserPosition]);
 
   // isDomeReady: true when wallet is connected (no Safe deployment needed)
   const isDomeReady = isConnected && !!walletClient;
