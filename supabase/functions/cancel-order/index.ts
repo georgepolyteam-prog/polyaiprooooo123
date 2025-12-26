@@ -23,24 +23,20 @@ function json(status: number, body: unknown) {
 
 /**
  * Generate L2 HMAC headers for Polymarket CLOB API
- * For DELETE requests with body, we need to include the body in the signature
+ * For DELETE /order/:id endpoint, there is no body in the signature
  */
 function generateL2Headers(
   method: string,
   pathOnly: string,
   address: string,
-  apiCreds: { apiKey: string; secret: string; passphrase: string },
-  body?: string
+  apiCreds: { apiKey: string; secret: string; passphrase: string }
 ) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   
-  // Message format: timestamp + method + path + body (if present)
-  let message = timestamp + method.toUpperCase() + pathOnly;
-  if (body) {
-    message += body;
-  }
+  // Message format: timestamp + method + path (no body for DELETE /order/:id)
+  const message = timestamp + method.toUpperCase() + pathOnly;
   
-  console.log(`[HMAC] Signing message for cancel: "${message.slice(0, 100)}..."`);
+  console.log(`[HMAC] Signing message for cancel: "${message}"`);
 
   const secretBuffer = Buffer.from(apiCreds.secret, "base64");
   const signature = createHmac("sha256", secretBuffer)
@@ -80,58 +76,62 @@ serve(async (req) => {
 
     console.log("[Cancel Order] Cancelling orders:", orderIds);
 
-    const pathOnly = "/orders";
-    const requestBody = JSON.stringify({ orderIds });
-
-    // Generate L2 authentication headers with body included in signature
-    const l2Headers = generateL2Headers("DELETE", pathOnly, walletAddress, apiCreds, requestBody);
-
-    const response = await fetch(`${CLOB_HOST}${pathOnly}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        ...l2Headers,
-      },
-      body: requestBody,
-    });
-
-    const responseText = await response.text();
-    console.log("[Cancel Order] Response status:", response.status, "body:", responseText);
-
-    if (!response.ok) {
-      // Parse error for user-friendly message
-      let errorMessage = "Failed to cancel order";
+    // Cancel orders one by one using DELETE /order/:id (no body)
+    const cancelledIds: string[] = [];
+    const errors: string[] = [];
+    
+    for (const orderId of orderIds) {
       try {
-        const errorData = JSON.parse(responseText);
-        if (errorData.error) {
-          errorMessage = errorData.error;
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
+        const pathOnly = `/order/${orderId}`;
+
+        // Generate L2 authentication headers (no body for DELETE /order/:id)
+        const l2Headers = generateL2Headers("DELETE", pathOnly, walletAddress, apiCreds);
+
+        const response = await fetch(`${CLOB_HOST}${pathOnly}`, {
+          method: "DELETE",
+          headers: {
+            "Accept": "application/json",
+            ...l2Headers,
+          },
+        });
+
+        const responseText = await response.text();
+        console.log("[Cancel Order] Response for", orderId, "status:", response.status, "body:", responseText);
+
+        if (!response.ok) {
+          // Parse error for user-friendly message
+          let errorMessage = "Failed to cancel order";
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.error || errorData.message || `API error: ${response.status}`;
+          } catch {
+            errorMessage = responseText || `API error: ${response.status}`;
+          }
+          errors.push(`${orderId}: ${errorMessage}`);
+        } else {
+          cancelledIds.push(orderId);
         }
-      } catch {
-        errorMessage = responseText || `API error: ${response.status}`;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        errors.push(`${orderId}: ${msg}`);
       }
-      
-      return json(response.status, { 
+    }
+
+    // If all failed, return error
+    if (cancelledIds.length === 0 && errors.length > 0) {
+      return json(400, { 
         success: false,
-        error: errorMessage,
+        error: errors[0].split(': ').slice(1).join(': ') || 'Failed to cancel order',
+        errors,
       });
     }
 
-    let result;
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      result = { cancelled: orderIds };
-    }
-
-    console.log("[Cancel Order] Successfully cancelled orders");
+    console.log("[Cancel Order] Successfully cancelled:", cancelledIds.length, "orders");
     
     return json(200, { 
       success: true,
-      cancelled: result.cancelled || orderIds,
-      result,
+      cancelled: cancelledIds,
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error: unknown) {
     console.error("[Cancel Order] Error:", error);
