@@ -111,73 +111,101 @@ serve(async (req) => {
           );
         }
         
-        console.log("[dome-router] Placing order via Dome API:", { 
+        // Round price and size to 2 decimal places as required by Dome
+        const roundedPrice = Math.round(price * 100) / 100;
+        const roundedSize = Math.round(size * 100) / 100;
+        
+        console.log("[dome-router] Placing order via Dome API (JSON-RPC):", { 
           userId,
           marketId, 
           side,
-          size,
-          price,
+          size: roundedSize,
+          price: roundedPrice,
           funderAddress,
           orderType: orderType || "GTC",
         });
         
-        // Call Dome's placeOrder API endpoint directly
-        // This uses Dome's PolymarketRouter which handles:
-        // 1. Builder-signer for attribution
-        // 2. Order signing with ClobClient
-        // 3. Submission to Polymarket CLOB
+        // Build JSON-RPC 2.0 payload as required by Dome
+        const jsonRpcPayload = {
+          jsonrpc: "2.0",
+          method: "placeOrder",
+          id: crypto.randomUUID(),
+          params: {
+            tokenId: marketId,
+            side: side.toUpperCase(),
+            price: roundedPrice,
+            size: roundedSize,
+            orderType: orderType || "GTC",
+            negRisk: negRisk ?? false,
+            credentials: {
+              apiKey: credentials.apiKey,
+              apiSecret: credentials.apiSecret,
+              apiPassphrase: credentials.apiPassphrase,
+            },
+          },
+        };
+        
+        console.log("[dome-router] JSON-RPC payload:", JSON.stringify(jsonRpcPayload, null, 2));
+        
         const domeResponse = await fetch(`${DOME_API_URL}/polymarket/placeOrder`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${DOME_API_KEY}`,
           },
-          body: JSON.stringify({
-            userId: userId || funderAddress,
-            marketId,
-            side: side.toLowerCase(),
-            size,
-            price,
-            credentials: {
-              key: credentials.apiKey,
-              secret: credentials.apiSecret,
-              passphrase: credentials.apiPassphrase,
-            },
-            walletType: "eoa",
-            funderAddress,
-            negRisk: negRisk ?? false,
-            orderType: orderType || "GTC",
-            tickSize: tickSize || "0.01",
-            chainId: POLYGON_CHAIN_ID,
-          }),
+          body: JSON.stringify(jsonRpcPayload),
         });
         
-        if (!domeResponse.ok) {
-          const errorText = await domeResponse.text();
-          console.error("[dome-router] Dome API placeOrder error:", domeResponse.status, errorText);
-          
-          let errorMessage = `Dome API error: ${domeResponse.status}`;
-          try {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.message || errorData.error || errorMessage;
-          } catch {
-            errorMessage = errorText || errorMessage;
-          }
+        const responseText = await domeResponse.text();
+        console.log("[dome-router] Dome API response status:", domeResponse.status);
+        console.log("[dome-router] Dome API response body:", responseText);
+        
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch {
+          console.error("[dome-router] Failed to parse Dome response as JSON:", responseText);
+          return new Response(
+            JSON.stringify({ error: `Invalid response from Dome: ${responseText}` }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        // Handle JSON-RPC error response
+        if (result.error) {
+          const errorMessage = result.error.message || "Unknown Dome error";
+          const errorReason = result.error.data?.reason || "";
+          const fullError = errorReason ? `${errorMessage} - ${errorReason}` : errorMessage;
+          console.error("[dome-router] Dome JSON-RPC error:", result.error);
           
           return new Response(
-            JSON.stringify({ error: errorMessage }),
+            JSON.stringify({ 
+              error: fullError,
+              code: result.error.code,
+              details: result.error.data,
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        // Handle HTTP error (non-2xx without JSON-RPC error)
+        if (!domeResponse.ok && !result.result) {
+          console.error("[dome-router] Dome API HTTP error:", domeResponse.status, result);
+          return new Response(
+            JSON.stringify({ error: result.message || `Dome API error: ${domeResponse.status}` }),
             { status: domeResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
         
-        const result = await domeResponse.json();
-        console.log("[dome-router] Order placed via Dome successfully:", result);
+        // Success - extract result from JSON-RPC response
+        const orderResult = result.result || result;
+        console.log("[dome-router] Order placed successfully:", orderResult);
         
         return new Response(
           JSON.stringify({ 
             success: true,
-            orderId: result.orderID || result.orderId || result.id, 
-            ...result 
+            orderId: orderResult.orderID || orderResult.orderId || orderResult.id, 
+            ...orderResult 
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
