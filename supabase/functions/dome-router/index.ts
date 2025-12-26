@@ -8,30 +8,30 @@ const corsHeaders = {
 const DOME_API_KEY = Deno.env.get("DOME_API_KEY");
 const POLYGON_CHAIN_ID = 137;
 
-// Dome API base URL (from SDK docs: https://api.domeapi.io/v1)
-const DOME_API_URL = "https://api.domeapi.io/v1";
+// Dome's builder-signer service for signing orders
+const BUILDER_SIGNER_URL = "https://builder-signer.domeapi.io/builder-signer/sign";
 
 // Polymarket CLOB API endpoints
 const CLOB_API_URL = "https://clob.polymarket.com";
 
-interface LinkUserRequest {
-  action: "link";
-  address: string;
-  signature: string;
-  nonce: string;
-  timestamp: number;
-}
-
 interface PlaceOrderRequest {
   action: "place_order";
-  address: string;
-  safeAddress: string;
-  tokenId: string;
-  side: "buy" | "sell";
-  size: number;
-  price: number;
+  signedOrder: {
+    salt: string;
+    maker: string;
+    signer: string;
+    taker: string;
+    tokenId: string;
+    makerAmount: string;
+    takerAmount: string;
+    expiration: string;
+    nonce: string;
+    feeRateBps: string;
+    side: number;
+    signatureType: number;
+    signature: string;
+  };
   orderType: "GTC" | "FAK" | "FOK";
-  signature: string;
   credentials: {
     apiKey: string;
     apiSecret: string;
@@ -50,7 +50,7 @@ interface CheckStatusRequest {
   safeAddress: string;
 }
 
-type DomeRequest = LinkUserRequest | PlaceOrderRequest | DeriveSafeRequest | CheckStatusRequest;
+type DomeRequest = PlaceOrderRequest | DeriveSafeRequest | CheckStatusRequest;
 
 // Create HMAC signature for CLOB API
 async function createHmacSignature(
@@ -77,60 +77,36 @@ async function createHmacSignature(
   return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
-// Call Polymarket CLOB API with credentials
-async function callClobApi(
+// Sign order via Dome's builder-signer service
+async function signWithBuilderSigner(
   method: string,
   path: string,
-  credentials: { apiKey: string; apiSecret: string; apiPassphrase: string },
-  body?: object
-): Promise<Response> {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const bodyStr = body ? JSON.stringify(body) : "";
-  
-  const signature = await createHmacSignature(
-    credentials.apiSecret,
-    timestamp,
-    method,
-    path,
-    bodyStr
-  );
-  
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "POLY_API_KEY": credentials.apiKey,
-    "POLY_SIGNATURE": signature,
-    "POLY_TIMESTAMP": timestamp,
-    "POLY_PASSPHRASE": credentials.apiPassphrase,
-  };
-  
-  const url = `${CLOB_API_URL}${path}`;
-  
-  return fetch(url, {
-    method,
-    headers,
-    body: bodyStr || undefined,
-  });
-}
+  body: string
+): Promise<Record<string, string> | null> {
+  try {
+    console.log("[dome-router] Signing with builder-signer:", method, path);
+    
+    const timestamp = Math.floor(Date.now() / 1000);
+    
+    const response = await fetch(BUILDER_SIGNER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method, path, body, timestamp }),
+    });
 
-// Helper to make Dome API calls
-async function callDomeApi(
-  method: string,
-  path: string,
-  body?: object
-): Promise<Response> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${DOME_API_KEY}`,
-  };
-  
-  const url = `${DOME_API_URL}${path}`;
-  console.log(`[dome-router] Calling Dome API: ${method} ${url}`);
-  
-  return fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn("[dome-router] Builder-signer error (non-blocking):", response.status, errorText);
+      return null;
+    }
+
+    const headers = await response.json();
+    console.log("[dome-router] Builder-signer headers received");
+    return headers;
+  } catch (e) {
+    console.warn("[dome-router] Builder-signer failed (non-blocking):", e);
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -164,20 +140,21 @@ serve(async (req) => {
         // Use Dome API to get wallet info which includes the safe/proxy address
         console.log("[dome-router] Fetching wallet info for:", address);
         
-        const domeResponse = await callDomeApi("GET", `/polymarket/wallet?eoa=${address}`);
+        const domeResponse = await fetch(`https://api.domeapi.io/v1/polymarket/wallet?eoa=${address}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DOME_API_KEY}`,
+          },
+        });
         
         if (!domeResponse.ok) {
           const errorText = await domeResponse.text();
-          console.error("[dome-router] Dome API error:", domeResponse.status, errorText);
+          console.log("[dome-router] Dome API wallet lookup failed:", domeResponse.status, errorText);
           
-          // If wallet not found, derive a placeholder Safe address
-          // The actual Safe will be created when linking
-          // Use deterministic derivation based on address
-          const safeAddress = `0x${address.slice(2, 42)}`.toLowerCase();
-          console.log("[dome-router] Using derived placeholder:", safeAddress);
-          
+          // Return placeholder - Safe will be derived client-side
           return new Response(
-            JSON.stringify({ safeAddress }),
+            JSON.stringify({ safeAddress: null, needsDerivation: true }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -191,104 +168,66 @@ serve(async (req) => {
         );
       }
 
-      case "link": {
-        const { address, signature, nonce, timestamp } = body;
+      case "place_order": {
+        const { signedOrder, orderType, credentials } = body;
         
-        if (!address || !signature || !nonce) {
+        if (!signedOrder || !credentials) {
           return new Response(
-            JSON.stringify({ error: "Missing required fields" }),
+            JSON.stringify({ error: "Missing signedOrder or credentials" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
         
-        console.log("[dome-router] Linking user:", address);
-        
-        // For linking, we need to use the Polymarket CLOB API directly
-        // The Dome SDK's PolymarketRouter.linkUser() internally calls the CLOB's derive API key endpoint
-        // Reference: https://docs.polymarket.com/developers/CLOB/authentication
-        
-        // First, try to derive or create API credentials via the CLOB API
-        // This requires the user to sign an EIP-712 message
-        const clobTimestamp = Math.floor(Date.now() / 1000).toString();
-        const clobNonce = "0"; // First time linking
-        
-        // Create the derive API key request
-        const deriveResponse = await fetch(`${CLOB_API_URL}/auth/derive-api-key`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "POLY_ADDRESS": address,
-            "POLY_SIGNATURE": signature,
-            "POLY_TIMESTAMP": clobTimestamp,
-            "POLY_NONCE": clobNonce,
-          },
+        console.log("[dome-router] Placing signed order:", { 
+          tokenId: signedOrder.tokenId, 
+          side: signedOrder.side,
+          signatureType: signedOrder.signatureType,
+          maker: signedOrder.maker,
+          signer: signedOrder.signer,
         });
         
-        if (!deriveResponse.ok) {
-          const error = await deriveResponse.text();
-          console.error("[dome-router] CLOB derive error:", deriveResponse.status, error);
-          
-          // Return a mock response for development/testing
-          // In production, this should properly integrate with Polymarket's auth flow
-          console.log("[dome-router] Returning mock credentials for development");
-          
-          return new Response(
-            JSON.stringify({
-              safeAddress: `0x${address.slice(2, 42)}`.toLowerCase(),
-              credentials: {
-                apiKey: "mock_api_key_" + address.slice(0, 10),
-                apiSecret: "mock_secret",
-                apiPassphrase: "mock_passphrase",
-              },
-              isDeployed: false,
-              allowancesSet: 0,
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        
-        const clobResult = await deriveResponse.json();
-        console.log("[dome-router] CLOB derive result:", clobResult);
-        
-        return new Response(
-          JSON.stringify({
-            safeAddress: clobResult.proxyAddress || address,
-            credentials: {
-              apiKey: clobResult.apiKey,
-              apiSecret: clobResult.secret,
-              apiPassphrase: clobResult.passphrase,
-            },
-            isDeployed: true,
-            allowancesSet: 1,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      case "place_order": {
-        const { address, safeAddress, tokenId, side, size, price, orderType, signature, credentials } = body;
-        
-        if (!address || !safeAddress || !tokenId || !side || !size || !price || !credentials) {
-          return new Response(
-            JSON.stringify({ error: "Missing required fields" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        
-        console.log("[dome-router] Placing order:", { tokenId, side, size, price, orderType });
-        
-        // Place order directly with Polymarket CLOB API using stored credentials
+        // Build the order payload for CLOB API
         const orderPath = "/order";
         const orderBody = {
-          tokenID: tokenId,
-          price: price.toString(),
-          size: size.toString(),
-          side: side.toUpperCase(),
-          type: orderType || "GTC",
-          feeRateBps: "0",
+          order: signedOrder,
+          orderType: orderType || "GTC",
+        };
+        const orderBodyStr = JSON.stringify(orderBody);
+        
+        // Get builder-signer headers (optional - for attribution)
+        const builderHeaders = await signWithBuilderSigner("POST", orderPath, orderBodyStr);
+        
+        // Create HMAC signature for CLOB API
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const hmacSignature = await createHmacSignature(
+          credentials.apiSecret,
+          timestamp,
+          "POST",
+          orderPath,
+          orderBodyStr
+        );
+        
+        // Build request headers
+        const requestHeaders: Record<string, string> = {
+          "Content-Type": "application/json",
+          "POLY_API_KEY": credentials.apiKey,
+          "POLY_SIGNATURE": hmacSignature,
+          "POLY_TIMESTAMP": timestamp,
+          "POLY_PASSPHRASE": credentials.apiPassphrase,
         };
         
-        const clobResponse = await callClobApi("POST", orderPath, credentials, orderBody);
+        // Add builder headers if available (for attribution)
+        if (builderHeaders) {
+          Object.assign(requestHeaders, builderHeaders);
+        }
+        
+        console.log("[dome-router] Submitting order to CLOB...");
+        
+        const clobResponse = await fetch(`${CLOB_API_URL}${orderPath}`, {
+          method: "POST",
+          headers: requestHeaders,
+          body: orderBodyStr,
+        });
         
         if (!clobResponse.ok) {
           const error = await clobResponse.text();
@@ -299,7 +238,7 @@ serve(async (req) => {
             const errorJson = JSON.parse(error);
             errorMessage = errorJson.message || errorJson.error || errorMessage;
           } catch {
-            // Use default message
+            errorMessage = error || errorMessage;
           }
           
           return new Response(
@@ -309,7 +248,7 @@ serve(async (req) => {
         }
         
         const result = await clobResponse.json();
-        console.log("[dome-router] Order placed:", result);
+        console.log("[dome-router] Order placed successfully:", result);
         
         return new Response(
           JSON.stringify({ orderId: result.orderID || result.id, ...result }),
