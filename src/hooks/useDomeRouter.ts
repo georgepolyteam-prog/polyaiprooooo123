@@ -426,18 +426,26 @@ export function useDomeRouter() {
       const tickSize = params.tickSize || '0.01';
       const roundingConfig = ROUNDING_CONFIG[tickSize] || ROUNDING_CONFIG['0.01'];
 
-      // Calculate size (shares) from amount (USDC) and price
-      const rawSize = params.amount / params.price;
+      // Round price first (USDC precision)
+      const roundedPrice = roundNearest(params.price, roundingConfig.price);
+
+      // Calculate raw size from amount and price
+      const rawSize = params.amount / roundedPrice;
       
       // Round size to configured decimals (shares precision for takerAmount)
-      const size = roundDown(rawSize, roundingConfig.size);
+      let size = roundDown(rawSize, roundingConfig.size);
       
-      // Round price to configured decimals (USDC precision for makerAmount)
-      const roundedPrice = roundNearest(params.price, roundingConfig.price);
+      // CRITICAL: Calculate the actual cost and ensure it has max 2 decimals for USDC
+      // Even if price (2 dec) × size (2 dec) = cost (up to 4 dec), we must force 2 dec
+      const rawCost = size * roundedPrice;
+      const roundedCost = roundDown(rawCost, 2); // Force max 2 decimals for makerAmount
       
-      // Calculate and round the final amount to ensure it meets precision requirements
-      const rawAmount = size * roundedPrice;
-      const finalAmount = roundDown(rawAmount, roundingConfig.amount);
+      // Recalculate size based on the rounded cost to ensure consistency
+      // This ensures: roundedCost = size × roundedPrice with both properly rounded
+      size = roundDown(roundedCost / roundedPrice, roundingConfig.size);
+      
+      // Final amount for logging
+      const finalAmount = roundedCost;
       
       const MIN_ORDER_SIZE = 5;
       if (size < MIN_ORDER_SIZE) {
@@ -453,8 +461,10 @@ export function useDomeRouter() {
         roundedSize: size,
         originalPrice: params.price,
         roundedPrice,
-        rawAmount,
+        rawCost,
+        roundedCost,
         finalAmount,
+        costDecimals: (roundedCost.toString().split('.')[1] || '').length,
       });
 
       console.log('[DomeRouter] Creating order for submission...');
