@@ -10,26 +10,23 @@ const corsHeaders = {
 const DOME_API_URL = "https://api.domeapi.io/v1";
 const POLYGON_CHAIN_ID = 137;
 
+// SignedPolymarketOrder - flat structure per Dome SDK
 interface PlaceOrderRequest {
   action: "place_order";
   signedOrder: {
-    order: {
-      salt: string;
-      maker: string;
-      signer: string;
-      taker: string;
-      tokenId: string;
-      makerAmount: string;
-      takerAmount: string;
-      expiration: string;
-      nonce: string;
-      feeRateBps: string;
-      side: string | number; // Accept both - will be "BUY" or "SELL" string after transformation
-      signatureType: number;
-    };
+    salt: string;
+    maker: string;
+    signer: string;
+    taker: string;
+    tokenId: string;
+    makerAmount: string;
+    takerAmount: string;
+    expiration: string;
+    nonce: string;
+    feeRateBps: string;
+    side: 'BUY' | 'SELL';
+    signatureType: number;
     signature: string;
-    owner: string;
-    orderType: string;
   };
   credentials: {
     apiKey: string;
@@ -37,6 +34,7 @@ interface PlaceOrderRequest {
     apiPassphrase: string;
   };
   negRisk?: boolean;
+  clientOrderId: string; // At request level per Dome SDK ServerPlaceOrderRequest
 }
 
 interface DeriveSafeRequest {
@@ -113,24 +111,25 @@ serve(async (req) => {
       }
 
       case "place_order": {
-        const { signedOrder, credentials, negRisk } = body as PlaceOrderRequest;
+        const { signedOrder, credentials, negRisk, clientOrderId } = body as PlaceOrderRequest;
         
-        if (!signedOrder || !credentials) {
+        if (!signedOrder || !credentials || !clientOrderId) {
           return new Response(
-            JSON.stringify({ error: "Missing required fields (signedOrder, credentials)" }),
+            JSON.stringify({ error: "Missing required fields (signedOrder, credentials, clientOrderId)" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
         
         console.log("[dome-router] Submitting pre-signed order via Dome API:", { 
-          tokenId: signedOrder.order?.tokenId?.slice(0, 20),
-          side: signedOrder.order?.side,
-          orderType: signedOrder.orderType,
+          tokenId: signedOrder.tokenId?.slice(0, 20),
+          side: signedOrder.side,
+          clientOrderId,
           hasSignature: !!signedOrder.signature,
           negRisk: negRisk ?? false,
         });
         
-        // Build JSON-RPC 2.0 payload with the pre-signed order
+        // Build JSON-RPC 2.0 payload matching Dome SDK's ServerPlaceOrderRequest
+        // clientOrderId is at params level, NOT inside signedOrder
         const jsonRpcPayload = {
           jsonrpc: "2.0",
           method: "placeOrder",
@@ -143,6 +142,7 @@ serve(async (req) => {
               apiSecret: credentials.apiSecret,
               apiPassphrase: credentials.apiPassphrase,
             },
+            clientOrderId, // At params level per Dome SDK
           },
         };
         

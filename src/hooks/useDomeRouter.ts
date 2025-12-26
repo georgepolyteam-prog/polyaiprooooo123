@@ -379,11 +379,11 @@ export function useDomeRouter() {
 
       // Transform numeric side to string for Dome API
       // ClobClient returns side: 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
+      // Generate clientOrderId separately - Dome expects it at params level, NOT inside signedOrder
       const clientOrderId = crypto.randomUUID();
       const transformedOrder = {
         ...signedOrder,
         side: params.side, // Force string value at root level
-        clientOrderId, // Required by Dome API
       };
 
       console.log('[DomeRouter] Signed order created:', {
@@ -398,6 +398,7 @@ export function useDomeRouter() {
       updateStage('submitting-order', 'Submitting order to Polymarket...');
 
       // Submit transformed order to dome-router edge function
+      // clientOrderId is passed as a separate field at request level (per Dome SDK ServerPlaceOrderRequest)
       const { data: response, error: edgeError } = await supabase.functions.invoke('dome-router', {
         body: {
           action: 'place_order',
@@ -408,6 +409,7 @@ export function useDomeRouter() {
             apiPassphrase: credentials.apiPassphrase,
           },
           negRisk: params.negRisk ?? false,
+          clientOrderId, // At request level, NOT inside signedOrder
         },
       });
 
