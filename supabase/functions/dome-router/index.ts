@@ -12,20 +12,31 @@ const POLYGON_CHAIN_ID = 137;
 
 interface PlaceOrderRequest {
   action: "place_order";
-  userId: string;
-  marketId: string;
-  side: "buy" | "sell";
-  size: number;
-  price: number;
+  signedOrder: {
+    order: {
+      salt: string;
+      maker: string;
+      signer: string;
+      taker: string;
+      tokenId: string;
+      makerAmount: string;
+      takerAmount: string;
+      expiration: string;
+      nonce: string;
+      feeRateBps: string;
+      side: number;
+      signatureType: number;
+    };
+    signature: string;
+    owner: string;
+    orderType: string;
+  };
   credentials: {
     apiKey: string;
     apiSecret: string;
     apiPassphrase: string;
   };
-  funderAddress: string;
   negRisk?: boolean;
-  orderType?: string;
-  tickSize?: string;
 }
 
 interface DeriveSafeRequest {
@@ -102,40 +113,30 @@ serve(async (req) => {
       }
 
       case "place_order": {
-        const { userId, marketId, side, size, price, credentials, funderAddress, negRisk, orderType, tickSize } = body as PlaceOrderRequest;
+        const { signedOrder, credentials, negRisk } = body as PlaceOrderRequest;
         
-        if (!marketId || !credentials || !funderAddress) {
+        if (!signedOrder || !credentials) {
           return new Response(
-            JSON.stringify({ error: "Missing required fields (marketId, credentials, funderAddress)" }),
+            JSON.stringify({ error: "Missing required fields (signedOrder, credentials)" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
         
-        // Round price and size to 2 decimal places as required by Dome
-        const roundedPrice = Math.round(price * 100) / 100;
-        const roundedSize = Math.round(size * 100) / 100;
-        
-        console.log("[dome-router] Placing order via Dome API (JSON-RPC):", { 
-          userId,
-          marketId, 
-          side,
-          size: roundedSize,
-          price: roundedPrice,
-          funderAddress,
-          orderType: orderType || "GTC",
+        console.log("[dome-router] Submitting pre-signed order via Dome API:", { 
+          tokenId: signedOrder.order?.tokenId?.slice(0, 20),
+          side: signedOrder.order?.side,
+          orderType: signedOrder.orderType,
+          hasSignature: !!signedOrder.signature,
+          negRisk: negRisk ?? false,
         });
         
-        // Build JSON-RPC 2.0 payload as required by Dome
+        // Build JSON-RPC 2.0 payload with the pre-signed order
         const jsonRpcPayload = {
           jsonrpc: "2.0",
           method: "placeOrder",
           id: crypto.randomUUID(),
           params: {
-            tokenId: marketId,
-            side: side.toUpperCase(),
-            price: roundedPrice,
-            size: roundedSize,
-            orderType: orderType || "GTC",
+            signedOrder,
             negRisk: negRisk ?? false,
             credentials: {
               apiKey: credentials.apiKey,
