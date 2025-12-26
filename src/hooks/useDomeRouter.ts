@@ -302,8 +302,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage]);
 
   /**
-   * Place an order using ClobClient.createOrder() for signing, then submit via edge function
-   * This ensures correct order signing format compatible with Polymarket CLOB
+   * Place an order using ClobClient.createAndPostOrder() directly
+   * This handles signing and submission in one call
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -354,12 +354,12 @@ export function useDomeRouter() {
 
       updateStage('signing-order');
 
-      console.log('[DomeRouter] Creating ClobClient for order signing...');
+      console.log('[DomeRouter] Creating ClobClient for order...');
 
       // Create ethers adapter
       const ethersAdapter = createEthersAdapter(walletClient, address);
       
-      // Create ClobClient with credentials for authenticated order signing
+      // Create ClobClient with credentials for authenticated order posting
       const clobClient = new ClobClient(
         CLOB_HOST,
         POLYGON_CHAIN_ID,
@@ -380,16 +380,20 @@ export function useDomeRouter() {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
       }
 
-      console.log('[DomeRouter] Creating signed order via ClobClient...', {
+      console.log('[DomeRouter] Calling createAndPostOrder...', {
         tokenId: params.tokenId,
         price: params.price,
         size,
         side: params.side,
         negRisk: params.negRisk,
+        orderType: params.isMarketOrder ? 'FAK' : 'GTC',
       });
 
-      // Use ClobClient to create the signed order - it handles all EIP-712 formatting
-      const signedOrder = await clobClient.createOrder(
+      updateStage('submitting-order', 'Signing and submitting order...');
+
+      // Use ClobClient.createAndPostOrder() - handles signing AND submission directly to CLOB
+      // Note: createAndPostOrder only supports GTC and GTD, not FAK for market orders
+      const result = await clobClient.createAndPostOrder(
         {
           tokenID: params.tokenId,
           price: params.price,
@@ -399,53 +403,27 @@ export function useDomeRouter() {
         {
           tickSize: params.tickSize || '0.01',
           negRisk: params.negRisk,
-        }
+        },
+        OrderType.GTC
       );
 
-      console.log('[DomeRouter] Order signed, submitting to edge function...', {
-        maker: signedOrder.maker,
-        signer: signedOrder.signer,
-        signatureType: signedOrder.signatureType,
-      });
+      console.log('[DomeRouter] Order result:', result);
 
-      updateStage('submitting-order', 'Submitting order...');
-
-      // Submit to edge function (which routes through Dome builder-signer)
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'place_order',
-          signedOrder,
-          orderType: params.isMarketOrder ? OrderType.FAK : OrderType.GTC,
-          credentials: {
-            apiKey: credentials.apiKey,
-            apiSecret: credentials.apiSecret,
-            apiPassphrase: credentials.apiPassphrase,
-          },
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to place order');
-      }
-
-      console.log('[DomeRouter] Order result:', data);
+      // Extract order ID from result
+      const orderId = result?.orderID || result?.id || (typeof result === 'string' ? result : undefined);
 
       const orderResult: OrderResult = {
         success: true,
-        orderId: data.orderId,
-        result: data,
+        orderId,
+        result,
       };
 
       setLastOrderResult(orderResult);
       updateStage('completed');
       
       toast.success('Order placed!', {
-        description: data.orderId 
-          ? `Order ID: ${data.orderId.slice(0, 12)}...` 
+        description: orderId 
+          ? `Order ID: ${String(orderId).slice(0, 12)}...` 
           : 'Order submitted successfully'
       });
 
