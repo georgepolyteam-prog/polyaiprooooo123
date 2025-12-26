@@ -339,22 +339,24 @@ export function useDomeRouter() {
         negRisk: params.negRisk,
       });
 
-      // Submit to edge function - Dome handles order building & signing
-      const { data: response, error: edgeError } = await supabase.functions.invoke('dome-place-order', {
+      // Submit to dome-router edge function - Dome handles order building & signing
+      const { data: response, error: edgeError } = await supabase.functions.invoke('dome-router', {
         body: {
+          action: 'place_order',
+          userId: address,
+          marketId: params.tokenId,
+          side: params.side.toLowerCase(),
+          size,
+          price,
           credentials: {
             apiKey: credentials.apiKey,
             apiSecret: credentials.apiSecret,
             apiPassphrase: credentials.apiPassphrase,
           },
-          orderParams: {
-            tokenId: params.tokenId,
-            price,
-            size,
-            side: params.side,
-            orderType,
-            negRisk: params.negRisk,
-          },
+          funderAddress: address,
+          negRisk: params.negRisk,
+          orderType,
+          tickSize: params.tickSize || '0.01',
         },
       });
 
