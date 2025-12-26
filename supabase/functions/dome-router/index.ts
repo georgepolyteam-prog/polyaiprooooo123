@@ -24,7 +24,7 @@ interface PlaceOrderRequest {
       expiration: string;
       nonce: string;
       feeRateBps: string;
-      side: number;
+      side: string | number; // Accept both - will be "BUY" or "SELL" string after transformation
       signatureType: number;
     };
     signature: string;
