@@ -466,10 +466,16 @@ export function useDomeRouter() {
 
       updateStage('submitting-order', 'Submitting order via Dome...');
 
-      // Submit the SIGNED order to edge function
+      // Submit the SIGNED order to edge function with original params
       const { data, error } = await supabase.functions.invoke('dome-place-order', {
         body: {
           signedOrder,
+          orderParams: {
+            tokenId: params.tokenId,
+            side: params.side,      // "BUY" or "SELL" string
+            size: size,             // calculated size
+            price: params.price,    // original price
+          },
           orderType,
           credentials: {
             apiKey: credentials.apiKey,
