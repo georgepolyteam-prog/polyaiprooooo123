@@ -2,92 +2,44 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
 import { toast } from 'sonner';
 import { ethers } from 'ethers';
+import { RelayClient } from '@polymarket/builder-relayer-client';
+import { BuilderConfig } from '@polymarket/builder-signing-sdk';
+import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/derive';
+import { getContractConfig } from '@polymarket/builder-relayer-client/dist/config';
 
 const POLYGON_CHAIN_ID = 137;
-const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-
-// Polymarket exchange contracts
-const POLYMARKET_CTF_EXCHANGE = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
-const POLYMARKET_NEG_RISK_CTF_EXCHANGE = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
-
-// Safe constants for address derivation
-const SAFE_FACTORY_ADDRESS = '0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2';
-const SAFE_SINGLETON_ADDRESS = '0xd9Db270c1B5E3Bd161E8c8503c55cEABeE709552';
-const SAFE_FALLBACK_HANDLER = '0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4';
-
-// Polygon RPC for read operations
 const POLYGON_RPC = 'https://polygon-rpc.com';
 
+// Dome builder signer URL for order attribution
+const RELAYER_URL = 'https://relayer-v2.polymarket.com/';
+const BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
+
 /**
- * Derive Safe address from EOA using CREATE2
- * This matches the derivation used by Polymarket/Dome
+ * Derive Safe address from EOA using the official Polymarket library
  */
 function deriveSafeAddress(ownerAddress: string): string {
-  const owners = [ownerAddress.toLowerCase()];
-  const threshold = 1;
-
-  // Encode Safe setup data
-  const safeInterface = new ethers.utils.Interface([
-    'function setup(address[] calldata _owners, uint256 _threshold, address to, bytes calldata data, address fallbackHandler, address paymentToken, uint256 payment, address payable paymentReceiver)'
-  ]);
-
-  const setupData = safeInterface.encodeFunctionData('setup', [
-    owners,
-    threshold,
-    ethers.constants.AddressZero,
-    '0x',
-    SAFE_FALLBACK_HANDLER,
-    ethers.constants.AddressZero,
-    0,
-    ethers.constants.AddressZero,
-  ]);
-
-  // Create salt from setup hash
-  const salt = ethers.utils.keccak256(
-    ethers.utils.defaultAbiCoder.encode(
-      ['bytes32', 'uint256'],
-      [ethers.utils.keccak256(setupData), 0]
-    )
-  );
-
-  // Calculate CREATE2 address
-  const proxyCreationCode = ethers.utils.solidityPack(
-    ['bytes', 'bytes32'],
-    [
-      '0x608060405234801561001057600080fd5b5060405161017338038061017383398101604081905261002f91610059565b6001600160a01b0316600090815260016020819052604090912055610087565b60006020828403121561006a578081fd5b81516001600160a01b038116811461008057600080fd5b9392505050565b60de8061009560003960006101f35260f3fe',
-      ethers.utils.defaultAbiCoder.encode(['address'], [SAFE_SINGLETON_ADDRESS])
-    ]
-  );
-
-  const initCodeHash = ethers.utils.keccak256(proxyCreationCode);
-
-  const safeAddress = ethers.utils.getCreate2Address(
-    SAFE_FACTORY_ADDRESS,
-    salt,
-    initCodeHash
-  );
-
-  return safeAddress;
+  const config = getContractConfig(POLYGON_CHAIN_ID);
+  return deriveSafe(ownerAddress, config.SafeContracts.SafeFactory);
 }
 
 /**
- * Check if Safe is deployed on Polygon
+ * Fallback: Check if Safe is deployed via RPC
  */
-async function checkSafeDeployed(safeAddress: string): Promise<boolean> {
+async function checkSafeDeployedRPC(safeAddress: string): Promise<boolean> {
   try {
     const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC);
     const code = await provider.getCode(safeAddress);
     return code !== '0x' && code.length > 2;
   } catch (e) {
-    console.error('[Safe] Failed to check deployment:', e);
+    console.error('[Safe] RPC deployment check failed:', e);
     return false;
   }
 }
 
 /**
- * Convert wagmi walletClient to ethers signer
+ * Convert wagmi walletClient to ethers JsonRpcSigner (required by RelayClient)
  */
-function walletClientToSigner(walletClient: any): ethers.Signer {
+function walletClientToSigner(walletClient: any): ethers.providers.JsonRpcSigner {
   const { account, chain, transport } = walletClient;
   const network = {
     chainId: chain.id,
@@ -96,6 +48,24 @@ function walletClientToSigner(walletClient: any): ethers.Signer {
   };
   const provider = new ethers.providers.Web3Provider(transport, network);
   return provider.getSigner(account.address);
+}
+
+/**
+ * Create RelayClient with BuilderConfig for Dome integration
+ */
+function createRelayClient(signer: ethers.providers.JsonRpcSigner): RelayClient {
+  const builderConfig = new BuilderConfig({
+    remoteBuilderConfig: {
+      url: BUILDER_SIGNER_URL,
+    },
+  });
+
+  return new RelayClient(
+    RELAYER_URL,
+    POLYGON_CHAIN_ID,
+    signer,
+    builderConfig
+  );
 }
 
 export function useSafeWallet() {
@@ -110,19 +80,38 @@ export function useSafeWallet() {
   
   // Track if we've confirmed deployment to avoid flaky re-checks
   const deploymentConfirmed = useRef(false);
+  
+  // Store RelayClient instance
+  const relayClientRef = useRef<RelayClient | null>(null);
 
-  // Derive Safe address deterministically
+  // Derive Safe address deterministically using the official library
   const safeAddress = useMemo(() => {
     if (!address) return null;
     try {
       const derived = deriveSafeAddress(address);
-      console.log('[Safe] Derived address:', derived, 'from EOA:', address);
+      console.log('[Safe] Derived address (via library):', derived, 'from EOA:', address);
       return derived;
     } catch (e) {
       console.error('[Safe] Failed to derive address:', e);
       return null;
     }
   }, [address]);
+
+  // Create/update RelayClient when walletClient changes
+  useEffect(() => {
+    if (walletClient) {
+      try {
+        const signer = walletClientToSigner(walletClient);
+        relayClientRef.current = createRelayClient(signer);
+        console.log('[Safe] RelayClient created with BuilderConfig');
+      } catch (e) {
+        console.error('[Safe] Failed to create RelayClient:', e);
+        relayClientRef.current = null;
+      }
+    } else {
+      relayClientRef.current = null;
+    }
+  }, [walletClient]);
 
   // Load cached deployment status
   useEffect(() => {
@@ -139,7 +128,7 @@ export function useSafeWallet() {
     }
   }, [safeAddress]);
 
-  // Check deployment status
+  // Check deployment status using RelayClient or fallback to RPC
   const checkDeployment = useCallback(async (): Promise<boolean> => {
     if (!safeAddress) return false;
     
@@ -150,17 +139,31 @@ export function useSafeWallet() {
     }
 
     try {
-      const deployed = await checkSafeDeployed(safeAddress);
+      let deployed = false;
+      
+      // Try RelayClient first
+      if (relayClientRef.current) {
+        try {
+          deployed = await (relayClientRef.current as any).getDeployed(safeAddress);
+          console.log('[Safe] RelayClient deployment check:', deployed);
+        } catch (e) {
+          console.log('[Safe] RelayClient check failed, falling back to RPC');
+          deployed = await checkSafeDeployedRPC(safeAddress);
+        }
+      } else {
+        // Fallback to RPC check
+        deployed = await checkSafeDeployedRPC(safeAddress);
+      }
       
       if (deployed) {
         setIsDeployed(true);
         deploymentConfirmed.current = true;
         localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
       }
-      console.log('[Safe] Polygon deployment status:', deployed);
+      console.log('[Safe] Deployment status:', deployed);
       return deployed;
     } catch (e) {
-      console.error('[Safe] Polygon deployment check failed:', e);
+      console.error('[Safe] Deployment check failed:', e);
       return false;
     }
   }, [safeAddress]);
@@ -172,7 +175,7 @@ export function useSafeWallet() {
     }
   }, [safeAddress, address, checkDeployment]);
 
-  // Deploy Safe smart wallet
+  // Deploy Safe smart wallet using RelayClient
   const deploySafe = useCallback(async (): Promise<string | null> => {
     if (!address || !safeAddress || !walletClient) {
       toast.error('Connect wallet first');
@@ -187,52 +190,38 @@ export function useSafeWallet() {
       return safeAddress;
     }
 
+    // Ensure RelayClient is available
+    if (!relayClientRef.current) {
+      const signer = walletClientToSigner(walletClient);
+      relayClientRef.current = createRelayClient(signer);
+    }
+
     setIsDeploying(true);
     try {
       toast.info('Deploying Safe wallet...', { 
         description: 'Please confirm the transaction in your wallet' 
       });
 
-      // Create signer from walletClient
-      const signer = walletClientToSigner(walletClient);
-
-      // Safe Factory interface
-      const factoryInterface = new ethers.utils.Interface([
-        'function createProxyWithNonce(address _singleton, bytes memory initializer, uint256 saltNonce) external returns (address proxy)'
-      ]);
-
-      // Safe setup data
-      const safeInterface = new ethers.utils.Interface([
-        'function setup(address[] calldata _owners, uint256 _threshold, address to, bytes calldata data, address fallbackHandler, address paymentToken, uint256 payment, address payable paymentReceiver)'
-      ]);
-
-      const setupData = safeInterface.encodeFunctionData('setup', [
-        [address],
-        1,
-        ethers.constants.AddressZero,
-        '0x',
-        SAFE_FALLBACK_HANDLER,
-        ethers.constants.AddressZero,
-        0,
-        ethers.constants.AddressZero,
-      ]);
-
-      const factory = new ethers.Contract(SAFE_FACTORY_ADDRESS, factoryInterface, signer);
+      console.log('[Safe] Deploying via RelayClient...');
       
-      console.log('[Safe] Deploying Safe...');
-      const tx = await factory.createProxyWithNonce(SAFE_SINGLETON_ADDRESS, setupData, 0);
-      await tx.wait();
+      // Use RelayClient.deploy() as per documentation
+      const response = await relayClientRef.current.deploy();
+      const result = await response.wait();
 
-      console.log('[Safe] Deployed at:', safeAddress);
+      if (!result?.proxyAddress) {
+        throw new Error('Safe deployment failed - no proxy address returned');
+      }
+
+      console.log('[Safe] Deployed at:', result.proxyAddress);
       setIsDeployed(true);
       deploymentConfirmed.current = true;
       localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
       
       toast.success('Safe wallet deployed!', {
-        description: `Address: ${safeAddress.slice(0, 10)}...`
+        description: `Address: ${result.proxyAddress.slice(0, 10)}...`
       });
 
-      return safeAddress;
+      return result.proxyAddress;
     } catch (error: any) {
       console.error('[Safe] Deployment error:', error);
       toast.error('Failed to deploy Safe wallet', {
@@ -244,7 +233,7 @@ export function useSafeWallet() {
     }
   }, [address, safeAddress, walletClient, checkDeployment]);
 
-  // Set token allowances for Polymarket contracts
+  // Set token allowances using RelayClient (sets from Safe, not EOA)
   const setAllowances = useCallback(async (): Promise<boolean> => {
     if (!safeAddress || !walletClient || !address) {
       console.log('[Safe] setAllowances aborted: missing requirements');
@@ -263,33 +252,24 @@ export function useSafeWallet() {
     }
     console.log('[Safe] setAllowances: deployment confirmed, proceeding...');
 
+    // Ensure RelayClient is available
+    if (!relayClientRef.current) {
+      const signer = walletClientToSigner(walletClient);
+      relayClientRef.current = createRelayClient(signer);
+    }
+
     setIsSettingAllowances(true);
     try {
       toast.info('Setting token allowances...', {
         description: 'Please confirm the transaction in your wallet'
       });
 
-      // Create signer from walletClient
-      const signer = walletClientToSigner(walletClient);
+      console.log('[Safe] Setting allowances via RelayClient (from Safe)...');
+      
+      // Use RelayClient.setAllowances() - this sets allowances FROM the Safe
+      await (relayClientRef.current as any).setAllowances();
 
-      // USDC interface
-      const erc20Interface = new ethers.utils.Interface([
-        'function approve(address spender, uint256 amount) external returns (bool)'
-      ]);
-
-      const usdc = new ethers.Contract(USDC_ADDRESS, erc20Interface, signer);
-      const maxApproval = ethers.constants.MaxUint256;
-
-      // Approve both exchange contracts
-      console.log('[Safe] Approving CTF Exchange...');
-      const tx1 = await usdc.approve(POLYMARKET_CTF_EXCHANGE, maxApproval);
-      await tx1.wait();
-
-      console.log('[Safe] Approving Neg Risk CTF Exchange...');
-      const tx2 = await usdc.approve(POLYMARKET_NEG_RISK_CTF_EXCHANGE, maxApproval);
-      await tx2.wait();
-
-      console.log('[Safe] Allowances set successfully');
+      console.log('[Safe] Allowances set successfully via RelayClient');
       setHasAllowances(true);
       localStorage.setItem(`safe_allowances:${safeAddress.toLowerCase()}`, 'true');
       
@@ -309,7 +289,7 @@ export function useSafeWallet() {
     }
   }, [safeAddress, walletClient, address, checkDeployment]);
 
-  // Withdraw USDC from Safe to EOA
+  // Withdraw USDC from Safe to EOA (still uses direct contract call)
   const withdrawUSDC = useCallback(async (amount: number, toAddress: string): Promise<boolean> => {
     if (!safeAddress || !walletClient || !address) {
       toast.error('Safe address not available');
@@ -335,6 +315,7 @@ export function useSafeWallet() {
       const amountInUnits = ethers.utils.parseUnits(amount.toString(), 6);
 
       // USDC transfer interface
+      const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
       const erc20Interface = new ethers.utils.Interface([
         'function transfer(address to, uint256 amount) external returns (bool)'
       ]);
