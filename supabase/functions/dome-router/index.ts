@@ -143,7 +143,7 @@ serve(async (req) => {
               secret: credentials.apiSecret,
               passphrase: credentials.apiPassphrase,
             },
-            walletType: "safe",
+            walletType: "eoa",
             funderAddress,
             negRisk: negRisk ?? false,
             orderType: orderType || "GTC",
