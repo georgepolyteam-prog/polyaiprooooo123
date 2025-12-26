@@ -158,14 +158,32 @@ export function useDomeRouter() {
     }));
   }, [address]);
 
-  // Clear session
+  // Clear session - nuclear option to wipe all cached credentials
   const clearSession = useCallback(() => {
     if (!address) return;
+    
     const cacheKey = `${STORAGE_KEY}:${address.toLowerCase()}`;
     localStorage.removeItem(cacheKey);
+    
+    // Nuclear option: Clear everything to force fresh credentials
+    try {
+      console.log('[DomeRouter] Performing nuclear clear...');
+      localStorage.clear();
+      sessionStorage.clear();
+      ['dome', 'dome_router', 'polymarket'].forEach(dbName => {
+        indexedDB.deleteDatabase(dbName);
+      });
+      console.log('[DomeRouter] All storage cleared');
+    } catch (error) {
+      console.error('[DomeRouter] Error during nuclear clear:', error);
+    }
+    
     setIsLinked(false);
     setCredentials(null);
-    toast.success('Trading session cleared');
+    
+    toast.success('All credentials cleared - please refresh and re-link', {
+      description: 'Cleared localStorage, sessionStorage, and IndexedDB'
+    });
   }, [address]);
 
   /**
@@ -435,34 +453,38 @@ export function useDomeRouter() {
       // Round size to configured decimals (shares precision for takerAmount)
       let size = roundDown(rawSize, roundingConfig.size);
       
-      // Calculate target cost - ensure minimum $1 for market orders
+      // CRITICAL: Polymarket requires EXACTLY 2 decimal precision for USD amounts
+      // Step 1: Round to 2 decimals FIRST
       let targetCost = Math.round(params.amount * 100) / 100;
+
+      // Step 2: Ensure minimum $1 for market orders
       if (params.isMarketOrder && targetCost < 1.0) {
-        targetCost = 1.0; // Polymarket requires minimum $1 for market orders
+        targetCost = 1.0;
         console.log('[DomeRouter] Adjusted target cost to $1 minimum for market order');
       }
 
-      // Calculate size that produces this exact cost
+      // Step 3: Work in atomic units to avoid floating point errors
+      // 1 USDC = 1,000,000 micro-units
+      // 2 decimals = must be multiple of 10,000 micro-units
+      const targetCostMicro = Math.round(targetCost * 1_000_000);
+      const cleanCostMicro = Math.floor(targetCostMicro / 10_000) * 10_000;
+      targetCost = cleanCostMicro / 1_000_000; // Now exactly 2 decimals
+
+      // Step 4: Calculate size from the clean cost
       size = targetCost / roundedPrice;
-      size = Math.round(size * 100) / 100; // Round to 2 decimals
+      size = Math.round(size * 100) / 100;
 
-      // Verify the cost is valid (2 decimals)
-      let actualCost = Math.round(size * roundedPrice * 100) / 100;
+      const actualCost = Math.round(size * roundedPrice * 100) / 100;
 
-      // If cost is less than target due to rounding, adjust size up
-      if (actualCost < targetCost) {
-        size = size + 0.01;
-        actualCost = Math.round(size * roundedPrice * 100) / 100;
-      }
-
-      console.log('[DomeRouter] Final calculation:', {
+      console.log('[DomeRouter] Final calculation (2-decimal precision enforced):', {
         requestedAmount: params.amount,
         targetCost,
+        targetCostMicro: cleanCostMicro,
         price: roundedPrice,
         size,
         actualCost,
         meetsMinimum: actualCost >= 1.0,
-        has2Decimals: Math.abs(actualCost - Math.round(actualCost * 100) / 100) < 0.001,
+        costInMicroUSDC: cleanCostMicro,
       });
       
       const MIN_ORDER_SIZE = 5;
@@ -542,13 +564,33 @@ export function useDomeRouter() {
         }
       );
 
+      // SAFETY: Force makerAmount to exactly 2 decimal places in case ClobClient adds precision
+      // makerAmount must be a multiple of 10,000 atomic units (2 decimals in USDC)
+      const makerAmountNum = parseInt(order.makerAmount);
+      const cleanMakerAmount = Math.floor(makerAmountNum / 10000) * 10000;
+      
+      // Create a mutable copy of the order with sanitized makerAmount
+      const sanitizedOrder = {
+        ...order,
+        makerAmount: cleanMakerAmount.toString(),
+      };
+
+      if (makerAmountNum !== cleanMakerAmount) {
+        console.log('[DomeRouter] Sanitizing makerAmount:', {
+          original: makerAmountNum,
+          clean: cleanMakerAmount,
+          diff: makerAmountNum - cleanMakerAmount,
+        });
+      }
+
       console.log('[DomeRouter] Order signed with amounts:', {
-        maker: order.maker?.slice(0, 10),
-        signer: order.signer?.slice(0, 10),
-        tokenId: order.tokenId?.slice(0, 20),
-        side: order.side,
-        makerAmount: order.makerAmount,
-        takerAmount: order.takerAmount,
+        maker: sanitizedOrder.maker?.slice(0, 10),
+        signer: sanitizedOrder.signer?.slice(0, 10),
+        tokenId: sanitizedOrder.tokenId?.slice(0, 20),
+        side: sanitizedOrder.side,
+        makerAmount: sanitizedOrder.makerAmount,
+        takerAmount: sanitizedOrder.takerAmount,
+        makerAmountUSD: cleanMakerAmount / 1_000_000,
       });
 
       updateStage('submitting-order');
@@ -556,7 +598,7 @@ export function useDomeRouter() {
       // Submit via edge function to Dome API
       const { data, error } = await supabase.functions.invoke('dome-place-order', {
         body: {
-          signedOrder: order,
+          signedOrder: sanitizedOrder,
           orderType,
           credentials: {
             apiKey: credentials.apiKey,
