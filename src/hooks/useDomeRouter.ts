@@ -536,7 +536,12 @@ export function useDomeRouter() {
           return { success: false, error: errorMsg };
         }
 
-        const requestedSize = params.amount / Math.max(params.price, 0.01);
+        // For MARKET SELL: amount IS the number of shares directly
+        // For LIMIT SELL: amount = USDC value, so shares = amount / price
+        const requestedSize = params.isMarketOrder 
+          ? params.amount 
+          : params.amount / Math.max(params.price, 0.01);
+          
         if (size < requestedSize * 0.99) { // 1% tolerance for rounding
           const errorMsg = `Insufficient shares. You have ${size.toFixed(2)} but trying to sell ${requestedSize.toFixed(2)}`;
           toast.error(errorMsg);
