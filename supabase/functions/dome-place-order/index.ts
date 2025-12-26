@@ -16,23 +16,24 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { signedOrder, orderType, credentials, signer, funderAddress, negRisk } = body;
+    const { signedOrder, orderParams, orderType, credentials, signer, funderAddress, negRisk } = body;
 
-    console.log('[dome-place-order] Received signed order:', {
+    console.log('[dome-place-order] Received order:', {
       signer: signer?.slice(0, 10),
       funderAddress: funderAddress?.slice(0, 10),
       orderType,
       hasSignedOrder: !!signedOrder,
+      hasOrderParams: !!orderParams,
       hasCredentials: !!credentials,
     });
 
     // Validate required fields
-    if (!signedOrder || !credentials || !signer || !funderAddress) {
+    if (!signedOrder || !orderParams || !credentials || !signer || !funderAddress) {
       console.error('[dome-place-order] Missing required fields');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: signedOrder, credentials, signer, funderAddress' 
+          error: 'Missing required fields: signedOrder, orderParams, credentials, signer, funderAddress' 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -48,33 +49,33 @@ serve(async (req) => {
       );
     }
 
-    // Log signed order details for debugging
-    console.log('[dome-place-order] Signed order details:', {
-      tokenId: signedOrder.tokenID?.slice(0, 20),
-      side: signedOrder.side,
-      size: signedOrder.size,
-      price: signedOrder.price,
-      makerAmount: signedOrder.makerAmount,
-      takerAmount: signedOrder.takerAmount,
-      maker: signedOrder.maker?.slice(0, 10),
-      hasSignature: !!signedOrder.signature,
+    // Log order details for debugging
+    console.log('[dome-place-order] Order params:', {
+      tokenId: orderParams.tokenId?.slice(0, 20),
+      side: orderParams.side,
+      size: orderParams.size,
+      price: orderParams.price,
     });
 
-    // Prepare payload for Dome API
-    // The signedOrder is already signed with Dome's builder-signer client-side
+    console.log('[dome-place-order] Signed order details:', {
+      maker: signedOrder.maker?.slice(0, 10),
+      hasSignature: !!signedOrder.signature,
+      makerAmount: signedOrder.makerAmount,
+      takerAmount: signedOrder.takerAmount,
+    });
+
+    // Prepare payload for Dome API using orderParams for readable fields
     const payload = {
       userId: signer,
-      marketId: signedOrder.tokenID,
-      side: signedOrder.side?.toLowerCase(),
-      size: signedOrder.size,
-      price: signedOrder.price,
+      marketId: orderParams.tokenId,
+      side: orderParams.side.toLowerCase(),  // Now works - it's a string!
+      size: orderParams.size,
+      price: orderParams.price,
       walletType: 'safe',
       funderAddress,
       orderType: orderType || 'GTC',
       negRisk: negRisk || false,
-      // Pass the pre-signed order for Dome to submit to CLOB
-      signedOrder: signedOrder,
-      // Include credentials for API authentication
+      signedOrder: signedOrder,  // The actual signed order for CLOB
       credentials: {
         key: credentials.apiKey,
         secret: credentials.apiSecret,
