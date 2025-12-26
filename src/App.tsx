@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/useTheme";
-import { WalletProvider } from "@/contexts/WalletContext";
+import { PrivyWalletProvider } from "@/contexts/PrivyContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
@@ -66,13 +66,13 @@ const AppContent = () => {
 };
 
 const App = () => (
-  <WalletProvider>
+  <PrivyWalletProvider>
     <ThemeProvider>
       <TooltipProvider>
         <AppContent />
       </TooltipProvider>
     </ThemeProvider>
-  </WalletProvider>
+  </PrivyWalletProvider>
 );
 
 export default App;
