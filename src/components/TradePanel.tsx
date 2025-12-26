@@ -59,8 +59,6 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     tradeStageMessage,
     clearSession,
     isDomeReady,
-    setAllowances,
-    isSettingAllowances,
   } = useDomeRouter();
 
   // Use Safe balance when deployed, otherwise EOA balance
@@ -428,7 +426,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
             )}
           </AnimatePresence>
 
-          {/* Step 1.5: Set Allowances (if linking succeeded but allowances failed) */}
+          {/* Step 1.5: Set Allowances (if linking succeeded but allowances failed - re-link to fix) */}
           <AnimatePresence>
             {isConnected && !isWrongNetwork && needsAllowances && (
               <motion.div
@@ -442,31 +440,32 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                     <CheckCircle2 className="w-5 h-5 text-amber-400" />
                   </div>
                   <div>
-                    <p className="font-semibold text-amber-200 text-sm">Set Token Allowances</p>
-                    <p className="text-xs text-amber-300/70">Approve contracts to enable trading</p>
+                    <p className="font-semibold text-amber-200 text-sm">Complete Setup</p>
+                    <p className="text-xs text-amber-300/70">Set token allowances to enable trading</p>
                   </div>
                 </div>
                 <Button
                   size="default"
                   onClick={async () => {
                     try {
-                      await setAllowances();
+                      // Re-link to set allowances (PolymarketRouter handles this)
+                      await linkUser();
                     } catch (e) {
-                      console.error('Allowance error:', e);
+                      console.error('Setup error:', e);
                     }
                   }}
-                  disabled={isSettingAllowances}
+                  disabled={isLinking}
                   className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold"
                 >
-                  {isSettingAllowances ? (
+                  {isLinking ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Setting Allowances...
+                      Setting Up...
                     </>
                   ) : (
                     <>
                       <Shield className="w-4 h-4 mr-2" />
-                      Set Allowances
+                      Complete Setup
                     </>
                   )}
                 </Button>
