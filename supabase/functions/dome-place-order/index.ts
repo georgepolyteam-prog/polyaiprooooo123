@@ -77,7 +77,6 @@ serve(async (req) => {
       maker: signedOrder.maker?.slice(0, 10),
       signer: signedOrder.signer?.slice(0, 10),
       tokenId: signedOrder.tokenId?.slice(0, 20),
-      funder: orderParams?.funderAddress?.slice(0, 10),
       // CRITICAL: Log amounts to debug precision issues
       makerAmount: signedOrder.makerAmount,
       takerAmount: signedOrder.takerAmount,
