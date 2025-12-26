@@ -5,7 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DOME_API_ENDPOINT = 'https://api.domeapi.io/v1';
+const CLOB_API_URL = 'https://clob.polymarket.com';
+const BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
 
 interface PlaceOrderRequest {
   signedOrder: {
@@ -32,6 +33,62 @@ interface PlaceOrderRequest {
   clientOrderId?: string;
 }
 
+// Generate HMAC-SHA256 signature for Polymarket CLOB API
+async function createHmacSignature(
+  secret: string,
+  timestamp: string,
+  method: string,
+  path: string,
+  body?: string
+): Promise<string> {
+  const message = timestamp + method + path + (body || '');
+  
+  // Decode base64 secret
+  const secretBytes = Uint8Array.from(atob(secret), c => c.charCodeAt(0));
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    secretBytes,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const encoder = new TextEncoder();
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  
+  // Convert to base64
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+
+// Get optional builder attribution headers (non-blocking)
+async function getBuilderHeaders(
+  method: string,
+  path: string,
+  body: string,
+  timestamp: string
+): Promise<Record<string, string>> {
+  try {
+    const response = await fetch(BUILDER_SIGNER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method, path, body, timestamp }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[dome-place-order] Builder headers received:', Object.keys(data));
+      return data.headers || {};
+    }
+    
+    console.log('[dome-place-order] Builder signer returned non-ok:', response.status);
+    return {};
+  } catch (error) {
+    console.log('[dome-place-order] Builder signer failed (non-blocking):', error);
+    return {};
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -39,16 +96,6 @@ serve(async (req) => {
   }
 
   try {
-    const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
-
-    if (!DOME_API_KEY) {
-      console.error('[dome-place-order] DOME_API_KEY not configured');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Dome API key not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     const body: PlaceOrderRequest = await req.json();
     const { signedOrder, orderType, credentials, clientOrderId } = body;
 
@@ -57,8 +104,8 @@ serve(async (req) => {
       tokenId: signedOrder?.tokenId?.slice(0, 20),
       side: signedOrder?.side,
       orderType,
+      signatureType: signedOrder?.signatureType,
       hasCredentials: !!credentials?.apiKey,
-      clientOrderId,
     });
 
     // Validate required fields
@@ -69,7 +116,7 @@ serve(async (req) => {
       );
     }
 
-    // Normalize signedOrder.side to string (ClobClient returns numeric 0/1, Dome expects "BUY"/"SELL")
+    // Normalize side to string format expected by CLOB
     const normalizedOrder = {
       ...signedOrder,
       side: typeof signedOrder.side === 'number' 
@@ -77,89 +124,92 @@ serve(async (req) => {
         : signedOrder.side,
     };
 
-    console.log('[dome-place-order] Normalized order side:', {
-      original: signedOrder.side,
-      normalized: normalizedOrder.side,
-    });
-
-    // Prepare the request to Dome API
-    // Use the USER's credentials (from the signed order) - they must match!
-    const domeRequestBody = {
-      jsonrpc: '2.0',
-      method: 'placeOrder',
-      id: clientOrderId || crypto.randomUUID(),
-      params: {
-        signedOrder: normalizedOrder,
-        orderType,
-        credentials: {
-          apiKey: credentials.apiKey,
-          apiSecret: credentials.apiSecret,
-          apiPassphrase: credentials.apiPassphrase,
-        },
-        clientOrderId: clientOrderId || crypto.randomUUID(),
-      },
-    };
-
-    console.log('[dome-place-order] Sending to Dome API:', {
-      endpoint: `${DOME_API_ENDPOINT}/polymarket/placeOrder`,
-      method: 'POST',
+    // Prepare request body for CLOB API
+    const orderPayload = {
+      order: normalizedOrder,
       orderType,
-    });
+    };
+    
+    const orderBody = JSON.stringify(orderPayload);
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const path = '/order';
+    const method = 'POST';
 
-    // Send to Dome API
-    const domeResponse = await fetch(`${DOME_API_ENDPOINT}/polymarket/placeOrder`, {
+    // Generate HMAC signature
+    const hmacSignature = await createHmacSignature(
+      credentials.apiSecret,
+      timestamp,
+      method,
+      path,
+      orderBody
+    );
+
+    console.log('[dome-place-order] Generated HMAC signature for CLOB API');
+
+    // Get optional builder attribution headers (don't block on failure)
+    const builderHeaders = await getBuilderHeaders(method, path, orderBody, timestamp);
+
+    // Submit to Polymarket CLOB
+    console.log('[dome-place-order] Submitting to CLOB:', CLOB_API_URL + path);
+
+    const clobResponse = await fetch(`${CLOB_API_URL}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DOME_API_KEY}`,
+        'POLY_API_KEY': credentials.apiKey,
+        'POLY_SIGNATURE': hmacSignature,
+        'POLY_TIMESTAMP': timestamp,
+        'POLY_PASSPHRASE': credentials.apiPassphrase,
+        ...builderHeaders,
       },
-      body: JSON.stringify(domeRequestBody),
+      body: orderBody,
     });
 
-    const responseText = await domeResponse.text();
-    console.log('[dome-place-order] Dome API response status:', domeResponse.status);
-    console.log('[dome-place-order] Dome API response:', responseText.slice(0, 500));
+    const responseText = await clobResponse.text();
+    console.log('[dome-place-order] CLOB response status:', clobResponse.status);
+    console.log('[dome-place-order] CLOB response:', responseText.slice(0, 500));
 
-    let domeResult;
+    let clobResult;
     try {
-      domeResult = JSON.parse(responseText);
+      clobResult = JSON.parse(responseText);
     } catch {
-      console.error('[dome-place-order] Failed to parse Dome response:', responseText);
+      console.error('[dome-place-order] Failed to parse CLOB response:', responseText);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid response from Dome API',
+          error: 'Invalid response from CLOB API',
           rawResponse: responseText.slice(0, 200),
         }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Check for Dome API errors
-    if (domeResult.error) {
-      console.error('[dome-place-order] Dome API error:', domeResult.error);
+    // Check for CLOB API errors
+    if (!clobResponse.ok) {
+      console.error('[dome-place-order] CLOB API error:', clobResult);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: domeResult.error.message || domeResult.error,
-          code: domeResult.error.code,
+          error: clobResult.error || clobResult.message || 'Order rejected by CLOB',
+          code: clobResult.code,
+          details: clobResult,
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: clobResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Success - return Dome result
+    // Success - return CLOB result
     console.log('[dome-place-order] Order placed successfully:', {
-      status: domeResult.result?.status,
-      orderId: domeResult.result?.orderId || domeResult.result?.orderID,
+      orderId: clobResult.orderID || clobResult.id,
+      status: clobResult.status,
     });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        result: domeResult.result,
-        orderId: domeResult.result?.orderId || domeResult.result?.orderID,
-        status: domeResult.result?.status,
+        result: clobResult,
+        orderId: clobResult.orderID || clobResult.id,
+        status: clobResult.status,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
