@@ -41,3 +41,9 @@ verify_jwt = false
 
 [functions.dome-place-order]
 verify_jwt = false
+
+[functions.privy-link-user]
+verify_jwt = false
+
+[functions.privy-place-order]
+verify_jwt = false
