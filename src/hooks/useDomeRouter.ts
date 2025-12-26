@@ -258,14 +258,15 @@ export function useDomeRouter() {
       });
 
       // Create ClobClient with EOA signer for L1 auth
-      // Use signatureType=2 (Safe) so credentials are tied to Safe address
+      // Use signatureType=0 (EOA) so credentials are tied to EOA address (the signer)
+      // Orders will use signatureType=2 (Safe) separately for balance checking
       const clobClient = new ClobClient(
         'https://clob.polymarket.com',
         POLYGON_CHAIN_ID,
         eoaSigner,    // EOA signer (signs the message)
         undefined,    // no credentials yet
-        2,            // signatureType = 2 (Safe wallet)
-        safeAddress,  // funderAddress = Safe (where USDC lives)
+        0,            // signatureType = 0 (EOA) - credentials tied to signer
+        safeAddress,  // funderAddress = Safe (for reference)
         undefined,    // 7th param
         false,        // 8th param
         builderConfig // 9th param - Dome builder config!
