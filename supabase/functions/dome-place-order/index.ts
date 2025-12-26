@@ -72,7 +72,7 @@ serve(async (req) => {
         credentials: {
           apiKey: credentials.apiKey,
           apiSecret: credentials.apiSecret,
-          apiPassphrase: credentials.passphrase,
+          apiPassphrase: credentials.apiPassphrase,
         },
         clientOrderId: clientOrderId,
       },
