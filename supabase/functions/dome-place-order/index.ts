@@ -68,13 +68,26 @@ serve(async (req) => {
       );
     }
 
+    // Normalize signedOrder.side to string (ClobClient returns numeric 0/1, Dome expects "BUY"/"SELL")
+    const normalizedOrder = {
+      ...signedOrder,
+      side: typeof signedOrder.side === 'number' 
+        ? (signedOrder.side === 0 ? 'BUY' : 'SELL') 
+        : signedOrder.side,
+    };
+
+    console.log('[dome-place-order] Normalized order side:', {
+      original: signedOrder.side,
+      normalized: normalizedOrder.side,
+    });
+
     // Prepare the request to Dome API
     const domeRequestBody = {
       jsonrpc: '2.0',
       method: 'placeOrder',
       id: clientOrderId || crypto.randomUUID(),
       params: {
-        signedOrder,
+        signedOrder: normalizedOrder,
         orderType,
         credentials: {
           apiKey: credentials.apiKey,

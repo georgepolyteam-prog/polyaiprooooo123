@@ -438,11 +438,16 @@ export function useDomeRouter() {
         }
       );
 
-      console.log('[DomeRouter] Order signed locally:', {
-        hasSalt: !!signedOrder.salt,
-        hasMaker: !!signedOrder.maker,
-        hasSignature: !!signedOrder.signature,
-      });
+      console.log('[DomeRouter] Order signed locally:', signedOrder);
+
+      // Convert numeric side to string for Dome API
+      // ClobClient returns side as 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
+      const signedOrderForDome = {
+        ...signedOrder,
+        side: typeof signedOrder.side === 'number' 
+          ? (signedOrder.side === 0 ? 'BUY' : 'SELL') 
+          : signedOrder.side,
+      };
 
       updateStage('submitting-order', 'Submitting order via Dome...');
 
@@ -458,7 +463,7 @@ export function useDomeRouter() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          signedOrder,
+          signedOrder: signedOrderForDome,
           orderType,
           credentials: {
             apiKey: credentials.apiKey,
