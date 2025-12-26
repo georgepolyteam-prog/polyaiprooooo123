@@ -162,17 +162,18 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     const amountNum = parseFloat(amount);
     const marketPrice = selectedSide === 'YES' ? marketData.currentPrice : (1 - marketData.currentPrice);
     
-    // For market orders (FOK), use a marketable price to ensure instant fill
-    // For BUY: use 0.99 (willing to pay up to 99¢)
-    // For SELL: use 0.01 (willing to sell down to 1¢)
+    // For market orders (FOK), use market price + buffer to ensure fill
+    // For BUY: add a small buffer (5%) to ensure fill
     // For limit orders (GTC), use the user's specified price
     let orderPrice: number;
     if (isMarketOrder) {
-      // Market order: use extreme marketable price for instant fill
-      orderPrice = 0.99; // For BUY, willing to pay max
+      // Market order: use market price with a 5% buffer for BUY
+      // Round to 2 decimals for API compatibility
+      orderPrice = Math.round(Math.min(marketPrice * 1.05, 0.99) * 100) / 100;
     } else {
       // Limit order: use user's specified price or current market price
       orderPrice = limitPrice ? parseFloat(limitPrice) / 100 : marketPrice;
+      orderPrice = Math.round(orderPrice * 100) / 100;
     }
     
     const expectedShares = amountNum / Math.max(isMarketOrder ? marketPrice : orderPrice, 0.01);
@@ -183,7 +184,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
       amount: amountNum,
       price: orderPrice,
       isMarketOrder,
-      orderType: isMarketOrder ? 'FOK' : 'GTC', // Market = FOK for instant fill, Limit = GTC
+      orderType: isMarketOrder ? 'FOK' : 'GTC',
     });
 
     if (result.success) {
