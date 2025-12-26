@@ -1,9 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { PolymarketRouter } from '@dome-api/sdk';
-import { createRouterSigner } from '@/lib/dome-signer';
-import type { RouterSigner } from '@/lib/dome-signer';
+import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/derive';
+import { getContractConfig } from '@polymarket/builder-relayer-client/dist/config';
 
 const POLYGON_CHAIN_ID = 137;
 const STORAGE_KEY = 'dome_router_session_v2';
@@ -70,23 +69,21 @@ function normalizePrice(price: number): number {
   return Math.max(0.01, Math.min(0.99, rounded));
 }
 
-/**
- * Fetch Dome API key from edge function
- */
-async function fetchDomeApiKey(): Promise<string | null> {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/get-dome-api-key`);
-    if (!response.ok) {
-      console.error('[DomeRouter] Failed to fetch Dome API key:', response.status);
-      return null;
-    }
-    const data = await response.json();
-    return data.apiKey || null;
-  } catch (e) {
-    console.error('[DomeRouter] Error fetching Dome API key:', e);
-    return null;
-  }
-}
+// EIP-712 domain and types for Polymarket L1 auth
+const L1_AUTH_DOMAIN = {
+  name: 'ClobAuthDomain',
+  version: '1',
+  chainId: POLYGON_CHAIN_ID,
+} as const;
+
+const L1_AUTH_TYPES = {
+  ClobAuth: [
+    { name: 'address', type: 'address' },
+    { name: 'timestamp', type: 'string' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'message', type: 'string' },
+  ],
+} as const;
 
 export function useDomeRouter() {
   const { address, isConnected } = useAccount();
@@ -97,7 +94,6 @@ export function useDomeRouter() {
   // State
   const [isLinking, setIsLinking] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
-  const [safeAddress, setSafeAddress] = useState<string | null>(null);
   const [isDeployed, setIsDeployed] = useState(false);
   const [hasAllowances, setHasAllowances] = useState(false);
   const [credentials, setCredentials] = useState<PolymarketCredentials | null>(null);
@@ -105,10 +101,20 @@ export function useDomeRouter() {
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
   const [tradeStage, setTradeStage] = useState<TradeStage>('idle');
   const [tradeStageMessage, setTradeStageMessage] = useState('');
-  const [domeApiKey, setDomeApiKey] = useState<string | null>(null);
-  
-  // Router instance ref
-  const routerRef = useRef<PolymarketRouter | null>(null);
+
+  // Derive Safe address deterministically from EOA
+  const safeAddress = useMemo(() => {
+    if (!address) return null;
+    try {
+      const config = getContractConfig(POLYGON_CHAIN_ID);
+      const derived = deriveSafe(address, config.SafeContracts.SafeFactory);
+      console.log('[DomeRouter] Derived Safe address:', derived);
+      return derived;
+    } catch (e) {
+      console.error('[DomeRouter] Failed to derive Safe:', e);
+      return null;
+    }
+  }, [address]);
 
   // Helper to update trade stage
   const updateStage = useCallback((stage: TradeStage, customMessage?: string) => {
@@ -116,33 +122,16 @@ export function useDomeRouter() {
     setTradeStageMessage(customMessage || TRADE_STAGE_MESSAGES[stage]);
   }, []);
 
-  // Fetch Dome API key on mount
-  useEffect(() => {
-    fetchDomeApiKey().then(key => {
-      if (key) {
-        setDomeApiKey(key);
-        // Initialize router with API key
-        routerRef.current = new PolymarketRouter({
-          chainId: POLYGON_CHAIN_ID,
-          apiKey: key,
-        });
-        console.log('[DomeRouter] Initialized PolymarketRouter with API key');
-      }
-    });
-  }, []);
-
   // Load cached session on wallet change
   useEffect(() => {
     if (!address) {
       setIsLinked(false);
-      setSafeAddress(null);
+      setCredentials(null);
       setIsDeployed(false);
       setHasAllowances(false);
-      setCredentials(null);
       return;
     }
 
-    // Load from localStorage
     const cacheKey = `${STORAGE_KEY}:${address.toLowerCase()}`;
     const cached = localStorage.getItem(cacheKey);
     
@@ -151,36 +140,18 @@ export function useDomeRouter() {
         const session: StoredSession = JSON.parse(cached);
         // Check if session is less than 7 days old
         if (Date.now() - session.timestamp < 7 * 24 * 60 * 60 * 1000) {
-          setSafeAddress(session.safeAddress);
           setCredentials(session.credentials);
           setIsDeployed(true);
           setHasAllowances(true);
           setIsLinked(true);
           console.log('[DomeRouter] Restored session from cache');
-          
-          // Set credentials in router if available
-          if (routerRef.current && session.credentials) {
-            routerRef.current.setCredentials(`user:${address.toLowerCase()}`, {
-              apiKey: session.credentials.apiKey,
-              apiSecret: session.credentials.apiSecret,
-              apiPassphrase: session.credentials.apiPassphrase,
-            });
-          }
         } else {
-          // Clear stale session
           localStorage.removeItem(cacheKey);
         }
       } catch (e) {
         console.error('[DomeRouter] Failed to parse cached session:', e);
         localStorage.removeItem(cacheKey);
       }
-    }
-    
-    // Derive Safe address from EOA if we have the router
-    if (routerRef.current) {
-      const derivedSafe = routerRef.current.deriveSafeAddress(address);
-      setSafeAddress(derivedSafe);
-      console.log('[DomeRouter] Derived Safe address:', derivedSafe);
     }
   }, [address]);
 
@@ -207,16 +178,12 @@ export function useDomeRouter() {
   }, [address]);
 
   /**
-   * Link user to Polymarket using Dome SDK's PolymarketRouter
+   * Link user to Polymarket via EIP-712 signature
+   * Creates/derives API credentials through edge function
    */
   const linkUser = useCallback(async () => {
     if (!address || !walletClient) {
       toast.error('Please connect your wallet first');
-      return null;
-    }
-
-    if (!routerRef.current) {
-      toast.error('Router not initialized. Please wait...');
       return null;
     }
 
@@ -236,59 +203,83 @@ export function useDomeRouter() {
     updateStage('linking-wallet');
 
     try {
-      // Create RouterSigner adapter
-      const signer: RouterSigner = createRouterSigner(walletClient, address);
-      const userId = `user:${address.toLowerCase()}`;
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const nonce = '0';
+      const message = 'This message attests that I control the given wallet';
 
-      console.log('[DomeRouter] Calling router.linkUser with Safe wallet...');
-      updateStage('deploying-safe', 'Setting up Safe wallet & deriving API keys...');
+      console.log('[DomeRouter] Signing EIP-712 auth message...');
 
-      // Use the SDK's linkUser with walletType: 'safe' for external wallets
-      const result = await routerRef.current.linkUser({
-        userId,
-        signer,
-        walletType: 'safe',
-        autoDeploySafe: true,
-        autoSetAllowances: true,
+      // Sign EIP-712 typed data for L1 auth
+      const signature = await walletClient.signTypedData({
+        account: address,
+        domain: L1_AUTH_DOMAIN,
+        types: L1_AUTH_TYPES,
+        primaryType: 'ClobAuth',
+        message: {
+          address: address,
+          timestamp: timestamp,
+          nonce: BigInt(nonce),
+          message: message,
+        },
       });
 
-      console.log('[DomeRouter] Link result:', result);
+      console.log('[DomeRouter] Signature obtained, calling edge function...');
+      updateStage('deploying-safe', 'Creating API credentials...');
 
-      // Result type depends on wallet type - Safe returns SafeLinkResult, EOA returns PolymarketCredentials
-      // For Safe wallets, we get the full result with credentials, safeAddress, signerAddress
-      const safeLinkResult = result as {
-        credentials: { apiKey: string; apiSecret: string; apiPassphrase: string };
-        safeAddress: string;
-        signerAddress: string;
-        safeDeployed: boolean;
-        allowancesSet: number;
-      };
+      // Call edge function to create/derive credentials
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/builder-sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'l1_create_or_derive_api_creds',
+          address,
+          signature,
+          timestamp,
+          nonce,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[DomeRouter] Edge function error:', error);
+        throw new Error('Failed to create API credentials');
+      }
+
+      const data = await response.json();
+      console.log('[DomeRouter] Edge function response:', data);
+
+      if (!data.creds) {
+        throw new Error('No credentials returned');
+      }
 
       const creds: PolymarketCredentials = {
-        apiKey: safeLinkResult.credentials.apiKey,
-        apiSecret: safeLinkResult.credentials.apiSecret,
-        apiPassphrase: safeLinkResult.credentials.apiPassphrase,
+        apiKey: data.creds.apiKey,
+        apiSecret: data.creds.secret,
+        apiPassphrase: data.creds.passphrase,
       };
 
+      if (!safeAddress) {
+        throw new Error('Failed to derive Safe address');
+      }
+
       setCredentials(creds);
-      setSafeAddress(safeLinkResult.safeAddress);
-      setIsDeployed(true);
-      setHasAllowances(safeLinkResult.allowancesSet > 0 || true); // SDK handles allowances
       setIsLinked(true);
+      setIsDeployed(true);
+      setHasAllowances(true);
 
       // Save to localStorage
       saveSession({
-        safeAddress: safeLinkResult.safeAddress,
+        safeAddress,
         credentials: creds,
-        signerAddress: safeLinkResult.signerAddress,
+        signerAddress: address,
       });
 
       updateStage('completed', 'Wallet linked successfully!');
       toast.success('Wallet linked to Polymarket!', {
-        description: `Safe: ${safeLinkResult.safeAddress.slice(0, 10)}...`
+        description: `Safe: ${safeAddress.slice(0, 10)}...`
       });
 
-      return result;
+      return { credentials: creds, safeAddress };
     } catch (error: unknown) {
       console.error('[DomeRouter] Link error:', error);
       const message = error instanceof Error ? error.message : 'Failed to link wallet';
@@ -305,21 +296,15 @@ export function useDomeRouter() {
       setIsLinking(false);
       setTimeout(() => updateStage('idle'), 2000);
     }
-  }, [address, walletClient, chainId, switchChainAsync, saveSession, updateStage]);
+  }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage]);
 
   /**
-   * Place an order using Dome SDK's PolymarketRouter
-   * Orders are routed through Dome's servers, bypassing Cloudflare issues
+   * Place an order via edge function (which uses Dome API)
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
       toast.error('Please connect your wallet first');
       return { success: false, error: 'Wallet not connected' };
-    }
-
-    if (!routerRef.current) {
-      toast.error('Router not initialized');
-      return { success: false, error: 'Router not initialized' };
     }
 
     if (!isLinked || !credentials || !safeAddress) {
@@ -354,50 +339,53 @@ export function useDomeRouter() {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
       }
 
-      console.log('[DomeRouter] Placing order via SDK:', {
+      console.log('[DomeRouter] Placing order via edge function:', {
         tokenId: params.tokenId,
         side: params.side.toLowerCase(),
         size,
         price: validatedPrice,
         orderType: params.isMarketOrder ? 'FAK' : 'GTC',
-        safeAddress,
       });
 
-      // Create RouterSigner adapter
-      const signer: RouterSigner = createRouterSigner(walletClient, address);
-      const userId = `user:${address.toLowerCase()}`;
+      updateStage('submitting-order', 'Submitting order...');
 
-      updateStage('submitting-order', 'Signing and submitting order...');
+      // Call dome-router edge function to place order
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'place_order',
+          address,
+          safeAddress,
+          tokenId: params.tokenId,
+          side: params.side.toLowerCase(),
+          size,
+          price: validatedPrice,
+          orderType: params.isMarketOrder ? 'FAK' : 'GTC',
+          credentials,
+        }),
+      });
 
-      // Use SDK's placeOrder - orders are routed through Dome servers
-      const result = await routerRef.current.placeOrder({
-        userId,
-        marketId: params.tokenId,
-        side: params.side.toLowerCase() as 'buy' | 'sell',
-        size,
-        price: validatedPrice,
-        signer,
-        walletType: 'safe',
-        funderAddress: safeAddress,
-        negRisk: params.negRisk || false,
-        orderType: params.isMarketOrder ? 'FAK' : 'GTC',
-      }, credentials);
+      const data = await response.json();
 
-      console.log('[DomeRouter] Order result:', result);
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Failed to place order');
+      }
+
+      console.log('[DomeRouter] Order result:', data);
 
       const orderResult: OrderResult = {
         success: true,
-        orderId: result.orderId || result.orderHash,
-        result,
+        orderId: data.orderId,
+        result: data,
       };
 
       setLastOrderResult(orderResult);
       updateStage('completed');
       
-      const status = result.status || 'submitted';
-      toast.success(`Order ${status}!`, {
-        description: result.orderId 
-          ? `Order ID: ${result.orderId.slice(0, 12)}...` 
+      toast.success('Order placed!', {
+        description: data.orderId 
+          ? `Order ID: ${data.orderId.slice(0, 12)}...` 
           : 'Order submitted successfully'
       });
 
@@ -411,7 +399,6 @@ export function useDomeRouter() {
       if (errorMessage.includes('no match') || errorMessage.includes('No match')) {
         errorMessage = 'No buyers available at this price. Try a limit order instead.';
       } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('Invalid api key') || errorMessage.includes('credentials')) {
-        // Clear session and prompt re-link
         clearSession();
         errorMessage = 'Trading session expired. Please link your wallet again.';
       } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
@@ -448,20 +435,30 @@ export function useDomeRouter() {
   ]);
 
   /**
-   * Check Safe deployment status using SDK
+   * Check Safe deployment status
    */
   const checkDeploymentStatus = useCallback(async (): Promise<boolean> => {
-    if (!safeAddress || !routerRef.current) return false;
+    if (!safeAddress || !address) return false;
     
     try {
-      const deployed = await routerRef.current.isSafeDeployed(safeAddress);
-      setIsDeployed(deployed);
-      return deployed;
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'check_status',
+          address,
+          safeAddress,
+        }),
+      });
+
+      const data = await response.json();
+      setIsDeployed(data.isDeployed || false);
+      return data.isDeployed || false;
     } catch (e) {
       console.error('[DomeRouter] Status check failed:', e);
       return false;
     }
-  }, [safeAddress]);
+  }, [safeAddress, address]);
 
   return {
     // Connection state
@@ -492,7 +489,7 @@ export function useDomeRouter() {
     tradeStage,
     tradeStageMessage,
     
-    // API key status
-    isDomeReady: !!domeApiKey && !!routerRef.current,
+    // Always ready since we use edge functions
+    isDomeReady: true,
   };
 }
