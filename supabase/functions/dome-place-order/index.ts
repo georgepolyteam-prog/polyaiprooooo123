@@ -49,13 +49,25 @@ serve(async (req) => {
     const requestId = crypto.randomUUID();
     const clientOrderId = crypto.randomUUID();
 
+    // Convert side from number to string (ClobClient returns 0=BUY, 1=SELL)
+    const sideString = signedOrder.side === 0 ? 'BUY' : 'SELL';
+    const transformedSignedOrder = {
+      ...signedOrder,
+      side: sideString,
+    };
+
+    console.log('[dome-place-order] Transformed signedOrder.side:', {
+      original: signedOrder.side,
+      transformed: sideString,
+    });
+
     // JSON-RPC 2.0 format (required by Dome API)
     const payload = {
       jsonrpc: '2.0',
       method: 'placeOrder',
       id: requestId,
       params: {
-        signedOrder: signedOrder,
+        signedOrder: transformedSignedOrder,
         orderType: orderType || 'GTC',
         credentials: {
           apiKey: credentials.apiKey,
