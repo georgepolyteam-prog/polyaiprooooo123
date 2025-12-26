@@ -1049,8 +1049,20 @@ export default function LiveTrades() {
             trade={selectedTrade}
             onClose={() => setSelectedTrade(null)}
             onTrade={async (marketUrl, trade, side) => {
+              // Open modal immediately with loading state
+              setTradeMarketData({
+                title: trade.title,
+                currentPrice: trade.price,
+                url: marketUrl,
+                isLoading: true,
+              });
+              setTradeDefaultSide(side);
+              setTradeModalOpen(true);
+              
+              // Fetch full data in background
               const res = await fetchTradeableMarketData(marketUrl);
               if (res.ok === false) {
+                setTradeModalOpen(false);
                 if (res.reason === 'needs_market_selection') {
                   toast.info("Multiple markets - please select a specific one");
                   navigate('/chat', {
@@ -1064,8 +1076,6 @@ export default function LiveTrades() {
                 return;
               }
               setTradeMarketData(res.data);
-              setTradeDefaultSide(side);
-              setTradeModalOpen(true);
             }}
             onAnalyze={(trade, resolvedUrl) => {
               setTradeAnalysisContext({ 

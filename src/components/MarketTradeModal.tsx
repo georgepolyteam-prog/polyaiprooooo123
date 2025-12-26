@@ -18,6 +18,7 @@ interface MarketTradeModalProps {
     url?: string;
     eventSlug?: string;
     marketSlug?: string;
+    isLoading?: boolean;
   };
 }
 
