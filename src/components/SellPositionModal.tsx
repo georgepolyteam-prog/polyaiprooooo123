@@ -26,12 +26,7 @@ interface Position {
 interface SellPositionModalProps {
   position: Position;
   onClose: () => void;
-  /**
-   * @param shares - Number of shares to sell
-   * @param price - Price per share (used for limit orders, informational for market orders)
-   * @param isMarketOrder - If true, executes at market price immediately
-   */
-  onSell: (shares: number, price: number, isMarketOrder?: boolean) => Promise<void>;
+  onSell: (amount: number, price: number, isMarketOrder?: boolean) => Promise<void>;
 }
 
 export function SellPositionModal({ position, onClose, onSell }: SellPositionModalProps) {
@@ -93,15 +88,15 @@ export function SellPositionModal({ position, onClose, onSell }: SellPositionMod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
       
-      {/* Modal - scrollable with max height */}
-      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl shadow-primary/20">
+      {/* Modal */}
+      <div className="relative w-full max-w-md mx-4 bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl shadow-primary/20 overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b border-white/10 bg-gradient-to-r from-rose-500/10 to-orange-500/10">
           <div className="flex items-center justify-between">

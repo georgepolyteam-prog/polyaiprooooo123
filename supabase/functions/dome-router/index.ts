@@ -35,7 +35,6 @@ interface PlaceOrderRequest {
   };
   negRisk?: boolean;
   clientOrderId: string; // At request level per Dome SDK ServerPlaceOrderRequest
-  orderType?: 'GTC' | 'GTD' | 'FOK'; // Order type: GTC (limit), FOK (market fill-or-kill)
 }
 
 interface DeriveSafeRequest {
@@ -112,7 +111,7 @@ serve(async (req) => {
       }
 
       case "place_order": {
-        const { signedOrder, credentials, negRisk, clientOrderId, orderType } = body as PlaceOrderRequest;
+        const { signedOrder, credentials, negRisk, clientOrderId } = body as PlaceOrderRequest;
         
         if (!signedOrder || !credentials || !clientOrderId) {
           return new Response(
@@ -127,7 +126,6 @@ serve(async (req) => {
           clientOrderId,
           hasSignature: !!signedOrder.signature,
           negRisk: negRisk ?? false,
-          orderType: orderType ?? 'GTC',
         });
         
         // Build JSON-RPC 2.0 payload matching Dome SDK's ServerPlaceOrderRequest
@@ -145,7 +143,6 @@ serve(async (req) => {
               apiPassphrase: credentials.apiPassphrase,
             },
             clientOrderId, // At params level per Dome SDK
-            orderType: orderType ?? 'GTC', // GTC for limit, FOK for market orders
           },
         };
         
@@ -203,19 +200,12 @@ serve(async (req) => {
         
         // Success - extract result from JSON-RPC response
         const orderResult = result.result || result;
-        
-        // Log full order result for debugging
-        console.log("[dome-router] Order result (full):", JSON.stringify(orderResult, null, 2));
-        console.log("[dome-router] Order status:", orderResult.status);
-        console.log("[dome-router] Order matched:", orderResult.matched);
-        console.log("[dome-router] Order ID:", orderResult.orderID || orderResult.orderId || orderResult.id);
+        console.log("[dome-router] Order placed successfully:", orderResult);
         
         return new Response(
           JSON.stringify({ 
             success: true,
-            orderId: orderResult.orderID || orderResult.orderId || orderResult.id,
-            status: orderResult.status, // Pass through the order status (live, matched, etc.)
-            matched: orderResult.matched,
+            orderId: orderResult.orderID || orderResult.orderId || orderResult.id, 
             ...orderResult 
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }

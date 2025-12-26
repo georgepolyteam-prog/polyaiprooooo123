@@ -312,29 +312,21 @@ export default function MyTrades() {
     }
   };
 
-  const handleSellPosition = async (shares: number, price: number, isMarketOrder?: boolean) => {
+  const handleSellPosition = async (amount: number, price: number, isMarketOrder?: boolean) => {
     if (!sellModalPosition || !address) return;
     
     try {
-      // For MARKET SELL: amount = shares (SDK will find best price)
-      // For LIMIT SELL: amount = USDC value (price × shares)
-      const amount = isMarketOrder ? shares : shares * price;
-      
+      // For selling, we need to place a SELL order for the position's token
       const result = await placeOrder({
         tokenId: sellModalPosition.asset,
         side: "SELL",
-        amount,
+        amount: amount * price, // USDC value
         price: price,
         isMarketOrder: isMarketOrder,
       });
 
       if (result?.success) {
-        const statusMsg = result.status === 'matched' || result.status === 'filled'
-          ? "Sell order filled!"
-          : isMarketOrder 
-            ? "Market sell submitted!"
-            : "Limit sell order placed!";
-        toast.success(statusMsg);
+        toast.success(isMarketOrder ? "Market sell executed!" : "Limit sell order placed!");
         // Refresh positions after successful order
         setTimeout(() => fetchPositions(), 2000);
       } else {
