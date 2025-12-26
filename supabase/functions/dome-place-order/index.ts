@@ -40,22 +40,10 @@ serve(async (req) => {
 
   try {
     const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
-    const POLY_API_KEY = Deno.env.get('POLY_API_KEY');
-    const POLY_API_SECRET = Deno.env.get('POLY_API_SECRET');
-    const POLY_API_PASSPHRASE = Deno.env.get('POLY_API_PASSPHRASE');
-
     if (!DOME_API_KEY) {
       console.error('[dome-place-order] DOME_API_KEY not configured');
       return new Response(
         JSON.stringify({ success: false, error: 'Dome API key not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!POLY_API_KEY || !POLY_API_SECRET || !POLY_API_PASSPHRASE) {
-      console.error('[dome-place-order] POLY_API credentials not configured');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Polymarket API credentials not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -94,7 +82,6 @@ serve(async (req) => {
     });
 
     // Prepare the request to Dome API
-    // Use BUILDER credentials from env, not user credentials
     const domeRequestBody = {
       jsonrpc: '2.0',
       method: 'placeOrder',
@@ -103,9 +90,9 @@ serve(async (req) => {
         signedOrder: normalizedOrder,
         orderType,
         credentials: {
-          apiKey: POLY_API_KEY,
-          apiSecret: POLY_API_SECRET,
-          apiPassphrase: POLY_API_PASSPHRASE,
+          apiKey: credentials.apiKey,
+          apiSecret: credentials.apiSecret,
+          apiPassphrase: credentials.apiPassphrase,
         },
         clientOrderId: clientOrderId || crypto.randomUUID(),
       },
