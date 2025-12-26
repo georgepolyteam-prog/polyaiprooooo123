@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Dome API endpoint - matches SDK's DOME_API_ENDPOINT constant
+// Dome API endpoint
 const DOME_API_ENDPOINT = 'https://api.domeapi.io/v1';
 
 serve(async (req) => {
@@ -15,19 +15,20 @@ serve(async (req) => {
   }
 
   try {
-    const { signedOrder, orderType, credentials, signer, funderAddress, negRisk } = await req.json();
+    const body = await req.json();
+    const { signedOrder, orderType, credentials, signer, funderAddress, negRisk } = body;
 
-    console.log('[dome-place-order] Request received:', {
+    console.log('[dome-place-order] Received signed order:', {
       signer: signer?.slice(0, 10),
-      tokenId: signedOrder?.tokenId?.slice(0, 20),
-      side: signedOrder?.side,
       funderAddress: funderAddress?.slice(0, 10),
       orderType,
+      hasSignedOrder: !!signedOrder,
       hasCredentials: !!credentials,
     });
 
     // Validate required fields
     if (!signedOrder || !credentials || !signer || !funderAddress) {
+      console.error('[dome-place-order] Missing required fields');
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -47,29 +48,37 @@ serve(async (req) => {
       );
     }
 
-    // Calculate size and price from signed order amounts
-    const makerAmount = parseFloat(signedOrder.makerAmount);
-    const takerAmount = parseFloat(signedOrder.takerAmount);
-    const size = takerAmount / 1e6; // Convert from USDC decimals
-    const price = makerAmount / takerAmount;
+    // Log signed order details for debugging
+    console.log('[dome-place-order] Signed order details:', {
+      tokenId: signedOrder.tokenID?.slice(0, 20),
+      side: signedOrder.side,
+      size: signedOrder.size,
+      price: signedOrder.price,
+      makerAmount: signedOrder.makerAmount,
+      takerAmount: signedOrder.takerAmount,
+      maker: signedOrder.maker?.slice(0, 10),
+      hasSignature: !!signedOrder.signature,
+    });
 
-    // Prepare request payload matching SDK's placeOrder method
-    // See: dome-sdk-ts/src/router/polymarket.ts lines 456-608
+    // Prepare payload for Dome API
+    // The signedOrder is already signed with Dome's builder-signer client-side
     const payload = {
       userId: signer,
-      marketId: signedOrder.tokenId,
+      marketId: signedOrder.tokenID,
       side: signedOrder.side?.toLowerCase(),
-      size,
-      price,
+      size: signedOrder.size,
+      price: signedOrder.price,
       walletType: 'safe',
       funderAddress,
       orderType: orderType || 'GTC',
       negRisk: negRisk || false,
+      // Pass the pre-signed order for Dome to submit to CLOB
+      signedOrder: signedOrder,
       // Include credentials for API authentication
       credentials: {
-        apiKey: credentials.apiKey,
-        apiSecret: credentials.apiSecret,
-        apiPassphrase: credentials.passphrase,
+        key: credentials.apiKey,
+        secret: credentials.apiSecret,
+        passphrase: credentials.passphrase,
       },
     };
 
@@ -82,7 +91,7 @@ serve(async (req) => {
       price: payload.price,
     });
 
-    // Submit to Dome's placeOrder endpoint (SDK's server-side endpoint)
+    // Submit to Dome's placeOrder endpoint
     const response = await fetch(`${DOME_API_ENDPOINT}/polymarket/placeOrder`, {
       method: 'POST',
       headers: {
@@ -125,8 +134,9 @@ serve(async (req) => {
       );
     }
 
-    console.log('[dome-place-order] Order placed via Dome API:', {
-      orderId: result?.orderID || result?.orderId || result?.id,
+    const orderId = result?.orderID || result?.orderId || result?.id;
+    console.log('[dome-place-order] Order placed successfully:', {
+      orderId,
       status: result?.status,
     });
 
@@ -134,7 +144,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         result,
-        orderId: result?.orderID || result?.orderId || result?.id,
+        orderId,
         status: result?.status,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

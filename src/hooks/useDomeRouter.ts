@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient } from '@polymarket/clob-client';
+import { ClobClient, Side } from '@polymarket/clob-client';
 import { BuilderConfig } from '@polymarket/builder-signing-sdk';
 import { useSafeWallet } from './useSafeWallet';
 import { supabase } from '@/integrations/supabase/client';
@@ -353,8 +353,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage, safeIsDeployed, deploySafe, safeHasAllowances, setAllowances]);
 
   /**
-   * Place an order using Dome's PolymarketRouter API
-   * This routes orders through Dome for builder attribution and better execution
+   * Place an order using ClobClient with Dome builder config
+   * Signs the order client-side with Dome's builder-signer for attribution and MEV protection
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -403,7 +403,7 @@ export function useDomeRouter() {
         }
       }
 
-      updateStage('signing-order', 'Preparing order...');
+      updateStage('signing-order');
 
       // Calculate size (shares) from amount (USDC) and price
       const size = params.amount / params.price;
@@ -414,39 +414,71 @@ export function useDomeRouter() {
 
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
-      console.log('[DomeRouter] Placing order via Dome API...', {
-        marketId: params.tokenId,
-        side: params.side.toLowerCase(),
-        size,
+      console.log('[DomeRouter] Creating ClobClient with Dome builder config...');
+
+      // Create ethers adapter for signing
+      const ethersAdapter = createEthersAdapter(walletClient, address);
+
+      // Create Dome's builder config - CRITICAL for attribution and MEV protection!
+      const builderConfig = new BuilderConfig({
+        remoteBuilderConfig: {
+          url: DOME_BUILDER_SIGNER_URL,
+        },
+      });
+
+      // Create ClobClient WITH builder config AND credentials (9th parameter)
+      const clobClient = new ClobClient(
+        CLOB_HOST,
+        POLYGON_CHAIN_ID,
+        ethersAdapter as unknown as import('@ethersproject/providers').JsonRpcSigner,
+        {
+          key: credentials.apiKey,
+          secret: credentials.apiSecret,
+          passphrase: credentials.apiPassphrase,
+        },
+        SIGNATURE_TYPE_SAFE,
+        safeAddress,
+        undefined, // 7th param: proxy wallet address
+        false, // 8th param: useServerTime
+        builderConfig, // 9th param: DOME BUILDER CONFIG - enables builder attribution!
+      );
+
+      console.log('[DomeRouter] Signing order with Dome builder-signer...', {
+        tokenId: params.tokenId,
         price: params.price,
-        funderAddress: safeAddress,
+        size,
+        side: params.side,
+        negRisk: params.negRisk,
         orderType,
       });
 
+      // Sign the order - builder config makes it use Dome's builder-signer
+      const signedOrder = await clobClient.createOrder({
+        tokenID: params.tokenId,
+        price: params.price,
+        size: size,
+        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+      }, {
+        negRisk: params.negRisk,
+      });
+
+      console.log('[DomeRouter] Order signed with Dome builder attribution:', signedOrder);
+
       updateStage('submitting-order', 'Submitting order via Dome...');
 
-      // Call the dome-router edge function which uses Dome's placeOrder API
-      // This handles:
-      // 1. Builder-signer for attribution (automatic)
-      // 2. Order signing with credentials
-      // 3. Submission to Polymarket CLOB via Dome
-      const { data, error } = await supabase.functions.invoke('dome-router', {
+      // Submit the SIGNED order to edge function
+      const { data, error } = await supabase.functions.invoke('dome-place-order', {
         body: {
-          action: 'place_order',
-          userId: address,
-          marketId: params.tokenId,
-          side: params.side.toLowerCase(),
-          size: size,
-          price: params.price,
+          signedOrder,
+          orderType,
           credentials: {
             apiKey: credentials.apiKey,
             apiSecret: credentials.apiSecret,
-            apiPassphrase: credentials.apiPassphrase,
+            passphrase: credentials.apiPassphrase,
           },
+          signer: address,
           funderAddress: safeAddress,
           negRisk: params.negRisk ?? false,
-          orderType: orderType,
-          tickSize: params.tickSize || '0.01',
         },
       });
 
@@ -460,7 +492,7 @@ export function useDomeRouter() {
 
       console.log('[DomeRouter] Order placed via Dome!', data);
 
-      const orderId = data?.orderId || data?.orderID || data?.id;
+      const orderId = data?.orderId || data?.orderID || data?.result?.orderID;
 
       const orderResult: OrderResult = {
         success: true,
@@ -493,7 +525,7 @@ export function useDomeRouter() {
         errorMessage = 'Transaction rejected by user.';
       } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
         errorMessage = 'Insufficient balance. Please add more USDC.';
-      } else if (errorMessage.includes('Dome API key not configured')) {
+      } else if (errorMessage.includes('Dome API key not configured') || errorMessage.includes('Dome API not configured')) {
         errorMessage = 'Dome routing not available. Please contact support.';
       }
 
