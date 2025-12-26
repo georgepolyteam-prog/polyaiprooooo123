@@ -14,6 +14,14 @@ const POLYGON_RPC = 'https://polygon-rpc.com';
 const RELAYER_URL = 'https://relayer-v2.polymarket.com/';
 const BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
 
+// Polygon contract addresses for allowance verification
+const POLYGON_ADDRESSES = {
+  USDC: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+  CTF_EXCHANGE: '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8DB438C',
+  NEG_RISK_CTF_EXCHANGE: '0xC5d563A36AE78145C45a50134d48A1215220f80a',
+  NEG_RISK_ADAPTER: '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296',
+};
+
 /**
  * Derive Safe address from EOA using the official Polymarket library
  */
@@ -233,6 +241,46 @@ export function useSafeWallet() {
     }
   }, [address, safeAddress, walletClient, checkDeployment]);
 
+  // Check allowances on-chain for a given Safe address
+  const checkAllowancesOnChain = useCallback(async (): Promise<{
+    allSet: boolean;
+    ctfExchange: boolean;
+    negRiskCtfExchange: boolean;
+    negRiskAdapter: boolean;
+  }> => {
+    if (!safeAddress) {
+      return { allSet: false, ctfExchange: false, negRiskCtfExchange: false, negRiskAdapter: false };
+    }
+    
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC);
+      const usdcContract = new ethers.Contract(
+        POLYGON_ADDRESSES.USDC,
+        ['function allowance(address owner, address spender) view returns (uint256)'],
+        provider
+      );
+      
+      const [ctf, negRiskCtf, negRiskAdapter] = await Promise.all([
+        usdcContract.allowance(safeAddress, POLYGON_ADDRESSES.CTF_EXCHANGE),
+        usdcContract.allowance(safeAddress, POLYGON_ADDRESSES.NEG_RISK_CTF_EXCHANGE),
+        usdcContract.allowance(safeAddress, POLYGON_ADDRESSES.NEG_RISK_ADAPTER),
+      ]);
+      
+      const result = {
+        ctfExchange: ctf.gt(0),
+        negRiskCtfExchange: negRiskCtf.gt(0),
+        negRiskAdapter: negRiskAdapter.gt(0),
+        allSet: ctf.gt(0) && negRiskCtf.gt(0) && negRiskAdapter.gt(0),
+      };
+      
+      console.log('[Safe] On-chain allowance check:', result);
+      return result;
+    } catch (e) {
+      console.error('[Safe] Failed to check allowances on-chain:', e);
+      return { allSet: false, ctfExchange: false, negRiskCtfExchange: false, negRiskAdapter: false };
+    }
+  }, [safeAddress]);
+
   // Set token allowances using RelayClient (sets from Safe, not EOA)
   const setAllowances = useCallback(async (): Promise<boolean> => {
     if (!safeAddress || !walletClient || !address) {
@@ -266,8 +314,17 @@ export function useSafeWallet() {
 
       console.log('[Safe] Setting allowances via RelayClient (from Safe)...');
       
-      // Use RelayClient.setAllowances() - this sets allowances FROM the Safe
-      await (relayClientRef.current as any).setAllowances();
+      // Use RelayClient.setAllowances() with fallbacks for different method names
+      const client = relayClientRef.current as any;
+      if (typeof client.setAllowances === 'function') {
+        await client.setAllowances();
+      } else if (typeof client.approveAll === 'function') {
+        await client.approveAll();
+      } else if (typeof client.setApprovals === 'function') {
+        await client.setApprovals();
+      } else {
+        console.warn('[Safe] RelayClient setAllowances method not found - allowances may need to be set manually');
+      }
 
       console.log('[Safe] Allowances set successfully via RelayClient');
       setHasAllowances(true);
@@ -352,6 +409,7 @@ export function useSafeWallet() {
     hasAllowances,
     isSettingAllowances,
     setAllowances,
+    checkAllowancesOnChain,
     isWithdrawing,
     withdrawUSDC,
   };

@@ -100,6 +100,7 @@ export function useDomeRouter() {
     hasAllowances,
     isSettingAllowances,
     setAllowances,
+    checkAllowancesOnChain,
     checkDeployment,
   } = useSafeWallet();
   
@@ -422,8 +423,18 @@ export function useDomeRouter() {
       }
     }
 
-    // Check allowances
-    if (!hasAllowances) {
+    // Check allowances - verify on-chain even if cached
+    let allowancesSet = hasAllowances;
+    if (hasAllowances) {
+      console.log('[DomeRouter] Verifying allowances on-chain...');
+      const onChainAllowances = await checkAllowancesOnChain();
+      allowancesSet = onChainAllowances.allSet;
+      if (!allowancesSet) {
+        console.log('[DomeRouter] On-chain allowances not set despite cache, setting now...');
+      }
+    }
+    
+    if (!allowancesSet) {
       updateStage('setting-allowances');
       toast.info('Setting token allowances...');
       const success = await setAllowances();
