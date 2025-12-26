@@ -170,7 +170,18 @@ export function useDomeRouter() {
 
   /**
    * Link user to Polymarket - CLIENT-SIDE credential creation
-   * Uses ClobClient.createOrDeriveApiKey() with signatureType=2 and funderAddress=safeAddress
+   * 
+   * L1 Authentication (API Key Creation):
+   * - Uses EOA signer to sign the credential request
+   * - signatureType = 2 (Safe wallet mode)
+   * - Credentials registered to the Safe address
+   * - funderAddress = Safe (where USDC is held)
+   * 
+   * Order Placement:
+   * - Safe is the maker (owns the USDC funds)
+   * - EOA is the signer (authorizes the trade)
+   * - signatureType = 2 ensures Polymarket checks Safe balance
+   * - This is the standard pattern for Safe wallet trading
    */
   const linkUser = useCallback(async () => {
     if (!address || !walletClient) {
@@ -199,7 +210,7 @@ export function useDomeRouter() {
 
       console.log('[DomeRouter] Starting wallet link (client-side)...');
       console.log('[DomeRouter] EOA (signer):', address);
-      console.log('[DomeRouter] Safe (funder):', safeAddress);
+      console.log('[DomeRouter] Safe (maker/funder):', safeAddress);
 
       updateStage('linking-wallet', 'Sign to create trading credentials...');
 
@@ -214,20 +225,9 @@ export function useDomeRouter() {
       );
       const eoaSigner = provider.getSigner();
 
-      /**
-       * L1 Authentication (API Key Creation):
-       * - Uses EOA signer DIRECTLY
-       * - signatureType = 0 (EOA as maker)
-       * - Credentials registered to EOA
-       * 
-       * Order Placement:
-       * - EOA is the maker (signatureType = 0)
-       * - Safe holds the funds (user deposits USDC to Safe)
-       * - Orders are placed by EOA, funded by Safe balance
-       */
-      console.log('[DomeRouter] Using EOA signer directly for L1 auth');
-      console.log('[DomeRouter]   EOA (signer + POLY_ADDRESS):', address);
-      console.log('[DomeRouter]   Safe (for funding):', safeAddress);
+      console.log('[DomeRouter] Using signatureType=2 (Safe) for credential creation');
+      console.log('[DomeRouter]   EOA (signer):', address);
+      console.log('[DomeRouter]   Safe (maker + funder):', safeAddress);
 
       // Import BuilderConfig for Dome integration
       const { BuilderConfig } = await import('@polymarket/builder-signing-sdk');
@@ -240,14 +240,14 @@ export function useDomeRouter() {
       });
 
       // Create ClobClient with EOA signer for L1 auth
-      // Use signatureType=0 (EOA) so credentials match the maker
+      // Use signatureType=2 (Safe) so credentials are tied to Safe address
       const clobClient = new ClobClient(
         'https://clob.polymarket.com',
         POLYGON_CHAIN_ID,
-        eoaSigner,    // EOA signer
+        eoaSigner,    // EOA signer (signs the message)
         undefined,    // no credentials yet
-        0,            // signatureType = 0 (EOA)
-        undefined,    // no funderAddress for auth
+        2,            // signatureType = 2 (Safe wallet)
+        safeAddress,  // funderAddress = Safe (where USDC lives)
         undefined,    // 7th param
         false,        // 8th param
         builderConfig // 9th param - Dome builder config!
@@ -435,35 +435,34 @@ export function useDomeRouter() {
       // Round size to configured decimals (shares precision for takerAmount)
       let size = roundDown(rawSize, roundingConfig.size);
       
-      // CRITICAL FIX: Find a size where size × price produces a clean 2-decimal cost
-      // Problem: 15.12 × 0.33 = 4.9896 (4 decimals) - NOT valid!
-      // Solution: Iteratively reduce size until we get a valid cost
-      let cost = size * roundedPrice;
-      let iterations = 0;
-      const MAX_ITERATIONS = 100; // Safety limit
-      
-      // Check if cost has more than 2 decimals: (cost * 100) should be a whole number
-      while ((Math.round(cost * 100) / 100) !== cost && size > 0 && iterations < MAX_ITERATIONS) {
-        // Reduce size by 0.01 (minimum share increment)
-        size = Math.round((size - 0.01) * 100) / 100;
-        cost = size * roundedPrice;
-        iterations++;
+      // Calculate target cost - ensure minimum $1 for market orders
+      let targetCost = Math.round(params.amount * 100) / 100;
+      if (params.isMarketOrder && targetCost < 1.0) {
+        targetCost = 1.0; // Polymarket requires minimum $1 for market orders
+        console.log('[DomeRouter] Adjusted target cost to $1 minimum for market order');
       }
-      
-      // Final safety check - round cost to exactly 2 decimals
-      const finalCost = Math.round(cost * 100) / 100;
-      
-      console.log('[DomeRouter] Amount adjustment:', {
-        originalSize: rawSize,
-        adjustedSize: size,
+
+      // Calculate size that produces this exact cost
+      size = targetCost / roundedPrice;
+      size = Math.round(size * 100) / 100; // Round to 2 decimals
+
+      // Verify the cost is valid (2 decimals)
+      let actualCost = Math.round(size * roundedPrice * 100) / 100;
+
+      // If cost is less than target due to rounding, adjust size up
+      if (actualCost < targetCost) {
+        size = size + 0.01;
+        actualCost = Math.round(size * roundedPrice * 100) / 100;
+      }
+
+      console.log('[DomeRouter] Final calculation:', {
+        requestedAmount: params.amount,
+        targetCost,
         price: roundedPrice,
-        finalCost,
-        iterations,
-        costCheck: {
-          raw: cost,
-          rounded: finalCost,
-          isClean: Math.abs(cost - finalCost) < 0.0001,
-        },
+        size,
+        actualCost,
+        meetsMinimum: actualCost >= 1.0,
+        has2Decimals: Math.abs(actualCost - Math.round(actualCost * 100) / 100) < 0.001,
       });
       
       const MIN_ORDER_SIZE = 5;
@@ -511,14 +510,14 @@ export function useDomeRouter() {
       });
       
       // Initialize ClobClient for order signing
-      // Use signatureType=0 (EOA) to match credentials
+      // Use signatureType=2 (Safe) to match credentials from linkUser
       const clobClient = new ClobClient(
         'https://clob.polymarket.com',
         POLYGON_CHAIN_ID,
         signer,
         clobCreds,
-        0,            // signatureType = 0 (EOA)
-        undefined,    // no funderAddress
+        2,            // signatureType = 2 (Safe wallet)
+        safeAddress,  // funderAddress = Safe (where USDC lives)
         undefined,    // 7th param
         false,        // 8th param
         builderConfig // 9th param - Dome builder config!
