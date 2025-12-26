@@ -54,20 +54,64 @@ function generateL2Headers(
 
 /**
  * Fetch market info from Gamma API to get title for a token
+ * Tries multiple endpoints for better coverage
  */
 async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outcome?: string } | null> {
   try {
-    const response = await fetch(`${GAMMA_API}/markets?asset_id=${tokenId}&closed=false`);
-    if (!response.ok) return null;
-    
-    const markets = await response.json();
-    if (markets && markets.length > 0) {
-      const market = markets[0];
-      return {
-        title: market.question || market.title || market.groupItemTitle,
-        outcome: market.outcome || (market.groupItemTitle?.includes('Yes') ? 'Yes' : market.groupItemTitle?.includes('No') ? 'No' : undefined),
-      };
+    // Try 1: Markets endpoint without closed filter (some orders may be for closed markets)
+    let response = await fetch(`${GAMMA_API}/markets?asset_id=${tokenId}`);
+    if (response.ok) {
+      const markets = await response.json();
+      if (markets && markets.length > 0) {
+        const market = markets[0];
+        console.log('[Get Open Orders] Found market via markets endpoint:', market.question?.slice(0, 50));
+        return {
+          title: market.question || market.title || market.groupItemTitle,
+          outcome: market.outcome || (market.groupItemTitle?.includes('Yes') ? 'Yes' : market.groupItemTitle?.includes('No') ? 'No' : undefined),
+        };
+      }
     }
+
+    // Try 2: Direct token endpoint - provides token-specific info
+    response = await fetch(`${GAMMA_API}/tokens/${tokenId}`);
+    if (response.ok) {
+      const token = await response.json();
+      if (token) {
+        console.log('[Get Open Orders] Found market via tokens endpoint:', token.question?.slice(0, 50) || token.market_question?.slice(0, 50));
+        return {
+          title: token.question || token.market_question || token.conditionId,
+          outcome: token.outcome,
+        };
+      }
+    }
+
+    // Try 3: Events endpoint by token
+    response = await fetch(`${GAMMA_API}/events?token_id=${tokenId}`);
+    if (response.ok) {
+      const events = await response.json();
+      if (events && events.length > 0) {
+        const event = events[0];
+        // Find the matching market in the event
+        const matchingMarket = event.markets?.find((m: { clobTokenIds?: string[] }) => 
+          m.clobTokenIds?.includes(tokenId)
+        );
+        if (matchingMarket) {
+          console.log('[Get Open Orders] Found market via events endpoint:', matchingMarket.question?.slice(0, 50));
+          return {
+            title: matchingMarket.question || event.title,
+            outcome: matchingMarket.outcome,
+          };
+        }
+        // Fallback to event title
+        console.log('[Get Open Orders] Found event via events endpoint:', event.title?.slice(0, 50));
+        return {
+          title: event.title,
+          outcome: undefined,
+        };
+      }
+    }
+
+    console.log('[Get Open Orders] No market info found for token:', tokenId.slice(0, 20));
     return null;
   } catch (e) {
     console.error('[Get Open Orders] Failed to fetch market info:', e);

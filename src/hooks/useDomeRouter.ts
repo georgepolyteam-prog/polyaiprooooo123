@@ -351,7 +351,16 @@ export function useDomeRouter() {
       const roundTo = (n: number, decimals: number) => Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals);
       
       const price = roundTo(params.price, 2);
-      const size = roundTo(params.amount / Math.max(price, 0.01), 2);
+      
+      // For BUY: user inputs USDC amount, we calculate shares (USDC / price = shares)
+      // For SELL: user inputs shares directly (they're selling shares they own)
+      let size: number;
+      if (params.side === 'BUY') {
+        size = roundTo(params.amount / Math.max(price, 0.01), 2);
+      } else {
+        // SELL: amount is already in shares
+        size = roundTo(params.amount, 2);
+      }
 
       console.log('[DomeRouter] Building signed order:', {
         tokenId: params.tokenId?.slice(0, 20),
