@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
 import { ClobClient } from '@polymarket/clob-client';
+import { BuilderConfig } from '@polymarket/builder-signing-sdk';
 import { useSafeWallet } from './useSafeWallet';
 import { supabase } from '@/integrations/supabase/client';
 import type { WalletClient } from 'viem';
@@ -9,6 +10,9 @@ import type { WalletClient } from 'viem';
 const POLYGON_CHAIN_ID = 137;
 const STORAGE_KEY = 'dome_router_session_v3';
 const CLOB_HOST = 'https://clob.polymarket.com';
+
+// Dome's builder-signer URL for order attribution and MEV protection
+const DOME_BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
 
 // Signature type for Safe/Gnosis wallet
 const SIGNATURE_TYPE_SAFE = 2;
@@ -225,12 +229,22 @@ export function useDomeRouter() {
     updateStage('linking-wallet');
 
     try {
-      console.log('[DomeRouter] Creating ethers adapter for ClobClient...');
+      console.log('[DomeRouter] Creating ethers adapter for ClobClient with Dome builder config...');
       
       // Create ethers-compatible signer adapter
       const ethersAdapter = createEthersAdapter(walletClient, address);
       
-      // Create ClobClient without credentials (for L1 auth)
+      // Create Dome's builder config for attribution and MEV protection
+      // This matches the SDK's PolymarketBuilderConfig (polymarket.ts lines 107-111)
+      const builderConfig = new BuilderConfig({
+        remoteBuilderConfig: {
+          url: DOME_BUILDER_SIGNER_URL,
+        },
+      });
+
+      console.log('[DomeRouter] Builder config created with URL:', DOME_BUILDER_SIGNER_URL);
+      
+      // Create ClobClient WITH builder config (9th parameter)
       // Use signatureType=2 (Safe) and funderAddress=safeAddress
       const clobClient = new ClobClient(
         CLOB_HOST,
@@ -239,6 +253,9 @@ export function useDomeRouter() {
         undefined, // No credentials yet
         SIGNATURE_TYPE_SAFE,
         safeAddress || undefined, // funderAddress is the Safe
+        undefined, // 7th param: proxy wallet address (not used)
+        false, // 8th param: useServerTime
+        builderConfig, // 9th param: DOME BUILDER CONFIG - enables builder attribution!
       );
 
       console.log('[DomeRouter] Calling createOrDeriveApiKey...');
