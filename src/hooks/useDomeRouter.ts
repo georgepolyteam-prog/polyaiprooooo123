@@ -206,25 +206,28 @@ export function useDomeRouter() {
         safeAddress // funderAddress = Safe
       );
 
-      console.log('[DomeRouter] ClobClient initialized, deriving credentials...');
+      console.log('[DomeRouter] ClobClient initialized, creating credentials...');
 
       // This prompts the user to sign ONE EIP-712 message
       // The credentials are tied to the EOA signing for the Safe
+      // IMPORTANT: Use createApiKey() FIRST to ensure fresh credentials
+      // deriveApiKey() can return stale cached credentials from Polymarket that may not work
       let apiKeyCreds;
       try {
-        // Try to derive existing credentials first
-        apiKeyCreds = await clobClient.deriveApiKey();
-        console.log('[DomeRouter] Derived existing API credentials');
-      } catch (deriveError) {
-        console.log('[DomeRouter] No existing credentials, creating new ones...');
+        // Try to create new credentials first (ensures fresh, valid creds)
+        apiKeyCreds = await clobClient.createApiKey();
+        console.log('[DomeRouter] Created new API credentials');
+      } catch (createError: unknown) {
+        // If creation fails (e.g., creds already exist), try to derive existing ones
+        console.log('[DomeRouter] Create failed, trying to derive existing credentials...');
         try {
-          apiKeyCreds = await clobClient.createApiKey();
-          console.log('[DomeRouter] Created new API credentials');
-        } catch (createError: unknown) {
-          console.error('[DomeRouter] Failed to create API key:', createError);
+          apiKeyCreds = await clobClient.deriveApiKey();
+          console.log('[DomeRouter] Derived existing API credentials');
+        } catch (deriveError: unknown) {
+          console.error('[DomeRouter] Failed to derive API key:', deriveError);
           throw new Error(
-            createError instanceof Error 
-              ? createError.message 
+            deriveError instanceof Error 
+              ? deriveError.message 
               : 'Failed to create trading credentials'
           );
         }
