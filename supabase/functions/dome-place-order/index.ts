@@ -78,6 +78,11 @@ serve(async (req) => {
       signer: signedOrder.signer?.slice(0, 10),
       tokenId: signedOrder.tokenId?.slice(0, 20),
       funder: orderParams?.funderAddress?.slice(0, 10),
+      // CRITICAL: Log amounts to debug precision issues
+      makerAmount: signedOrder.makerAmount,
+      takerAmount: signedOrder.takerAmount,
+      price: orderParams?.price,
+      size: orderParams?.size,
     });
 
     // JSON-RPC 2.0 format for Dome API placeOrder
