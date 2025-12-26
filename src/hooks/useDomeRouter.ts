@@ -440,38 +440,36 @@ export function useDomeRouter() {
 
       console.log('[DomeRouter] Order signed locally:', signedOrder);
 
-      // Convert numeric side to string for Dome API
-      // ClobClient returns side as 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
-      const signedOrderForDome = {
-        ...signedOrder,
-        side: typeof signedOrder.side === 'number' 
-          ? (signedOrder.side === 0 ? 'BUY' : 'SELL') 
-          : signedOrder.side,
-      };
-
       updateStage('submitting-order', 'Submitting order via Dome...');
 
-      // Generate a client order ID for tracking
-      const clientOrderId = crypto.randomUUID();
+      // Extract signature from signed order and prepare Dome API payload
+      // Dome API expects: userId, marketId, side, size, price, walletType, funderAddress, signature
+      const domePayload = {
+        userId: address,
+        marketId: params.tokenId,
+        side: params.side.toLowerCase() as 'buy' | 'sell',
+        size: size,
+        price: params.price,
+        walletType: 'safe' as const,
+        funderAddress: safeAddress,
+        signature: signedOrder.signature,
+        orderType,
+      };
 
-      // Submit signed order to Dome API via edge function
-      console.log('[DomeRouter] Submitting to Dome API via edge function...');
+      console.log('[DomeRouter] Submitting to Dome API via edge function...', {
+        userId: domePayload.userId?.slice(0, 10),
+        marketId: domePayload.marketId?.slice(0, 20),
+        side: domePayload.side,
+        size: domePayload.size,
+        price: domePayload.price,
+      });
       
       const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          signedOrder: signedOrderForDome,
-          orderType,
-          credentials: {
-            apiKey: credentials.apiKey,
-            apiSecret: credentials.apiSecret,
-            apiPassphrase: credentials.apiPassphrase,
-          },
-          clientOrderId,
-        }),
+        body: JSON.stringify(domePayload),
       });
 
       const domeResult = await domeResponse.json();
