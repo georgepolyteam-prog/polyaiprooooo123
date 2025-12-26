@@ -270,6 +270,28 @@ export function useDomeRouter() {
       setCredentials(creds);
       setIsLinked(true);
 
+      // Deploy Safe if not already deployed
+      if (!safeIsDeployed) {
+        console.log('[DomeRouter] Deploying Safe wallet...');
+        updateStage('deploying-safe', 'Deploying Safe wallet...');
+        const deployed = await deploySafe();
+        if (!deployed) {
+          throw new Error('Failed to deploy Safe wallet');
+        }
+        console.log('[DomeRouter] Safe wallet deployed successfully');
+      }
+
+      // Set allowances if not already set
+      if (!safeHasAllowances) {
+        console.log('[DomeRouter] Setting token allowances...');
+        updateStage('setting-allowances', 'Setting token allowances...');
+        const allowancesSet = await setAllowances();
+        if (!allowancesSet) {
+          throw new Error('Failed to set token allowances');
+        }
+        console.log('[DomeRouter] Token allowances set successfully');
+      }
+
       // Save to localStorage
       saveSession({
         safeAddress,
@@ -277,9 +299,9 @@ export function useDomeRouter() {
         signerAddress: address,
       });
 
-      updateStage('completed', 'Wallet linked successfully!');
+      updateStage('completed', 'Wallet setup complete!');
       toast.success('Wallet linked to Polymarket!', {
-        description: `Safe: ${safeAddress.slice(0, 10)}...`
+        description: `Safe deployed: ${safeAddress.slice(0, 10)}...`
       });
 
       return { credentials: creds, safeAddress };
@@ -299,7 +321,7 @@ export function useDomeRouter() {
       setIsLinking(false);
       setTimeout(() => updateStage('idle'), 2000);
     }
-  }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage]);
+  }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage, safeIsDeployed, deploySafe, safeHasAllowances, setAllowances]);
 
   /**
    * Place an order using ClobClient.createAndPostOrder() directly
