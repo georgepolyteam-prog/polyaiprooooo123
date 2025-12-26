@@ -217,7 +217,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
-        {/* Action Buttons - BUY YES/NO + Analyze */}
+        {/* Action Buttons - BUY YES/NO */}
         <div className="flex gap-2">
           {/* BUY YES Button */}
           <Button
@@ -260,16 +260,17 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
               </>
             )}
           </Button>
-          
-          {/* Analyze Button */}
-          <Button
-            className="flex-1 h-12 sm:h-14 gap-2 font-semibold rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 transition-all duration-300 min-h-[48px]"
-            onClick={handleAnalyze}
-          >
-            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Analyze</span>
-          </Button>
         </div>
+        
+        {/* Analyze Button - Separate Row */}
+        <Button
+          variant="outline"
+          className="w-full h-11 gap-2 font-semibold rounded-xl bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:border-primary/50 transition-all duration-200"
+          onClick={handleAnalyze}
+        >
+          <Sparkles className="w-4 h-4" />
+          Analyze Market
+        </Button>
 
         {/* Trade Details Card */}
         <div className="glass-card rounded-xl p-4 sm:p-6">

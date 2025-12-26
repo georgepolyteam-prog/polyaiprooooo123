@@ -9,6 +9,7 @@ export type TradeableMarketData = {
   conditionId?: string;
   eventSlug?: string;
   marketSlug?: string;
+  isLoading?: boolean;
 };
 
 export type FetchTradeableMarketDataResult =

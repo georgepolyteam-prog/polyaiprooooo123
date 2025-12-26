@@ -24,6 +24,7 @@ interface TradePanelProps {
     url?: string;
     eventSlug?: string;
     marketSlug?: string;
+    isLoading?: boolean;
   };
   defaultSide?: 'YES' | 'NO';
 }
@@ -256,6 +257,16 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
         )} />
         
         <div className="relative backdrop-blur-xl bg-card/80 border border-border/50 p-5 space-y-5">
+          {/* Loading State */}
+          {marketData.isLoading && (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading market data...</p>
+            </div>
+          )}
+          
+          {!marketData.isLoading && (
+            <>
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -533,6 +544,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               <Wallet className="w-4 h-4 mr-2" />
               Connect Wallet
             </Button>
+          )}
+            </>
           )}
         </div>
       </div>
