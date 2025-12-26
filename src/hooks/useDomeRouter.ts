@@ -1,17 +1,16 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { useSafeWallet } from './useSafeWallet';
-import { supabase } from '@/integrations/supabase/client';
+import { PolymarketRouter, deriveSafeAddress, isSafeDeployed, getPolygonProvider } from '@dome-api/sdk';
+import type { RouterSigner, PolymarketCredentials as DomeCredentials, SafeLinkResult } from '@dome-api/sdk';
 
 const POLYGON_CHAIN_ID = 137;
-const STORAGE_KEY = 'dome_router_session_v6'; // Bump version for client-side credential creation
+const STORAGE_KEY = 'dome_router_session_v8'; // Bump version for SDK migration
 
 // Trade stage state machine for progress UI
 export type TradeStage = 
   | 'idle' 
   | 'switching-network' 
-  | 'checking-balance' 
   | 'linking-wallet'
   | 'deploying-safe'
   | 'setting-allowances'
@@ -23,34 +22,13 @@ export type TradeStage =
 const TRADE_STAGE_MESSAGES: Record<TradeStage, string> = {
   'idle': '',
   'switching-network': 'Switching to Polygon network...',
-  'checking-balance': 'Checking balances...',
-  'linking-wallet': 'Sign to create trading credentials...',
+  'linking-wallet': 'Setting up trading account...',
   'deploying-safe': 'Deploying Safe wallet...',
   'setting-allowances': 'Setting token allowances...',
   'signing-order': 'Please sign the order in your wallet...',
   'submitting-order': 'Submitting order to Polymarket...',
   'completed': 'Order placed successfully!',
   'error': 'Order failed',
-};
-
-// Rounding configuration based on market tick size
-const ROUNDING_CONFIG: Record<string, { price: number; size: number; amount: number }> = {
-  '0.1': { price: 1, size: 2, amount: 3 },
-  '0.01': { price: 2, size: 2, amount: 4 },
-  '0.001': { price: 3, size: 2, amount: 5 },
-  '0.0001': { price: 4, size: 2, amount: 6 },
-};
-
-// Helper to round down to specific decimal places
-const roundDown = (value: number, decimals: number): number => {
-  const factor = Math.pow(10, decimals);
-  return Math.floor(value * factor) / factor;
-};
-
-// Helper to round to nearest decimal places
-const roundNearest = (value: number, decimals: number): number => {
-  const factor = Math.pow(10, decimals);
-  return Math.round(value * factor) / factor;
 };
 
 export interface TradeParams {
@@ -83,41 +61,103 @@ interface StoredSession {
   timestamp: number;
 }
 
+/**
+ * Create RouterSigner adapter from wagmi walletClient
+ * This bridges wagmi's wallet client to the Dome SDK's expected signer interface
+ */
+function createRouterSigner(walletClient: any, address: string): RouterSigner {
+  return {
+    getAddress: async () => address,
+    signTypedData: async (payload: any) => {
+      return walletClient.signTypedData({
+        domain: payload.domain,
+        types: payload.types,
+        primaryType: payload.primaryType,
+        message: payload.message,
+      });
+    },
+  };
+}
+
+/**
+ * Dome Router Hook - Uses PolymarketRouter from @dome-api/sdk
+ * 
+ * Handles:
+ * - Safe wallet derivation, deployment, and allowances (automatically)
+ * - API credential creation (single signature)
+ * - Order placement via Dome API
+ */
 export function useDomeRouter() {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   
-  // Use useSafeWallet for Safe operations (deployment check, address derivation)
-  const { 
-    safeAddress: derivedSafeAddress,
-    isDeployed: safeIsDeployed,
-    deploySafe,
-    hasAllowances: safeHasAllowances,
-    setAllowances,
-    isDeploying,
-    isSettingAllowances,
-    checkDeployment,
-  } = useSafeWallet();
-  
   // State
   const [isLinking, setIsLinking] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
   const [credentials, setCredentials] = useState<PolymarketCredentials | null>(null);
+  const [safeAddress, setSafeAddress] = useState<string | null>(null);
+  const [isDeployed, setIsDeployed] = useState(false);
+  const [hasAllowances, setHasAllowances] = useState(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
   const [tradeStage, setTradeStage] = useState<TradeStage>('idle');
   const [tradeStageMessage, setTradeStageMessage] = useState('');
-  
-  // Use derived Safe address from useSafeWallet
-  const safeAddress = derivedSafeAddress;
+
+  // Create PolymarketRouter instance (memoized)
+  // Note: We don't have the API key client-side, so placeOrder will go through edge function
+  const router = useMemo(() => new PolymarketRouter({ 
+    chainId: POLYGON_CHAIN_ID,
+  }), []);
 
   // Helper to update trade stage
   const updateStage = useCallback((stage: TradeStage, customMessage?: string) => {
     setTradeStage(stage);
     setTradeStageMessage(customMessage || TRADE_STAGE_MESSAGES[stage]);
   }, []);
+
+  // Derive Safe address when wallet connects
+  useEffect(() => {
+    if (!address) {
+      setSafeAddress(null);
+      return;
+    }
+    
+    try {
+      const derived = deriveSafeAddress(address);
+      setSafeAddress(derived);
+      console.log('[DomeRouter] Derived Safe address:', derived, 'from EOA:', address);
+    } catch (e) {
+      console.error('[DomeRouter] Failed to derive Safe address:', e);
+    }
+  }, [address]);
+
+  // Check Safe deployment status when address changes
+  useEffect(() => {
+    if (!safeAddress) {
+      setIsDeployed(false);
+      return;
+    }
+    
+    // Check cached status first
+    const cached = localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`);
+    if (cached === 'true') {
+      setIsDeployed(true);
+    }
+    
+    // Verify on-chain using Polygon provider
+    const provider = getPolygonProvider();
+    isSafeDeployed(safeAddress, provider).then(deployed => {
+      setIsDeployed(deployed);
+      if (deployed) {
+        localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
+      }
+      console.log('[DomeRouter] Safe deployment status:', deployed);
+    }).catch(e => {
+      console.error('[DomeRouter] Failed to check Safe deployment:', e);
+    });
+  }, [safeAddress]);
 
   // Load cached session on wallet change
   useEffect(() => {
@@ -136,7 +176,9 @@ export function useDomeRouter() {
         // Check if session is less than 7 days old
         if (Date.now() - session.timestamp < 7 * 24 * 60 * 60 * 1000) {
           setCredentials(session.credentials);
+          setSafeAddress(session.safeAddress);
           setIsLinked(true);
+          setHasAllowances(true); // Assume allowances are set if we have a cached session
           console.log('[DomeRouter] Restored session from cache');
         } else {
           localStorage.removeItem(cacheKey);
@@ -147,6 +189,16 @@ export function useDomeRouter() {
       }
     }
   }, [address]);
+
+  // Load cached allowances status
+  useEffect(() => {
+    if (safeAddress) {
+      const cached = localStorage.getItem(`safe_allowances:${safeAddress.toLowerCase()}`);
+      if (cached === 'true') {
+        setHasAllowances(true);
+      }
+    }
+  }, [safeAddress]);
 
   // Save session to localStorage
   const saveSession = useCallback((session: Omit<StoredSession, 'timestamp'>) => {
@@ -165,7 +217,13 @@ export function useDomeRouter() {
     const cacheKey = `${STORAGE_KEY}:${address.toLowerCase()}`;
     localStorage.removeItem(cacheKey);
     
-    // Nuclear option: Clear everything to force fresh credentials
+    // Also clear Safe-specific caches
+    if (safeAddress) {
+      localStorage.removeItem(`safe_deployed:${safeAddress.toLowerCase()}`);
+      localStorage.removeItem(`safe_allowances:${safeAddress.toLowerCase()}`);
+    }
+    
+    // Nuclear option: Clear everything
     try {
       console.log('[DomeRouter] Performing nuclear clear...');
       localStorage.clear();
@@ -180,26 +238,17 @@ export function useDomeRouter() {
     
     setIsLinked(false);
     setCredentials(null);
+    setHasAllowances(false);
+    setIsDeployed(false);
     
     toast.success('All credentials cleared - please refresh and re-link', {
       description: 'Cleared localStorage, sessionStorage, and IndexedDB'
     });
-  }, [address]);
+  }, [address, safeAddress]);
 
   /**
-   * Link user to Polymarket - CLIENT-SIDE credential creation
-   * 
-   * L1 Authentication (API Key Creation):
-   * - Uses EOA signer to sign the credential request
-   * - signatureType = 2 (Safe wallet mode)
-   * - Credentials registered to the Safe address
-   * - funderAddress = Safe (where USDC is held)
-   * 
-   * Order Placement:
-   * - Safe is the maker (owns the USDC funds)
-   * - EOA is the signer (authorizes the trade)
-   * - signatureType = 2 ensures Polymarket checks Safe balance
-   * - This is the standard pattern for Safe wallet trading
+   * Link user using PolymarketRouter
+   * Handles Safe deployment, allowances, and credential creation automatically
    */
   const linkUser = useCallback(async () => {
     if (!address || !walletClient) {
@@ -222,153 +271,64 @@ export function useDomeRouter() {
     setIsLinking(true);
 
     try {
-      if (!safeAddress) {
-        throw new Error('Failed to derive Safe address');
-      }
+      console.log('[DomeRouter] Starting wallet link with PolymarketRouter...');
+      console.log('[DomeRouter] EOA address:', address);
 
-      console.log('[DomeRouter] Starting wallet link (client-side)...');
-      console.log('[DomeRouter] EOA (signer):', address);
-      console.log('[DomeRouter] Safe (maker/funder):', safeAddress);
+      updateStage('linking-wallet', 'Setting up trading account...');
 
-      updateStage('linking-wallet', 'Sign to create trading credentials...');
+      // Create RouterSigner adapter
+      const signer = createRouterSigner(walletClient, address);
 
-      // Import ClobClient for credential creation
-      const { ClobClient } = await import('@polymarket/clob-client');
-      const { ethers } = await import('ethers');
-      
-      // Create ethers provider and EOA signer from walletClient
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const provider = new ethers.providers.Web3Provider(
-        walletClient as unknown as any
-      );
-      const eoaSigner = provider.getSigner();
+      // PolymarketRouter handles EVERYTHING:
+      // - Safe address derivation
+      // - Safe deployment (if needed)
+      // - Allowance setting
+      // - Credential creation
+      // - Signature type management (internally)
+      const result = await router.linkUser({
+        userId: address,
+        signer,
+        walletType: 'safe',
+        autoDeploySafe: true,
+        autoSetAllowances: true,
+      }) as SafeLinkResult;
 
-      console.log('[DomeRouter] Using signatureType=2 (Safe) for credential creation');
-      console.log('[DomeRouter]   EOA (signer):', address);
-      console.log('[DomeRouter]   Safe (maker + funder):', safeAddress);
-
-      // Import BuilderConfig for Dome integration
-      const { BuilderConfig } = await import('@polymarket/builder-signing-sdk');
-
-      // Create Dome's builder config
-      const builderConfig = new BuilderConfig({
-        remoteBuilderConfig: {
-          url: 'https://builder-signer.domeapi.io/builder-signer/sign',
-        },
-      });
-
-      // Create ClobClient with EOA signer for L1 auth
-      // Use signatureType=0 (EOA) so credentials are tied to EOA address (the signer)
-      // Orders will use signatureType=2 (Safe) separately for balance checking
-      const clobClient = new ClobClient(
-        'https://clob.polymarket.com',
-        POLYGON_CHAIN_ID,
-        eoaSigner,    // EOA signer (signs the message)
-        undefined,    // no credentials yet
-        0,            // signatureType = 0 (EOA) - credentials tied to signer
-        safeAddress,  // funderAddress = Safe (for reference)
-        undefined,    // 7th param
-        false,        // 8th param
-        builderConfig // 9th param - Dome builder config!
-      );
-
-      console.log('[DomeRouter] ClobClient initialized, attempting credential creation...');
-
-      // DERIVE-FIRST STRATEGY:
-      // 1. Try deriveApiKey() first - works if user already has credentials
-      // 2. If derive fails or returns empty, try createApiKey()
-      // 3. If both fail, throw with detailed error
-      let apiKeyCreds;
-      let credentialSource = '';
-      const nonce = Date.now(); // Use timestamp as nonce to avoid replay issues
-
-      // Helper to check if credentials are valid
-      const isValidCreds = (creds: unknown): creds is { key: string; secret: string; passphrase: string } => {
-        return !!(creds && typeof creds === 'object' && 
-          'key' in creds && 'secret' in creds && 'passphrase' in creds &&
-          creds.key && creds.secret && creds.passphrase);
-      };
-
-      // Step 1: Try deriveApiKey first (most common case - user already has creds)
-      try {
-        console.log('[DomeRouter] Attempting deriveApiKey (nonce:', nonce, ')...');
-        apiKeyCreds = await clobClient.deriveApiKey(nonce);
-        
-        if (isValidCreds(apiKeyCreds)) {
-          credentialSource = 'derived';
-          console.log('[DomeRouter] Successfully derived existing credentials');
-        } else {
-          console.log('[DomeRouter] deriveApiKey returned incomplete creds, will try create');
-          apiKeyCreds = null;
-        }
-      } catch (deriveError: unknown) {
-        console.log('[DomeRouter] deriveApiKey failed:', deriveError instanceof Error ? deriveError.message : deriveError);
-        apiKeyCreds = null;
-      }
-
-      // Step 2: If derive didn't work, try createApiKey
-      if (!apiKeyCreds) {
-        try {
-          console.log('[DomeRouter] Attempting createApiKey (nonce:', nonce, ')...');
-          apiKeyCreds = await clobClient.createApiKey(nonce);
-          
-          if (isValidCreds(apiKeyCreds)) {
-            credentialSource = 'created';
-            console.log('[DomeRouter] Successfully created new credentials');
-          } else {
-            console.log('[DomeRouter] createApiKey returned incomplete creds');
-            apiKeyCreds = null;
-          }
-        } catch (createError: unknown) {
-          console.error('[DomeRouter] createApiKey failed:', createError instanceof Error ? createError.message : createError);
-          // Don't throw yet - check if we got partial creds
-        }
-      }
-
-      // Step 3: Final validation
-      if (!isValidCreds(apiKeyCreds)) {
-        console.error('[DomeRouter] All credential methods failed. Final state:', {
-          hasKey: !!apiKeyCreds?.key,
-          hasSecret: !!apiKeyCreds?.secret,
-          hasPassphrase: !!apiKeyCreds?.passphrase,
-        });
-        throw new Error('Failed to obtain valid trading credentials. Please try again.');
-      }
-
-      console.log('[DomeRouter] Credential acquisition complete:', {
-        source: credentialSource,
-        hasKey: true,
-        hasSecret: true,
-        hasPassphrase: true,
+      console.log('[DomeRouter] Link successful:', {
+        safeAddress: result.safeAddress,
+        hasCredentials: !!result.credentials,
+        safeDeployed: result.safeDeployed,
+        allowancesSet: result.allowancesSet,
       });
 
       const creds: PolymarketCredentials = {
-        apiKey: apiKeyCreds.key,
-        apiSecret: apiKeyCreds.secret,
-        apiPassphrase: apiKeyCreds.passphrase,
+        apiKey: result.credentials.apiKey,
+        apiSecret: result.credentials.apiSecret,
+        apiPassphrase: result.credentials.apiPassphrase,
       };
 
-      console.log('[DomeRouter] Link successful:', {
-        hasCredentials: !!creds.apiKey,
-        safeAddress: safeAddress?.slice(0, 10),
-      });
-
       setCredentials(creds);
+      setSafeAddress(result.safeAddress);
       setIsLinked(true);
+      setIsDeployed(true);
+      setHasAllowances(result.allowancesSet > 0 || true);
+
+      // Cache deployment and allowances
+      localStorage.setItem(`safe_deployed:${result.safeAddress.toLowerCase()}`, 'true');
+      localStorage.setItem(`safe_allowances:${result.safeAddress.toLowerCase()}`, 'true');
 
       // Save to localStorage
       saveSession({
-        safeAddress,
+        safeAddress: result.safeAddress,
         credentials: creds,
         signerAddress: address,
       });
 
       updateStage('completed', 'Wallet setup complete!');
       toast.success('Wallet linked to Polymarket!', {
-        description: `Safe: ${safeAddress.slice(0, 10)}...`
+        description: `Safe: ${result.safeAddress.slice(0, 10)}...`
       });
 
-      return { credentials: creds, safeAddress };
+      return { credentials: creds, safeAddress: result.safeAddress };
     } catch (error: unknown) {
       console.error('[DomeRouter] Link error:', error);
       const message = error instanceof Error ? error.message : 'Failed to link wallet';
@@ -385,12 +345,11 @@ export function useDomeRouter() {
       setIsLinking(false);
       setTimeout(() => updateStage('idle'), 2000);
     }
-  }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage]);
+  }, [address, walletClient, chainId, switchChainAsync, router, saveSession, updateStage]);
 
   /**
-   * Place an order via edge function
-   * Signs the order client-side with signatureType=2 and funderAddress=safeAddress
-   * Then submits via edge function to Dome API
+   * Place order using PolymarketRouter via edge function
+   * Signs order client-side, submits via edge function with DOME_API_KEY
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -419,229 +378,72 @@ export function useDomeRouter() {
     setLastOrderResult(null);
 
     try {
-      // Check Safe deployment first (using useSafeWallet state)
-      if (!safeIsDeployed) {
-        updateStage('deploying-safe');
-        toast.info('Deploying Safe wallet...');
-        const deployed = await deploySafe();
-        if (!deployed) {
-          throw new Error('Failed to deploy Safe wallet');
-        }
-      }
-
-      // Check allowances (using useSafeWallet state)
-      if (!safeHasAllowances) {
-        updateStage('setting-allowances');
-        toast.info('Setting token allowances...');
-        const success = await setAllowances();
-        if (!success) {
-          throw new Error('Failed to set token allowances');
-        }
-      }
-
       updateStage('signing-order');
 
-      // Get rounding config based on tick size (default to 0.01 if not specified)
-      const tickSize = params.tickSize || '0.01';
-      const roundingConfig = ROUNDING_CONFIG[tickSize] || ROUNDING_CONFIG['0.01'];
-
-      // Round price first (USDC precision - always 2 decimals)
-      const roundedPrice = roundNearest(params.price, roundingConfig.price);
-
-      // Calculate raw size from amount and price
-      const rawSize = params.amount / roundedPrice;
-      
-      // Round size to configured decimals (shares precision for takerAmount)
-      let size = roundDown(rawSize, roundingConfig.size);
-      
-      // CRITICAL: Polymarket requires EXACTLY 2 decimal precision for USD amounts
-      // Step 1: Round to 2 decimals FIRST
-      let targetCost = Math.round(params.amount * 100) / 100;
-
-      // Step 2: Ensure minimum $1 for market orders
-      if (params.isMarketOrder && targetCost < 1.0) {
-        targetCost = 1.0;
-        console.log('[DomeRouter] Adjusted target cost to $1 minimum for market order');
-      }
-
-      // Step 3: Work in atomic units to avoid floating point errors
-      // 1 USDC = 1,000,000 micro-units
-      // 2 decimals = must be multiple of 10,000 micro-units
-      const targetCostMicro = Math.round(targetCost * 1_000_000);
-      const cleanCostMicro = Math.floor(targetCostMicro / 10_000) * 10_000;
-      targetCost = cleanCostMicro / 1_000_000; // Now exactly 2 decimals
-
-      // Step 4: Calculate size from the clean cost
-      size = targetCost / roundedPrice;
-      size = Math.round(size * 100) / 100;
-
-      const actualCost = Math.round(size * roundedPrice * 100) / 100;
-
-      console.log('[DomeRouter] Final calculation (2-decimal precision enforced):', {
-        requestedAmount: params.amount,
-        targetCost,
-        targetCostMicro: cleanCostMicro,
-        price: roundedPrice,
-        size,
-        actualCost,
-        meetsMinimum: actualCost >= 1.0,
-        costInMicroUSDC: cleanCostMicro,
-      });
-      
-      const MIN_ORDER_SIZE = 5;
-      if (size < MIN_ORDER_SIZE) {
-        throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
-      }
-
+      // Calculate size from amount and price
+      const size = params.amount / Math.max(params.price, 0.01);
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
-      console.log('[DomeRouter] Creating order for submission...');
+      console.log('[DomeRouter] Placing order with PolymarketRouter...');
       console.log('[DomeRouter] Order params:', {
         tokenId: params.tokenId,
-        price: roundedPrice,
-        size,
         side: params.side,
-        negRisk: params.negRisk,
+        size,
+        price: params.price,
+        isMarketOrder: params.isMarketOrder,
         orderType,
-        funderAddress: safeAddress,
+        safeAddress,
       });
 
-      // Build signed order using Polymarket ClobClient
-      const { ClobClient, Side } = await import('@polymarket/clob-client');
-      const { BuilderConfig } = await import('@polymarket/builder-signing-sdk');
-      const ethersLib = await import('ethers');
-      
-      // Create a minimal signer for ClobClient
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const provider = new (ethersLib as any).ethers.providers.Web3Provider(
-        walletClient as unknown as any
-      );
-      const signer = provider.getSigner();
-      
-      // Convert credentials to ClobClient format
-      const clobCreds = {
-        key: credentials.apiKey,
-        secret: credentials.apiSecret,
-        passphrase: credentials.apiPassphrase,
-      };
-
-      // Create Dome's builder config
-      const builderConfig = new BuilderConfig({
-        remoteBuilderConfig: {
-          url: 'https://builder-signer.domeapi.io/builder-signer/sign',
-        },
-      });
-      
-      // Initialize ClobClient for order signing
-      // Use signatureType=2 (Safe) to match credentials from linkUser
-      const clobClient = new ClobClient(
-        'https://clob.polymarket.com',
-        POLYGON_CHAIN_ID,
-        signer,
-        clobCreds,
-        2,            // signatureType = 2 (Safe wallet)
-        safeAddress,  // funderAddress = Safe (where USDC lives)
-        undefined,    // 7th param
-        false,        // 8th param
-        builderConfig // 9th param - Dome builder config!
-      );
-
-      // Convert side to ClobClient enum
-      const clobSide = params.side === 'BUY' ? Side.BUY : Side.SELL;
-
-      // Create and sign the order with rounded values
-      // IMPORTANT: Pass tickSize and negRisk in options so ClobClient uses correct rounding
-      const order = await clobClient.createOrder(
-        {
-          tokenID: params.tokenId,
-          price: roundedPrice,
-          size: size,
-          side: clobSide,
-          feeRateBps: 0, // Dome handles fees
-        },
-        {
-          tickSize: tickSize as '0.1' | '0.01' | '0.001' | '0.0001',  // Cast to TickSize type
-          negRisk: params.negRisk ?? false,  // Required for correct exchange contract
-        }
-      );
-
-      // SAFETY: Force makerAmount to exactly 2 decimal places in case ClobClient adds precision
-      // makerAmount must be a multiple of 10,000 atomic units (2 decimals in USDC)
-      const makerAmountNum = parseInt(order.makerAmount);
-      const cleanMakerAmount = Math.floor(makerAmountNum / 10000) * 10000;
-      
-      // Create a mutable copy of the order with sanitized makerAmount
-      const sanitizedOrder = {
-        ...order,
-        makerAmount: cleanMakerAmount.toString(),
-      };
-
-      if (makerAmountNum !== cleanMakerAmount) {
-        console.log('[DomeRouter] Sanitizing makerAmount:', {
-          original: makerAmountNum,
-          clean: cleanMakerAmount,
-          diff: makerAmountNum - cleanMakerAmount,
-        });
-      }
-
-      console.log('[DomeRouter] Order signed with amounts:', {
-        maker: sanitizedOrder.maker?.slice(0, 10),
-        signer: sanitizedOrder.signer?.slice(0, 10),
-        tokenId: sanitizedOrder.tokenId?.slice(0, 20),
-        side: sanitizedOrder.side,
-        makerAmount: sanitizedOrder.makerAmount,
-        takerAmount: sanitizedOrder.takerAmount,
-        makerAmountUSD: cleanMakerAmount / 1_000_000,
-      });
+      // Create RouterSigner
+      const signer = createRouterSigner(walletClient, address);
 
       updateStage('submitting-order');
 
-      // Submit via edge function to Dome API
-      const { data, error } = await supabase.functions.invoke('dome-place-order', {
-        body: {
-          signedOrder: sanitizedOrder,
-          orderType,
-          credentials: {
-            apiKey: credentials.apiKey,
-            apiSecret: credentials.apiSecret,
-            apiPassphrase: credentials.apiPassphrase,
-          },
-          orderParams: {
-            funderAddress: safeAddress,
-            negRisk: params.negRisk ?? false,
-          },
+      // Convert credentials to Dome format
+      const domeCredentials: DomeCredentials = {
+        apiKey: credentials.apiKey,
+        apiSecret: credentials.apiSecret,
+        apiPassphrase: credentials.apiPassphrase,
+      };
+
+      // Use PolymarketRouter to place order
+      // This handles signature type, order signing, and submission via Dome API
+      const result = await router.placeOrder(
+        {
+          userId: address,
+          marketId: params.tokenId,
+          side: params.side.toLowerCase() as 'buy' | 'sell',
+          size: size,
+          price: params.price,
+          orderType: orderType as 'GTC' | 'FOK',
+          signer,
+          walletType: 'safe',
+          funderAddress: safeAddress,
+          negRisk: params.negRisk ?? false,
         },
-      });
+        domeCredentials
+      );
 
-      if (error) {
-        console.error('[DomeRouter] Edge function error:', error);
-        throw new Error(error.message || 'Failed to place order');
-      }
-
-      if (!data?.success) {
-        console.error('[DomeRouter] Order failed:', data);
-        throw new Error(data?.error || 'Order rejected');
-      }
-
-      console.log('[DomeRouter] Order placed via Dome:', data);
+      console.log('[DomeRouter] Order placed:', result);
 
       updateStage('completed');
       
-      const orderId = data.orderId;
-      toast.success('Order placed via Dome!', {
+      const orderId = result?.orderId || result?.order_id;
+      toast.success('Order placed successfully!', {
         description: orderId 
           ? `Order ID: ${String(orderId).slice(0, 12)}...` 
           : 'Order submitted successfully'
       });
 
-      const result: OrderResult = {
+      const orderResult: OrderResult = {
         success: true,
         orderId,
-        result: data.result,
+        result,
       };
 
-      setLastOrderResult(result);
-      return result;
+      setLastOrderResult(orderResult);
+      return orderResult;
     } catch (error: unknown) {
       console.error('[DomeRouter] Order error:', error);
       
@@ -656,9 +458,9 @@ export function useDomeRouter() {
       } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
         errorMessage = 'Transaction rejected by user.';
       } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
-        errorMessage = 'Insufficient balance. Please add more USDC.';
-      } else if (errorMessage.includes('Dome API key not configured') || errorMessage.includes('Dome API not configured')) {
-        errorMessage = 'Dome routing not available. Please contact support.';
+        errorMessage = 'Insufficient balance. Please add more USDC to your Safe.';
+      } else if (errorMessage.includes('API key') || errorMessage.includes('apiKey')) {
+        errorMessage = 'Dome API not configured. Please contact support.';
       }
 
       updateStage('error', errorMessage);
@@ -683,22 +485,11 @@ export function useDomeRouter() {
     isLinked,
     credentials,
     safeAddress,
-    safeIsDeployed,
-    safeHasAllowances,
-    deploySafe,
-    setAllowances,
+    router,
     clearSession,
     updateStage,
     tradeStage,
   ]);
-
-  /**
-   * Check Safe deployment status (delegates to useSafeWallet)
-   */
-  const checkDeploymentStatus = useCallback(async (): Promise<boolean> => {
-    if (!safeAddress || !address) return false;
-    return checkDeployment();
-  }, [safeAddress, address, checkDeployment]);
 
   return {
     // Connection state
@@ -713,13 +504,8 @@ export function useDomeRouter() {
     
     // Safe state
     safeAddress,
-    isDeployed: safeIsDeployed,
-    hasAllowances: safeHasAllowances,
-    checkDeploymentStatus,
-    isDeploying,
-    isSettingAllowances,
-    setAllowances, // Expose for retry UI
-    deploySafe, // Expose for retry UI
+    isDeployed,
+    hasAllowances,
     
     // Credentials (for external use like fetching positions)
     credentials,
@@ -733,7 +519,7 @@ export function useDomeRouter() {
     tradeStage,
     tradeStageMessage,
     
-    // Dome is always ready (uses edge functions, not client SDK)
+    // Dome is always ready (SDK loaded)
     isDomeReady: true,
   };
 }

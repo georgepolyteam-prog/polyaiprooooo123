@@ -25,7 +25,6 @@ import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
 import { SafeWalletPanel } from "@/components/SafeWalletPanel";
 import { useDomeRouter } from "@/hooks/useDomeRouter";
-import { useSafeWallet } from "@/hooks/useSafeWallet";
 import { fetchTradeableMarketData } from "@/lib/market-trade-data";
 import { ClaimablePosition } from "@/hooks/useClaimWinnings";
 
@@ -124,7 +123,6 @@ export default function MyTrades() {
   const { address, isConnected } = useAccount();
   const navigate = useNavigate();
   const { placeOrder, isPlacingOrder, safeAddress, isDeployed, credentials } = useDomeRouter();
-  const { } = useSafeWallet();
   
   // Wait for Safe state to load before fetching positions
   const [safeStateLoaded, setSafeStateLoaded] = useState(false);
