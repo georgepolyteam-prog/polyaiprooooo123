@@ -5,8 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Dome API endpoint
-const DOME_API_ENDPOINT = 'https://api.domeapi.io/v1';
+const DOME_API_URL = 'https://api.domeapi.io/v1';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -16,28 +15,13 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { signedOrder, orderParams, orderType, credentials, signer, funderAddress, negRisk } = body;
+    const { signedOrder, orderType, credentials } = body;
 
-    console.log('[dome-place-order] Received order:', {
-      signer: signer?.slice(0, 10),
-      funderAddress: funderAddress?.slice(0, 10),
-      orderType,
+    console.log('[dome-place-order] Received request:', {
       hasSignedOrder: !!signedOrder,
-      hasOrderParams: !!orderParams,
       hasCredentials: !!credentials,
+      orderType,
     });
-
-    // Validate required fields
-    if (!signedOrder || !orderParams || !credentials || !signer || !funderAddress) {
-      console.error('[dome-place-order] Missing required fields');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing required fields: signedOrder, orderParams, credentials, signer, funderAddress' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     // Get Dome API key from environment
     const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
@@ -49,51 +33,49 @@ serve(async (req) => {
       );
     }
 
-    // Log order details for debugging
-    console.log('[dome-place-order] Order params:', {
-      tokenId: orderParams.tokenId?.slice(0, 20),
-      side: orderParams.side,
-      size: orderParams.size,
-      price: orderParams.price,
-    });
+    // Validate required fields
+    if (!signedOrder || !credentials) {
+      console.error('[dome-place-order] Missing required fields');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing required fields: signedOrder and credentials are required' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    console.log('[dome-place-order] Signed order details:', {
-      maker: signedOrder.maker?.slice(0, 10),
-      hasSignature: !!signedOrder.signature,
-      makerAmount: signedOrder.makerAmount,
-      takerAmount: signedOrder.takerAmount,
-    });
+    // Generate unique IDs for JSON-RPC
+    const requestId = crypto.randomUUID();
+    const clientOrderId = crypto.randomUUID();
 
-    // Prepare payload for Dome API using orderParams for readable fields
+    // JSON-RPC 2.0 format (required by Dome API)
     const payload = {
-      userId: signer,
-      marketId: orderParams.tokenId,
-      side: orderParams.side.toLowerCase(),  // Now works - it's a string!
-      size: orderParams.size,
-      price: orderParams.price,
-      walletType: 'safe',
-      funderAddress,
-      orderType: orderType || 'GTC',
-      negRisk: negRisk || false,
-      signedOrder: signedOrder,  // The actual signed order for CLOB
-      credentials: {
-        key: credentials.apiKey,
-        secret: credentials.apiSecret,
-        passphrase: credentials.passphrase,
+      jsonrpc: '2.0',
+      method: 'placeOrder',
+      id: requestId,
+      params: {
+        signedOrder: signedOrder,
+        orderType: orderType || 'GTC',
+        credentials: {
+          apiKey: credentials.apiKey,
+          apiSecret: credentials.apiSecret,
+          apiPassphrase: credentials.passphrase,
+        },
+        clientOrderId: clientOrderId,
       },
     };
 
-    console.log('[dome-place-order] Submitting to Dome API:', {
-      endpoint: `${DOME_API_ENDPOINT}/polymarket/placeOrder`,
-      userId: payload.userId?.slice(0, 10),
-      marketId: payload.marketId?.slice(0, 20),
-      side: payload.side,
-      size: payload.size,
-      price: payload.price,
+    console.log('[dome-place-order] Submitting JSON-RPC request to Dome API:', {
+      endpoint: `${DOME_API_URL}/polymarket/placeOrder`,
+      requestId,
+      clientOrderId,
+      signedOrderMaker: signedOrder.maker?.slice(0, 10),
+      signedOrderTokenId: signedOrder.tokenId?.slice(0, 20),
     });
 
-    // Submit to Dome's placeOrder endpoint
-    const response = await fetch(`${DOME_API_ENDPOINT}/polymarket/placeOrder`, {
+    // Submit to Dome API
+    const response = await fetch(`${DOME_API_URL}/polymarket/placeOrder`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -121,32 +103,46 @@ serve(async (req) => {
       );
     }
 
-    // Check for API errors
-    if (!response.ok) {
-      console.error('[dome-place-order] Dome API error:', result);
+    // Handle JSON-RPC error response
+    if (result.error) {
+      console.error('[dome-place-order] JSON-RPC error:', result.error);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: result.error || result.message || 'Order rejected by Dome',
-          code: result.code,
+          error: result.error.message || 'Order rejected by Dome',
+          code: result.error.code,
+          details: result.error.data,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Handle non-2xx HTTP status (but valid JSON)
+    if (!response.ok && !result.result) {
+      console.error('[dome-place-order] Dome API HTTP error:', result);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: result.message || 'Order rejected by Dome',
           details: result,
         }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const orderId = result?.orderID || result?.orderId || result?.id;
+    // Handle JSON-RPC success response
+    const orderId = result.result?.orderId || result.result?.orderID || result.result?.id;
     console.log('[dome-place-order] Order placed successfully:', {
       orderId,
-      status: result?.status,
+      status: result.result?.status,
     });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        result,
         orderId,
-        status: result?.status,
+        status: result.result?.status,
+        result: result.result,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
