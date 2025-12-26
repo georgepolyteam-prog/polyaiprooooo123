@@ -23,18 +23,22 @@ function json(status: number, body: unknown) {
 
 /**
  * Generate L2 HMAC headers for Polymarket CLOB API
- * For DELETE /order/:id endpoint, there is no body in the signature
+ * Body MUST be included in the signature for DELETE /order endpoint
  */
 function generateL2Headers(
   method: string,
   pathOnly: string,
   address: string,
-  apiCreds: { apiKey: string; secret: string; passphrase: string }
+  apiCreds: { apiKey: string; secret: string; passphrase: string },
+  body?: string
 ) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
   
-  // Message format: timestamp + method + path (no body for DELETE /order/:id)
-  const message = timestamp + method.toUpperCase() + pathOnly;
+  // Message format: timestamp + method + path + body
+  let message = timestamp + method.toUpperCase() + pathOnly;
+  if (body) {
+    message += body;
+  }
   
   console.log(`[HMAC] Signing message for cancel: "${message}"`);
 
@@ -76,23 +80,26 @@ serve(async (req) => {
 
     console.log("[Cancel Order] Cancelling orders:", orderIds);
 
-    // Cancel orders one by one using DELETE /order/:id (no body)
+    // Cancel orders one by one using DELETE /order with body { orderID: ... }
     const cancelledIds: string[] = [];
     const errors: string[] = [];
     
     for (const orderId of orderIds) {
       try {
-        const pathOnly = `/order/${orderId}`;
+        const pathOnly = "/order";
+        const requestBody = JSON.stringify({ orderID: orderId }); // Capital ID!
 
-        // Generate L2 authentication headers (no body for DELETE /order/:id)
-        const l2Headers = generateL2Headers("DELETE", pathOnly, walletAddress, apiCreds);
+        // Generate L2 authentication headers WITH body in signature
+        const l2Headers = generateL2Headers("DELETE", pathOnly, walletAddress, apiCreds, requestBody);
 
         const response = await fetch(`${CLOB_HOST}${pathOnly}`, {
           method: "DELETE",
           headers: {
+            "Content-Type": "application/json",
             "Accept": "application/json",
             ...l2Headers,
           },
+          body: requestBody,
         });
 
         const responseText = await response.text();
