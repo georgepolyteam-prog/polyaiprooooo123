@@ -419,14 +419,50 @@ export default function MyTrades() {
   }, [timeFilter]);
 
   const handleCancelOrder = async (orderId: string) => {
+    if (!address || !credentials) {
+      toast.error("Please connect and link your wallet first");
+      return;
+    }
+
     setCancellingOrderId(orderId);
 
     try {
-      // Order cancellation requires CLOB client - show message to user
-      toast.error("Order cancellation not yet available in new trading system");
+      console.log('[MyTrades] Cancelling order:', orderId);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-order`,
+        {
+          method: 'POST',
+          headers: {
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            walletAddress: address,
+            orderIds: [orderId],
+            apiCreds: {
+              apiKey: credentials.apiKey,
+              secret: credentials.apiSecret,
+              passphrase: credentials.apiPassphrase,
+            },
+          }),
+        }
+      );
+
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to cancel order');
+      }
+
+      toast.success('Order cancelled successfully');
+      
+      // Refresh open orders
+      refreshOpenOrders();
     } catch (err) {
       console.error("Cancel order error:", err);
-      toast.error("Failed to cancel order");
+      const message = err instanceof Error ? err.message : "Failed to cancel order";
+      toast.error(message);
     } finally {
       setCancellingOrderId(null);
     }
@@ -1003,7 +1039,7 @@ export default function MyTrades() {
                           
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-foreground line-clamp-2">
-                              {order.outcome || order.market || 'Order'}
+                              {(order as { market_title?: string }).market_title || order.outcome || order.market || 'Limit Order'}
                             </p>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                               <Badge variant="outline" className={`${getSideColor(order.side)} border text-xs`}>
@@ -1047,7 +1083,7 @@ export default function MyTrades() {
                         
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-foreground truncate">
-                            {order.outcome || order.market || 'Order'}
+                            {(order as { market_title?: string }).market_title || order.outcome || order.market || 'Limit Order'}
                           </p>
                           <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                             <Badge variant="outline" className={`${getSideColor(order.side)} border`}>

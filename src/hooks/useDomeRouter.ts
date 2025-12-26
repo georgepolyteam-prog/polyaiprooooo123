@@ -43,7 +43,22 @@ interface OrderResult {
   orderId?: string;
   error?: string;
   result?: unknown;
+  status?: 'matched' | 'live' | 'partial' | 'rejected';
 }
+
+// User-friendly error messages for common API errors
+const ERROR_MESSAGES: Record<string, string> = {
+  'not enough balance': 'Insufficient balance: You don\'t have enough shares or USDC',
+  'insufficient balance': 'Insufficient balance: You don\'t have enough shares or USDC',
+  'not enough allowance': 'Insufficient allowance: Please approve USDC spending first',
+  'allowance': 'Please approve USDC spending in your wallet',
+  'ORDER_REJECTED': 'Order rejected by the exchange',
+  'invalid api key': 'API credentials invalid - please re-link your wallet',
+  'unauthorized': 'Authorization failed - please re-link your wallet',
+  'price out of range': 'Price is out of valid range (must be 0.01-0.99)',
+  'min tick size': 'Price doesn\'t meet minimum tick size requirement',
+  'size too small': 'Order size is too small',
+};
 
 interface PolymarketCredentials {
   apiKey: string;
@@ -425,37 +440,79 @@ export function useDomeRouter() {
           details: response?.details,
           rawResponse: response,
         });
-        const errorMessage = response?.details?.reason || response?.error || 'Order rejected';
+        
+        // Parse error for user-friendly message
+        let errorMessage = response?.details?.reason || response?.error || 'Order rejected';
+        const errorLower = errorMessage.toLowerCase();
+        
+        for (const [key, userMessage] of Object.entries(ERROR_MESSAGES)) {
+          if (errorLower.includes(key.toLowerCase())) {
+            errorMessage = userMessage;
+            break;
+          }
+        }
+        
         throw new Error(errorMessage);
       }
 
       console.log('[DomeRouter] Order placed successfully:', response);
 
+      // Determine order status for better feedback
+      const orderStatus = response.status?.toLowerCase() || 'live';
+      const isMatched = orderStatus === 'matched' || orderStatus === 'filled';
+      const isPartial = orderStatus === 'partial' || (response.size_matched && parseFloat(response.size_matched) > 0);
+
       const result: OrderResult = {
         success: true,
         orderId: response.orderId,
         result: response,
+        status: isMatched ? 'matched' : isPartial ? 'partial' : 'live',
       };
 
       setLastOrderResult(result);
       updateStage('completed');
-      toast.success('Order placed successfully!');
+      
+      // Show appropriate success message based on order status
+      if (isMatched) {
+        toast.success('Order filled instantly!', {
+          description: `Your ${params.side} order was matched immediately`,
+        });
+      } else if (isPartial) {
+        toast.success('Order partially filled', {
+          description: 'Remaining amount placed as limit order',
+        });
+      } else {
+        toast.success('Limit order placed', {
+          description: 'Waiting for a matching order at your price',
+        });
+      }
 
       return result;
     } catch (error: unknown) {
       console.error('[DomeRouter] Order error:', error);
-      const message = error instanceof Error ? error.message : 'Failed to place order';
+      let message = error instanceof Error ? error.message : 'Failed to place order';
+      
+      // Parse error for user-friendly message
+      const errorLower = message.toLowerCase();
+      for (const [key, userMessage] of Object.entries(ERROR_MESSAGES)) {
+        if (errorLower.includes(key.toLowerCase())) {
+          message = userMessage;
+          break;
+        }
+      }
       
       updateStage('error', message);
       
       // Handle specific error types
       if (message.includes('rejected') || message.includes('denied') || message.includes('User rejected')) {
         toast.error('Order signature rejected');
-      } else if (message.includes('Invalid api key') || message.includes('Unauthorized')) {
+      } else if (message.includes('Invalid api key') || message.includes('invalid') || message.includes('re-link')) {
         toast.error('API credentials invalid - please re-link your wallet');
         clearSession();
       } else {
-        toast.error(message);
+        toast.error(message, {
+          description: 'Check your balance and try again',
+        });
       }
 
       const result: OrderResult = {

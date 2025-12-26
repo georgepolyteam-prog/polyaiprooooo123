@@ -4,10 +4,7 @@ import { Buffer } from "node:buffer";
 
 /**
  * Edge function to fetch open orders from Polymarket CLOB API.
- * 
- * This requires L2 authentication headers (HMAC signature).
- * We generate the signature here and make the API call server-side
- * to avoid CORS issues.
+ * Enriches orders with market titles for better UX.
  */
 
 const corsHeaders = {
@@ -16,6 +13,7 @@ const corsHeaders = {
 };
 
 const CLOB_HOST = "https://clob.polymarket.com";
+const GAMMA_API = "https://gamma-api.polymarket.com";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -26,29 +24,19 @@ function json(status: number, body: unknown) {
 
 /**
  * Generate L2 HMAC headers for Polymarket CLOB API
- * CRITICAL: Must match Polymarket SDK behavior exactly:
- * 1. Decode secret from base64 before use as HMAC key
- * 2. Sign only the path (without query params)
- * 3. Message format: timestamp + METHOD + path (NO body for GET)
- * 4. Output as URL-safe base64
  */
 function generateL2Headers(
   method: string,
-  pathOnly: string, // path WITHOUT query params
+  pathOnly: string,
   address: string,
   apiCreds: { apiKey: string; secret: string; passphrase: string }
 ) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  
-  // Message format: timestamp + method + path (no query params, no body for GET)
   const message = timestamp + method.toUpperCase() + pathOnly;
   
   console.log(`[HMAC] Signing message: "${message}"`);
 
-  // CRITICAL: Decode the secret from base64 before use as HMAC key
   const secretBuffer = Buffer.from(apiCreds.secret, "base64");
-
-  // Generate HMAC-SHA256 and convert to URL-safe base64
   const signature = createHmac("sha256", secretBuffer)
     .update(message)
     .digest("base64")
@@ -64,8 +52,30 @@ function generateL2Headers(
   };
 }
 
+/**
+ * Fetch market info from Gamma API to get title for a token
+ */
+async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outcome?: string } | null> {
+  try {
+    const response = await fetch(`${GAMMA_API}/markets?asset_id=${tokenId}&closed=false`);
+    if (!response.ok) return null;
+    
+    const markets = await response.json();
+    if (markets && markets.length > 0) {
+      const market = markets[0];
+      return {
+        title: market.question || market.title || market.groupItemTitle,
+        outcome: market.outcome || (market.groupItemTitle?.includes('Yes') ? 'Yes' : market.groupItemTitle?.includes('No') ? 'No' : undefined),
+      };
+    }
+    return null;
+  } catch (e) {
+    console.error('[Get Open Orders] Failed to fetch market info:', e);
+    return null;
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -73,37 +83,30 @@ serve(async (req) => {
   try {
     const { apiCreds, walletAddress, market } = await req.json();
 
-    // Validate wallet address
     if (!walletAddress) {
       return json(400, { error: "Missing wallet address" });
     }
 
-    // Validate API credentials
     if (!apiCreds?.secret || !apiCreds?.apiKey || !apiCreds?.passphrase) {
       return json(400, { error: "Missing API credentials (apiKey, secret, passphrase)" });
     }
 
     console.log("[Get Open Orders] Fetching orders for wallet:", walletAddress);
 
-    // CRITICAL: Sign only the path, query params are added to URL but NOT signed
     const pathOnly = "/data/orders";
     
-    // Build query parameters for open orders
     const params = new URLSearchParams();
-    params.set("state", "LIVE"); // Only get live (open) orders
-    params.set("maker", walletAddress.toLowerCase()); // Filter by user
+    params.set("state", "LIVE");
+    params.set("maker", walletAddress.toLowerCase());
     if (market) params.set("market", market);
 
     const queryString = params.toString();
     const fullUrl = `${CLOB_HOST}${pathOnly}?${queryString}`;
 
     console.log("[Get Open Orders] Full URL:", fullUrl);
-    console.log("[Get Open Orders] Signing path only:", pathOnly);
 
-    // Generate L2 authentication headers (signing pathOnly, not query params)
     const l2Headers = generateL2Headers("GET", pathOnly, walletAddress, apiCreds);
 
-    // Make the API request
     const response = await fetch(fullUrl, {
       method: "GET",
       headers: {
@@ -127,15 +130,25 @@ serve(async (req) => {
     const orders = Array.isArray(data) ? data : (data.orders || data.data || []);
     
     console.log("[Get Open Orders] Fetched", orders.length, "open orders");
-    
-    // Log first order keys to help debug schema issues
-    if (orders.length > 0) {
-      console.log("[Get Open Orders] First order keys:", Object.keys(orders[0]));
-    }
 
-    // No filtering needed - we already query with maker=walletAddress
-    // The API returns only this user's orders
-    return json(200, { orders });
+    // Enrich orders with market titles
+    const enrichedOrders = await Promise.all(
+      orders.map(async (order: { asset_id?: string; [key: string]: unknown }) => {
+        const tokenId = order.asset_id;
+        if (!tokenId) return order;
+        
+        const marketInfo = await fetchMarketInfo(tokenId);
+        return {
+          ...order,
+          market_title: marketInfo?.title || order.market || 'Unknown Market',
+          outcome: marketInfo?.outcome || order.outcome,
+        };
+      })
+    );
+
+    console.log("[Get Open Orders] Enriched orders with market titles");
+    
+    return json(200, { orders: enrichedOrders });
   } catch (error: unknown) {
     console.error("[Get Open Orders] Error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
