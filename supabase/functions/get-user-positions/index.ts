@@ -72,11 +72,11 @@ function generateL2Headers(method: string, pathOnly: string, address: string, cr
     .replace(/\//g, '_');
 
   return {
-    'POLY-ADDRESS': address,
-    'POLY-SIGNATURE': signature,
-    'POLY-TIMESTAMP': timestamp,
-    'POLY-API-KEY': creds.apiKey,
-    'POLY-PASSPHRASE': creds.passphrase,
+    'POLY_ADDRESS': address,
+    'POLY_SIGNATURE': signature,
+    'POLY_TIMESTAMP': timestamp,
+    'POLY_API_KEY': creds.apiKey,
+    'POLY_PASSPHRASE': creds.passphrase,
   };
 }
 
@@ -235,12 +235,6 @@ async function fetchOpenOrders(address: string, creds: UserApiCreds | null): Pro
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[Positions] CLOB API returned ${response.status}:`, errorText);
-      
-      // Try alternative endpoint format if first fails
-      if (response.status === 405 || response.status === 404 || response.status === 401) {
-        console.log('[Positions] Trying alternative endpoint /orders...');
-        return await fetchOpenOrdersAlternative(address, creds);
-      }
       return [];
     }
 
@@ -258,43 +252,3 @@ async function fetchOpenOrders(address: string, creds: UserApiCreds | null): Pro
   }
 }
 
-// Alternative endpoint format
-async function fetchOpenOrdersAlternative(address: string, creds: UserApiCreds): Promise<OpenOrder[]> {
-  try {
-    // Try the /orders endpoint without /data prefix
-    // CRITICAL: Sign only the path, NOT the query params
-    const pathOnly = `/orders`;
-    const queryParams = `?maker=${address.toLowerCase()}&state=LIVE`;
-    const fullUrl = `${CLOB_API_URL}${pathOnly}${queryParams}`;
-    
-    console.log(`[Positions] Trying alternative: ${fullUrl}`);
-    console.log(`[Positions] Signing path only: ${pathOnly}`);
-    
-    // Generate headers with pathOnly (no query params in signature)
-    const headers = generateL2Headers('GET', pathOnly, address, creds);
-
-    const response = await fetch(fullUrl, {
-      method: 'GET',
-      headers: {
-        ...headers,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Positions] Alternative endpoint returned ${response.status}:`, errorText);
-      return [];
-    }
-
-    const data = await response.json();
-    const orders = Array.isArray(data) ? data : (data.orders || data.data || []);
-    console.log(`[Positions] Alternative endpoint orders count: ${orders.length}`);
-
-    return orders as OpenOrder[];
-  } catch (error) {
-    console.error('[Positions] Alternative endpoint failed:', error);
-    return [];
-  }
-}
