@@ -50,11 +50,12 @@ serve(async (req) => {
 
       console.log("[BUILDER-SIGN] L1 auth for address:", address);
 
+      // Polymarket CLOB L1 auth headers (must use underscores, per official docs)
       const l1Headers: Record<string, string> = {
-        "POLY-ADDRESS": address,
-        "POLY-SIGNATURE": signature,
-        "POLY-TIMESTAMP": timestamp,
-        "POLY-NONCE": nonce || "0",
+        "POLY_ADDRESS": address,
+        "POLY_SIGNATURE": signature,
+        "POLY_TIMESTAMP": timestamp,
+        "POLY_NONCE": nonce || "0",
       };
 
       // Try create first
