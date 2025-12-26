@@ -49,6 +49,7 @@ interface OpenOrder {
   id: string;
   status: string;
   market: string;
+  market_title: string;
   asset_id: string;
   side: string;
   original_size: string;
@@ -351,6 +352,7 @@ export default function MyTrades() {
         asset_id?: string;
         token_id?: string;
         market?: string;
+        market_title?: string;
         side?: string;
         original_size?: string;
         size?: string;
@@ -365,6 +367,7 @@ export default function MyTrades() {
         id: order.id || order.order_id || '',
         status: order.status || 'LIVE',
         market: order.market || '',
+        market_title: order.market_title || '',
         asset_id: order.asset_id || order.token_id || '',
         side: order.side || '',
         original_size: order.original_size || order.size || '0',
