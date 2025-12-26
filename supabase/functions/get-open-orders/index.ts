@@ -56,11 +56,11 @@ function generateL2Headers(
     .replace(/\//g, "_");
 
   return {
-    "POLY-ADDRESS": address.toLowerCase(),
-    "POLY-SIGNATURE": signature,
-    "POLY-TIMESTAMP": timestamp,
-    "POLY-API-KEY": apiCreds.apiKey,
-    "POLY-PASSPHRASE": apiCreds.passphrase,
+    "POLY_ADDRESS": address.toLowerCase(),
+    "POLY_SIGNATURE": signature,
+    "POLY_TIMESTAMP": timestamp,
+    "POLY_API_KEY": apiCreds.apiKey,
+    "POLY_PASSPHRASE": apiCreds.passphrase,
   };
 }
 
@@ -117,12 +117,6 @@ serve(async (req) => {
       const errorText = await response.text();
       console.error("[Get Open Orders] API error:", response.status, errorText);
       
-      // Try alternative endpoint if first fails
-      if (response.status === 401 || response.status === 404) {
-        console.log("[Get Open Orders] Trying alternative endpoint /orders...");
-        return await tryAlternativeEndpoint(walletAddress, apiCreds, market);
-      }
-      
       return json(response.status, { 
         error: `Polymarket API error: ${response.status}`,
         details: errorText 
@@ -150,62 +144,3 @@ serve(async (req) => {
   }
 });
 
-/**
- * Try alternative /orders endpoint if /data/orders fails
- */
-async function tryAlternativeEndpoint(
-  walletAddress: string,
-  apiCreds: { apiKey: string; secret: string; passphrase: string },
-  market?: string
-): Promise<Response> {
-  try {
-    const pathOnly = "/orders";
-    
-    const params = new URLSearchParams();
-    params.set("state", "LIVE");
-    params.set("maker", walletAddress.toLowerCase());
-    if (market) params.set("market", market);
-
-    const queryString = params.toString();
-    const fullUrl = `${CLOB_HOST}${pathOnly}?${queryString}`;
-
-    console.log("[Get Open Orders] Alt URL:", fullUrl);
-    console.log("[Get Open Orders] Alt signing path:", pathOnly);
-
-    const l2Headers = generateL2Headers("GET", pathOnly, walletAddress, apiCreds);
-
-    const response = await fetch(fullUrl, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        ...l2Headers,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[Get Open Orders] Alt endpoint error:", response.status, errorText);
-      return json(response.status, { 
-        error: `Polymarket API error: ${response.status}`,
-        details: errorText 
-      });
-    }
-
-    const data = await response.json();
-    const orders = Array.isArray(data) ? data : (data.orders || data.data || []);
-    
-    console.log("[Get Open Orders] Alt endpoint returned", orders.length, "orders");
-
-    const userOrders = orders.filter((o: { owner?: string; maker?: string }) => {
-      const owner = (o.owner || o.maker || '').toLowerCase();
-      return owner === walletAddress.toLowerCase();
-    });
-
-    return json(200, { orders: userOrders });
-  } catch (error: unknown) {
-    console.error("[Get Open Orders] Alt endpoint error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
-    return json(500, { error: message });
-  }
-}

@@ -56,11 +56,11 @@ function generateL2Headers(
     .replace(/\//g, "_");
 
   return {
-    "POLY-ADDRESS": address.toLowerCase(),
-    "POLY-SIGNATURE": signature,
-    "POLY-TIMESTAMP": timestamp,
-    "POLY-API-KEY": apiCreds.apiKey,
-    "POLY-PASSPHRASE": apiCreds.passphrase,
+    "POLY_ADDRESS": address.toLowerCase(),
+    "POLY_SIGNATURE": signature,
+    "POLY_TIMESTAMP": timestamp,
+    "POLY_API_KEY": apiCreds.apiKey,
+    "POLY_PASSPHRASE": apiCreds.passphrase,
   };
 }
 
