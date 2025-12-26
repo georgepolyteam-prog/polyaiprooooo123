@@ -552,7 +552,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-        <DialogContent>
+        <DialogContent elevated className="z-[200] bg-card border-border">
           <DialogHeader>
             <DialogTitle>Confirm Order</DialogTitle>
             <DialogDescription>Review your order details before confirming.</DialogDescription>
