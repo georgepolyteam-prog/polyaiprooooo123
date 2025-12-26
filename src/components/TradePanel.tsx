@@ -58,6 +58,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     tradeStage,
     tradeStageMessage,
     clearSession,
+    isDomeReady,
   } = useDomeRouter();
 
   // Use Safe balance when deployed, otherwise EOA balance
@@ -90,9 +91,9 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     console.log('[TradePanel] State:', { 
       isConnected, isWrongNetwork, isLinked, allApprovalsComplete, 
       hasYesToken, hasNoToken, selectedSide, canDirectTrade,
-      amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress
+      amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress, isDomeReady
     });
-  }, [isConnected, isWrongNetwork, isLinked, allApprovalsComplete, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress]);
+  }, [isConnected, isWrongNetwork, isLinked, allApprovalsComplete, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress, isDomeReady]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -398,10 +399,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
                 <Button
                   size="default"
                   onClick={handleLinkWallet}
-                  disabled={isLinking}
+                  disabled={isLinking || !isDomeReady}
                   className="w-full"
                 >
-                  {isLinking ? (
+                  {!isDomeReady ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Initializing...
+                    </>
+                  ) : isLinking ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Setting Up Wallet...
