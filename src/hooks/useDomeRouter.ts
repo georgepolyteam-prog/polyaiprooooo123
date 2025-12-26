@@ -219,36 +219,75 @@ export function useDomeRouter() {
         safeAddress   // funderAddress = Safe for orders
       );
 
-      console.log('[DomeRouter] ClobClient initialized, creating credentials...');
+      console.log('[DomeRouter] ClobClient initialized, attempting credential creation...');
 
-      // This prompts the user to sign ONE EIP-712 message
-      // The credentials are tied to the EOA signing for the Safe
-      // IMPORTANT: Use createApiKey() FIRST to ensure fresh credentials
-      // deriveApiKey() can return stale cached credentials from Polymarket that may not work
+      // DERIVE-FIRST STRATEGY:
+      // 1. Try deriveApiKey() first - works if user already has credentials
+      // 2. If derive fails or returns empty, try createApiKey()
+      // 3. If both fail, throw with detailed error
       let apiKeyCreds;
+      let credentialSource = '';
+      const nonce = Date.now(); // Use timestamp as nonce to avoid replay issues
+
+      // Helper to check if credentials are valid
+      const isValidCreds = (creds: unknown): creds is { key: string; secret: string; passphrase: string } => {
+        return !!(creds && typeof creds === 'object' && 
+          'key' in creds && 'secret' in creds && 'passphrase' in creds &&
+          creds.key && creds.secret && creds.passphrase);
+      };
+
+      // Step 1: Try deriveApiKey first (most common case - user already has creds)
       try {
-        // Try to create new credentials first (ensures fresh, valid creds)
-        apiKeyCreds = await clobClient.createApiKey();
-        console.log('[DomeRouter] Created new API credentials');
-      } catch (createError: unknown) {
-        // If creation fails (e.g., creds already exist), try to derive existing ones
-        console.log('[DomeRouter] Create failed, trying to derive existing credentials...');
+        console.log('[DomeRouter] Attempting deriveApiKey (nonce:', nonce, ')...');
+        apiKeyCreds = await clobClient.deriveApiKey(nonce);
+        
+        if (isValidCreds(apiKeyCreds)) {
+          credentialSource = 'derived';
+          console.log('[DomeRouter] Successfully derived existing credentials');
+        } else {
+          console.log('[DomeRouter] deriveApiKey returned incomplete creds, will try create');
+          apiKeyCreds = null;
+        }
+      } catch (deriveError: unknown) {
+        console.log('[DomeRouter] deriveApiKey failed:', deriveError instanceof Error ? deriveError.message : deriveError);
+        apiKeyCreds = null;
+      }
+
+      // Step 2: If derive didn't work, try createApiKey
+      if (!apiKeyCreds) {
         try {
-          apiKeyCreds = await clobClient.deriveApiKey();
-          console.log('[DomeRouter] Derived existing API credentials');
-        } catch (deriveError: unknown) {
-          console.error('[DomeRouter] Failed to derive API key:', deriveError);
-          throw new Error(
-            deriveError instanceof Error 
-              ? deriveError.message 
-              : 'Failed to create trading credentials'
-          );
+          console.log('[DomeRouter] Attempting createApiKey (nonce:', nonce, ')...');
+          apiKeyCreds = await clobClient.createApiKey(nonce);
+          
+          if (isValidCreds(apiKeyCreds)) {
+            credentialSource = 'created';
+            console.log('[DomeRouter] Successfully created new credentials');
+          } else {
+            console.log('[DomeRouter] createApiKey returned incomplete creds');
+            apiKeyCreds = null;
+          }
+        } catch (createError: unknown) {
+          console.error('[DomeRouter] createApiKey failed:', createError instanceof Error ? createError.message : createError);
+          // Don't throw yet - check if we got partial creds
         }
       }
 
-      if (!apiKeyCreds?.key || !apiKeyCreds?.secret || !apiKeyCreds?.passphrase) {
-        throw new Error('Invalid credentials returned from Polymarket');
+      // Step 3: Final validation
+      if (!isValidCreds(apiKeyCreds)) {
+        console.error('[DomeRouter] All credential methods failed. Final state:', {
+          hasKey: !!apiKeyCreds?.key,
+          hasSecret: !!apiKeyCreds?.secret,
+          hasPassphrase: !!apiKeyCreds?.passphrase,
+        });
+        throw new Error('Failed to obtain valid trading credentials. Please try again.');
       }
+
+      console.log('[DomeRouter] Credential acquisition complete:', {
+        source: credentialSource,
+        hasKey: true,
+        hasSecret: true,
+        hasPassphrase: true,
+      });
 
       const creds: PolymarketCredentials = {
         apiKey: apiKeyCreds.key,
