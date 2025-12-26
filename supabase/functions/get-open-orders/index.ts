@@ -55,33 +55,46 @@ function generateL2Headers(
 /**
  * Fetch market info from Gamma API to get title for a token
  * Tries multiple endpoints for better coverage
+ * IMPORTANT: Token IDs are very long (78 chars) - must use full ID for accurate lookups
  */
 async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outcome?: string } | null> {
+  console.log('[Get Open Orders] Looking up market info for token:', tokenId);
+  console.log('[Get Open Orders] Token ID length:', tokenId.length);
+  
   try {
-    // Try 1: Markets endpoint without closed filter (some orders may be for closed markets)
-    let response = await fetch(`${GAMMA_API}/markets?asset_id=${tokenId}`);
+    // Try 1: Direct token endpoint - most reliable for specific token lookups
+    let response = await fetch(`${GAMMA_API}/tokens/${tokenId}`);
     if (response.ok) {
-      const markets = await response.json();
-      if (markets && markets.length > 0) {
-        const market = markets[0];
-        console.log('[Get Open Orders] Found market via markets endpoint:', market.question?.slice(0, 50));
+      const token = await response.json();
+      if (token && (token.question || token.market_question)) {
+        console.log('[Get Open Orders] Found market via tokens endpoint:', token.question?.slice(0, 50) || token.market_question?.slice(0, 50));
         return {
-          title: market.question || market.title || market.groupItemTitle,
-          outcome: market.outcome || (market.groupItemTitle?.includes('Yes') ? 'Yes' : market.groupItemTitle?.includes('No') ? 'No' : undefined),
+          title: token.question || token.market_question,
+          outcome: token.outcome,
         };
       }
     }
 
-    // Try 2: Direct token endpoint - provides token-specific info
-    response = await fetch(`${GAMMA_API}/tokens/${tokenId}`);
+    // Try 2: Markets endpoint with asset_id - may return multiple markets
+    response = await fetch(`${GAMMA_API}/markets?asset_id=${tokenId}`);
     if (response.ok) {
-      const token = await response.json();
-      if (token) {
-        console.log('[Get Open Orders] Found market via tokens endpoint:', token.question?.slice(0, 50) || token.market_question?.slice(0, 50));
-        return {
-          title: token.question || token.market_question || token.conditionId,
-          outcome: token.outcome,
-        };
+      const markets = await response.json();
+      if (markets && markets.length > 0) {
+        // Find the market that actually contains this token ID
+        const matchingMarket = markets.find((m: { clobTokenIds?: string[] }) => 
+          m.clobTokenIds?.includes(tokenId)
+        );
+        
+        if (matchingMarket) {
+          console.log('[Get Open Orders] Found matching market via markets endpoint:', matchingMarket.question?.slice(0, 50));
+          return {
+            title: matchingMarket.question || matchingMarket.title || matchingMarket.groupItemTitle,
+            outcome: matchingMarket.outcome || (matchingMarket.groupItemTitle?.includes('Yes') ? 'Yes' : matchingMarket.groupItemTitle?.includes('No') ? 'No' : undefined),
+          };
+        }
+        
+        // If no exact match, log and skip (don't use wrong market)
+        console.log('[Get Open Orders] Markets endpoint returned results but none matched token ID exactly');
       }
     }
 
@@ -102,16 +115,12 @@ async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outco
             outcome: matchingMarket.outcome,
           };
         }
-        // Fallback to event title
-        console.log('[Get Open Orders] Found event via events endpoint:', event.title?.slice(0, 50));
-        return {
-          title: event.title,
-          outcome: undefined,
-        };
+        // Fallback to event title only if we can verify the token belongs to this event
+        console.log('[Get Open Orders] Events endpoint returned but no matching market found');
       }
     }
 
-    console.log('[Get Open Orders] No market info found for token:', tokenId.slice(0, 20));
+    console.log('[Get Open Orders] No market info found for token:', tokenId);
     return null;
   } catch (e) {
     console.error('[Get Open Orders] Failed to fetch market info:', e);

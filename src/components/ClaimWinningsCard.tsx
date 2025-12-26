@@ -87,6 +87,10 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
   
   // Not settled: denominator is 0 OR both numerators are 0
   const isNotSettled = !isCheckingSettlement && !readyForRedemption;
+  
+  // Check if user holds the LOSING outcome (their outcome doesn't match the winning outcome)
+  const userHoldsLosingOutcome = !isCheckingSettlement && readyForRedemption && winningOutcome && 
+    position.outcome.toUpperCase() !== winningOutcome.toUpperCase();
 
   const polymarketUrl = `https://polymarket.com/event/${position.eventSlug}`;
 
@@ -212,6 +216,26 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   <HelpCircle className="w-4 h-4" />
                   Contact Support
                 </a>
+              </motion.div>
+            ) : userHoldsLosingOutcome ? (
+              <motion.div
+                key="losing-outcome"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="space-y-2"
+              >
+                <div className="flex items-start gap-3 py-3 px-4 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                  <XCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+                  <div className="text-rose-400">
+                    <p className="font-semibold text-sm">You Didn't Win This Market</p>
+                    <p className="text-xs opacity-80 mt-1">
+                      The market resolved to <span className="font-bold">{winningOutcome}</span>, but you held <span className="font-bold">{position.outcome}</span> shares.
+                    </p>
+                    <p className="text-xs opacity-70 mt-2">
+                      Your {position.winningShares.toFixed(2)} {position.outcome} shares have no value as the outcome was {winningOutcome}.
+                    </p>
+                  </div>
+                </div>
               </motion.div>
             ) : isNotSettled ? (
               <motion.div
