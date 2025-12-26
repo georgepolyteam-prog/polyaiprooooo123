@@ -426,7 +426,7 @@ export function useDomeRouter() {
       const tickSize = params.tickSize || '0.01';
       const roundingConfig = ROUNDING_CONFIG[tickSize] || ROUNDING_CONFIG['0.01'];
 
-      // Round price first (USDC precision)
+      // Round price first (USDC precision - always 2 decimals)
       const roundedPrice = roundNearest(params.price, roundingConfig.price);
 
       // Calculate raw size from amount and price
@@ -435,17 +435,36 @@ export function useDomeRouter() {
       // Round size to configured decimals (shares precision for takerAmount)
       let size = roundDown(rawSize, roundingConfig.size);
       
-      // CRITICAL: Calculate the actual cost and ensure it has max 2 decimals for USDC
-      // Even if price (2 dec) × size (2 dec) = cost (up to 4 dec), we must force 2 dec
-      const rawCost = size * roundedPrice;
-      const roundedCost = roundDown(rawCost, 2); // Force max 2 decimals for makerAmount
+      // CRITICAL FIX: Find a size where size × price produces a clean 2-decimal cost
+      // Problem: 15.12 × 0.33 = 4.9896 (4 decimals) - NOT valid!
+      // Solution: Iteratively reduce size until we get a valid cost
+      let cost = size * roundedPrice;
+      let iterations = 0;
+      const MAX_ITERATIONS = 100; // Safety limit
       
-      // Recalculate size based on the rounded cost to ensure consistency
-      // This ensures: roundedCost = size × roundedPrice with both properly rounded
-      size = roundDown(roundedCost / roundedPrice, roundingConfig.size);
+      // Check if cost has more than 2 decimals: (cost * 100) should be a whole number
+      while ((Math.round(cost * 100) / 100) !== cost && size > 0 && iterations < MAX_ITERATIONS) {
+        // Reduce size by 0.01 (minimum share increment)
+        size = Math.round((size - 0.01) * 100) / 100;
+        cost = size * roundedPrice;
+        iterations++;
+      }
       
-      // Final amount for logging
-      const finalAmount = roundedCost;
+      // Final safety check - round cost to exactly 2 decimals
+      const finalCost = Math.round(cost * 100) / 100;
+      
+      console.log('[DomeRouter] Amount adjustment:', {
+        originalSize: rawSize,
+        adjustedSize: size,
+        price: roundedPrice,
+        finalCost,
+        iterations,
+        costCheck: {
+          raw: cost,
+          rounded: finalCost,
+          isClean: Math.abs(cost - finalCost) < 0.0001,
+        },
+      });
       
       const MIN_ORDER_SIZE = 5;
       if (size < MIN_ORDER_SIZE) {
@@ -453,19 +472,6 @@ export function useDomeRouter() {
       }
 
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
-
-      console.log('[DomeRouter] Rounding config for tickSize', tickSize, ':', roundingConfig);
-      console.log('[DomeRouter] Order params after rounding:', {
-        tickSize,
-        originalSize: rawSize,
-        roundedSize: size,
-        originalPrice: params.price,
-        roundedPrice,
-        rawCost,
-        roundedCost,
-        finalAmount,
-        costDecimals: (roundedCost.toString().split('.')[1] || '').length,
-      });
 
       console.log('[DomeRouter] Creating order for submission...');
       console.log('[DomeRouter] Order params:', {
