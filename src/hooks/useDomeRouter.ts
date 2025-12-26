@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient } from '@polymarket/clob-client';
+import { ClobClient, Side } from '@polymarket/clob-client';
 import { ethers } from 'ethers';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -292,7 +292,13 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, saveSession, updateStage]);
 
   /**
-   * Place order - Sends raw params to edge function, Dome handles signing
+   * Place order - Build and sign order client-side using ClobClient, then submit
+   * 
+   * Flow:
+   * 1. Create ClobClient with stored credentials
+   * 2. Build order using clobClient.createOrder()
+   * 3. Sign order using clobClient (returns signed order)
+   * 4. Submit signed order to dome-router edge function
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -321,42 +327,74 @@ export function useDomeRouter() {
     setLastOrderResult(null);
 
     try {
-      updateStage('submitting-order', 'Submitting order...');
+      updateStage('signing-order', 'Building and signing order...');
 
-      // Round amounts for display/logging (Dome handles precision internally)
+      // Create ethers signer from wagmi walletClient
+      const eoaSigner = walletClientToSigner(walletClient);
+
+      // Round amounts properly
       const roundTo = (n: number, decimals: number) => Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals);
       
       const price = roundTo(params.price, 2);
-      const size = roundTo(params.amount / Math.max(price, 0.01), 4);
-      const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
+      const size = roundTo(params.amount / Math.max(price, 0.01), 2);
 
-      console.log('[DomeRouter] Sending order to Dome Router:', {
+      console.log('[DomeRouter] Building signed order:', {
         tokenId: params.tokenId?.slice(0, 20),
         side: params.side,
         price,
         size,
-        orderType,
         negRisk: params.negRisk,
       });
 
-      // Submit to dome-router edge function - Dome handles order building & signing
+      // Create ClobClient with credentials for order signing
+      // signatureType = 0 for order building (Direct EOA)
+      const clobClient = new ClobClient(
+        'https://clob.polymarket.com',
+        POLYGON_CHAIN_ID,
+        eoaSigner,
+        {
+          key: credentials.apiKey,
+          secret: credentials.apiSecret,
+          passphrase: credentials.apiPassphrase,
+        },
+        0, // signatureType = 0 (Direct EOA)
+        undefined
+      );
+
+      // Create the order using ClobClient
+      const orderArgs = {
+        tokenID: params.tokenId,
+        price,
+        size,
+        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+        feeRateBps: 0, // No fees
+        nonce: 0, // Let library handle nonce
+        expiration: 0, // No expiration
+      };
+
+      console.log('[DomeRouter] Creating order with args:', orderArgs);
+
+      // createOrder returns the signed order ready for submission
+      const signedOrder = await clobClient.createOrder(orderArgs);
+
+      console.log('[DomeRouter] Signed order created:', {
+        hasSignature: !!signedOrder?.signature,
+        orderType: signedOrder?.orderType,
+      });
+
+      updateStage('submitting-order', 'Submitting order to Polymarket...');
+
+      // Submit signed order to dome-router edge function
       const { data: response, error: edgeError } = await supabase.functions.invoke('dome-router', {
         body: {
           action: 'place_order',
-          userId: address,
-          marketId: params.tokenId,
-          side: params.side.toLowerCase(),
-          size,
-          price,
+          signedOrder,
           credentials: {
             apiKey: credentials.apiKey,
             apiSecret: credentials.apiSecret,
             apiPassphrase: credentials.apiPassphrase,
           },
-          funderAddress: address,
-          negRisk: params.negRisk,
-          orderType,
-          tickSize: params.tickSize || '0.01',
+          negRisk: params.negRisk ?? false,
         },
       });
 
@@ -381,6 +419,7 @@ export function useDomeRouter() {
 
       setLastOrderResult(result);
       updateStage('completed');
+      toast.success('Order placed successfully!');
 
       return result;
     } catch (error: unknown) {
