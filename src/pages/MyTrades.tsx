@@ -476,7 +476,7 @@ export default function MyTrades() {
       const result = await placeOrder({
         tokenId: sellModalPosition.asset,
         side: "SELL",
-        amount: amount * price, // USDC value
+        amount: amount, // shares directly for SELL orders
         price: price,
         isMarketOrder: isMarketOrder,
       });
