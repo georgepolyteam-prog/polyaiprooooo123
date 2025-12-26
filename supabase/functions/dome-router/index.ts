@@ -35,6 +35,7 @@ interface PlaceOrderRequest {
   };
   negRisk?: boolean;
   clientOrderId: string; // At request level per Dome SDK ServerPlaceOrderRequest
+  orderType?: 'GTC' | 'FOK' | 'FAK'; // GTC = limit, FOK/FAK = instant fill
 }
 
 interface DeriveSafeRequest {
@@ -111,7 +112,7 @@ serve(async (req) => {
       }
 
       case "place_order": {
-        const { signedOrder, credentials, negRisk, clientOrderId } = body as PlaceOrderRequest;
+        const { signedOrder, credentials, negRisk, clientOrderId, orderType } = body as PlaceOrderRequest;
         
         if (!signedOrder || !credentials || !clientOrderId) {
           return new Response(
@@ -120,12 +121,16 @@ serve(async (req) => {
           );
         }
         
+        // Default to GTC if not specified
+        const effectiveOrderType = orderType || 'GTC';
+        
         console.log("[dome-router] Submitting pre-signed order via Dome API:", { 
           tokenId: signedOrder.tokenId?.slice(0, 20),
           side: signedOrder.side,
           clientOrderId,
           hasSignature: !!signedOrder.signature,
           negRisk: negRisk ?? false,
+          orderType: effectiveOrderType,
         });
         
         // Build JSON-RPC 2.0 payload matching Dome SDK's ServerPlaceOrderRequest
@@ -143,6 +148,7 @@ serve(async (req) => {
               apiPassphrase: credentials.apiPassphrase,
             },
             clientOrderId, // At params level per Dome SDK
+            orderType: effectiveOrderType, // GTC, FOK, or FAK
           },
         };
         

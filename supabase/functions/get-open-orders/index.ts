@@ -57,9 +57,9 @@ function generateL2Headers(
  * Tries multiple endpoints for better coverage
  * IMPORTANT: Token IDs are very long (78 chars) - must use full ID for accurate lookups
  */
-async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outcome?: string } | null> {
+async function fetchMarketInfo(tokenId: string, conditionId?: string): Promise<{ title?: string; outcome?: string } | null> {
   console.log('[Get Open Orders] Looking up market info for token:', tokenId);
-  console.log('[Get Open Orders] Token ID length:', tokenId.length);
+  console.log('[Get Open Orders] Condition ID:', conditionId || 'not provided');
   
   try {
     // Try 1: Direct token endpoint - most reliable for specific token lookups
@@ -93,7 +93,6 @@ async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outco
           };
         }
         
-        // If no exact match, log and skip (don't use wrong market)
         console.log('[Get Open Orders] Markets endpoint returned results but none matched token ID exactly');
       }
     }
@@ -104,7 +103,6 @@ async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outco
       const events = await response.json();
       if (events && events.length > 0) {
         const event = events[0];
-        // Find the matching market in the event
         const matchingMarket = event.markets?.find((m: { clobTokenIds?: string[] }) => 
           m.clobTokenIds?.includes(tokenId)
         );
@@ -115,8 +113,40 @@ async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outco
             outcome: matchingMarket.outcome,
           };
         }
-        // Fallback to event title only if we can verify the token belongs to this event
         console.log('[Get Open Orders] Events endpoint returned but no matching market found');
+      }
+    }
+
+    // Try 4: If we have a condition ID, try looking it up
+    if (conditionId && conditionId.startsWith('0x')) {
+      console.log('[Get Open Orders] Trying condition_id lookup:', conditionId.slice(0, 20));
+      
+      // Try markets endpoint with condition_id
+      response = await fetch(`${GAMMA_API}/markets?condition_id=${conditionId}`);
+      if (response.ok) {
+        const markets = await response.json();
+        if (markets && markets.length > 0) {
+          const market = markets[0];
+          console.log('[Get Open Orders] Found market via condition_id:', market.question?.slice(0, 50));
+          return {
+            title: market.question || market.title || market.groupItemTitle,
+            outcome: market.outcome,
+          };
+        }
+      }
+      
+      // Try events endpoint with condition_id
+      response = await fetch(`${GAMMA_API}/events?condition_id=${conditionId}`);
+      if (response.ok) {
+        const events = await response.json();
+        if (events && events.length > 0 && events[0].markets?.length > 0) {
+          const market = events[0].markets[0];
+          console.log('[Get Open Orders] Found market via events condition_id:', market.question?.slice(0, 50));
+          return {
+            title: market.question || events[0].title,
+            outcome: market.outcome,
+          };
+        }
       }
     }
 
@@ -126,6 +156,13 @@ async function fetchMarketInfo(tokenId: string): Promise<{ title?: string; outco
     console.error('[Get Open Orders] Failed to fetch market info:', e);
     return null;
   }
+}
+
+/**
+ * Check if a string looks like a hex hash (condition ID, tx hash, etc.)
+ */
+function isHexHash(str: string): boolean {
+  return str.startsWith('0x') && str.length >= 40;
 }
 
 serve(async (req) => {
@@ -186,14 +223,27 @@ serve(async (req) => {
 
     // Enrich orders with market titles
     const enrichedOrders = await Promise.all(
-      orders.map(async (order: { asset_id?: string; [key: string]: unknown }) => {
+      orders.map(async (order: { asset_id?: string; market?: string; outcome?: string; [key: string]: unknown }) => {
         const tokenId = order.asset_id;
+        const conditionId = order.market; // order.market is the condition ID
         if (!tokenId) return order;
         
-        const marketInfo = await fetchMarketInfo(tokenId);
+        const marketInfo = await fetchMarketInfo(tokenId, conditionId);
+        
+        // Determine the final title - NEVER show a hex hash
+        let finalTitle = marketInfo?.title;
+        if (!finalTitle) {
+          // Check if order.market is a hex hash (condition ID) - don't use it as title
+          if (conditionId && isHexHash(conditionId)) {
+            finalTitle = 'Unknown Market';
+          } else {
+            finalTitle = conditionId || 'Unknown Market';
+          }
+        }
+        
         return {
           ...order,
-          market_title: marketInfo?.title || order.market || 'Unknown Market',
+          market_title: finalTitle,
           outcome: marketInfo?.outcome || order.outcome,
         };
       })

@@ -36,6 +36,7 @@ export interface TradeParams {
   isMarketOrder?: boolean;
   negRisk?: boolean;
   tickSize?: string;
+  orderType?: 'GTC' | 'FOK' | 'FAK'; // GTC = limit, FOK/FAK = instant fill
 }
 
 interface OrderResult {
@@ -386,6 +387,8 @@ export function useDomeRouter() {
       );
 
       // Create the order using ClobClient
+      // For FOK/FAK (market orders), we use a marketable price to ensure instant fill
+      const orderType = params.orderType || 'GTC';
       const orderArgs = {
         tokenID: params.tokenId,
         price,
@@ -396,7 +399,7 @@ export function useDomeRouter() {
         expiration: 0, // No expiration
       };
 
-      console.log('[DomeRouter] Creating order with args:', orderArgs);
+      console.log('[DomeRouter] Creating order with args:', { ...orderArgs, orderType });
 
       // createOrder returns the signed order ready for submission
       const signedOrder = await clobClient.createOrder(orderArgs);
@@ -434,6 +437,7 @@ export function useDomeRouter() {
           },
           negRisk: params.negRisk ?? false,
           clientOrderId, // At request level, NOT inside signedOrder
+          orderType, // GTC, FOK, or FAK
         },
       });
 

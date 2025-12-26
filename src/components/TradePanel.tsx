@@ -161,10 +161,21 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     
     const amountNum = parseFloat(amount);
     const marketPrice = selectedSide === 'YES' ? marketData.currentPrice : (1 - marketData.currentPrice);
-    const orderPrice = isMarketOrder 
-      ? marketPrice 
-      : (limitPrice ? parseFloat(limitPrice) / 100 : marketPrice);
-    const expectedShares = amountNum / Math.max(orderPrice, 0.01);
+    
+    // For market orders (FOK), use a marketable price to ensure instant fill
+    // For BUY: use 0.99 (willing to pay up to 99¢)
+    // For SELL: use 0.01 (willing to sell down to 1¢)
+    // For limit orders (GTC), use the user's specified price
+    let orderPrice: number;
+    if (isMarketOrder) {
+      // Market order: use extreme marketable price for instant fill
+      orderPrice = 0.99; // For BUY, willing to pay max
+    } else {
+      // Limit order: use user's specified price or current market price
+      orderPrice = limitPrice ? parseFloat(limitPrice) / 100 : marketPrice;
+    }
+    
+    const expectedShares = amountNum / Math.max(isMarketOrder ? marketPrice : orderPrice, 0.01);
 
     const result = await placeOrder({
       tokenId: tokenId!,
@@ -172,11 +183,12 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
       amount: amountNum,
       price: orderPrice,
       isMarketOrder,
+      orderType: isMarketOrder ? 'FOK' : 'GTC', // Market = FOK for instant fill, Limit = GTC
     });
 
     if (result.success) {
       toast.success(
-        `Order placed! ${expectedShares.toFixed(2)} ${selectedSide} shares @ ${(orderPrice * 100).toFixed(1)}¢`,
+        `Order placed! ${expectedShares.toFixed(2)} ${selectedSide} shares @ ${(marketPrice * 100).toFixed(1)}¢`,
         {
           description: result.orderId 
             ? `Order ID: ${result.orderId.slice(0, 12)}...` 
