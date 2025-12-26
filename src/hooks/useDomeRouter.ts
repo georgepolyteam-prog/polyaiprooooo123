@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient, Side } from '@polymarket/clob-client';
+import { ClobClient } from '@polymarket/clob-client';
 import { ethers } from 'ethers';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -292,7 +292,7 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, saveSession, updateStage]);
 
   /**
-   * Place order - Signs order client-side, submits via edge function
+   * Place order - Sends raw params to edge function, Dome handles signing
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -321,82 +321,27 @@ export function useDomeRouter() {
     setLastOrderResult(null);
 
     try {
-      updateStage('signing-order');
+      updateStage('submitting-order', 'Submitting order...');
 
-      // Round amounts to satisfy Dome precision constraints:
-      // - Maker amount (USDC) ≤ 2 decimals
-      // - Size (shares) ≤ 4 decimals
-      // - Price ≤ 2 decimals
+      // Round amounts for display/logging (Dome handles precision internally)
       const roundTo = (n: number, decimals: number) => Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals);
       
-      const roundedAmount = roundTo(params.amount, 2); // USDC: 2 decimals
-      const roundedPrice = roundTo(params.price, 2); // Price: 2 decimals
-      const sizeRaw = roundedAmount / Math.max(roundedPrice, 0.01);
-      const size = roundTo(sizeRaw, 4); // Shares: 4 decimals
+      const price = roundTo(params.price, 2);
+      const size = roundTo(params.amount / Math.max(price, 0.01), 4);
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
-      console.log('[DomeRouter] Order params:', {
-        tokenId: params.tokenId,
-        originalAmount: params.amount,
-        roundedAmount,
-        price: roundedPrice,
-        sizeRaw,
-        size,
+      console.log('[DomeRouter] Sending order to Dome Router:', {
+        tokenId: params.tokenId?.slice(0, 20),
         side: params.side,
-        negRisk: params.negRisk,
+        price,
+        size,
         orderType,
-        maker: address,
+        negRisk: params.negRisk,
       });
 
-      // Create ethers signer
-      const signer = walletClientToSigner(walletClient);
-
-      // Create ClobClient with credentials
-      const clobCreds = {
-        key: credentials.apiKey,
-        secret: credentials.apiSecret,
-        passphrase: credentials.apiPassphrase,
-      };
-
-      const clobClient = new ClobClient(
-        'https://clob.polymarket.com',
-        POLYGON_CHAIN_ID,
-        signer,
-        clobCreds,
-        0, // signatureType = 0 (Direct EOA)
-        undefined // No funder address
-      );
-
-      // Build and sign order
-      const orderArgs = {
-        tokenID: params.tokenId,
-        price: roundedPrice,
-        size: size,
-        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
-        feeRateBps: 100,
-        nonce: Date.now(),
-      };
-
-      console.log('[DomeRouter] Creating order with ClobClient...');
-      const signedOrder = await clobClient.createOrder(orderArgs);
-
-      console.log('[DomeRouter] Order signed:', {
-        hasOrder: !!signedOrder,
-        hasSalt: !!signedOrder?.salt,
-        hasSignature: !!signedOrder?.signature,
-        maker: signedOrder?.maker?.slice(0, 10),
-        tokenId: signedOrder?.tokenId?.slice(0, 20),
-      });
-
-      // Submit to edge function
-      updateStage('submitting-order');
-
-      console.log('[DomeRouter] Submitting order to edge function...');
-
+      // Submit to edge function - Dome handles order building & signing
       const { data: response, error: edgeError } = await supabase.functions.invoke('dome-place-order', {
         body: {
-          signedOrder,
-          orderType,
           credentials: {
             apiKey: credentials.apiKey,
             apiSecret: credentials.apiSecret,
@@ -404,9 +349,10 @@ export function useDomeRouter() {
           },
           orderParams: {
             tokenId: params.tokenId,
-            price: roundedPrice,
+            price,
             size,
             side: params.side,
+            orderType,
             negRisk: params.negRisk,
           },
         },

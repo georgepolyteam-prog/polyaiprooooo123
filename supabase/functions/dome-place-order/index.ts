@@ -15,13 +15,15 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { signedOrder, orderType, credentials, orderParams } = body;
+    const { credentials, orderParams } = body;
 
     console.log('[dome-place-order] Received request:', {
-      hasSignedOrder: !!signedOrder,
       hasCredentials: !!credentials,
       hasOrderParams: !!orderParams,
-      orderType,
+      tokenId: orderParams?.tokenId?.slice(0, 20),
+      side: orderParams?.side,
+      price: orderParams?.price,
+      size: orderParams?.size,
     });
 
     // Validate credentials
@@ -37,6 +39,19 @@ serve(async (req) => {
       );
     }
 
+    // Validate order params
+    if (!orderParams?.tokenId || !orderParams?.side || !orderParams?.price || !orderParams?.size) {
+      console.error('[dome-place-order] Missing order params');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing order parameters',
+          details: 'tokenId, side, price, and size are all required'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get Dome API key from environment
     const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
     if (!DOME_API_KEY) {
@@ -47,41 +62,26 @@ serve(async (req) => {
       );
     }
 
-    // Validate signed order
-    if (!signedOrder) {
-      console.error('[dome-place-order] Missing signed order');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Missing signed order' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Generate unique IDs for JSON-RPC
     const requestId = crypto.randomUUID();
-    const clientOrderId = crypto.randomUUID();
 
-    // Convert side from number to string if needed (ClobClient returns 0=BUY, 1=SELL)
-    let sideString = signedOrder.side;
-    if (typeof signedOrder.side === 'number') {
-      sideString = signedOrder.side === 0 ? 'BUY' : 'SELL';
-    }
+    // Round amounts to Dome's precision constraints:
+    // - Price: 2 decimals
+    // - Size: 2 decimals (Dome requirement based on error logs)
+    const roundTo = (n: number, decimals: number) => 
+      Math.round(n * Math.pow(10, decimals)) / Math.pow(10, decimals);
     
-    const transformedSignedOrder = {
-      ...signedOrder,
-      side: sideString,
-    };
+    const price = roundTo(orderParams.price, 2);
+    const size = roundTo(orderParams.size, 2); // Dome requires 2 decimal max for size too
+    const side = orderParams.side.toUpperCase(); // 'BUY' or 'SELL'
+    const orderType = orderParams.orderType || 'GTC';
 
-    console.log('[dome-place-order] Order details:', {
-      originalSide: signedOrder.side,
-      transformedSide: sideString,
-      maker: signedOrder.maker?.slice(0, 10),
-      signer: signedOrder.signer?.slice(0, 10),
-      tokenId: signedOrder.tokenId?.slice(0, 20),
-      // CRITICAL: Log amounts to debug precision issues
-      makerAmount: signedOrder.makerAmount,
-      takerAmount: signedOrder.takerAmount,
-      price: orderParams?.price,
-      size: orderParams?.size,
+    console.log('[dome-place-order] Placing order via JSON-RPC:', {
+      tokenId: orderParams.tokenId.slice(0, 20) + '...',
+      side,
+      price,
+      size,
+      orderType,
     });
 
     // JSON-RPC 2.0 format for Dome API placeOrder
@@ -90,24 +90,28 @@ serve(async (req) => {
       method: 'placeOrder',
       id: requestId,
       params: {
-        signedOrder: transformedSignedOrder,
-        orderType: orderType || 'GTC',
+        tokenId: orderParams.tokenId,
+        side: side,
+        price: price,
+        size: size,
+        orderType: orderType,
+        negRisk: orderParams.negRisk || false,
         credentials: {
           apiKey: credentials.apiKey,
           apiSecret: credentials.apiSecret,
           apiPassphrase: credentials.apiPassphrase,
         },
-        clientOrderId,
       },
     };
 
     console.log('[dome-place-order] Submitting to Dome API:', {
       endpoint: `${DOME_API_URL}/polymarket/placeOrder`,
       requestId,
-      clientOrderId,
+      price,
+      size,
     });
 
-    // Submit directly to Dome API (no SDK needed)
+    // Submit to Dome API
     const response = await fetch(`${DOME_API_URL}/polymarket/placeOrder`, {
       method: 'POST',
       headers: {
