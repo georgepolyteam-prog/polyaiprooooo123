@@ -1,10 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { PolymarketRouter } from "npm:@dome-api/sdk@^0.17.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const POLYGON_CHAIN_ID = 137;
 const DOME_API_URL = 'https://api.domeapi.io/v1';
 
 serve(async (req) => {
@@ -15,15 +17,16 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { signedOrder, orderType, credentials } = body;
+    const { signedOrder, orderType, credentials, orderParams } = body;
 
     console.log('[dome-place-order] Received request:', {
       hasSignedOrder: !!signedOrder,
       hasCredentials: !!credentials,
+      hasOrderParams: !!orderParams,
       orderType,
     });
 
-    // DEBUG: Log credentials presence, lengths, and prefixes
+    // DEBUG: Log credentials presence
     console.log("[dome-place-order] Credentials check:", {
       hasApiKey: !!credentials?.apiKey,
       hasApiSecret: !!credentials?.apiSecret,
@@ -32,17 +35,11 @@ serve(async (req) => {
       apiSecretLength: credentials?.apiSecret?.length,
       apiPassphraseLength: credentials?.apiPassphrase?.length,
       apiKeyPrefix: credentials?.apiKey?.substring(0, 8),
-      apiSecretPrefix: credentials?.apiSecret?.substring(0, 8),
-      apiPassphrasePrefix: credentials?.apiPassphrase?.substring(0, 8),
     });
 
     // Validate credentials before proceeding
     if (!credentials?.apiKey || !credentials?.apiSecret || !credentials?.apiPassphrase) {
-      console.error('[dome-place-order] Missing credential fields:', {
-        hasApiKey: !!credentials?.apiKey,
-        hasApiSecret: !!credentials?.apiSecret,
-        hasApiPassphrase: !!credentials?.apiPassphrase,
-      });
+      console.error('[dome-place-order] Missing credential fields');
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -75,23 +72,33 @@ serve(async (req) => {
       );
     }
 
+    // Initialize PolymarketRouter with API key for server-side operations
+    console.log('[dome-place-order] Initializing PolymarketRouter...');
+    const router = new PolymarketRouter({
+      chainId: POLYGON_CHAIN_ID,
+      apiKey: DOME_API_KEY,
+    });
+
     // Generate unique IDs for JSON-RPC
     const requestId = crypto.randomUUID();
     const clientOrderId = crypto.randomUUID();
 
     // Convert side from number to string (ClobClient returns 0=BUY, 1=SELL)
-    const sideString = signedOrder.side === 0 ? 'BUY' : 'SELL';
+    const sideString = signedOrder.side === 0 ? 'BUY' : signedOrder.side === 1 ? 'SELL' : signedOrder.side;
     const transformedSignedOrder = {
       ...signedOrder,
       side: sideString,
     };
 
-    console.log('[dome-place-order] Transformed signedOrder.side:', {
-      original: signedOrder.side,
-      transformed: sideString,
+    console.log('[dome-place-order] Transformed order:', {
+      originalSide: signedOrder.side,
+      transformedSide: sideString,
+      maker: signedOrder.maker?.slice(0, 10),
+      tokenId: signedOrder.tokenId?.slice(0, 20),
+      funder: orderParams?.funderAddress?.slice(0, 10),
     });
 
-    // JSON-RPC 2.0 format (required by Dome API)
+    // JSON-RPC 2.0 format for Dome API placeOrder
     const payload = {
       jsonrpc: '2.0',
       method: 'placeOrder',
@@ -105,15 +112,18 @@ serve(async (req) => {
           apiPassphrase: credentials.apiPassphrase,
         },
         clientOrderId: clientOrderId,
+        // Include additional params if provided
+        ...(orderParams && {
+          funderAddress: orderParams.funderAddress,
+          negRisk: orderParams.negRisk,
+        }),
       },
     };
 
-    console.log('[dome-place-order] Submitting JSON-RPC request to Dome API:', {
+    console.log('[dome-place-order] Submitting to Dome API:', {
       endpoint: `${DOME_API_URL}/polymarket/placeOrder`,
       requestId,
       clientOrderId,
-      signedOrderMaker: signedOrder.maker?.slice(0, 10),
-      signedOrderTokenId: signedOrder.tokenId?.slice(0, 20),
     });
 
     // Submit to Dome API
