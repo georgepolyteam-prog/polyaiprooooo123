@@ -377,18 +377,31 @@ export function useDomeRouter() {
       // createOrder returns the signed order ready for submission
       const signedOrder = await clobClient.createOrder(orderArgs);
 
+      // Transform numeric side to string for Dome API
+      // ClobClient returns side: 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
+      const orderObj = signedOrder.order as Record<string, unknown> | undefined;
+      const transformedOrder = {
+        ...signedOrder,
+        order: orderObj ? {
+          ...orderObj,
+          side: params.side, // Force string value from original params
+        } : undefined,
+      };
+
       console.log('[DomeRouter] Signed order created:', {
         hasSignature: !!signedOrder?.signature,
         orderType: signedOrder?.orderType,
+        originalSide: orderObj?.side,
+        transformedSide: params.side,
       });
 
       updateStage('submitting-order', 'Submitting order to Polymarket...');
 
-      // Submit signed order to dome-router edge function
+      // Submit transformed order to dome-router edge function
       const { data: response, error: edgeError } = await supabase.functions.invoke('dome-router', {
         body: {
           action: 'place_order',
-          signedOrder,
+          signedOrder: transformedOrder,
           credentials: {
             apiKey: credentials.apiKey,
             apiSecret: credentials.apiSecret,
@@ -404,8 +417,13 @@ export function useDomeRouter() {
       }
 
       if (!response?.success) {
-        console.error('[DomeRouter] Order rejected:', response);
-        const errorMessage = response?.error || 'Order rejected';
+        console.error('[DomeRouter] Order rejected:', {
+          error: response?.error,
+          code: response?.code,
+          details: response?.details,
+          rawResponse: response,
+        });
+        const errorMessage = response?.details?.reason || response?.error || 'Order rejected';
         throw new Error(errorMessage);
       }
 
