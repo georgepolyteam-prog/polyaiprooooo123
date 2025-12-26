@@ -196,27 +196,41 @@ export function useDomeRouter() {
 
       /**
        * L1 Authentication (API Key Creation):
-       * - Uses EOA signer DIRECTLY (not SafeSignerWrapper!)
-       * - POLY_ADDRESS header = EOA address (the actual signer)
-       * - EIP-712 message is signed by EOA
-       * - Polymarket validates: recovered signer == POLY_ADDRESS
+       * - Uses EOA signer DIRECTLY
+       * - signatureType = 0 (EOA as maker)
+       * - Credentials registered to EOA
        * 
-       * For ORDER placement, signatureType=2 and funderAddress=safeAddress
-       * tell Polymarket to use the Safe as the funding source.
+       * Order Placement:
+       * - EOA is the maker (signatureType = 0)
+       * - Safe holds the funds (user deposits USDC to Safe)
+       * - Orders are placed by EOA, funded by Safe balance
        */
       console.log('[DomeRouter] Using EOA signer directly for L1 auth');
       console.log('[DomeRouter]   EOA (signer + POLY_ADDRESS):', address);
-      console.log('[DomeRouter]   Safe (funderAddress for orders):', safeAddress);
+      console.log('[DomeRouter]   Safe (for funding):', safeAddress);
+
+      // Import BuilderConfig for Dome integration
+      const { BuilderConfig } = await import('@polymarket/builder-signing-sdk');
+
+      // Create Dome's builder config
+      const builderConfig = new BuilderConfig({
+        remoteBuilderConfig: {
+          url: 'https://builder-signer.domeapi.io/builder-signer/sign',
+        },
+      });
 
       // Create ClobClient with EOA signer for L1 auth
-      // signatureType=2 and funderAddress only affect ORDER signing, not L1 auth
+      // Use signatureType=0 (EOA) so credentials match the maker
       const clobClient = new ClobClient(
         'https://clob.polymarket.com',
         POLYGON_CHAIN_ID,
-        eoaSigner,    // EOA signer directly - NOT SafeSignerWrapper!
+        eoaSigner,    // EOA signer
         undefined,    // no credentials yet
-        2,            // signatureType = 2 for Safe wallet ORDER signing
-        safeAddress   // funderAddress = Safe for orders
+        0,            // signatureType = 0 (EOA)
+        undefined,    // no funderAddress for auth
+        undefined,    // 7th param
+        false,        // 8th param
+        builderConfig // 9th param - Dome builder config!
       );
 
       console.log('[DomeRouter] ClobClient initialized, attempting credential creation...');
@@ -410,6 +424,7 @@ export function useDomeRouter() {
 
       // Build signed order using Polymarket ClobClient
       const { ClobClient, Side } = await import('@polymarket/clob-client');
+      const { BuilderConfig } = await import('@polymarket/builder-signing-sdk');
       const ethersLib = await import('ethers');
       
       // Create a minimal signer for ClobClient
@@ -425,16 +440,26 @@ export function useDomeRouter() {
         secret: credentials.apiSecret,
         passphrase: credentials.apiPassphrase,
       };
+
+      // Create Dome's builder config
+      const builderConfig = new BuilderConfig({
+        remoteBuilderConfig: {
+          url: 'https://builder-signer.domeapi.io/builder-signer/sign',
+        },
+      });
       
       // Initialize ClobClient for order signing
-      // CRITICAL: Use signatureType=2 and funderAddress=safeAddress
+      // Use signatureType=0 (EOA) to match credentials
       const clobClient = new ClobClient(
         'https://clob.polymarket.com',
         POLYGON_CHAIN_ID,
         signer,
         clobCreds,
-        2, // signatureType = 2 for Safe wallet
-        safeAddress // funder - the Safe that holds funds
+        0,            // signatureType = 0 (EOA)
+        undefined,    // no funderAddress
+        undefined,    // 7th param
+        false,        // 8th param
+        builderConfig // 9th param - Dome builder config!
       );
 
       // Convert side to ClobClient enum
