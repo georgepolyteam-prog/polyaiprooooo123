@@ -200,12 +200,19 @@ serve(async (req) => {
         
         // Success - extract result from JSON-RPC response
         const orderResult = result.result || result;
-        console.log("[dome-router] Order placed successfully:", orderResult);
+        
+        // Log full order result for debugging
+        console.log("[dome-router] Order result (full):", JSON.stringify(orderResult, null, 2));
+        console.log("[dome-router] Order status:", orderResult.status);
+        console.log("[dome-router] Order matched:", orderResult.matched);
+        console.log("[dome-router] Order ID:", orderResult.orderID || orderResult.orderId || orderResult.id);
         
         return new Response(
           JSON.stringify({ 
             success: true,
-            orderId: orderResult.orderID || orderResult.orderId || orderResult.id, 
+            orderId: orderResult.orderID || orderResult.orderId || orderResult.id,
+            status: orderResult.status, // Pass through the order status (live, matched, etc.)
+            matched: orderResult.matched,
             ...orderResult 
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
