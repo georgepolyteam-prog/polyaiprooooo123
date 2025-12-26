@@ -379,20 +379,17 @@ export function useDomeRouter() {
 
       // Transform numeric side to string for Dome API
       // ClobClient returns side: 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
-      const orderObj = signedOrder.order as Record<string, unknown> | undefined;
       const transformedOrder = {
         ...signedOrder,
-        order: orderObj ? {
-          ...orderObj,
-          side: params.side, // Force string value from original params
-        } : undefined,
+        side: params.side, // Force string value at root level
       };
 
       console.log('[DomeRouter] Signed order created:', {
         hasSignature: !!signedOrder?.signature,
         orderType: signedOrder?.orderType,
-        originalSide: orderObj?.side,
+        originalSide: (signedOrder as Record<string, unknown>).side,
         transformedSide: params.side,
+        fullOrderKeys: Object.keys(transformedOrder),
       });
 
       updateStage('submitting-order', 'Submitting order to Polymarket...');
