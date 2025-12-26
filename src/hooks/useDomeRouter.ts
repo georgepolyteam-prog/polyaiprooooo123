@@ -198,6 +198,8 @@ export function useDomeRouter() {
    * signatureType = 2 (Safe wallet mode)
    * Credentials registered to the Safe address
    * funderAddress = Safe (where USDC is held)
+   * 
+   * IMPORTANT: Safe must be deployed BEFORE credentials are created
    */
   const linkUser = useCallback(async () => {
     if (!address || !walletClient) {
@@ -225,16 +227,34 @@ export function useDomeRouter() {
     setIsLinking(true);
 
     try {
-      console.log('[DomeRouter] Starting wallet link (client-side)...');
+      console.log('[DomeRouter] ========== STARTING LINK FLOW ==========');
       console.log('[DomeRouter] EOA (signer):', address);
       console.log('[DomeRouter] Safe (maker/funder):', safeAddress);
 
+      // STEP 1: Check and deploy Safe BEFORE credential creation
+      console.log('[DomeRouter] Step 1: Checking Safe deployment status...');
+      await checkDeployment();
+      
+      if (!isDeployed) {
+        console.log('[DomeRouter] Safe not deployed, deploying now...');
+        updateStage('deploying-safe', 'Deploying Safe wallet...');
+        const deployed = await deploySafe();
+        if (!deployed) {
+          throw new Error('Safe deployment failed - cannot create credentials without deployed Safe');
+        }
+        console.log('[DomeRouter] Safe deployed successfully');
+      } else {
+        console.log('[DomeRouter] Safe already deployed');
+      }
+
+      // STEP 2: Create credentials
       updateStage('linking-wallet', 'Creating API credentials...');
 
       // Create ethers signer from wagmi walletClient
       const eoaSigner = walletClientToSigner(walletClient);
 
-      console.log('[DomeRouter] Using signatureType=2 (Safe) for credential creation');
+      console.log('[DomeRouter] Step 2: Creating credentials with:');
+      console.log('[DomeRouter]   signatureType = 2 (Safe wallet)');
       console.log('[DomeRouter]   EOA (signer):', address);
       console.log('[DomeRouter]   Safe (maker + funder):', safeAddress);
 
@@ -250,7 +270,7 @@ export function useDomeRouter() {
         safeAddress // funderAddress = Safe
       );
 
-      console.log('[DomeRouter] ClobClient initialized, attempting credential creation...');
+      console.log('[DomeRouter] ClobClient initialized for credential creation');
 
       // Try to derive existing API key first
       let creds: PolymarketCredentials | null = null;
@@ -293,9 +313,34 @@ export function useDomeRouter() {
 
       console.log('[DomeRouter] Credential acquisition complete:', {
         hasKey: !!creds.apiKey,
+        keyPrefix: creds.apiKey.slice(0, 8) + '...',
         hasSecret: !!creds.apiSecret,
         hasPassphrase: !!creds.apiPassphrase,
       });
+
+      // STEP 3: Verify credentials work
+      console.log('[DomeRouter] Step 3: Verifying credentials...');
+      updateStage('linking-wallet', 'Verifying credentials...');
+      
+      try {
+        // Create a new ClobClient WITH the credentials to verify they work
+        const verifyClobClient = new ClobClient(
+          'https://clob.polymarket.com',
+          POLYGON_CHAIN_ID,
+          eoaSigner,
+          { key: creds.apiKey, secret: creds.apiSecret, passphrase: creds.apiPassphrase },
+          2,
+          safeAddress
+        );
+        
+        // Try to get API keys - this will fail if credentials are invalid
+        const apiKeys = await verifyClobClient.getApiKeys();
+        console.log('[DomeRouter] Credential verification SUCCESS - API keys response received:', !!apiKeys);
+      } catch (verifyErr) {
+        console.warn('[DomeRouter] Credential verification failed:', verifyErr);
+        // Don't fail the whole flow - credentials might still work for trading
+        console.log('[DomeRouter] Proceeding despite verification failure (credentials may still work)');
+      }
 
       setCredentials(creds);
       setIsLinked(true);
@@ -307,9 +352,12 @@ export function useDomeRouter() {
         signerAddress: address,
       });
 
-      console.log('[DomeRouter] Link successful:', {
-        hasCredentials: !!creds,
-        safeAddress: safeAddress.slice(0, 10),
+      console.log('[DomeRouter] ========== LINK SUCCESSFUL ==========');
+      console.log('[DomeRouter] Summary:', {
+        eoaAddress: address,
+        safeAddress: safeAddress,
+        credentialKeyPrefix: creds.apiKey.slice(0, 8) + '...',
+        signatureType: 2,
       });
 
       updateStage('completed', 'Wallet linked successfully!');
@@ -319,7 +367,8 @@ export function useDomeRouter() {
 
       return { credentials: creds, safeAddress };
     } catch (error: unknown) {
-      console.error('[DomeRouter] Link error:', error);
+      console.error('[DomeRouter] ========== LINK FAILED ==========');
+      console.error('[DomeRouter] Error:', error);
       const message = error instanceof Error ? error.message : 'Failed to link wallet';
       updateStage('error', message);
 
@@ -334,7 +383,7 @@ export function useDomeRouter() {
       setIsLinking(false);
       setTimeout(() => updateStage('idle'), 2000);
     }
-  }, [address, walletClient, safeAddress, chainId, switchChainAsync, saveSession, updateStage]);
+  }, [address, walletClient, safeAddress, chainId, switchChainAsync, saveSession, updateStage, isDeployed, checkDeployment, deploySafe]);
 
   /**
    * Place order - Signs order client-side, submits via edge function
