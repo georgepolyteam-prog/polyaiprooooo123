@@ -480,7 +480,7 @@ export function useDomeRouter() {
           credentials: {
             apiKey: credentials.apiKey,
             apiSecret: credentials.apiSecret,
-            passphrase: credentials.apiPassphrase,
+            apiPassphrase: credentials.apiPassphrase,
           },
           signer: address,
           funderAddress: safeAddress,
