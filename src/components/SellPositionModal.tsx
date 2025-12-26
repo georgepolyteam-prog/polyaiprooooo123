@@ -96,7 +96,7 @@ export function SellPositionModal({ position, onClose, onSell }: SellPositionMod
       />
       
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl shadow-primary/20 overflow-hidden">
+      <div className="relative w-full max-w-md mx-4 bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl shadow-primary/20 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-white/10 bg-gradient-to-r from-rose-500/10 to-orange-500/10">
           <div className="flex items-center justify-between">
@@ -143,7 +143,7 @@ export function SellPositionModal({ position, onClose, onSell }: SellPositionMod
         </div>
 
         {/* Sell Form */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Order Type Toggle */}
           <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
             <div className="flex items-center gap-3">
