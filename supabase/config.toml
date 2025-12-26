@@ -36,8 +36,5 @@ verify_jwt = false
 [functions.get-dome-api-key]
 verify_jwt = false
 
-[functions.dome-router]
-verify_jwt = false
-
 [functions.dome-place-order]
 verify_jwt = false
