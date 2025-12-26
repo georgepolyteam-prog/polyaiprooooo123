@@ -3,6 +3,7 @@ import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
 import { ClobClient } from '@polymarket/clob-client';
 import { useSafeWallet } from './useSafeWallet';
+import { supabase } from '@/integrations/supabase/client';
 import type { WalletClient } from 'viem';
 
 const POLYGON_CHAIN_ID = 137;
@@ -128,7 +129,6 @@ export function useDomeRouter() {
     setAllowances,
     isDeploying,
     isSettingAllowances,
-    createRelayClient,
     checkDeployment,
   } = useSafeWallet();
   
@@ -336,8 +336,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage, safeIsDeployed, deploySafe, safeHasAllowances, setAllowances]);
 
   /**
-   * Place an order using RelayClient with Dome's builder-signer for order routing
-   * This handles signing (via Dome) and submission (via Polymarket relayer)
+   * Place an order using Dome's PolymarketRouter API
+   * This routes orders through Dome for builder attribution and better execution
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -386,16 +386,7 @@ export function useDomeRouter() {
         }
       }
 
-      updateStage('signing-order');
-
-      console.log('[DomeRouter] Creating RelayClient with Dome builder-signer...');
-
-      // Create RelayClient with Dome's builder-signer (handled by useSafeWallet)
-      const client = await createRelayClient();
-      
-      if (!client) {
-        throw new Error('Failed to create relay client');
-      }
+      updateStage('signing-order', 'Preparing order...');
 
       // Calculate size (shares) from amount (USDC) and price
       const size = params.amount / params.price;
@@ -406,42 +397,58 @@ export function useDomeRouter() {
 
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
-      console.log('[DomeRouter] Placing order via RelayClient...', {
-        tokenId: params.tokenId,
-        price: params.price,
+      console.log('[DomeRouter] Placing order via Dome API...', {
+        marketId: params.tokenId,
+        side: params.side.toLowerCase(),
         size,
-        side: params.side,
-        negRisk: params.negRisk,
+        price: params.price,
+        funderAddress: safeAddress,
         orderType,
       });
 
       updateStage('submitting-order', 'Submitting order via Dome...');
 
-      // RelayClient handles signing (via Dome's builder-signer) and submission (via Polymarket relayer)
-      // The builder-signer provides attribution headers for order routing
-      const response = await (client as any).placeOrder({
-        tokenId: params.tokenId,
-        side: params.side === 'BUY' ? 0 : 1, // 0 = BUY, 1 = SELL
-        size: size,
-        price: params.price,
-        orderType: orderType,
-        tickSize: params.tickSize || '0.01',
-        negRisk: params.negRisk,
+      // Call the dome-router edge function which uses Dome's placeOrder API
+      // This handles:
+      // 1. Builder-signer for attribution (automatic)
+      // 2. Order signing with credentials
+      // 3. Submission to Polymarket CLOB via Dome
+      const { data, error } = await supabase.functions.invoke('dome-router', {
+        body: {
+          action: 'place_order',
+          userId: address,
+          marketId: params.tokenId,
+          side: params.side.toLowerCase(),
+          size: size,
+          price: params.price,
+          credentials: {
+            apiKey: credentials.apiKey,
+            apiSecret: credentials.apiSecret,
+            apiPassphrase: credentials.apiPassphrase,
+          },
+          funderAddress: safeAddress,
+          negRisk: params.negRisk ?? false,
+          orderType: orderType,
+          tickSize: params.tickSize || '0.01',
+        },
       });
 
-      console.log('[DomeRouter] RelayClient order response:', response);
+      if (error) {
+        throw new Error(error.message || 'Failed to place order via Dome');
+      }
 
-      // Wait for the result if it's a pending response
-      const result = response?.wait ? await response.wait() : response;
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
-      console.log('[DomeRouter] Order result:', result);
+      console.log('[DomeRouter] Order placed via Dome!', data);
 
-      const orderId = result?.orderID || result?.orderId || result?.id;
+      const orderId = data?.orderId || data?.orderID || data?.id;
 
       const orderResult: OrderResult = {
         success: true,
         orderId,
-        result,
+        result: data,
       };
 
       setLastOrderResult(orderResult);
@@ -469,6 +476,8 @@ export function useDomeRouter() {
         errorMessage = 'Transaction rejected by user.';
       } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
         errorMessage = 'Insufficient balance. Please add more USDC.';
+      } else if (errorMessage.includes('Dome API key not configured')) {
+        errorMessage = 'Dome routing not available. Please contact support.';
       }
 
       updateStage('error', errorMessage);
@@ -497,7 +506,6 @@ export function useDomeRouter() {
     safeHasAllowances,
     deploySafe,
     setAllowances,
-    createRelayClient,
     clearSession,
     updateStage,
     tradeStage,
