@@ -298,16 +298,22 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               <h3 className="font-semibold text-foreground">Trade</h3>
             </div>
             <div className="flex items-center gap-2">
-              {/* Reset Trading Session button */}
+              {/* Force Re-link button - visible when linked, clears all and forces re-link */}
               {isConnected && !isWrongNetwork && isLinked && (
                 <button
                   onClick={() => {
-                    clearSession();
+                    if (window.confirm('This will clear all cached credentials and force you to re-link your wallet. Continue?')) {
+                      clearSession();
+                      toast.info('Credentials cleared. Please re-link your wallet.', {
+                        description: 'Click "Link & Setup Wallet" to create fresh credentials'
+                      });
+                    }
                   }}
-                  className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors p-1 rounded hover:bg-muted/50"
-                  title="Reset trading session if having issues"
+                  className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1.5 transition-colors px-2 py-1 rounded hover:bg-orange-500/10 border border-orange-500/30"
+                  title="Force re-link: Clear all cached credentials and re-authenticate"
                 >
                   <RotateCcw className="w-3 h-3" />
+                  <span>Re-link</span>
                 </button>
               )}
               {isConnected && !isWrongNetwork && (
