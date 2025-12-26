@@ -23,7 +23,6 @@ import { SellPositionModal } from "@/components/SellPositionModal";
 import { MarketTradeModal } from "@/components/MarketTradeModal";
 import { AnalysisSelectionModal } from "@/components/AnalysisSelectionModal";
 import { ClaimWinningsCard, ClaimableWinningsSummary } from "@/components/ClaimWinningsCard";
-import { SafeWalletPanel } from "@/components/SafeWalletPanel";
 import { useDomeRouter } from "@/hooks/useDomeRouter";
 import { fetchTradeableMarketData } from "@/lib/market-trade-data";
 import { ClaimablePosition } from "@/hooks/useClaimWinnings";
@@ -122,44 +121,11 @@ const getPolymarketUrl = (marketSlug?: string) => {
 export default function MyTrades() {
   const { address, isConnected } = useAccount();
   const navigate = useNavigate();
-  const { placeOrder, isPlacingOrder, safeAddress, isDeployed, credentials } = useDomeRouter();
+  const { placeOrder, isPlacingOrder, credentials } = useDomeRouter();
   
-  // Wait for Safe state to load before fetching positions
-  const [safeStateLoaded, setSafeStateLoaded] = useState(false);
+  // With direct EOA, we always query using the EOA address
+  const queryAddress = address;
   
-  useEffect(() => {
-    // Give Safe state a moment to load from localStorage + verify on-chain
-    const timer = setTimeout(() => {
-      console.log('[MyTrades] Safe state loaded - isDeployed:', isDeployed, 'safeAddress:', safeAddress);
-      setSafeStateLoaded(true);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Determine which address to query - use Safe if deployed, otherwise EOA
-  // Also check localStorage for cached Safe deployment status
-  const queryAddress = useMemo(() => {
-    // Check localStorage cache for Safe deployment
-    const cachedSafeDeployed = safeAddress ? 
-      localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`) === 'true' : false;
-    const isSafeActive = isDeployed || cachedSafeDeployed;
-    
-    if (isSafeActive && safeAddress) {
-      console.log('[MyTrades] Using Safe address for queries:', safeAddress, '(cached:', cachedSafeDeployed, ')');
-      return safeAddress;
-    }
-    console.log('[MyTrades] Using EOA address for queries:', address);
-    return address;
-  }, [isDeployed, safeAddress, address]);
-  
-  // Determine wallet type for display
-  const walletType = useMemo(() => {
-    const cachedSafeDeployed = safeAddress ? 
-      localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`) === 'true' : false;
-    return (isDeployed || cachedSafeDeployed) && safeAddress ? 'safe' : 'eoa';
-  }, [isDeployed, safeAddress]);
-  
-  // State for copy button feedback
   const [copiedAddress, setCopiedAddress] = useState(false);
   
   // Positions tab state
@@ -206,7 +172,7 @@ export default function MyTrades() {
         url += `&apiKey=${encodeURIComponent(credentials.apiKey)}&secret=${encodeURIComponent(credentials.apiSecret)}&passphrase=${encodeURIComponent(credentials.apiPassphrase)}`;
       }
 
-      console.log('[MyTrades] Fetching positions for:', queryAddress, isDeployed ? '(Safe)' : '(EOA)');
+      console.log('[MyTrades] Fetching positions for:', queryAddress);
 
       const response = await fetch(url, {
         headers: {
@@ -242,7 +208,7 @@ export default function MyTrades() {
     } finally {
       setIsLoadingPositions(false);
     }
-  }, [isConnected, queryAddress, credentials, isDeployed]);
+  }, [isConnected, queryAddress, credentials]);
 
   const fetchHistory = useCallback(async () => {
     if (!isConnected || !queryAddress) return;
@@ -251,7 +217,7 @@ export default function MyTrades() {
     setHasTriedFetchHistory(true);
 
     try {
-      console.log('[MyTrades] Fetching history for:', queryAddress, isDeployed ? '(Safe)' : '(EOA)');
+      console.log('[MyTrades] Fetching history for:', queryAddress);
       
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-profile?address=${queryAddress}&timeframe=${timeFilter}`,
@@ -282,7 +248,7 @@ export default function MyTrades() {
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [isConnected, queryAddress, timeFilter, isDeployed]);
+  }, [isConnected, queryAddress, timeFilter]);
 
   const refreshOpenOrders = useCallback(async () => {
     if (!isConnected || !address) return;
@@ -299,13 +265,12 @@ export default function MyTrades() {
     }
   }, [address, isConnected]);
 
-  // Auto-fetch when wallet is connected - wait for Safe state to load first
+  // Auto-fetch when wallet is connected
   useEffect(() => {
-    if (isConnected && address && !hasTriedFetchPositions && safeStateLoaded) {
-      console.log('[MyTrades] Safe state ready, fetching positions...');
+    if (isConnected && address && !hasTriedFetchPositions) {
       fetchPositions();
     }
-  }, [isConnected, address, hasTriedFetchPositions, fetchPositions, safeStateLoaded]);
+  }, [isConnected, address, hasTriedFetchPositions, fetchPositions]);
 
   // Poll open orders every 10s
   useEffect(() => {
@@ -520,10 +485,6 @@ export default function MyTrades() {
       <TopBar />
       
       <main className="relative max-w-7xl mx-auto px-4 py-8 space-y-6">
-        {/* Safe Wallet Manager */}
-        <SafeWalletPanel />
-        
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent flex items-center gap-3">
@@ -532,17 +493,10 @@ export default function MyTrades() {
             </h1>
             <div className="text-muted-foreground flex items-center gap-2 flex-wrap">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {walletType === 'safe' ? (
-                <Badge variant="outline" className="bg-violet-500/20 border-violet-500/50 text-violet-300 gap-1">
-                  <Shield className="w-3 h-3" />
-                  Safe Wallet
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-blue-500/20 border-blue-500/50 text-blue-300 gap-1">
-                  <Wallet className="w-3 h-3" />
-                  EOA Wallet
-                </Badge>
-              )}
+              <Badge variant="outline" className="bg-blue-500/20 border-blue-500/50 text-blue-300 gap-1">
+                <Wallet className="w-3 h-3" />
+                Connected
+              </Badge>
               <button
                 onClick={() => {
                   if (queryAddress) {
@@ -1225,9 +1179,20 @@ export default function MyTrades() {
             </div>
           </TabsContent>
 
-          {/* Wallet Tab */}
+          {/* Wallet Tab - removed Safe wallet panel since we now use direct EOA */}
           <TabsContent value="wallet" className="space-y-4">
-            <SafeWalletPanel />
+            <GlassCard cyber glow className="p-6">
+              <div className="text-center py-8">
+                <Wallet className="w-12 h-12 text-primary mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Direct EOA Trading</h3>
+                <p className="text-muted-foreground mb-4">
+                  Your wallet ({address?.slice(0, 6)}...{address?.slice(-4)}) is used directly for trading.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Fund your wallet with USDC on Polygon to trade on Polymarket.
+                </p>
+              </div>
+            </GlassCard>
           </TabsContent>
         </Tabs>
 
