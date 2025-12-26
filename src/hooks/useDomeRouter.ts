@@ -226,80 +226,32 @@ export function useDomeRouter() {
     }
 
     setIsLinking(true);
-    updateStage('linking-wallet');
 
     try {
-      console.log('[DomeRouter] Creating ethers adapter for ClobClient with Dome builder config...');
-      
-      // Create ethers-compatible signer adapter
-      const ethersAdapter = createEthersAdapter(walletClient, address);
-      
-      // Create Dome's builder config for attribution and MEV protection
-      // This matches the SDK's PolymarketBuilderConfig (polymarket.ts lines 107-111)
-      const builderConfig = new BuilderConfig({
-        remoteBuilderConfig: {
-          url: DOME_BUILDER_SIGNER_URL,
-        },
-      });
-
-      console.log('[DomeRouter] Builder config created with URL:', DOME_BUILDER_SIGNER_URL);
-      
-      // Create ClobClient WITH builder config (9th parameter)
-      // Use signatureType=2 (Safe) and funderAddress=safeAddress
-      const clobClient = new ClobClient(
-        CLOB_HOST,
-        POLYGON_CHAIN_ID,
-        ethersAdapter as unknown as import('@ethersproject/providers').JsonRpcSigner,
-        undefined, // No credentials yet
-        SIGNATURE_TYPE_SAFE,
-        safeAddress || undefined, // funderAddress is the Safe
-        undefined, // 7th param: proxy wallet address (not used)
-        false, // 8th param: useServerTime
-        builderConfig, // 9th param: DOME BUILDER CONFIG - enables builder attribution!
-      );
-
-      console.log('[DomeRouter] Calling createOrDeriveApiKey...');
-      updateStage('linking-wallet', 'Please sign in your wallet...');
-
-      // ClobClient handles L1 auth signature internally
-      const apiKeyCreds = await clobClient.createOrDeriveApiKey();
-
-      console.log('[DomeRouter] API credentials obtained:', {
-        hasKey: !!apiKeyCreds?.key,
-        hasSecret: !!apiKeyCreds?.secret,
-        hasPassphrase: !!apiKeyCreds?.passphrase,
-      });
-
-      if (!apiKeyCreds?.key || !apiKeyCreds?.secret || !apiKeyCreds?.passphrase) {
-        throw new Error('Invalid credentials returned');
-      }
-
       if (!safeAddress) {
         throw new Error('Failed to derive Safe address');
       }
 
-      // Map to our credential format
-      const creds: PolymarketCredentials = {
-        apiKey: apiKeyCreds.key,
-        apiSecret: apiKeyCreds.secret,
-        apiPassphrase: apiKeyCreds.passphrase,
-      };
+      console.log('[DomeRouter] Starting wallet link process...');
+      console.log('[DomeRouter] EOA:', address);
+      console.log('[DomeRouter] Safe (funderAddress):', safeAddress);
 
-      setCredentials(creds);
-      setIsLinked(true);
-
-      // Deploy Safe if not already deployed
+      // STEP 1: Deploy Safe wallet FIRST (before credential derivation)
+      // This ensures the Safe exists on-chain before we register it with Polymarket
       if (!safeIsDeployed) {
-        console.log('[DomeRouter] Deploying Safe wallet...');
+        console.log('[DomeRouter] Safe not deployed, deploying first...');
         updateStage('deploying-safe', 'Deploying Safe wallet...');
         const deployed = await deploySafe();
         if (!deployed) {
           throw new Error('Failed to deploy Safe wallet');
         }
-        console.log('[DomeRouter] Safe wallet deployed successfully');
+        console.log('[DomeRouter] Safe wallet deployed successfully at:', safeAddress);
+      } else {
+        console.log('[DomeRouter] Safe already deployed at:', safeAddress);
       }
 
-      // Set allowances if not already set - don't fail the entire link if this fails
+      // STEP 2: Set allowances BEFORE credential derivation
+      // This ensures the Safe has proper permissions before trading
       if (!safeHasAllowances) {
         console.log('[DomeRouter] Setting token allowances...');
         updateStage('setting-allowances', 'Setting token allowances...');
@@ -321,6 +273,66 @@ export function useDomeRouter() {
         }
       }
 
+      // STEP 3: Now derive API credentials with Safe as funderAddress
+      // The credentials will be tied to the EOA but orders will use Safe as maker
+      updateStage('linking-wallet', 'Please sign in your wallet...');
+      
+      console.log('[DomeRouter] Creating ethers adapter for ClobClient with Dome builder config...');
+      
+      // Create ethers-compatible signer adapter
+      const ethersAdapter = createEthersAdapter(walletClient, address);
+      
+      // Create Dome's builder config for attribution and MEV protection
+      const builderConfig = new BuilderConfig({
+        remoteBuilderConfig: {
+          url: DOME_BUILDER_SIGNER_URL,
+        },
+      });
+
+      console.log('[DomeRouter] Builder config created with URL:', DOME_BUILDER_SIGNER_URL);
+      
+      // Create ClobClient WITH builder config (9th parameter)
+      // Use signatureType=2 (Safe) and funderAddress=safeAddress (deployed Safe)
+      // CRITICAL: Safe must be deployed BEFORE this step for credentials to work correctly
+      const clobClient = new ClobClient(
+        CLOB_HOST,
+        POLYGON_CHAIN_ID,
+        ethersAdapter as unknown as import('@ethersproject/providers').JsonRpcSigner,
+        undefined, // No credentials yet
+        SIGNATURE_TYPE_SAFE,
+        safeAddress, // funderAddress is the deployed Safe
+        undefined, // 7th param: proxy wallet address (not used)
+        false, // 8th param: useServerTime
+        builderConfig, // 9th param: DOME BUILDER CONFIG - enables builder attribution!
+      );
+
+      console.log('[DomeRouter] Calling createOrDeriveApiKey with funderAddress:', safeAddress);
+
+      // ClobClient handles L1 auth signature internally
+      // With signatureType=2 and funderAddress set, credentials should be associated with Safe trading
+      const apiKeyCreds = await clobClient.createOrDeriveApiKey();
+
+      console.log('[DomeRouter] API credentials obtained:', {
+        hasKey: !!apiKeyCreds?.key,
+        hasSecret: !!apiKeyCreds?.secret,
+        hasPassphrase: !!apiKeyCreds?.passphrase,
+        keyPrefix: apiKeyCreds?.key?.substring(0, 8),
+      });
+
+      if (!apiKeyCreds?.key || !apiKeyCreds?.secret || !apiKeyCreds?.passphrase) {
+        throw new Error('Invalid credentials returned');
+      }
+
+      // Map to our credential format
+      const creds: PolymarketCredentials = {
+        apiKey: apiKeyCreds.key,
+        apiSecret: apiKeyCreds.secret,
+        apiPassphrase: apiKeyCreds.passphrase,
+      };
+
+      setCredentials(creds);
+      setIsLinked(true);
+
       // Save to localStorage
       saveSession({
         safeAddress,
@@ -330,7 +342,7 @@ export function useDomeRouter() {
 
       updateStage('completed', 'Wallet setup complete!');
       toast.success('Wallet linked to Polymarket!', {
-        description: `Safe deployed: ${safeAddress.slice(0, 10)}...`
+        description: `Safe: ${safeAddress.slice(0, 10)}...`
       });
 
       return { credentials: creds, safeAddress };
