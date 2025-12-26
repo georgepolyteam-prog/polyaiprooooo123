@@ -1,17 +1,17 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/derive';
-import { getContractConfig } from '@polymarket/builder-relayer-client/dist/config';
+import { ClobClient, Side as ClobSide, OrderType } from '@polymarket/clob-client';
 import { useSafeWallet } from './useSafeWallet';
+import type { WalletClient } from 'viem';
 
 const POLYGON_CHAIN_ID = 137;
-const STORAGE_KEY = 'dome_router_session_v2';
+const STORAGE_KEY = 'dome_router_session_v3';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const CLOB_HOST = 'https://clob.polymarket.com';
 
-// Polymarket CTF Exchange contract address
-const CTF_EXCHANGE = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
-const NEG_RISK_CTF_EXCHANGE = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
+// Signature type for Safe/Gnosis wallet
+const SIGNATURE_TYPE_SAFE = 2;
 
 // Trade stage state machine for progress UI
 export type TradeStage = 
@@ -46,6 +46,7 @@ export interface TradeParams {
   price: number;
   isMarketOrder?: boolean;
   negRisk?: boolean;
+  tickSize?: '0.1' | '0.01' | '0.001' | '0.0001';
 }
 
 interface OrderResult {
@@ -68,66 +69,50 @@ interface StoredSession {
   timestamp: number;
 }
 
-// Normalize price to avoid floating point errors
-function normalizePrice(price: number): number {
-  const rounded = Math.round(price * 100) / 100;
-  return Math.max(0.01, Math.min(0.99, rounded));
+/**
+ * Create an ethers-compatible signer adapter from wagmi walletClient
+ * This adapter works with @polymarket/clob-client which expects ethers Signer
+ */
+function createEthersAdapter(walletClient: WalletClient, address: `0x${string}`) {
+  return {
+    getAddress: async () => address,
+    
+    // ClobClient uses _signTypedData for EIP-712 signatures
+    _signTypedData: async (
+      domain: { name?: string; version?: string; chainId?: number | bigint; verifyingContract?: string },
+      types: Record<string, Array<{ name: string; type: string }>>,
+      value: Record<string, unknown>
+    ): Promise<string> => {
+      // Find the primary type (the one that's not EIP712Domain)
+      const primaryType = Object.keys(types).find(key => key !== 'EIP712Domain') || '';
+      
+      // Convert domain to proper format
+      const domainForWagmi = {
+        name: domain.name,
+        version: domain.version,
+        chainId: typeof domain.chainId === 'bigint' ? Number(domain.chainId) : domain.chainId,
+        verifyingContract: domain.verifyingContract as `0x${string}` | undefined,
+      };
+      
+      return await walletClient.signTypedData({
+        account: address,
+        domain: domainForWagmi,
+        types,
+        primaryType,
+        message: value,
+      });
+    },
+    
+    // For personal sign (used in some auth flows)
+    signMessage: async (message: string | Uint8Array): Promise<string> => {
+      const msg = typeof message === 'string' ? message : new TextDecoder().decode(message);
+      return await walletClient.signMessage({
+        account: address,
+        message: msg,
+      });
+    },
+  };
 }
-
-// Generate random salt for order uniqueness
-function generateSalt(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// EIP-712 domain and types for Polymarket L1 auth
-const L1_AUTH_DOMAIN = {
-  name: 'ClobAuthDomain',
-  version: '1',
-  chainId: POLYGON_CHAIN_ID,
-} as const;
-
-const L1_AUTH_TYPES = {
-  ClobAuth: [
-    { name: 'address', type: 'address' },
-    { name: 'timestamp', type: 'string' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'message', type: 'string' },
-  ],
-} as const;
-
-// EIP-712 domain and types for Polymarket Order signing
-const ORDER_DOMAIN = {
-  name: 'Polymarket CTF Exchange',
-  version: '1',
-  chainId: POLYGON_CHAIN_ID,
-  verifyingContract: CTF_EXCHANGE as `0x${string}`,
-} as const;
-
-const ORDER_TYPES = {
-  Order: [
-    { name: 'salt', type: 'uint256' },
-    { name: 'maker', type: 'address' },
-    { name: 'signer', type: 'address' },
-    { name: 'taker', type: 'address' },
-    { name: 'tokenId', type: 'uint256' },
-    { name: 'makerAmount', type: 'uint256' },
-    { name: 'takerAmount', type: 'uint256' },
-    { name: 'expiration', type: 'uint256' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'feeRateBps', type: 'uint256' },
-    { name: 'side', type: 'uint8' },
-    { name: 'signatureType', type: 'uint8' },
-  ],
-} as const;
-
-// Signature types
-const SIGNATURE_TYPE_POLY_GNOSIS_SAFE = 2;
-
-// Order sides
-const ORDER_SIDE_BUY = 0;
-const ORDER_SIDE_SELL = 1;
 
 export function useDomeRouter() {
   const { address, isConnected } = useAccount();
@@ -214,8 +199,8 @@ export function useDomeRouter() {
   }, [address]);
 
   /**
-   * Link user to Polymarket via EIP-712 signature
-   * Creates/derives API credentials through edge function
+   * Link user to Polymarket using @polymarket/clob-client
+   * Uses createOrDeriveApiKey() which handles all L1 auth internally
    */
   const linkUser = useCallback(async () => {
     if (!address || !walletClient) {
@@ -239,64 +224,48 @@ export function useDomeRouter() {
     updateStage('linking-wallet');
 
     try {
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const nonce = '0';
-      const message = 'This message attests that I control the given wallet';
+      console.log('[DomeRouter] Creating ethers adapter for ClobClient...');
+      
+      // Create ethers-compatible signer adapter
+      const ethersAdapter = createEthersAdapter(walletClient, address);
+      
+      // Create ClobClient without credentials (for L1 auth)
+      // Use signatureType=2 (Safe) and funderAddress=safeAddress
+      const clobClient = new ClobClient(
+        CLOB_HOST,
+        POLYGON_CHAIN_ID,
+        ethersAdapter as unknown as import('@ethersproject/providers').JsonRpcSigner,
+        undefined, // No credentials yet
+        SIGNATURE_TYPE_SAFE,
+        safeAddress || undefined, // funderAddress is the Safe
+      );
 
-      console.log('[DomeRouter] Signing EIP-712 auth message...');
+      console.log('[DomeRouter] Calling createOrDeriveApiKey...');
+      updateStage('linking-wallet', 'Please sign in your wallet...');
 
-      // Sign EIP-712 typed data for L1 auth
-      const signature = await walletClient.signTypedData({
-        account: address,
-        domain: L1_AUTH_DOMAIN,
-        types: L1_AUTH_TYPES,
-        primaryType: 'ClobAuth',
-        message: {
-          address: address,
-          timestamp: timestamp,
-          nonce: BigInt(nonce),
-          message: message,
-        },
+      // ClobClient handles L1 auth signature internally
+      const apiKeyCreds = await clobClient.createOrDeriveApiKey();
+
+      console.log('[DomeRouter] API credentials obtained:', {
+        hasKey: !!apiKeyCreds?.key,
+        hasSecret: !!apiKeyCreds?.secret,
+        hasPassphrase: !!apiKeyCreds?.passphrase,
       });
 
-      console.log('[DomeRouter] Signature obtained, calling edge function...');
-      updateStage('deploying-safe', 'Creating API credentials...');
-
-      // Call edge function to create/derive credentials
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/builder-sign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'l1_create_or_derive_api_creds',
-          address,
-          signature,
-          timestamp,
-          nonce,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('[DomeRouter] Edge function error:', error);
-        throw new Error('Failed to create API credentials');
+      if (!apiKeyCreds?.key || !apiKeyCreds?.secret || !apiKeyCreds?.passphrase) {
+        throw new Error('Invalid credentials returned');
       }
-
-      const data = await response.json();
-      console.log('[DomeRouter] Edge function response:', data);
-
-      if (!data.creds) {
-        throw new Error('No credentials returned');
-      }
-
-      const creds: PolymarketCredentials = {
-        apiKey: data.creds.apiKey,
-        apiSecret: data.creds.secret,
-        apiPassphrase: data.creds.passphrase,
-      };
 
       if (!safeAddress) {
         throw new Error('Failed to derive Safe address');
       }
+
+      // Map to our credential format
+      const creds: PolymarketCredentials = {
+        apiKey: apiKeyCreds.key,
+        apiSecret: apiKeyCreds.secret,
+        apiPassphrase: apiKeyCreds.passphrase,
+      };
 
       setCredentials(creds);
       setIsLinked(true);
@@ -333,8 +302,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage]);
 
   /**
-   * Build and sign an order client-side, then submit via edge function
-   * Uses signatureType=2 (POLY_GNOSIS_SAFE) with Safe address as maker/funder
+   * Place an order using ClobClient.createOrder() for signing, then submit via edge function
+   * This ensures correct order signing format compatible with Polymarket CLOB
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -385,112 +354,75 @@ export function useDomeRouter() {
 
       updateStage('signing-order');
 
-      // Normalize price and calculate amounts
-      const validatedPrice = normalizePrice(params.price);
-      const size = params.amount / validatedPrice;
+      console.log('[DomeRouter] Creating ClobClient for order signing...');
 
-      // Validate minimum order size
+      // Create ethers adapter
+      const ethersAdapter = createEthersAdapter(walletClient, address);
+      
+      // Create ClobClient with credentials for authenticated order signing
+      const clobClient = new ClobClient(
+        CLOB_HOST,
+        POLYGON_CHAIN_ID,
+        ethersAdapter as unknown as import('@ethersproject/providers').JsonRpcSigner,
+        {
+          key: credentials.apiKey,
+          secret: credentials.apiSecret,
+          passphrase: credentials.apiPassphrase,
+        },
+        SIGNATURE_TYPE_SAFE,
+        safeAddress, // funderAddress is the Safe
+      );
+
+      // Calculate size (shares) from amount (USDC) and price
+      const size = params.amount / params.price;
       const MIN_ORDER_SIZE = 5;
       if (size < MIN_ORDER_SIZE) {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
       }
 
-      // Calculate maker and taker amounts (in wei, 6 decimals for USDC)
-      const side = params.side === 'BUY' ? ORDER_SIDE_BUY : ORDER_SIDE_SELL;
-      
-      // For USDC amounts (6 decimals)
-      const USDC_DECIMALS = 6;
-      const sizeInWei = BigInt(Math.floor(size * 10 ** USDC_DECIMALS));
-      const priceScaled = BigInt(Math.floor(validatedPrice * 10 ** USDC_DECIMALS));
-      
-      let makerAmount: bigint;
-      let takerAmount: bigint;
-      
-      if (side === ORDER_SIDE_BUY) {
-        // Buying: maker gives USDC, taker gives tokens
-        makerAmount = (sizeInWei * priceScaled) / BigInt(10 ** USDC_DECIMALS);
-        takerAmount = sizeInWei;
-      } else {
-        // Selling: maker gives tokens, taker gives USDC
-        makerAmount = sizeInWei;
-        takerAmount = (sizeInWei * priceScaled) / BigInt(10 ** USDC_DECIMALS);
-      }
-
-      // Build order
-      const salt = generateSalt();
-      const expiration = BigInt(Math.floor(Date.now() / 1000) + 60 * 60 * 24); // 24 hours
-      const nonce = BigInt(0);
-      const feeRateBps = BigInt(0);
-
-      // Use correct exchange for neg risk markets
-      const exchange = params.negRisk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
-      const orderDomain = {
-        ...ORDER_DOMAIN,
-        verifyingContract: exchange as `0x${string}`,
-      };
-
-      const order = {
-        salt: BigInt(salt),
-        maker: safeAddress as `0x${string}`, // Safe is the maker (holds funds)
-        signer: address as `0x${string}`, // EOA signs on behalf of Safe
-        taker: '0x0000000000000000000000000000000000000000' as `0x${string}`, // Any taker
-        tokenId: BigInt(params.tokenId),
-        makerAmount,
-        takerAmount,
-        expiration,
-        nonce,
-        feeRateBps,
-        side,
-        signatureType: SIGNATURE_TYPE_POLY_GNOSIS_SAFE, // Safe wallet signature
-      };
-
-      console.log('[DomeRouter] Signing order with signatureType=2 (Safe):', {
-        maker: order.maker,
-        signer: order.signer,
+      console.log('[DomeRouter] Creating signed order via ClobClient...', {
         tokenId: params.tokenId,
+        price: params.price,
+        size,
         side: params.side,
-        makerAmount: makerAmount.toString(),
-        takerAmount: takerAmount.toString(),
+        negRisk: params.negRisk,
       });
 
-      // Sign the order with EIP-712
-      const signature = await walletClient.signTypedData({
-        account: address,
-        domain: orderDomain,
-        types: ORDER_TYPES,
-        primaryType: 'Order',
-        message: order,
+      // Use ClobClient to create the signed order - it handles all EIP-712 formatting
+      const signedOrder = await clobClient.createOrder(
+        {
+          tokenID: params.tokenId,
+          price: params.price,
+          size: size,
+          side: params.side === 'BUY' ? ClobSide.BUY : ClobSide.SELL,
+        },
+        {
+          tickSize: params.tickSize || '0.01',
+          negRisk: params.negRisk,
+        }
+      );
+
+      console.log('[DomeRouter] Order signed, submitting to edge function...', {
+        maker: signedOrder.maker,
+        signer: signedOrder.signer,
+        signatureType: signedOrder.signatureType,
       });
 
-      console.log('[DomeRouter] Order signed, submitting to edge function...');
       updateStage('submitting-order', 'Submitting order...');
 
-      // Build signed order for API
-      const signedOrder = {
-        salt: salt,
-        maker: safeAddress,
-        signer: address,
-        taker: '0x0000000000000000000000000000000000000000',
-        tokenId: params.tokenId,
-        makerAmount: makerAmount.toString(),
-        takerAmount: takerAmount.toString(),
-        expiration: expiration.toString(),
-        nonce: nonce.toString(),
-        feeRateBps: feeRateBps.toString(),
-        side,
-        signatureType: SIGNATURE_TYPE_POLY_GNOSIS_SAFE,
-        signature,
-      };
-
-      // Submit to edge function
+      // Submit to edge function (which routes through Dome builder-signer)
       const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'place_order',
           signedOrder,
-          orderType: params.isMarketOrder ? 'FAK' : 'GTC',
-          credentials,
+          orderType: params.isMarketOrder ? OrderType.FAK : OrderType.GTC,
+          credentials: {
+            apiKey: credentials.apiKey,
+            apiSecret: credentials.apiSecret,
+            apiPassphrase: credentials.apiPassphrase,
+          },
         }),
       });
 

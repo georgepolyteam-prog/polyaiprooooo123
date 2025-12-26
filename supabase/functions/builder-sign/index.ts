@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const CLOB_BASE_URL = "https://clob.polymarket.com";
 const DOME_BUILDER_SIGNER_URL = "https://builder-signer.domeapi.io/builder-signer/sign";
 
 const corsHeaders = {
@@ -8,13 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type ApiCredsPayload = {
-  action: "l1_create_or_derive_api_creds";
-  address: string;
-  signature: string;
-  timestamp: string;
-  nonce?: string;
-};
+// This edge function now ONLY handles builder-signer proxy requests
+// API credential creation is now done client-side using @polymarket/clob-client
 
 type BuilderSignPayload = {
   method: string;
@@ -40,56 +34,7 @@ serve(async (req) => {
     
     console.log("[BUILDER-SIGN] Request received:", JSON.stringify(payload).slice(0, 200));
 
-    // 1) L1: create/derive user API credentials - keep this as-is
-    if (payload.action === "l1_create_or_derive_api_creds") {
-      const { address, signature, timestamp, nonce } = payload as ApiCredsPayload;
-      
-      if (!address || !signature || !timestamp) {
-        return json(400, { error: "Missing address, signature, or timestamp" });
-      }
-
-      console.log("[BUILDER-SIGN] L1 auth for address:", address);
-
-      // Polymarket CLOB L1 auth headers (must use underscores, per official docs)
-      const l1Headers: Record<string, string> = {
-        "POLY_ADDRESS": address,
-        "POLY_SIGNATURE": signature,
-        "POLY_TIMESTAMP": timestamp,
-        "POLY_NONCE": nonce || "0",
-      };
-
-      // Try create first
-      const createResp = await fetch(`${CLOB_BASE_URL}/auth/api-key`, {
-        method: "POST",
-        headers: { ...l1Headers, "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-
-      if (createResp.ok) {
-        const creds = await createResp.json();
-        console.log("[BUILDER-SIGN] Created new API creds for:", address);
-        return json(200, { creds });
-      }
-
-      // If create fails (already exists), try derive
-      console.log("[BUILDER-SIGN] Create failed, trying derive...");
-      const deriveResp = await fetch(`${CLOB_BASE_URL}/auth/derive-api-key`, {
-        method: "GET",
-        headers: l1Headers,
-      });
-
-      if (!deriveResp.ok) {
-        const errorText = await deriveResp.text();
-        console.error("[BUILDER-SIGN] Failed to create/derive API creds:", errorText);
-        return json(400, { error: errorText || "Failed to create/derive API credentials" });
-      }
-
-      const creds = await deriveResp.json();
-      console.log("[BUILDER-SIGN] Derived existing API creds for:", address);
-      return json(200, { creds });
-    }
-
-    // 2) Builder program: proxy to Dome's official builder-signer service
+    // Builder program: proxy to Dome's official builder-signer service
     // NOTE: This is OPTIONAL and non-blocking for trades. 
     // If this fails (401), trades still work - builder attribution just won't be recorded.
     const { method, path, body, timestamp } = payload as BuilderSignPayload;
