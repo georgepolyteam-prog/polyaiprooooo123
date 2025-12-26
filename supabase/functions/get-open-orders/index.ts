@@ -127,16 +127,15 @@ serve(async (req) => {
     const orders = Array.isArray(data) ? data : (data.orders || data.data || []);
     
     console.log("[Get Open Orders] Fetched", orders.length, "open orders");
+    
+    // Log first order keys to help debug schema issues
+    if (orders.length > 0) {
+      console.log("[Get Open Orders] First order keys:", Object.keys(orders[0]));
+    }
 
-    // Filter orders owned by the user (safety check)
-    const userOrders = orders.filter((o: { owner?: string; maker?: string }) => {
-      const owner = (o.owner || o.maker || '').toLowerCase();
-      return owner === walletAddress.toLowerCase();
-    });
-
-    console.log("[Get Open Orders] User's orders:", userOrders.length);
-
-    return json(200, { orders: userOrders });
+    // No filtering needed - we already query with maker=walletAddress
+    // The API returns only this user's orders
+    return json(200, { orders });
   } catch (error: unknown) {
     console.error("[Get Open Orders] Error:", error);
     const message = error instanceof Error ? error.message : "Internal server error";
