@@ -24,20 +24,39 @@ function json(status: number, body: unknown) {
   });
 }
 
+/**
+ * Generate L2 HMAC headers for Polymarket CLOB API
+ * CRITICAL: Must match Polymarket SDK behavior exactly:
+ * 1. Decode secret from base64 before use as HMAC key
+ * 2. Sign only the path (without query params)
+ * 3. Message format: timestamp + METHOD + path (NO body for GET)
+ * 4. Output as URL-safe base64
+ */
 function generateL2Headers(
   method: string,
-  path: string,
-  body: string,
+  pathOnly: string, // path WITHOUT query params
+  address: string,
   apiCreds: { apiKey: string; secret: string; passphrase: string }
 ) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const message = timestamp + method.toUpperCase() + path + body;
+  
+  // Message format: timestamp + method + path (no query params, no body for GET)
+  const message = timestamp + method.toUpperCase() + pathOnly;
+  
+  console.log(`[HMAC] Signing message: "${message}"`);
 
-  // Important: Polymarket expects standard base64 HMAC output (not base64url)
-  const signature = createHmac("sha256", apiCreds.secret).update(message).digest("base64");
+  // CRITICAL: Decode the secret from base64 before use as HMAC key
+  const secretBuffer = Buffer.from(apiCreds.secret, "base64");
+
+  // Generate HMAC-SHA256 and convert to URL-safe base64
+  const signature = createHmac("sha256", secretBuffer)
+    .update(message)
+    .digest("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 
   return {
-    "POLY-ADDRESS": "", // set per request
+    "POLY-ADDRESS": address.toLowerCase(),
     "POLY-SIGNATURE": signature,
     "POLY-TIMESTAMP": timestamp,
     "POLY-API-KEY": apiCreds.apiKey,
@@ -64,6 +83,11 @@ serve(async (req) => {
       return json(400, { error: "Missing API credentials (apiKey, secret, passphrase)" });
     }
 
+    console.log("[Get User Trades] Fetching trades for wallet:", walletAddress);
+
+    // CRITICAL: Sign only the path, query params are added to URL but NOT signed
+    const pathOnly = "/data/trades";
+    
     // Build query parameters - filter by maker address to get user's trades
     const params = new URLSearchParams();
     params.set("maker", walletAddress.toLowerCase());
@@ -73,22 +97,20 @@ serve(async (req) => {
     if (filters?.id) params.set("id", filters.id);
 
     const queryString = params.toString();
-    const path = `/data/trades?${queryString}`;
-    const url = `${CLOB_HOST}${path}`;
+    const fullUrl = `${CLOB_HOST}${pathOnly}?${queryString}`;
 
-    console.log("[Get User Trades] Fetching trades for wallet:", walletAddress);
-    console.log("[Get User Trades] Path:", path);
+    console.log("[Get User Trades] Full URL:", fullUrl);
+    console.log("[Get User Trades] Signing path only:", pathOnly);
 
-    // Generate L2 authentication headers
-    const l2Headers = generateL2Headers("GET", path, "", apiCreds);
-    // Set the POLY_ADDRESS header to the user's wallet address
-    l2Headers["POLY-ADDRESS"] = walletAddress.toLowerCase();
+    // Generate L2 authentication headers (signing pathOnly, not query params)
+    const l2Headers = generateL2Headers("GET", pathOnly, walletAddress, apiCreds);
 
     // Make the API request
-    const response = await fetch(url, {
+    const response = await fetch(fullUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json",
         ...l2Headers,
       },
     });
@@ -111,14 +133,14 @@ serve(async (req) => {
     if (filters?.before) takerParams.set("before", filters.before);
     if (filters?.after) takerParams.set("after", filters.after);
 
-    const takerPath = `/data/trades?${takerParams.toString()}`;
-    const takerL2Headers = generateL2Headers("GET", takerPath, "", apiCreds);
-    takerL2Headers["POLY-ADDRESS"] = walletAddress.toLowerCase();
+    const takerFullUrl = `${CLOB_HOST}${pathOnly}?${takerParams.toString()}`;
+    const takerL2Headers = generateL2Headers("GET", pathOnly, walletAddress, apiCreds);
 
-    const takerResponse = await fetch(`${CLOB_HOST}${takerPath}`, {
+    const takerResponse = await fetch(takerFullUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json",
         ...takerL2Headers,
       },
     });
