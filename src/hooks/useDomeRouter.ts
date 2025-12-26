@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { ethers } from 'ethers';
+import { PolymarketRouter } from '@dome-api/sdk';
+import { createRouterSigner } from '@/lib/dome-signer';
+import type { RouterSigner } from '@/lib/dome-signer';
 
 const POLYGON_CHAIN_ID = 137;
-const STORAGE_KEY = 'dome_router_session';
-const POLYGON_RPC = 'https://polygon-rpc.com';
+const STORAGE_KEY = 'dome_router_session_v2';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // Trade stage state machine for progress UI
@@ -40,6 +41,7 @@ export interface TradeParams {
   amount: number;
   price: number;
   isMarketOrder?: boolean;
+  negRisk?: boolean;
 }
 
 interface OrderResult {
@@ -58,8 +60,7 @@ interface PolymarketCredentials {
 interface StoredSession {
   safeAddress: string;
   credentials: PolymarketCredentials;
-  isDeployed: boolean;
-  hasAllowances: boolean;
+  signerAddress: string;
   timestamp: number;
 }
 
@@ -70,46 +71,21 @@ function normalizePrice(price: number): number {
 }
 
 /**
- * Check if Safe is deployed on-chain
+ * Fetch Dome API key from edge function
  */
-async function checkSafeDeployed(safeAddress: string): Promise<boolean> {
+async function fetchDomeApiKey(): Promise<string | null> {
   try {
-    const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC);
-    const code = await provider.getCode(safeAddress);
-    return code !== '0x' && code !== '0x0';
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/get-dome-api-key`);
+    if (!response.ok) {
+      console.error('[DomeRouter] Failed to fetch Dome API key:', response.status);
+      return null;
+    }
+    const data = await response.json();
+    return data.apiKey || null;
   } catch (e) {
-    console.error('[DomeRouter] Failed to check Safe deployment:', e);
-    return false;
+    console.error('[DomeRouter] Error fetching Dome API key:', e);
+    return null;
   }
-}
-
-/**
- * Call the dome-router edge function
- */
-async function callDomeRouter(action: string, payload: Record<string, unknown>): Promise<unknown> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ action, ...payload }),
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
-  
-  return data;
-}
-
-/**
- * Derive Safe address using edge function
- */
-async function deriveSafeAddress(eoaAddress: string): Promise<string> {
-  const result = await callDomeRouter('derive_safe', { address: eoaAddress }) as { safeAddress: string };
-  return result.safeAddress;
 }
 
 export function useDomeRouter() {
@@ -129,11 +105,30 @@ export function useDomeRouter() {
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
   const [tradeStage, setTradeStage] = useState<TradeStage>('idle');
   const [tradeStageMessage, setTradeStageMessage] = useState('');
+  const [domeApiKey, setDomeApiKey] = useState<string | null>(null);
+  
+  // Router instance ref
+  const routerRef = useRef<PolymarketRouter | null>(null);
 
   // Helper to update trade stage
   const updateStage = useCallback((stage: TradeStage, customMessage?: string) => {
     setTradeStage(stage);
     setTradeStageMessage(customMessage || TRADE_STAGE_MESSAGES[stage]);
+  }, []);
+
+  // Fetch Dome API key on mount
+  useEffect(() => {
+    fetchDomeApiKey().then(key => {
+      if (key) {
+        setDomeApiKey(key);
+        // Initialize router with API key
+        routerRef.current = new PolymarketRouter({
+          chainId: POLYGON_CHAIN_ID,
+          apiKey: key,
+        });
+        console.log('[DomeRouter] Initialized PolymarketRouter with API key');
+      }
+    });
   }, []);
 
   // Load cached session on wallet change
@@ -158,10 +153,19 @@ export function useDomeRouter() {
         if (Date.now() - session.timestamp < 7 * 24 * 60 * 60 * 1000) {
           setSafeAddress(session.safeAddress);
           setCredentials(session.credentials);
-          setIsDeployed(session.isDeployed);
-          setHasAllowances(session.hasAllowances);
+          setIsDeployed(true);
+          setHasAllowances(true);
           setIsLinked(true);
           console.log('[DomeRouter] Restored session from cache');
+          
+          // Set credentials in router if available
+          if (routerRef.current && session.credentials) {
+            routerRef.current.setCredentials(`user:${address.toLowerCase()}`, {
+              apiKey: session.credentials.apiKey,
+              apiSecret: session.credentials.apiSecret,
+              apiPassphrase: session.credentials.apiPassphrase,
+            });
+          }
         } else {
           // Clear stale session
           localStorage.removeItem(cacheKey);
@@ -171,17 +175,13 @@ export function useDomeRouter() {
         localStorage.removeItem(cacheKey);
       }
     }
-
-    // Derive Safe address from edge function
-    deriveSafeAddress(address).then(derived => {
-      setSafeAddress(derived);
-      // Check if Safe is deployed
-      checkSafeDeployed(derived).then(deployed => {
-        setIsDeployed(deployed);
-      }).catch(() => {});
-    }).catch(e => {
-      console.error('[DomeRouter] Failed to derive Safe address:', e);
-    });
+    
+    // Derive Safe address from EOA if we have the router
+    if (routerRef.current) {
+      const derivedSafe = routerRef.current.deriveSafeAddress(address);
+      setSafeAddress(derivedSafe);
+      console.log('[DomeRouter] Derived Safe address:', derivedSafe);
+    }
   }, [address]);
 
   // Save session to localStorage
@@ -202,15 +202,21 @@ export function useDomeRouter() {
     setIsLinked(false);
     setCredentials(null);
     setHasAllowances(false);
+    setIsDeployed(false);
     toast.success('Trading session cleared');
   }, [address]);
 
   /**
-   * Link user to Polymarket via edge function
+   * Link user to Polymarket using Dome SDK's PolymarketRouter
    */
   const linkUser = useCallback(async () => {
     if (!address || !walletClient) {
       toast.error('Please connect your wallet first');
+      return null;
+    }
+
+    if (!routerRef.current) {
+      toast.error('Router not initialized. Please wait...');
       return null;
     }
 
@@ -230,54 +236,56 @@ export function useDomeRouter() {
     updateStage('linking-wallet');
 
     try {
-      // Generate nonce and timestamp
-      const nonce = Math.random().toString(36).substring(2, 15);
-      const timestamp = Date.now();
-      
-      // Create message to sign
-      const message = `Link wallet to Polymarket\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
-      
-      // Sign the message
-      const signature = await walletClient.signMessage({ 
-        account: address as `0x${string}`,
-        message,
-      });
-      
-      console.log('[DomeRouter] Calling link endpoint...');
+      // Create RouterSigner adapter
+      const signer: RouterSigner = createRouterSigner(walletClient, address);
+      const userId = `user:${address.toLowerCase()}`;
 
-      // Call edge function to link
-      const result = await callDomeRouter('link', {
-        address,
-        signature,
-        nonce,
-        timestamp,
-      }) as {
-        safeAddress: string;
-        credentials: PolymarketCredentials;
-        isDeployed: boolean;
-        allowancesSet: number;
-      };
+      console.log('[DomeRouter] Calling router.linkUser with Safe wallet...');
+      updateStage('deploying-safe', 'Setting up Safe wallet & deriving API keys...');
+
+      // Use the SDK's linkUser with walletType: 'safe' for external wallets
+      const result = await routerRef.current.linkUser({
+        userId,
+        signer,
+        walletType: 'safe',
+        autoDeploySafe: true,
+        autoSetAllowances: true,
+      });
 
       console.log('[DomeRouter] Link result:', result);
 
-      // Update state
-      setCredentials(result.credentials);
-      setSafeAddress(result.safeAddress);
+      // Result type depends on wallet type - Safe returns SafeLinkResult, EOA returns PolymarketCredentials
+      // For Safe wallets, we get the full result with credentials, safeAddress, signerAddress
+      const safeLinkResult = result as {
+        credentials: { apiKey: string; apiSecret: string; apiPassphrase: string };
+        safeAddress: string;
+        signerAddress: string;
+        safeDeployed: boolean;
+        allowancesSet: number;
+      };
+
+      const creds: PolymarketCredentials = {
+        apiKey: safeLinkResult.credentials.apiKey,
+        apiSecret: safeLinkResult.credentials.apiSecret,
+        apiPassphrase: safeLinkResult.credentials.apiPassphrase,
+      };
+
+      setCredentials(creds);
+      setSafeAddress(safeLinkResult.safeAddress);
       setIsDeployed(true);
-      setHasAllowances(result.allowancesSet > 0);
+      setHasAllowances(safeLinkResult.allowancesSet > 0 || true); // SDK handles allowances
       setIsLinked(true);
 
       // Save to localStorage
       saveSession({
-        safeAddress: result.safeAddress,
-        credentials: result.credentials,
-        isDeployed: true,
-        hasAllowances: true,
+        safeAddress: safeLinkResult.safeAddress,
+        credentials: creds,
+        signerAddress: safeLinkResult.signerAddress,
       });
 
       updateStage('completed', 'Wallet linked successfully!');
       toast.success('Wallet linked to Polymarket!', {
-        description: `Safe: ${result.safeAddress.slice(0, 10)}...`
+        description: `Safe: ${safeLinkResult.safeAddress.slice(0, 10)}...`
       });
 
       return result;
@@ -286,7 +294,7 @@ export function useDomeRouter() {
       const message = error instanceof Error ? error.message : 'Failed to link wallet';
       updateStage('error', message);
 
-      if (message.includes('rejected') || message.includes('denied')) {
+      if (message.includes('rejected') || message.includes('denied') || message.includes('User rejected')) {
         toast.error('Signature rejected');
       } else {
         toast.error(message);
@@ -300,12 +308,18 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, saveSession, updateStage]);
 
   /**
-   * Place an order via edge function
+   * Place an order using Dome SDK's PolymarketRouter
+   * Orders are routed through Dome's servers, bypassing Cloudflare issues
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
       toast.error('Please connect your wallet first');
       return { success: false, error: 'Wallet not connected' };
+    }
+
+    if (!routerRef.current) {
+      toast.error('Router not initialized');
+      return { success: false, error: 'Router not initialized' };
     }
 
     if (!isLinked || !credentials || !safeAddress) {
@@ -340,7 +354,7 @@ export function useDomeRouter() {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
       }
 
-      console.log('[DomeRouter] Placing order:', {
+      console.log('[DomeRouter] Placing order via SDK:', {
         tokenId: params.tokenId,
         side: params.side.toLowerCase(),
         size,
@@ -349,46 +363,43 @@ export function useDomeRouter() {
         safeAddress,
       });
 
-      // Create order message to sign
-      const orderMessage = JSON.stringify({
-        tokenId: params.tokenId,
-        side: params.side.toLowerCase(),
+      // Create RouterSigner adapter
+      const signer: RouterSigner = createRouterSigner(walletClient, address);
+      const userId = `user:${address.toLowerCase()}`;
+
+      updateStage('submitting-order', 'Signing and submitting order...');
+
+      // Use SDK's placeOrder - orders are routed through Dome servers
+      const result = await routerRef.current.placeOrder({
+        userId,
+        marketId: params.tokenId,
+        side: params.side.toLowerCase() as 'buy' | 'sell',
         size,
         price: validatedPrice,
-        timestamp: Date.now(),
-      });
-
-      // Sign the order
-      const signature = await walletClient.signMessage({ 
-        account: address as `0x${string}`,
-        message: orderMessage,
-      });
-      updateStage('submitting-order');
-
-      // Call edge function to place order
-      const result = await callDomeRouter('place_order', {
-        address,
-        safeAddress,
-        tokenId: params.tokenId,
-        side: params.side.toLowerCase(),
-        size,
-        price: validatedPrice,
+        signer,
+        walletType: 'safe',
+        funderAddress: safeAddress,
+        negRisk: params.negRisk || false,
         orderType: params.isMarketOrder ? 'FAK' : 'GTC',
-        signature,
-        credentials,
-      }) as { orderId: string };
+      }, credentials);
 
       console.log('[DomeRouter] Order result:', result);
 
       const orderResult: OrderResult = {
         success: true,
-        orderId: result.orderId,
+        orderId: result.orderId || result.orderHash,
         result,
       };
 
       setLastOrderResult(orderResult);
       updateStage('completed');
-      toast.success(`Order placed! ID: ${result.orderId.slice(0, 12)}...`);
+      
+      const status = result.status || 'submitted';
+      toast.success(`Order ${status}!`, {
+        description: result.orderId 
+          ? `Order ID: ${result.orderId.slice(0, 12)}...` 
+          : 'Order submitted successfully'
+      });
 
       return orderResult;
     } catch (error: unknown) {
@@ -397,12 +408,16 @@ export function useDomeRouter() {
       let errorMessage = error instanceof Error ? error.message : 'Failed to place order';
       
       // Handle specific error cases
-      if (errorMessage.includes('no match')) {
+      if (errorMessage.includes('no match') || errorMessage.includes('No match')) {
         errorMessage = 'No buyers available at this price. Try a limit order instead.';
-      } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('Invalid api key')) {
+      } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('Invalid api key') || errorMessage.includes('credentials')) {
         // Clear session and prompt re-link
         clearSession();
         errorMessage = 'Trading session expired. Please link your wallet again.';
+      } else if (errorMessage.includes('rejected') || errorMessage.includes('denied')) {
+        errorMessage = 'Transaction rejected by user.';
+      } else if (errorMessage.includes('insufficient') || errorMessage.includes('balance')) {
+        errorMessage = 'Insufficient balance. Please add more USDC.';
       }
 
       updateStage('error', errorMessage);
@@ -433,20 +448,20 @@ export function useDomeRouter() {
   ]);
 
   /**
-   * Check Safe deployment status
+   * Check Safe deployment status using SDK
    */
   const checkDeploymentStatus = useCallback(async (): Promise<boolean> => {
-    if (!address || !safeAddress) return false;
+    if (!safeAddress || !routerRef.current) return false;
     
     try {
-      const result = await callDomeRouter('check_status', { address, safeAddress }) as { isDeployed: boolean };
-      setIsDeployed(result.isDeployed);
-      return result.isDeployed;
+      const deployed = await routerRef.current.isSafeDeployed(safeAddress);
+      setIsDeployed(deployed);
+      return deployed;
     } catch (e) {
       console.error('[DomeRouter] Status check failed:', e);
       return false;
     }
-  }, [address, safeAddress]);
+  }, [safeAddress]);
 
   return {
     // Connection state
@@ -476,5 +491,8 @@ export function useDomeRouter() {
     // Trade progress
     tradeStage,
     tradeStageMessage,
+    
+    // API key status
+    isDomeReady: !!domeApiKey && !!routerRef.current,
   };
 }
