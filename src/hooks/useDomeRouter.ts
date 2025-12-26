@@ -379,12 +379,15 @@ export function useDomeRouter() {
 
       // Transform numeric side to string for Dome API
       // ClobClient returns side: 0 (BUY) or 1 (SELL), but Dome expects "BUY" or "SELL"
+      const clientOrderId = crypto.randomUUID();
       const transformedOrder = {
         ...signedOrder,
         side: params.side, // Force string value at root level
+        clientOrderId, // Required by Dome API
       };
 
       console.log('[DomeRouter] Signed order created:', {
+        clientOrderId,
         hasSignature: !!signedOrder?.signature,
         orderType: signedOrder?.orderType,
         originalSide: (signedOrder as Record<string, unknown>).side,
