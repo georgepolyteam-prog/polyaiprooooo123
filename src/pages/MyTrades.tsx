@@ -475,18 +475,21 @@ export default function MyTrades() {
     if (!sellModalPosition || !address) return;
     
     try {
-      // For selling, we need to place a SELL order for the position's token
+      // For market sell orders, use a low price to ensure fill
+      // For limit orders, use the user's specified price
+      const orderPrice = isMarketOrder ? Math.max(0.01, price * 0.9) : price;
+      
       const result = await placeOrder({
         tokenId: sellModalPosition.asset,
         side: "SELL",
-        amount: amount, // shares directly for SELL orders
-        price: price,
+        amount: amount,
+        price: orderPrice,
         isMarketOrder: isMarketOrder,
+        orderType: isMarketOrder ? 'FOK' : 'GTC',
       });
 
       if (result?.success) {
         toast.success(isMarketOrder ? "Market sell executed!" : "Limit sell order placed!");
-        // Refresh positions after successful order
         setTimeout(() => fetchPositions(), 2000);
       } else {
         toast.error(result?.error || "Failed to place sell order");
