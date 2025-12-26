@@ -5,19 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DOME_API_URL = 'https://api.domeapi.io/v1/polymarket/order';
-
-interface DomeOrderRequest {
-  userId: string;
-  marketId: string;
-  side: 'buy' | 'sell';
-  size: number;
-  price: number;
-  walletType: 'safe' | 'eoa';
-  funderAddress: string;
-  signature: string;
-  orderType?: 'GTC' | 'GTD' | 'FOK' | 'FAK';
-}
+// Dome API endpoint - matches SDK's DOME_API_ENDPOINT constant
+const DOME_API_ENDPOINT = 'https://api.domeapi.io/v1';
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -26,34 +15,31 @@ serve(async (req) => {
   }
 
   try {
-    const body: DomeOrderRequest = await req.json();
-    
-    console.log('[dome-place-order] Received order request:', {
-      userId: body.userId?.slice(0, 10),
-      marketId: body.marketId?.slice(0, 20),
-      side: body.side,
-      size: body.size,
-      price: body.price,
-      walletType: body.walletType,
-      funderAddress: body.funderAddress?.slice(0, 10),
-      hasSignature: !!body.signature,
-      orderType: body.orderType,
+    const { signedOrder, orderType, credentials, signer, funderAddress, negRisk } = await req.json();
+
+    console.log('[dome-place-order] Request received:', {
+      signer: signer?.slice(0, 10),
+      tokenId: signedOrder?.tokenId?.slice(0, 20),
+      side: signedOrder?.side,
+      funderAddress: funderAddress?.slice(0, 10),
+      orderType,
+      hasCredentials: !!credentials,
     });
 
     // Validate required fields
-    if (!body.userId || !body.marketId || !body.side || !body.size || !body.price || !body.funderAddress || !body.signature) {
+    if (!signedOrder || !credentials || !signer || !funderAddress) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required fields: userId, marketId, side, size, price, funderAddress, signature' 
+          error: 'Missing required fields: signedOrder, credentials, signer, funderAddress' 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Get Dome API key from environment
-    const domeApiKey = Deno.env.get('DOME_API_KEY');
-    if (!domeApiKey) {
+    const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
+    if (!DOME_API_KEY) {
       console.error('[dome-place-order] DOME_API_KEY not configured');
       return new Response(
         JSON.stringify({ success: false, error: 'Dome API not configured' }),
@@ -61,38 +47,58 @@ serve(async (req) => {
       );
     }
 
-    // Prepare Dome API payload
-    const domePayload = {
-      userId: body.userId,
-      marketId: body.marketId,
-      side: body.side.toLowerCase(), // Dome expects lowercase
-      size: body.size,
-      price: body.price,
-      walletType: body.walletType || 'safe',
-      funderAddress: body.funderAddress,
-      signature: body.signature,
-      orderType: body.orderType || 'GTC',
+    // Calculate size and price from signed order amounts
+    const makerAmount = parseFloat(signedOrder.makerAmount);
+    const takerAmount = parseFloat(signedOrder.takerAmount);
+    const size = takerAmount / 1e6; // Convert from USDC decimals
+    const price = makerAmount / takerAmount;
+
+    // Prepare request payload matching SDK's placeOrder method
+    // See: dome-sdk-ts/src/router/polymarket.ts lines 456-608
+    const payload = {
+      userId: signer,
+      marketId: signedOrder.tokenId,
+      side: signedOrder.side?.toLowerCase(),
+      size,
+      price,
+      walletType: 'safe',
+      funderAddress,
+      orderType: orderType || 'GTC',
+      negRisk: negRisk || false,
+      // Include credentials for API authentication
+      credentials: {
+        apiKey: credentials.apiKey,
+        apiSecret: credentials.apiSecret,
+        apiPassphrase: credentials.passphrase,
+      },
     };
 
-    console.log('[dome-place-order] Submitting to Dome API:', DOME_API_URL);
+    console.log('[dome-place-order] Submitting to Dome API:', {
+      endpoint: `${DOME_API_ENDPOINT}/polymarket/placeOrder`,
+      userId: payload.userId?.slice(0, 10),
+      marketId: payload.marketId?.slice(0, 20),
+      side: payload.side,
+      size: payload.size,
+      price: payload.price,
+    });
 
-    // Submit to Dome API
-    const domeResponse = await fetch(DOME_API_URL, {
+    // Submit to Dome's placeOrder endpoint (SDK's server-side endpoint)
+    const response = await fetch(`${DOME_API_ENDPOINT}/polymarket/placeOrder`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${domeApiKey}`,
+        'Authorization': `Bearer ${DOME_API_KEY}`,
       },
-      body: JSON.stringify(domePayload),
+      body: JSON.stringify(payload),
     });
 
-    const responseText = await domeResponse.text();
-    console.log('[dome-place-order] Dome API response status:', domeResponse.status);
+    const responseText = await response.text();
+    console.log('[dome-place-order] Dome API response status:', response.status);
     console.log('[dome-place-order] Dome API response:', responseText.slice(0, 500));
 
-    let domeResult;
+    let result;
     try {
-      domeResult = JSON.parse(responseText);
+      result = JSON.parse(responseText);
     } catch {
       console.error('[dome-place-order] Failed to parse Dome response:', responseText);
       return new Response(
@@ -105,32 +111,31 @@ serve(async (req) => {
       );
     }
 
-    // Check for Dome API errors
-    if (!domeResponse.ok) {
-      console.error('[dome-place-order] Dome API error:', domeResult);
+    // Check for API errors
+    if (!response.ok) {
+      console.error('[dome-place-order] Dome API error:', result);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: domeResult.error || domeResult.message || 'Order rejected by Dome',
-          code: domeResult.code,
-          details: domeResult,
+          error: result.error || result.message || 'Order rejected by Dome',
+          code: result.code,
+          details: result,
         }),
-        { status: domeResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Success - return Dome result
-    console.log('[dome-place-order] Order placed successfully:', {
-      orderId: domeResult.orderId || domeResult.id,
-      status: domeResult.status,
+    console.log('[dome-place-order] Order placed via Dome API:', {
+      orderId: result?.orderID || result?.orderId || result?.id,
+      status: result?.status,
     });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        result: domeResult,
-        orderId: domeResult.orderId || domeResult.id,
-        status: domeResult.status,
+        result,
+        orderId: result?.orderID || result?.orderId || result?.id,
+        status: result?.status,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -141,6 +146,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error',
+        details: error instanceof Error ? error.stack : undefined,
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
