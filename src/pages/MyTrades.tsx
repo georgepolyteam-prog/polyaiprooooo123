@@ -251,19 +251,83 @@ export default function MyTrades() {
   }, [isConnected, queryAddress, timeFilter]);
 
   const refreshOpenOrders = useCallback(async () => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address || !credentials) return;
 
     setIsLoadingOrders(true);
     try {
-      // Open orders fetching requires the CLOB client which is now internal to useDomeRouter
-      // For now, we'll rely on the positions endpoint which may include order data
-      setOpenOrders([]);
+      console.log('[MyTrades] Fetching open orders for:', address);
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-open-orders`,
+        {
+          method: 'POST',
+          headers: {
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            walletAddress: address,
+            apiCreds: {
+              apiKey: credentials.apiKey,
+              secret: credentials.apiSecret,
+              passphrase: credentials.apiPassphrase,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch open orders: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.error) {
+        console.error("[MyTrades] Open orders API error:", result.error);
+        return;
+      }
+
+      // Map the response to our OpenOrder interface
+      const mappedOrders: OpenOrder[] = (result.orders || []).map((order: {
+        id?: string;
+        order_id?: string;
+        status?: string;
+        asset_id?: string;
+        token_id?: string;
+        market?: string;
+        side?: string;
+        original_size?: string;
+        size?: string;
+        size_matched?: string;
+        price?: string;
+        outcome?: string;
+        created_at?: number | string;
+        expiration?: number | string;
+        owner?: string;
+        maker?: string;
+      }) => ({
+        id: order.id || order.order_id || '',
+        status: order.status || 'LIVE',
+        market: order.market || '',
+        asset_id: order.asset_id || order.token_id || '',
+        side: order.side || '',
+        original_size: order.original_size || order.size || '0',
+        size_matched: order.size_matched || '0',
+        price: order.price || '0',
+        outcome: order.outcome || '',
+        created_at: order.created_at || 0,
+        expiration: order.expiration || 0,
+        owner: order.owner || order.maker || '',
+      }));
+
+      console.log('[MyTrades] Loaded', mappedOrders.length, 'open orders');
+      setOpenOrders(mappedOrders);
     } catch (err) {
       console.error("[MyTrades] Open orders error:", err);
     } finally {
       setIsLoadingOrders(false);
     }
-  }, [address, isConnected]);
+  }, [address, isConnected, credentials]);
 
   // Auto-fetch when wallet is connected
   useEffect(() => {
