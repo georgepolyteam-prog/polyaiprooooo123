@@ -403,7 +403,14 @@ export function useDomeRouter() {
       updateStage('signing-order');
 
       // Calculate size (shares) from amount (USDC) and price
-      const size = params.amount / params.price;
+      const rawSize = params.amount / params.price;
+      
+      // Round size to 4 decimals (shares precision for takerAmount)
+      const size = Math.floor(rawSize * 10000) / 10000;
+      
+      // Round price to 2 decimals (USDC precision for makerAmount)
+      const roundedPrice = Math.round(params.price * 100) / 100;
+      
       const MIN_ORDER_SIZE = 5;
       if (size < MIN_ORDER_SIZE) {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
@@ -411,10 +418,17 @@ export function useDomeRouter() {
 
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
+      console.log('[DomeRouter] Order params after rounding:', {
+        originalSize: rawSize,
+        roundedSize: size,
+        originalPrice: params.price,
+        roundedPrice: roundedPrice,
+      });
+
       console.log('[DomeRouter] Creating order for submission...');
       console.log('[DomeRouter] Order params:', {
         tokenId: params.tokenId,
-        price: params.price,
+        price: roundedPrice,
         size,
         side: params.side,
         negRisk: params.negRisk,
@@ -465,11 +479,11 @@ export function useDomeRouter() {
       // Convert side to ClobClient enum
       const clobSide = params.side === 'BUY' ? Side.BUY : Side.SELL;
 
-      // Create and sign the order
+      // Create and sign the order with rounded values
       const order = await clobClient.createOrder({
         tokenID: params.tokenId,
-        price: params.price,
-        size: size,
+        price: roundedPrice,  // 2 decimals (USDC precision)
+        size: size,           // 4 decimals (shares precision)
         side: clobSide,
         feeRateBps: 0, // Dome handles fees
       });
