@@ -512,19 +512,28 @@ export function useDomeRouter() {
       const clobSide = params.side === 'BUY' ? Side.BUY : Side.SELL;
 
       // Create and sign the order with rounded values
-      const order = await clobClient.createOrder({
-        tokenID: params.tokenId,
-        price: roundedPrice,  // 2 decimals (USDC precision)
-        size: size,           // 4 decimals (shares precision)
-        side: clobSide,
-        feeRateBps: 0, // Dome handles fees
-      });
+      // IMPORTANT: Pass tickSize and negRisk in options so ClobClient uses correct rounding
+      const order = await clobClient.createOrder(
+        {
+          tokenID: params.tokenId,
+          price: roundedPrice,
+          size: size,
+          side: clobSide,
+          feeRateBps: 0, // Dome handles fees
+        },
+        {
+          tickSize: tickSize as '0.1' | '0.01' | '0.001' | '0.0001',  // Cast to TickSize type
+          negRisk: params.negRisk ?? false,  // Required for correct exchange contract
+        }
+      );
 
-      console.log('[DomeRouter] Order signed:', {
+      console.log('[DomeRouter] Order signed with amounts:', {
         maker: order.maker?.slice(0, 10),
         signer: order.signer?.slice(0, 10),
         tokenId: order.tokenId?.slice(0, 20),
         side: order.side,
+        makerAmount: order.makerAmount,
+        takerAmount: order.takerAmount,
       });
 
       updateStage('submitting-order');
