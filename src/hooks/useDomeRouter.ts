@@ -185,22 +185,56 @@ export function useDomeRouter() {
 
       // Import ClobClient for credential creation
       const { ClobClient } = await import('@polymarket/clob-client');
-      const ethersLib = await import('ethers');
+      const { ethers } = await import('ethers');
       
-      // Create ethers signer from walletClient
+      // Create ethers provider and EOA signer from walletClient
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const provider = new (ethersLib as any).ethers.providers.Web3Provider(
+      const provider = new ethers.providers.Web3Provider(
         walletClient as unknown as any
       );
-      const signer = provider.getSigner();
+      const eoaSigner = provider.getSigner();
+
+      /**
+       * SafeSignerWrapper - Critical for Safe wallet credential creation
+       * 
+       * The ClobClient uses signer.getAddress() for the POLY_ADDRESS header.
+       * For signatureType=2 (Safe), Polymarket expects the Safe address in this header,
+       * but the EOA must still do the actual signing.
+       * 
+       * This wrapper:
+       * - Returns SAFE address from getAddress() (for POLY_ADDRESS header)
+       * - Uses EOA signer for actual _signTypedData() calls
+       */
+      const safeSigner = {
+        provider,
+        getAddress: async () => {
+          // Return SAFE address - this goes in POLY_ADDRESS header!
+          return safeAddress;
+        },
+        signMessage: async (message: string | Uint8Array) => {
+          return eoaSigner.signMessage(message);
+        },
+        signTransaction: async (tx: any) => {
+          return eoaSigner.signTransaction(tx);
+        },
+        _signTypedData: async (domain: any, types: any, value: any) => {
+          // Sign with EOA - the actual signing key
+          return (eoaSigner as any)._signTypedData(domain, types, value);
+        },
+      };
+
+      console.log('[DomeRouter] SafeSignerWrapper created:');
+      console.log('[DomeRouter]   getAddress() will return:', safeAddress);
+      console.log('[DomeRouter]   _signTypedData() uses EOA:', address);
 
       // Create ClobClient with:
       // - signatureType = 2 (Safe/browser wallet)
       // - funderAddress = safeAddress (the Safe that holds funds)
+      // - safeSigner that returns Safe address for POLY_ADDRESS header
       const clobClient = new ClobClient(
         'https://clob.polymarket.com',
         POLYGON_CHAIN_ID,
-        signer,
+        safeSigner as any, // Uses Safe address for POLY_ADDRESS header!
         undefined, // no credentials yet
         2, // signatureType = 2 for Safe wallet
         safeAddress // funderAddress = Safe
