@@ -59,6 +59,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     tradeStageMessage,
     clearSession,
     isDomeReady,
+    setAllowances,
+    isSettingAllowances,
   } = useDomeRouter();
 
   // Use Safe balance when deployed, otherwise EOA balance
@@ -81,19 +83,22 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
   
-  // Trading readiness: linked + Safe deployed + funded + (allowances are handled by SDK during linkUser)
+  // Trading readiness: linked + Safe deployed + allowances set + funded
   const isSafeFunded = balance > 0;
-  // SDK's linkUser with autoSetAllowances handles allowances, but we track it for UI
-  const allApprovalsComplete = isDeployed && (hasAllowances || isLinked);
-  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isDeployed && isSafeFunded;
+  // Require hasAllowances explicitly for trading readiness
+  const allApprovalsComplete = isDeployed && hasAllowances;
+  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isDeployed && hasAllowances && isSafeFunded;
+  
+  // Need allowances step: linked and deployed but no allowances
+  const needsAllowances = isLinked && isDeployed && !hasAllowances;
 
   useEffect(() => {
     console.log('[TradePanel] State:', { 
       isConnected, isWrongNetwork, isLinked, allApprovalsComplete, 
-      hasYesToken, hasNoToken, selectedSide, canDirectTrade,
+      hasYesToken, hasNoToken, selectedSide, canDirectTrade, needsAllowances,
       amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress, isDomeReady
     });
-  }, [isConnected, isWrongNetwork, isLinked, allApprovalsComplete, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress, isDomeReady]);
+  }, [isConnected, isWrongNetwork, isLinked, allApprovalsComplete, hasYesToken, hasNoToken, selectedSide, canDirectTrade, needsAllowances, amount, balance, safeAddress, isDeployed, hasAllowances, isSafeFunded, balanceTargetAddress, isDomeReady]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -423,9 +428,55 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
             )}
           </AnimatePresence>
 
+          {/* Step 1.5: Set Allowances (if linking succeeded but allowances failed) */}
+          <AnimatePresence>
+            {isConnected && !isWrongNetwork && needsAllowances && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border-2 border-amber-500/50 backdrop-blur-sm"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-200 text-sm">Set Token Allowances</p>
+                    <p className="text-xs text-amber-300/70">Approve contracts to enable trading</p>
+                  </div>
+                </div>
+                <Button
+                  size="default"
+                  onClick={async () => {
+                    try {
+                      await setAllowances();
+                    } catch (e) {
+                      console.error('Allowance error:', e);
+                    }
+                  }}
+                  disabled={isSettingAllowances}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+                >
+                  {isSettingAllowances ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Setting Allowances...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4 mr-2" />
+                      Set Allowances
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Step 2: Fund Safe Wallet */}
           <AnimatePresence>
-            {isConnected && !isWrongNetwork && isLinked && isDeployed && !isSafeFunded && (
+            {isConnected && !isWrongNetwork && isLinked && isDeployed && hasAllowances && !isSafeFunded && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -477,6 +528,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
               </motion.div>
             )}
           </AnimatePresence>
+
 
           {/* Epic Side Selector */}
           <div className="grid grid-cols-2 gap-3">

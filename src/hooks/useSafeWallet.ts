@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
 import { ethers } from 'ethers';
 import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/derive';
@@ -10,6 +10,9 @@ import { BuilderConfig } from '@polymarket/builder-signing-sdk';
 const POLYGON_CHAIN_ID = 137;
 const BUILDER_SIGNER_URL = 'https://builder-signer.domeapi.io/builder-signer/sign';
 const RELAYER_URL = 'https://relayer-v2.polymarket.com/';
+
+// Polygon public RPC for reliable deployment checks
+const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
 // Polymarket contract addresses on Polygon
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
@@ -25,15 +28,21 @@ const ERC20_INTERFACE = new ethers.utils.Interface([
 const ERC1155_INTERFACE = new ethers.utils.Interface([
   'function setApprovalForAll(address operator, bool approved)'
 ]);
+
 export function useSafeWallet() {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const polygonPublicClient = usePublicClient({ chainId: POLYGON_CHAIN_ID });
+  
   const [isDeploying, setIsDeploying] = useState(false);
   const [isDeployed, setIsDeployed] = useState(false);
   const [isSettingAllowances, setIsSettingAllowances] = useState(false);
   const [hasAllowances, setHasAllowances] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [relayClient, setRelayClient] = useState<RelayClient | null>(null);
+  
+  // Track if we've confirmed deployment to avoid flaky re-checks
+  const deploymentConfirmed = useRef(false);
 
   // Derive Safe address deterministically using official Polymarket derivation
   const safeAddress = useMemo(() => {
@@ -55,6 +64,7 @@ export function useSafeWallet() {
       const cached = localStorage.getItem(`safe_deployed:${safeAddress.toLowerCase()}`);
       if (cached === 'true') {
         setIsDeployed(true);
+        deploymentConfirmed.current = true;
       }
       const allowancesCached = localStorage.getItem(`safe_allowances:${safeAddress.toLowerCase()}`);
       if (allowancesCached === 'true') {
@@ -63,29 +73,55 @@ export function useSafeWallet() {
     }
   }, [safeAddress]);
 
+  // Check deployment status using Polygon-specific provider (not window.ethereum which may be on wrong chain)
+  const checkDeploymentPolygon = useCallback(async (): Promise<boolean> => {
+    if (!safeAddress) return false;
+    
+    // If we've already confirmed deployment, don't re-check (avoids flaky resets)
+    if (deploymentConfirmed.current) {
+      console.log('[Safe] Deployment already confirmed, skipping check');
+      return true;
+    }
+
+    try {
+      // Use wagmi's Polygon public client if available
+      if (polygonPublicClient) {
+        const bytecode = await polygonPublicClient.getBytecode({ address: safeAddress as `0x${string}` });
+        const deployed = !!bytecode && bytecode !== '0x';
+        
+        if (deployed) {
+          setIsDeployed(true);
+          deploymentConfirmed.current = true;
+          localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
+        }
+        console.log('[Safe] Polygon deployment status:', deployed);
+        return deployed;
+      }
+      
+      // Fallback to Polygon RPC directly
+      const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+      const code = await provider.getCode(safeAddress);
+      const deployed = code !== '0x' && code !== '0x0';
+      
+      if (deployed) {
+        setIsDeployed(true);
+        deploymentConfirmed.current = true;
+        localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
+      }
+      console.log('[Safe] Polygon RPC deployment status:', deployed);
+      return deployed;
+    } catch (e) {
+      console.error('[Safe] Polygon deployment check failed:', e);
+      return false;
+    }
+  }, [safeAddress, polygonPublicClient]);
+
   // Check deployment status on mount/wallet change
   useEffect(() => {
-    if (safeAddress && address && window.ethereum) {
-      // Verify deployment via RPC on mount
-      const verifyDeployment = async () => {
-        try {
-          const provider = new ethers.providers.Web3Provider(
-            window.ethereum as ethers.providers.ExternalProvider
-          );
-          const code = await provider.getCode(safeAddress);
-          const deployed = code !== '0x' && code !== '0x0';
-          setIsDeployed(deployed);
-          if (deployed) {
-            localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
-          }
-          console.log('[Safe] Deployment status:', deployed);
-        } catch (e) {
-          console.error('[Safe] RPC check failed:', e);
-        }
-      };
-      verifyDeployment();
+    if (safeAddress && address) {
+      checkDeploymentPolygon();
     }
-  }, [safeAddress, address]);
+  }, [safeAddress, address, checkDeploymentPolygon]);
   // Create RelayClient when wallet is available
   const createRelayClient = useCallback(async (): Promise<RelayClient | null> => {
     if (!walletClient || !address) {
@@ -121,30 +157,10 @@ export function useSafeWallet() {
     }
   }, [walletClient, address]);
 
-  // Check if Safe is deployed on-chain
+  // Check if Safe is deployed on-chain (uses Polygon-specific provider)
   const checkDeployment = useCallback(async (): Promise<boolean> => {
-    if (!safeAddress || !window.ethereum) return false;
-
-    try {
-      const provider = new ethers.providers.Web3Provider(
-        window.ethereum as ethers.providers.ExternalProvider
-      );
-      const code = await provider.getCode(safeAddress);
-      const deployed = code !== '0x' && code !== '0x0';
-      
-      setIsDeployed(deployed);
-      
-      if (deployed) {
-        localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
-      }
-      
-      console.log('[Safe] Deployment status:', deployed);
-      return deployed;
-    } catch (e) {
-      console.error('[Safe] Failed to check deployment:', e);
-      return false;
-    }
-  }, [safeAddress]);
+    return checkDeploymentPolygon();
+  }, [checkDeploymentPolygon]);
 
   // Deploy Safe smart wallet
   const deploySafe = useCallback(async (): Promise<string | null> => {
@@ -153,8 +169,8 @@ export function useSafeWallet() {
       return null;
     }
 
-    // Check if already deployed
-    const alreadyDeployed = await checkDeployment();
+    // Check if already deployed using Polygon-specific check
+    const alreadyDeployed = await checkDeploymentPolygon();
     if (alreadyDeployed) {
       console.log('[Safe] Already deployed at:', safeAddress);
       toast.success('Safe wallet already deployed!');
@@ -186,6 +202,7 @@ export function useSafeWallet() {
 
       console.log('[Safe] Deployed at:', result.proxyAddress);
       setIsDeployed(true);
+      deploymentConfirmed.current = true; // Mark as confirmed to prevent flaky resets
       localStorage.setItem(`safe_deployed:${safeAddress.toLowerCase()}`, 'true');
       
       toast.success('Safe wallet deployed!', {
@@ -202,20 +219,26 @@ export function useSafeWallet() {
     } finally {
       setIsDeploying(false);
     }
-  }, [address, safeAddress, relayClient, createRelayClient, checkDeployment]);
+  }, [address, safeAddress, relayClient, createRelayClient, checkDeploymentPolygon]);
 
   // Set token allowances for Polymarket contracts
   const setAllowances = useCallback(async (): Promise<boolean> => {
     if (!safeAddress) {
+      console.log('[Safe] setAllowances aborted: no safeAddress');
       toast.error('Safe address not available');
       return false;
     }
 
-    const deployed = await checkDeployment();
-    if (!deployed) {
-      toast.error('Please deploy your Safe wallet first');
-      return false;
+    // Check deployment - use confirmed flag to avoid flaky checks
+    if (!deploymentConfirmed.current) {
+      const deployed = await checkDeploymentPolygon();
+      if (!deployed) {
+        console.log('[Safe] setAllowances aborted: Safe not deployed');
+        toast.error('Please deploy your Safe wallet first');
+        return false;
+      }
     }
+    console.log('[Safe] setAllowances: deployment confirmed, proceeding...');
 
     setIsSettingAllowances(true);
     try {
@@ -296,7 +319,7 @@ export function useSafeWallet() {
     } finally {
       setIsSettingAllowances(false);
     }
-  }, [safeAddress, relayClient, createRelayClient, checkDeployment]);
+  }, [safeAddress, relayClient, createRelayClient, checkDeploymentPolygon]);
 
   // Check if Safe is deployed using RelayClient
   const checkDeploymentViaRelay = useCallback(async (): Promise<boolean> => {
