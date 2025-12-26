@@ -23,6 +23,36 @@ serve(async (req) => {
       orderType,
     });
 
+    // DEBUG: Log credentials presence, lengths, and prefixes
+    console.log("[dome-place-order] Credentials check:", {
+      hasApiKey: !!credentials?.apiKey,
+      hasApiSecret: !!credentials?.apiSecret,
+      hasApiPassphrase: !!credentials?.apiPassphrase,
+      apiKeyLength: credentials?.apiKey?.length,
+      apiSecretLength: credentials?.apiSecret?.length,
+      apiPassphraseLength: credentials?.apiPassphrase?.length,
+      apiKeyPrefix: credentials?.apiKey?.substring(0, 8),
+      apiSecretPrefix: credentials?.apiSecret?.substring(0, 8),
+      apiPassphrasePrefix: credentials?.apiPassphrase?.substring(0, 8),
+    });
+
+    // Validate credentials before proceeding
+    if (!credentials?.apiKey || !credentials?.apiSecret || !credentials?.apiPassphrase) {
+      console.error('[dome-place-order] Missing credential fields:', {
+        hasApiKey: !!credentials?.apiKey,
+        hasApiSecret: !!credentials?.apiSecret,
+        hasApiPassphrase: !!credentials?.apiPassphrase,
+      });
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing Polymarket API credentials',
+          details: 'apiKey, apiSecret, and apiPassphrase are all required'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get Dome API key from environment
     const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
     if (!DOME_API_KEY) {
