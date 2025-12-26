@@ -281,15 +281,26 @@ export function useDomeRouter() {
         console.log('[DomeRouter] Safe wallet deployed successfully');
       }
 
-      // Set allowances if not already set
+      // Set allowances if not already set - don't fail the entire link if this fails
       if (!safeHasAllowances) {
         console.log('[DomeRouter] Setting token allowances...');
         updateStage('setting-allowances', 'Setting token allowances...');
-        const allowancesSet = await setAllowances();
-        if (!allowancesSet) {
-          throw new Error('Failed to set token allowances');
+        try {
+          const allowancesSet = await setAllowances();
+          if (!allowancesSet) {
+            console.warn('[DomeRouter] Allowances not set, user can retry later');
+            toast.warning('Allowances need to be set before trading', {
+              description: 'Tap "Set Allowances" to complete setup'
+            });
+          } else {
+            console.log('[DomeRouter] Token allowances set successfully');
+          }
+        } catch (allowanceError) {
+          console.error('[DomeRouter] Allowance error (non-fatal):', allowanceError);
+          toast.warning('Allowances need to be set before trading', {
+            description: 'Tap "Set Allowances" to complete setup'
+          });
         }
-        console.log('[DomeRouter] Token allowances set successfully');
       }
 
       // Save to localStorage
@@ -541,6 +552,8 @@ export function useDomeRouter() {
     checkDeploymentStatus,
     isDeploying,
     isSettingAllowances,
+    setAllowances, // Expose for retry UI
+    deploySafe, // Expose for retry UI
     
     // Credentials (for external use like fetching positions)
     credentials,
