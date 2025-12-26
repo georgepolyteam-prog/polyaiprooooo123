@@ -1,13 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient, Side as ClobSide } from '@polymarket/clob-client';
+import { ClobClient } from '@polymarket/clob-client';
 import { useSafeWallet } from './useSafeWallet';
 import type { WalletClient } from 'viem';
 
 const POLYGON_CHAIN_ID = 137;
 const STORAGE_KEY = 'dome_router_session_v3';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const CLOB_HOST = 'https://clob.polymarket.com';
 
 // Signature type for Safe/Gnosis wallet
@@ -129,6 +128,8 @@ export function useDomeRouter() {
     setAllowances,
     isDeploying,
     isSettingAllowances,
+    createRelayClient,
+    checkDeployment,
   } = useSafeWallet();
   
   // State
@@ -335,8 +336,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage, safeIsDeployed, deploySafe, safeHasAllowances, setAllowances]);
 
   /**
-   * Place an order using ClobClient.createOrder() to sign locally,
-   * then submit via Dome API for geo-unrestricted trading and builder attribution
+   * Place an order using RelayClient with Dome's builder-signer for order routing
+   * This handles signing (via Dome) and submission (via Polymarket relayer)
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -387,24 +388,14 @@ export function useDomeRouter() {
 
       updateStage('signing-order');
 
-      console.log('[DomeRouter] Creating ClobClient for order signing...');
+      console.log('[DomeRouter] Creating RelayClient with Dome builder-signer...');
 
-      // Create ethers adapter
-      const ethersAdapter = createEthersAdapter(walletClient, address);
+      // Create RelayClient with Dome's builder-signer (handled by useSafeWallet)
+      const client = await createRelayClient();
       
-      // Create ClobClient with credentials for order signing
-      const clobClient = new ClobClient(
-        CLOB_HOST,
-        POLYGON_CHAIN_ID,
-        ethersAdapter as unknown as import('@ethersproject/providers').JsonRpcSigner,
-        {
-          key: credentials.apiKey,
-          secret: credentials.apiSecret,
-          passphrase: credentials.apiPassphrase,
-        },
-        SIGNATURE_TYPE_SAFE,
-        safeAddress, // funderAddress is the Safe
-      );
+      if (!client) {
+        throw new Error('Failed to create relay client');
+      }
 
       // Calculate size (shares) from amount (USDC) and price
       const size = params.amount / params.price;
@@ -415,7 +406,7 @@ export function useDomeRouter() {
 
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
-      console.log('[DomeRouter] Signing order locally with createOrder...', {
+      console.log('[DomeRouter] Placing order via RelayClient...', {
         tokenId: params.tokenId,
         price: params.price,
         size,
@@ -424,68 +415,33 @@ export function useDomeRouter() {
         orderType,
       });
 
-      // Use ClobClient.createOrder() to sign the order locally (no submission)
-      const signedOrder = await clobClient.createOrder(
-        {
-          tokenID: params.tokenId,
-          price: params.price,
-          size: size,
-          side: params.side === 'BUY' ? ClobSide.BUY : ClobSide.SELL,
-        },
-        {
-          tickSize: params.tickSize || '0.01',
-          negRisk: params.negRisk,
-        }
-      );
-
-      console.log('[DomeRouter] Order signed locally:', signedOrder);
-
       updateStage('submitting-order', 'Submitting order via Dome...');
 
-      // Extract signature from signed order and prepare Dome API payload
-      // Dome API expects: userId, marketId, side, size, price, walletType, funderAddress, signature
-      const domePayload = {
-        userId: address,
-        marketId: params.tokenId,
-        side: params.side.toLowerCase() as 'buy' | 'sell',
+      // RelayClient handles signing (via Dome's builder-signer) and submission (via Polymarket relayer)
+      // The builder-signer provides attribution headers for order routing
+      const response = await (client as any).placeOrder({
+        tokenId: params.tokenId,
+        side: params.side === 'BUY' ? 0 : 1, // 0 = BUY, 1 = SELL
         size: size,
         price: params.price,
-        walletType: 'safe' as const,
-        funderAddress: safeAddress,
-        signature: signedOrder.signature,
-        orderType,
-      };
-
-      console.log('[DomeRouter] Submitting to Dome API via edge function...', {
-        userId: domePayload.userId?.slice(0, 10),
-        marketId: domePayload.marketId?.slice(0, 20),
-        side: domePayload.side,
-        size: domePayload.size,
-        price: domePayload.price,
-      });
-      
-      const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(domePayload),
+        orderType: orderType,
+        tickSize: params.tickSize || '0.01',
+        negRisk: params.negRisk,
       });
 
-      const domeResult = await domeResponse.json();
-      
-      console.log('[DomeRouter] Dome API response:', domeResult);
+      console.log('[DomeRouter] RelayClient order response:', response);
 
-      if (!domeResult.success) {
-        throw new Error(domeResult.error || 'Failed to place order via Dome');
-      }
+      // Wait for the result if it's a pending response
+      const result = response?.wait ? await response.wait() : response;
 
-      const orderId = domeResult.orderId || domeResult.result?.orderID;
+      console.log('[DomeRouter] Order result:', result);
+
+      const orderId = result?.orderID || result?.orderId || result?.id;
 
       const orderResult: OrderResult = {
         success: true,
         orderId,
-        result: domeResult.result,
+        result,
       };
 
       setLastOrderResult(orderResult);
@@ -494,7 +450,7 @@ export function useDomeRouter() {
       toast.success('Order placed via Dome!', {
         description: orderId 
           ? `Order ID: ${String(orderId).slice(0, 12)}...` 
-          : `Status: ${domeResult.status || 'Submitted'}`
+          : 'Order submitted successfully'
       });
 
       return orderResult;
@@ -541,35 +497,19 @@ export function useDomeRouter() {
     safeHasAllowances,
     deploySafe,
     setAllowances,
+    createRelayClient,
     clearSession,
     updateStage,
     tradeStage,
   ]);
 
   /**
-   * Check Safe deployment status
+   * Check Safe deployment status (delegates to useSafeWallet)
    */
   const checkDeploymentStatus = useCallback(async (): Promise<boolean> => {
     if (!safeAddress || !address) return false;
-    
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'check_status',
-          address,
-          safeAddress,
-        }),
-      });
-
-      const data = await response.json();
-      return data.isDeployed || false;
-    } catch (e) {
-      console.error('[DomeRouter] Status check failed:', e);
-      return false;
-    }
-  }, [safeAddress, address]);
+    return checkDeployment();
+  }, [safeAddress, address, checkDeployment]);
 
   return {
     // Connection state
