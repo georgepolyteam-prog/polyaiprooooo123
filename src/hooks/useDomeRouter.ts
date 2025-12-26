@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
+import { ClobClient, Side, OrderType, TickSize } from '@polymarket/clob-client';
 import { ethers } from 'ethers';
 import { supabase } from '@/integrations/supabase/client';
 import { polygon } from 'wagmi/chains';
@@ -586,56 +586,53 @@ export function useDomeRouter() {
       let signedOrder: Awaited<ReturnType<typeof clobClient.createOrder>>;
       let orderDescription: string;
 
-      if (params.isMarketOrder) {
-        // MARKET ORDER: Use createMarketOrder for FOK (Fill-or-Kill) execution
-        // UserMarketOrder: { tokenID, amount, side, price? }
-        // BUY: amount = USDC to spend
-        // SELL: amount = shares to sell
-        const marketAmount = roundTo(params.amount, 2);
-        
-        console.log('[DomeRouter] Creating MARKET order:', {
-          tokenId: params.tokenId?.slice(0, 20),
-          side: params.side,
-          amount: marketAmount,
-          negRisk: params.negRisk,
-        });
-
-        signedOrder = await clobClient.createMarketOrder({
-          tokenID: params.tokenId,
-          amount: marketAmount,
-          side: params.side === 'BUY' ? Side.BUY : Side.SELL,
-          feeRateBps: 0,
-          nonce: 0,
-        });
-        orderDescription = params.side === 'BUY' 
-          ? `Market BUY $${marketAmount} USDC`
-          : `Market SELL ${marketAmount} shares`;
+      // Always use createOrder() with proper tickSize for decimal precision
+      // The order type (FOK/GTC) is handled by the edge function when posting
+      const tickSize: TickSize = (params.tickSize as TickSize) || '0.01';
+      const price = roundTo(params.price, 2);
+      
+      // Calculate size based on order type and side
+      let size: number;
+      if (params.isMarketOrder && params.side === 'SELL') {
+        // Market SELL: amount IS the number of shares
+        size = roundTo(params.amount, 2);
       } else {
-        // LIMIT ORDER: Use regular createOrder with price
-        const price = roundTo(params.price, 2);
-        const size = roundTo(params.amount / Math.max(price, 0.01), 2);
-
-        console.log('[DomeRouter] Creating LIMIT order:', {
-          tokenId: params.tokenId?.slice(0, 20),
-          side: params.side,
-          price,
-          size,
-          negRisk: params.negRisk,
-        });
-
-        const orderArgs = {
-          tokenID: params.tokenId,
-          price,
-          size,
-          side: params.side === 'BUY' ? Side.BUY : Side.SELL,
-          feeRateBps: 0,
-          nonce: 0,
-          expiration: 0,
-        };
-
-        signedOrder = await clobClient.createOrder(orderArgs);
-        orderDescription = `Limit ${params.side} ${size} shares @ ${(price * 100).toFixed(0)}¢`;
+        // BUY orders and Limit SELL: amount = USDC value, size = amount / price
+        size = roundTo(params.amount / Math.max(price, 0.01), 2);
       }
+
+      console.log('[DomeRouter] Creating order:', {
+        tokenId: params.tokenId?.slice(0, 20),
+        side: params.side,
+        price,
+        size,
+        orderType: params.isMarketOrder ? 'FOK (Market)' : 'GTC (Limit)',
+        negRisk: params.negRisk,
+        tickSize,
+      });
+
+      const orderArgs = {
+        tokenID: params.tokenId,
+        price,
+        size,
+        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+        feeRateBps: 0,
+        nonce: 0,
+        expiration: 0,
+      };
+
+      // Pass tickSize and negRisk in options for proper decimal handling
+      signedOrder = await clobClient.createOrder(orderArgs, { 
+        tickSize, 
+        negRisk: params.negRisk ?? false 
+      });
+      
+      orderDescription = params.isMarketOrder
+        ? (params.side === 'BUY' 
+            ? `Market BUY ${size} shares @ ${(price * 100).toFixed(0)}¢`
+            : `Market SELL ${size} shares @ ${(price * 100).toFixed(0)}¢`)
+        : `Limit ${params.side} ${size} shares @ ${(price * 100).toFixed(0)}¢`;
+
 
       // Transform numeric side to string for Dome API
       const clientOrderId = crypto.randomUUID();
@@ -657,6 +654,7 @@ export function useDomeRouter() {
 
       // Submit transformed order to dome-router edge function
       // clientOrderId is passed as a separate field at request level (per Dome SDK ServerPlaceOrderRequest)
+      // orderType: FOK for market orders (immediate fill or cancel), GTC for limit orders
       const { data: response, error: edgeError } = await supabase.functions.invoke('dome-router', {
         body: {
           action: 'place_order',
@@ -668,6 +666,7 @@ export function useDomeRouter() {
           },
           negRisk: params.negRisk ?? false,
           clientOrderId, // At request level, NOT inside signedOrder
+          orderType: params.isMarketOrder ? 'FOK' : 'GTC', // FOK for market, GTC for limit
         },
       });
 

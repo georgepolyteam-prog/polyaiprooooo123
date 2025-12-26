@@ -35,6 +35,7 @@ interface PlaceOrderRequest {
   };
   negRisk?: boolean;
   clientOrderId: string; // At request level per Dome SDK ServerPlaceOrderRequest
+  orderType?: 'GTC' | 'GTD' | 'FOK'; // Order type: GTC (limit), FOK (market fill-or-kill)
 }
 
 interface DeriveSafeRequest {
@@ -111,7 +112,7 @@ serve(async (req) => {
       }
 
       case "place_order": {
-        const { signedOrder, credentials, negRisk, clientOrderId } = body as PlaceOrderRequest;
+        const { signedOrder, credentials, negRisk, clientOrderId, orderType } = body as PlaceOrderRequest;
         
         if (!signedOrder || !credentials || !clientOrderId) {
           return new Response(
@@ -126,6 +127,7 @@ serve(async (req) => {
           clientOrderId,
           hasSignature: !!signedOrder.signature,
           negRisk: negRisk ?? false,
+          orderType: orderType ?? 'GTC',
         });
         
         // Build JSON-RPC 2.0 payload matching Dome SDK's ServerPlaceOrderRequest
@@ -143,6 +145,7 @@ serve(async (req) => {
               apiPassphrase: credentials.apiPassphrase,
             },
             clientOrderId, // At params level per Dome SDK
+            orderType: orderType ?? 'GTC', // GTC for limit, FOK for market orders
           },
         };
         
