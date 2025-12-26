@@ -3,10 +3,15 @@ import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
 import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/derive';
 import { getContractConfig } from '@polymarket/builder-relayer-client/dist/config';
+import { useSafeWallet } from './useSafeWallet';
 
 const POLYGON_CHAIN_ID = 137;
 const STORAGE_KEY = 'dome_router_session_v2';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+// Polymarket CTF Exchange contract address
+const CTF_EXCHANGE = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
+const NEG_RISK_CTF_EXCHANGE = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
 
 // Trade stage state machine for progress UI
 export type TradeStage = 
@@ -69,6 +74,13 @@ function normalizePrice(price: number): number {
   return Math.max(0.01, Math.min(0.99, rounded));
 }
 
+// Generate random salt for order uniqueness
+function generateSalt(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // EIP-712 domain and types for Polymarket L1 auth
 const L1_AUTH_DOMAIN = {
   name: 'ClobAuthDomain',
@@ -85,36 +97,66 @@ const L1_AUTH_TYPES = {
   ],
 } as const;
 
+// EIP-712 domain and types for Polymarket Order signing
+const ORDER_DOMAIN = {
+  name: 'Polymarket CTF Exchange',
+  version: '1',
+  chainId: POLYGON_CHAIN_ID,
+  verifyingContract: CTF_EXCHANGE as `0x${string}`,
+} as const;
+
+const ORDER_TYPES = {
+  Order: [
+    { name: 'salt', type: 'uint256' },
+    { name: 'maker', type: 'address' },
+    { name: 'signer', type: 'address' },
+    { name: 'taker', type: 'address' },
+    { name: 'tokenId', type: 'uint256' },
+    { name: 'makerAmount', type: 'uint256' },
+    { name: 'takerAmount', type: 'uint256' },
+    { name: 'expiration', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'feeRateBps', type: 'uint256' },
+    { name: 'side', type: 'uint8' },
+    { name: 'signatureType', type: 'uint8' },
+  ],
+} as const;
+
+// Signature types
+const SIGNATURE_TYPE_POLY_GNOSIS_SAFE = 2;
+
+// Order sides
+const ORDER_SIDE_BUY = 0;
+const ORDER_SIDE_SELL = 1;
+
 export function useDomeRouter() {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   
+  // Use useSafeWallet for Safe operations
+  const { 
+    safeAddress: derivedSafeAddress,
+    isDeployed: safeIsDeployed,
+    deploySafe,
+    hasAllowances: safeHasAllowances,
+    setAllowances,
+    isDeploying,
+    isSettingAllowances,
+  } = useSafeWallet();
+  
   // State
   const [isLinking, setIsLinking] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
-  const [isDeployed, setIsDeployed] = useState(false);
-  const [hasAllowances, setHasAllowances] = useState(false);
   const [credentials, setCredentials] = useState<PolymarketCredentials | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
   const [tradeStage, setTradeStage] = useState<TradeStage>('idle');
   const [tradeStageMessage, setTradeStageMessage] = useState('');
 
-  // Derive Safe address deterministically from EOA
-  const safeAddress = useMemo(() => {
-    if (!address) return null;
-    try {
-      const config = getContractConfig(POLYGON_CHAIN_ID);
-      const derived = deriveSafe(address, config.SafeContracts.SafeFactory);
-      console.log('[DomeRouter] Derived Safe address:', derived);
-      return derived;
-    } catch (e) {
-      console.error('[DomeRouter] Failed to derive Safe:', e);
-      return null;
-    }
-  }, [address]);
+  // Use derived Safe address from useSafeWallet
+  const safeAddress = derivedSafeAddress;
 
   // Helper to update trade stage
   const updateStage = useCallback((stage: TradeStage, customMessage?: string) => {
@@ -127,8 +169,6 @@ export function useDomeRouter() {
     if (!address) {
       setIsLinked(false);
       setCredentials(null);
-      setIsDeployed(false);
-      setHasAllowances(false);
       return;
     }
 
@@ -141,8 +181,6 @@ export function useDomeRouter() {
         // Check if session is less than 7 days old
         if (Date.now() - session.timestamp < 7 * 24 * 60 * 60 * 1000) {
           setCredentials(session.credentials);
-          setIsDeployed(true);
-          setHasAllowances(true);
           setIsLinked(true);
           console.log('[DomeRouter] Restored session from cache');
         } else {
@@ -172,8 +210,6 @@ export function useDomeRouter() {
     localStorage.removeItem(cacheKey);
     setIsLinked(false);
     setCredentials(null);
-    setHasAllowances(false);
-    setIsDeployed(false);
     toast.success('Trading session cleared');
   }, [address]);
 
@@ -264,8 +300,6 @@ export function useDomeRouter() {
 
       setCredentials(creds);
       setIsLinked(true);
-      setIsDeployed(true);
-      setHasAllowances(true);
 
       // Save to localStorage
       saveSession({
@@ -299,7 +333,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage]);
 
   /**
-   * Place an order via edge function (which uses Dome API)
+   * Build and sign an order client-side, then submit via edge function
+   * Uses signatureType=2 (POLY_GNOSIS_SAFE) with Safe address as maker/funder
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -326,10 +361,31 @@ export function useDomeRouter() {
 
     setIsPlacingOrder(true);
     setLastOrderResult(null);
-    updateStage('signing-order');
 
     try {
-      // Normalize price
+      // Check Safe deployment first
+      if (!safeIsDeployed) {
+        updateStage('deploying-safe');
+        toast.info('Deploying Safe wallet...');
+        const deployed = await deploySafe();
+        if (!deployed) {
+          throw new Error('Failed to deploy Safe wallet');
+        }
+      }
+
+      // Check allowances
+      if (!safeHasAllowances) {
+        updateStage('setting-allowances');
+        toast.info('Setting token allowances...');
+        const success = await setAllowances();
+        if (!success) {
+          throw new Error('Failed to set token allowances');
+        }
+      }
+
+      updateStage('signing-order');
+
+      // Normalize price and calculate amounts
       const validatedPrice = normalizePrice(params.price);
       const size = params.amount / validatedPrice;
 
@@ -339,28 +395,100 @@ export function useDomeRouter() {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
       }
 
-      console.log('[DomeRouter] Placing order via edge function:', {
+      // Calculate maker and taker amounts (in wei, 6 decimals for USDC)
+      const side = params.side === 'BUY' ? ORDER_SIDE_BUY : ORDER_SIDE_SELL;
+      
+      // For USDC amounts (6 decimals)
+      const USDC_DECIMALS = 6;
+      const sizeInWei = BigInt(Math.floor(size * 10 ** USDC_DECIMALS));
+      const priceScaled = BigInt(Math.floor(validatedPrice * 10 ** USDC_DECIMALS));
+      
+      let makerAmount: bigint;
+      let takerAmount: bigint;
+      
+      if (side === ORDER_SIDE_BUY) {
+        // Buying: maker gives USDC, taker gives tokens
+        makerAmount = (sizeInWei * priceScaled) / BigInt(10 ** USDC_DECIMALS);
+        takerAmount = sizeInWei;
+      } else {
+        // Selling: maker gives tokens, taker gives USDC
+        makerAmount = sizeInWei;
+        takerAmount = (sizeInWei * priceScaled) / BigInt(10 ** USDC_DECIMALS);
+      }
+
+      // Build order
+      const salt = generateSalt();
+      const expiration = BigInt(Math.floor(Date.now() / 1000) + 60 * 60 * 24); // 24 hours
+      const nonce = BigInt(0);
+      const feeRateBps = BigInt(0);
+
+      // Use correct exchange for neg risk markets
+      const exchange = params.negRisk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE;
+      const orderDomain = {
+        ...ORDER_DOMAIN,
+        verifyingContract: exchange as `0x${string}`,
+      };
+
+      const order = {
+        salt: BigInt(salt),
+        maker: safeAddress as `0x${string}`, // Safe is the maker (holds funds)
+        signer: address as `0x${string}`, // EOA signs on behalf of Safe
+        taker: '0x0000000000000000000000000000000000000000' as `0x${string}`, // Any taker
+        tokenId: BigInt(params.tokenId),
+        makerAmount,
+        takerAmount,
+        expiration,
+        nonce,
+        feeRateBps,
+        side,
+        signatureType: SIGNATURE_TYPE_POLY_GNOSIS_SAFE, // Safe wallet signature
+      };
+
+      console.log('[DomeRouter] Signing order with signatureType=2 (Safe):', {
+        maker: order.maker,
+        signer: order.signer,
         tokenId: params.tokenId,
-        side: params.side.toLowerCase(),
-        size,
-        price: validatedPrice,
-        orderType: params.isMarketOrder ? 'FAK' : 'GTC',
+        side: params.side,
+        makerAmount: makerAmount.toString(),
+        takerAmount: takerAmount.toString(),
       });
 
+      // Sign the order with EIP-712
+      const signature = await walletClient.signTypedData({
+        account: address,
+        domain: orderDomain,
+        types: ORDER_TYPES,
+        primaryType: 'Order',
+        message: order,
+      });
+
+      console.log('[DomeRouter] Order signed, submitting to edge function...');
       updateStage('submitting-order', 'Submitting order...');
 
-      // Call dome-router edge function to place order
+      // Build signed order for API
+      const signedOrder = {
+        salt: salt,
+        maker: safeAddress,
+        signer: address,
+        taker: '0x0000000000000000000000000000000000000000',
+        tokenId: params.tokenId,
+        makerAmount: makerAmount.toString(),
+        takerAmount: takerAmount.toString(),
+        expiration: expiration.toString(),
+        nonce: nonce.toString(),
+        feeRateBps: feeRateBps.toString(),
+        side,
+        signatureType: SIGNATURE_TYPE_POLY_GNOSIS_SAFE,
+        signature,
+      };
+
+      // Submit to edge function
       const response = await fetch(`${SUPABASE_URL}/functions/v1/dome-router`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'place_order',
-          address,
-          safeAddress,
-          tokenId: params.tokenId,
-          side: params.side.toLowerCase(),
-          size,
-          price: validatedPrice,
+          signedOrder,
           orderType: params.isMarketOrder ? 'FAK' : 'GTC',
           credentials,
         }),
@@ -429,6 +557,10 @@ export function useDomeRouter() {
     isLinked,
     credentials,
     safeAddress,
+    safeIsDeployed,
+    safeHasAllowances,
+    deploySafe,
+    setAllowances,
     clearSession,
     updateStage,
     tradeStage,
@@ -452,7 +584,6 @@ export function useDomeRouter() {
       });
 
       const data = await response.json();
-      setIsDeployed(data.isDeployed || false);
       return data.isDeployed || false;
     } catch (e) {
       console.error('[DomeRouter] Status check failed:', e);
@@ -473,9 +604,11 @@ export function useDomeRouter() {
     
     // Safe state
     safeAddress,
-    isDeployed,
-    hasAllowances,
+    isDeployed: safeIsDeployed,
+    hasAllowances: safeHasAllowances,
     checkDeploymentStatus,
+    isDeploying,
+    isSettingAllowances,
     
     // Credentials (for external use like fetching positions)
     credentials,
