@@ -33,6 +33,26 @@ const TRADE_STAGE_MESSAGES: Record<TradeStage, string> = {
   'error': 'Order failed',
 };
 
+// Rounding configuration based on market tick size
+const ROUNDING_CONFIG: Record<string, { price: number; size: number; amount: number }> = {
+  '0.1': { price: 1, size: 2, amount: 3 },
+  '0.01': { price: 2, size: 2, amount: 4 },
+  '0.001': { price: 3, size: 2, amount: 5 },
+  '0.0001': { price: 4, size: 2, amount: 6 },
+};
+
+// Helper to round down to specific decimal places
+const roundDown = (value: number, decimals: number): number => {
+  const factor = Math.pow(10, decimals);
+  return Math.floor(value * factor) / factor;
+};
+
+// Helper to round to nearest decimal places
+const roundNearest = (value: number, decimals: number): number => {
+  const factor = Math.pow(10, decimals);
+  return Math.round(value * factor) / factor;
+};
+
 export interface TradeParams {
   tokenId: string;
   side: 'BUY' | 'SELL';
@@ -40,7 +60,7 @@ export interface TradeParams {
   price: number;
   isMarketOrder?: boolean;
   negRisk?: boolean;
-  tickSize?: '0.1' | '0.01' | '0.001' | '0.0001';
+  tickSize?: string;
 }
 
 interface OrderResult {
@@ -402,14 +422,22 @@ export function useDomeRouter() {
 
       updateStage('signing-order');
 
+      // Get rounding config based on tick size (default to 0.01 if not specified)
+      const tickSize = params.tickSize || '0.01';
+      const roundingConfig = ROUNDING_CONFIG[tickSize] || ROUNDING_CONFIG['0.01'];
+
       // Calculate size (shares) from amount (USDC) and price
       const rawSize = params.amount / params.price;
       
-      // Round size to 4 decimals (shares precision for takerAmount)
-      const size = Math.floor(rawSize * 10000) / 10000;
+      // Round size to configured decimals (shares precision for takerAmount)
+      const size = roundDown(rawSize, roundingConfig.size);
       
-      // Round price to 2 decimals (USDC precision for makerAmount)
-      const roundedPrice = Math.round(params.price * 100) / 100;
+      // Round price to configured decimals (USDC precision for makerAmount)
+      const roundedPrice = roundNearest(params.price, roundingConfig.price);
+      
+      // Calculate and round the final amount to ensure it meets precision requirements
+      const rawAmount = size * roundedPrice;
+      const finalAmount = roundDown(rawAmount, roundingConfig.amount);
       
       const MIN_ORDER_SIZE = 5;
       if (size < MIN_ORDER_SIZE) {
@@ -418,11 +446,15 @@ export function useDomeRouter() {
 
       const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
 
+      console.log('[DomeRouter] Rounding config for tickSize', tickSize, ':', roundingConfig);
       console.log('[DomeRouter] Order params after rounding:', {
+        tickSize,
         originalSize: rawSize,
         roundedSize: size,
         originalPrice: params.price,
-        roundedPrice: roundedPrice,
+        roundedPrice,
+        rawAmount,
+        finalAmount,
       });
 
       console.log('[DomeRouter] Creating order for submission...');
