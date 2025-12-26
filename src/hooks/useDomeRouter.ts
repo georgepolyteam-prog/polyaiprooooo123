@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
 import { toast } from 'sonner';
-import { ClobClient, Side as ClobSide, OrderType } from '@polymarket/clob-client';
+import { ClobClient, Side as ClobSide } from '@polymarket/clob-client';
 import { useSafeWallet } from './useSafeWallet';
 import type { WalletClient } from 'viem';
 
@@ -335,8 +335,8 @@ export function useDomeRouter() {
   }, [address, walletClient, chainId, switchChainAsync, safeAddress, saveSession, updateStage, safeIsDeployed, deploySafe, safeHasAllowances, setAllowances]);
 
   /**
-   * Place an order using ClobClient.createAndPostOrder() directly
-   * This handles signing and submission in one call
+   * Place an order using ClobClient.createOrder() to sign locally,
+   * then submit via Dome API for geo-unrestricted trading and builder attribution
    */
   const placeOrder = useCallback(async (params: TradeParams): Promise<OrderResult> => {
     if (!address || !walletClient) {
@@ -387,12 +387,12 @@ export function useDomeRouter() {
 
       updateStage('signing-order');
 
-      console.log('[DomeRouter] Creating ClobClient for order...');
+      console.log('[DomeRouter] Creating ClobClient for order signing...');
 
       // Create ethers adapter
       const ethersAdapter = createEthersAdapter(walletClient, address);
       
-      // Create ClobClient with credentials for authenticated order posting
+      // Create ClobClient with credentials for order signing
       const clobClient = new ClobClient(
         CLOB_HOST,
         POLYGON_CHAIN_ID,
@@ -413,20 +413,19 @@ export function useDomeRouter() {
         throw new Error(`Minimum order size is ${MIN_ORDER_SIZE} shares`);
       }
 
-      console.log('[DomeRouter] Calling createAndPostOrder...', {
+      const orderType = params.isMarketOrder ? 'FOK' : 'GTC';
+
+      console.log('[DomeRouter] Signing order locally with createOrder...', {
         tokenId: params.tokenId,
         price: params.price,
         size,
         side: params.side,
         negRisk: params.negRisk,
-        orderType: params.isMarketOrder ? 'FAK' : 'GTC',
+        orderType,
       });
 
-      updateStage('submitting-order', 'Signing and submitting order...');
-
-      // Use ClobClient.createAndPostOrder() - handles signing AND submission directly to CLOB
-      // Note: createAndPostOrder only supports GTC and GTD, not FAK for market orders
-      const result = await clobClient.createAndPostOrder(
+      // Use ClobClient.createOrder() to sign the order locally (no submission)
+      const signedOrder = await clobClient.createOrder(
         {
           tokenID: params.tokenId,
           price: params.price,
@@ -436,28 +435,63 @@ export function useDomeRouter() {
         {
           tickSize: params.tickSize || '0.01',
           negRisk: params.negRisk,
-        },
-        OrderType.GTC
+        }
       );
 
-      console.log('[DomeRouter] Order result:', result);
+      console.log('[DomeRouter] Order signed locally:', {
+        hasSalt: !!signedOrder.salt,
+        hasMaker: !!signedOrder.maker,
+        hasSignature: !!signedOrder.signature,
+      });
 
-      // Extract order ID from result
-      const orderId = result?.orderID || result?.id || (typeof result === 'string' ? result : undefined);
+      updateStage('submitting-order', 'Submitting order via Dome...');
+
+      // Generate a client order ID for tracking
+      const clientOrderId = crypto.randomUUID();
+
+      // Submit signed order to Dome API via edge function
+      console.log('[DomeRouter] Submitting to Dome API via edge function...');
+      
+      const domeResponse = await fetch(`${SUPABASE_URL}/functions/v1/dome-place-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          signedOrder,
+          orderType,
+          credentials: {
+            apiKey: credentials.apiKey,
+            apiSecret: credentials.apiSecret,
+            apiPassphrase: credentials.apiPassphrase,
+          },
+          clientOrderId,
+        }),
+      });
+
+      const domeResult = await domeResponse.json();
+      
+      console.log('[DomeRouter] Dome API response:', domeResult);
+
+      if (!domeResult.success) {
+        throw new Error(domeResult.error || 'Failed to place order via Dome');
+      }
+
+      const orderId = domeResult.orderId || domeResult.result?.orderID;
 
       const orderResult: OrderResult = {
         success: true,
         orderId,
-        result,
+        result: domeResult.result,
       };
 
       setLastOrderResult(orderResult);
       updateStage('completed');
       
-      toast.success('Order placed!', {
+      toast.success('Order placed via Dome!', {
         description: orderId 
           ? `Order ID: ${String(orderId).slice(0, 12)}...` 
-          : 'Order submitted successfully'
+          : `Status: ${domeResult.status || 'Submitted'}`
       });
 
       return orderResult;
