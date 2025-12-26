@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useAccount, useWalletClient, useChainId, useSwitchChain } from 'wagmi';
+import { useAccount, useWalletClient, useChainId, useSwitchChain, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { toast } from 'sonner';
 import { ClobClient, Side } from '@polymarket/clob-client';
 import { ethers } from 'ethers';
 import { supabase } from '@/integrations/supabase/client';
+import { polygon } from 'wagmi/chains';
+import { POLYGON_CONTRACTS, CTF_ABI } from '@/lib/polymarket-contracts';
 
 const POLYGON_CHAIN_ID = 137;
 const STORAGE_KEY = 'dome_router_session_v10'; // Bump version for EOA migration
@@ -13,6 +15,7 @@ export type TradeStage =
   | 'idle' 
   | 'switching-network' 
   | 'linking-wallet'
+  | 'approving-tokens'
   | 'signing-order' 
   | 'submitting-order' 
   | 'completed' 
@@ -22,6 +25,7 @@ const TRADE_STAGE_MESSAGES: Record<TradeStage, string> = {
   'idle': '',
   'switching-network': 'Switching to Polygon network...',
   'linking-wallet': 'Setting up trading account...',
+  'approving-tokens': 'Approving token transfers (one-time)...',
   'signing-order': 'Please sign the order in your wallet...',
   'submitting-order': 'Submitting order to Polymarket...',
   'completed': 'Order placed successfully!',
@@ -87,6 +91,7 @@ export function useDomeRouter() {
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
+  const publicClient = usePublicClient({ chainId: polygon.id });
   
   // State
   const [isLinking, setIsLinking] = useState(false);
@@ -96,6 +101,41 @@ export function useDomeRouter() {
   const [lastOrderResult, setLastOrderResult] = useState<OrderResult | null>(null);
   const [tradeStage, setTradeStage] = useState<TradeStage>('idle');
   const [tradeStageMessage, setTradeStageMessage] = useState('');
+  const [isApprovingTokens, setIsApprovingTokens] = useState(false);
+
+  // CTF ERC1155 approval checks for SELL orders
+  const { data: ctfExchangeApproved, refetch: refetchCtfApproval } = useReadContract({
+    address: POLYGON_CONTRACTS.CTF_CONTRACT,
+    abi: CTF_ABI,
+    functionName: 'isApprovedForAll',
+    args: address ? [address, POLYGON_CONTRACTS.CTF_EXCHANGE] : undefined,
+    chainId: polygon.id,
+    query: { enabled: !!address && isConnected },
+  });
+
+  const { data: negRiskExchangeApproved, refetch: refetchNegRiskApproval } = useReadContract({
+    address: POLYGON_CONTRACTS.CTF_CONTRACT,
+    abi: CTF_ABI,
+    functionName: 'isApprovedForAll',
+    args: address ? [address, POLYGON_CONTRACTS.NEG_RISK_CTF_EXCHANGE] : undefined,
+    chainId: polygon.id,
+    query: { enabled: !!address && isConnected },
+  });
+
+  const { data: negRiskAdapterApproved, refetch: refetchNegRiskAdapterApproval } = useReadContract({
+    address: POLYGON_CONTRACTS.CTF_CONTRACT,
+    abi: CTF_ABI,
+    functionName: 'isApprovedForAll',
+    args: address ? [address, POLYGON_CONTRACTS.NEG_RISK_ADAPTER] : undefined,
+    chainId: polygon.id,
+    query: { enabled: !!address && isConnected },
+  });
+
+  // Write contract for token approvals
+  const { writeContractAsync } = useWriteContract();
+
+  // Check if CTF tokens are approved for the exchange
+  const isCTFApprovedForSell = !!ctfExchangeApproved && !!negRiskExchangeApproved && !!negRiskAdapterApproved;
 
   // Helper to update trade stage
   const updateStage = useCallback((stage: TradeStage, customMessage?: string) => {
@@ -154,6 +194,104 @@ export function useDomeRouter() {
     
     toast.success('Credentials cleared - please re-link');
   }, [address]);
+
+  /**
+   * Ensure CTF tokens are approved for transfer (required for SELL orders)
+   * This is a one-time approval per wallet
+   */
+  const ensureCTFApproval = useCallback(async (negRisk?: boolean): Promise<boolean> => {
+    if (!address || !publicClient) {
+      return false;
+    }
+
+    // Check which approvals are needed
+    const needsCtfExchangeApproval = !ctfExchangeApproved;
+    const needsNegRiskApproval = !negRiskExchangeApproved;
+    const needsNegRiskAdapterApproval = !negRiskAdapterApproved;
+
+    // If all approved, we're good
+    if (!needsCtfExchangeApproval && !needsNegRiskApproval && !needsNegRiskAdapterApproval) {
+      console.log('[DomeRouter] CTF tokens already approved for all exchanges');
+      return true;
+    }
+
+    console.log('[DomeRouter] CTF approval needed:', {
+      needsCtfExchangeApproval,
+      needsNegRiskApproval,
+      needsNegRiskAdapterApproval,
+    });
+
+    setIsApprovingTokens(true);
+    updateStage('approving-tokens');
+
+    try {
+      // Approve CTF Exchange
+      if (needsCtfExchangeApproval) {
+        toast.info('Approving token transfers for CTF Exchange...');
+        const hash = await writeContractAsync({
+          account: address as `0x${string}`,
+          chain: polygon,
+          address: POLYGON_CONTRACTS.CTF_CONTRACT,
+          abi: CTF_ABI,
+          functionName: 'setApprovalForAll',
+          args: [POLYGON_CONTRACTS.CTF_EXCHANGE, true],
+        });
+        await publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+        console.log('[DomeRouter] CTF Exchange approval confirmed');
+      }
+
+      // Approve Neg Risk Exchange
+      if (needsNegRiskApproval) {
+        toast.info('Approving token transfers for Neg Risk Exchange...');
+        const hash = await writeContractAsync({
+          account: address as `0x${string}`,
+          chain: polygon,
+          address: POLYGON_CONTRACTS.CTF_CONTRACT,
+          abi: CTF_ABI,
+          functionName: 'setApprovalForAll',
+          args: [POLYGON_CONTRACTS.NEG_RISK_CTF_EXCHANGE, true],
+        });
+        await publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+        console.log('[DomeRouter] Neg Risk Exchange approval confirmed');
+      }
+
+      // Approve Neg Risk Adapter
+      if (needsNegRiskAdapterApproval) {
+        toast.info('Approving token transfers for Neg Risk Adapter...');
+        const hash = await writeContractAsync({
+          account: address as `0x${string}`,
+          chain: polygon,
+          address: POLYGON_CONTRACTS.CTF_CONTRACT,
+          abi: CTF_ABI,
+          functionName: 'setApprovalForAll',
+          args: [POLYGON_CONTRACTS.NEG_RISK_ADAPTER, true],
+        });
+        await publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
+        console.log('[DomeRouter] Neg Risk Adapter approval confirmed');
+      }
+
+      // Refetch approval states
+      await Promise.all([
+        refetchCtfApproval(),
+        refetchNegRiskApproval(),
+        refetchNegRiskAdapterApproval(),
+      ]);
+
+      toast.success('Token approvals confirmed!');
+      return true;
+    } catch (error: unknown) {
+      console.error('[DomeRouter] CTF approval error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to approve tokens';
+      if (message.includes('rejected') || message.includes('denied')) {
+        toast.error('Token approval rejected');
+      } else {
+        toast.error('Failed to approve tokens: ' + message);
+      }
+      return false;
+    } finally {
+      setIsApprovingTokens(false);
+    }
+  }, [address, publicClient, ctfExchangeApproved, negRiskExchangeApproved, negRiskAdapterApproved, writeContractAsync, updateStage, refetchCtfApproval, refetchNegRiskApproval, refetchNegRiskAdapterApproval]);
 
   /**
    * Link user to Polymarket - CLIENT-SIDE credential creation using ClobClient
@@ -386,7 +524,7 @@ export function useDomeRouter() {
     setLastOrderResult(null);
 
     try {
-      // For SELL orders, verify user has the position first
+      // For SELL orders, verify user has the position and CTF approval
       if (params.side === 'SELL') {
         updateStage('signing-order', 'Verifying position...');
         const { hasPosition, size } = await checkUserPosition(params.tokenId);
@@ -404,6 +542,16 @@ export function useDomeRouter() {
           toast.error(errorMsg);
           updateStage('error', errorMsg);
           return { success: false, error: errorMsg };
+        }
+
+        // Check and ensure CTF token approval for SELL orders
+        if (!isCTFApprovedForSell) {
+          console.log('[DomeRouter] CTF approval needed for SELL order');
+          const approved = await ensureCTFApproval(params.negRisk);
+          if (!approved) {
+            updateStage('error', 'Token approval required to sell');
+            return { success: false, error: 'Token approval was rejected or failed' };
+          }
         }
       }
 
@@ -585,7 +733,7 @@ export function useDomeRouter() {
       setIsPlacingOrder(false);
       setTimeout(() => updateStage('idle'), 2000);
     }
-  }, [address, walletClient, chainId, switchChainAsync, isLinked, credentials, updateStage, clearSession, checkUserPosition]);
+  }, [address, walletClient, chainId, switchChainAsync, isLinked, credentials, updateStage, clearSession, checkUserPosition, isCTFApprovedForSell, ensureCTFApproval]);
 
   // isDomeReady: true when wallet is connected (no Safe deployment needed)
   const isDomeReady = isConnected && !!walletClient;
@@ -612,6 +760,11 @@ export function useDomeRouter() {
     // Trade stage UI
     tradeStage,
     tradeStageMessage,
+    
+    // Token approval state
+    isCTFApprovedForSell,
+    isApprovingTokens,
+    ensureCTFApproval,
     
     // Ready state
     isDomeReady,
