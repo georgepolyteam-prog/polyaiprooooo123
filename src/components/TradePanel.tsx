@@ -4,7 +4,7 @@ import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, ExternalLink, AlertCircle, Loader2, Zap, Target, ArrowRight, Link2, CheckCircle2, RotateCcw, Shield } from 'lucide-react';
 import { TradeProgressOverlay } from './TradeProgressOverlay';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -56,7 +56,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   } = useDomeRouter();
 
   // Use EOA balance directly (no Safe wallet)
-  const { balance, hasSufficientBalance, refetch } = useUSDCBalance();
+  const { balance, hasSufficientBalance, refetch, isFullyApproved, approveUSDC, isApproving } = useUSDCBalance();
   
   // Check if on correct network
   const isWrongNetwork = isConnected && chainId !== POLYGON_CHAIN_ID;
@@ -65,16 +65,16 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const hasYesToken = !!(marketData.yesTokenId || marketData.tokenId);
   const hasNoToken = !!marketData.noTokenId;
   
-  // Trading readiness: linked + funded
+  // Trading readiness: linked + approved + funded
   const isFunded = balance > 0;
-  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isFunded;
+  const canDirectTrade = hasYesToken && isConnected && !isWrongNetwork && isLinked && isFullyApproved && isFunded;
 
   useEffect(() => {
     console.log('[TradePanel] State:', { 
-      isConnected, isWrongNetwork, isLinked, hasYesToken, hasNoToken, 
+      isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, 
       selectedSide, canDirectTrade, amount, balance, isFunded, isDomeReady
     });
-  }, [isConnected, isWrongNetwork, isLinked, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, isFunded, isDomeReady]);
+  }, [isConnected, isWrongNetwork, isLinked, isFullyApproved, hasYesToken, hasNoToken, selectedSide, canDirectTrade, amount, balance, isFunded, isDomeReady]);
 
   const handleSwitchNetwork = async () => {
     try {
@@ -344,9 +344,42 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
             )}
           </AnimatePresence>
 
+          {/* Approve Contracts Step */}
+          <AnimatePresence>
+            {isConnected && !isWrongNetwork && isLinked && !isFullyApproved && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="p-4 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border-2 border-blue-500/50"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-blue-200 text-sm">Approve Trading Contracts</p>
+                    <p className="text-xs text-blue-300/70">One-time approval to enable trading</p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={approveUSDC} 
+                  disabled={isApproving}
+                  className="w-full bg-blue-500 hover:bg-blue-600"
+                >
+                  {isApproving ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Approving...</>
+                  ) : (
+                    <><Shield className="w-4 h-4 mr-2" />Approve Contracts</>
+                  )}
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Fund Wallet Step */}
           <AnimatePresence>
-            {isConnected && !isWrongNetwork && isLinked && !isFunded && (
+            {isConnected && !isWrongNetwork && isLinked && isFullyApproved && !isFunded && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
