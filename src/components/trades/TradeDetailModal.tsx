@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, Zap, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTrackedWallets } from '@/hooks/useTrackedWallets';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { WalletPnlChart } from './WalletPnlChart';
 
 interface Trade {
   token_id: string;
@@ -32,12 +33,12 @@ interface WalletMetrics {
   total_volume: number;
   total_trades: number;
   unique_markets: number;
+  orders_capped?: boolean;
 }
 
-interface PnlData {
-  total_pnl?: number;
-  realized_pnl?: number;
-  unrealized_pnl?: number;
+interface PnlSummary {
+  total_pnl: number;
+  series: Array<{ timestamp: number; pnl_to_date: number }>;
 }
 
 interface RecentTrade {
@@ -61,11 +62,12 @@ interface TradeDetailModalProps {
 export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDetailModalProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isLoading: authLoading } = useAuth();
   const { isWalletTracked, trackWallet, untrackWallet } = useTrackedWallets();
   
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
-  const [pnlData, setPnlData] = useState<PnlData | null>(null);
+  const [pnlSummary, setPnlSummary] = useState<PnlSummary | null>(null);
   const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -130,7 +132,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
 
       if (data) {
         setWalletMetrics(data.walletMetrics);
-        setPnlData(data.pnlData);
+        setPnlSummary(data.pnlSummary);
         setRecentTrades(data.recentTrades || []);
       }
     } catch (error) {
@@ -170,8 +172,14 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     if (authLoading) return;
     
     if (!user) {
-      toast({ title: "Sign in to track wallets", variant: "destructive" });
-      navigate('/auth');
+      toast({ 
+        title: "Account required", 
+        description: "Create a free account to save tracked wallets across sessions.",
+        variant: "destructive" 
+      });
+      // Redirect to email auth with return path
+      const returnPath = encodeURIComponent(location.pathname);
+      navigate(`/auth?step=email&next=${returnPath}`);
       return;
     }
     
@@ -257,14 +265,22 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
               <Activity className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">Trades</span>
             </div>
-            <div className="font-bold text-lg">{walletMetrics?.total_trades ?? '—'}</div>
+            <div className="font-bold text-lg">
+              {walletMetrics?.total_trades !== undefined 
+                ? (walletMetrics.orders_capped && walletMetrics.total_trades >= 1000 ? '1000+' : walletMetrics.total_trades)
+                : '—'}
+            </div>
           </div>
           <div className="rounded-xl p-4 bg-muted/20 border border-border/30">
             <div className="flex items-center gap-2 mb-2">
               <Layers className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">Markets</span>
             </div>
-            <div className="font-bold text-lg">{walletMetrics?.unique_markets ?? '—'}</div>
+            <div className="font-bold text-lg">
+              {walletMetrics?.unique_markets !== undefined 
+                ? (walletMetrics.orders_capped ? `${walletMetrics.unique_markets}+` : walletMetrics.unique_markets)
+                : '—'}
+            </div>
           </div>
           <div className="rounded-xl p-4 bg-muted/20 border border-border/30">
             <div className="flex items-center gap-2 mb-2">
@@ -273,12 +289,20 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             </div>
             <div className={cn(
               "font-bold text-lg",
-              pnlData?.total_pnl !== undefined && pnlData.total_pnl >= 0 ? "text-success" : "text-destructive"
+              pnlSummary?.total_pnl !== undefined && pnlSummary.total_pnl >= 0 ? "text-success" : "text-destructive"
             )}>
-              {pnlData?.total_pnl !== undefined ? formatPnl(pnlData.total_pnl) : '—'}
+              {pnlSummary?.total_pnl !== undefined ? formatPnl(pnlSummary.total_pnl) : '—'}
             </div>
           </div>
         </div>
+
+        {/* PnL Chart */}
+        {pnlSummary && pnlSummary.series.length > 0 && (
+          <WalletPnlChart 
+            series={pnlSummary.series} 
+            totalPnl={pnlSummary.total_pnl} 
+          />
+        )}
 
         {/* Recent Trades */}
         <div className="rounded-xl border border-border/30 overflow-hidden">
@@ -448,19 +472,23 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             </div>
             <div className="rounded-lg p-3 bg-muted/20 text-center">
               <div className="text-xs text-muted-foreground mb-1">Trades</div>
-              <div className="font-bold text-sm">{walletMetrics.total_trades}</div>
+              <div className="font-bold text-sm">
+                {walletMetrics.orders_capped && walletMetrics.total_trades >= 1000 ? '1000+' : walletMetrics.total_trades}
+              </div>
             </div>
             <div className="rounded-lg p-3 bg-muted/20 text-center">
               <div className="text-xs text-muted-foreground mb-1">Markets</div>
-              <div className="font-bold text-sm">{walletMetrics.unique_markets}</div>
+              <div className="font-bold text-sm">
+                {walletMetrics.orders_capped ? `${walletMetrics.unique_markets}+` : walletMetrics.unique_markets}
+              </div>
             </div>
             <div className="rounded-lg p-3 bg-muted/20 text-center">
               <div className="text-xs text-muted-foreground mb-1">PnL</div>
               <div className={cn(
                 "font-bold text-sm",
-                pnlData?.total_pnl !== undefined && pnlData.total_pnl >= 0 ? "text-success" : "text-destructive"
+                pnlSummary?.total_pnl !== undefined && pnlSummary.total_pnl >= 0 ? "text-success" : "text-destructive"
               )}>
-                {pnlData?.total_pnl !== undefined ? formatPnl(pnlData.total_pnl) : '—'}
+                {pnlSummary?.total_pnl !== undefined ? formatPnl(pnlSummary.total_pnl) : '—'}
               </div>
             </div>
           </div>
