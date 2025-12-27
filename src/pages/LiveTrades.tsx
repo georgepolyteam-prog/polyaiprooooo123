@@ -260,41 +260,51 @@ export default function LiveTrades() {
     }
   }, []);
 
-  // Pre-cache images from polymarket-live on mount (optional optimization for popular markets)
+  // Pre-cache images using polymarket-data (same as Markets page)
   const preCacheImages = useCallback(async () => {
     if (imagePreCachedRef.current) return;
     imagePreCachedRef.current = true;
     
     try {
-      console.log('[LiveTrades] Pre-caching top market images...');
-      const { data, error } = await supabase.functions.invoke('polymarket-live');
+      console.log('[LiveTrades] Pre-caching market images (same as Markets page)...');
       
-      if (error || !data) {
-        console.log('[LiveTrades] Pre-cache failed (optional):', error);
+      // Use same edge function as Markets page
+      const { data, error } = await supabase.functions.invoke('polymarket-data', {
+        body: { 
+          action: 'getEvents', 
+          limit: 100,
+          order: 'volume24hr',
+          ascending: false
+        }
+      });
+      
+      if (error || !data?.events) {
+        console.log('[LiveTrades] Pre-cache failed:', error);
         return;
       }
       
-      // polymarket-live returns array directly, not { markets: [...] }
-      const markets = Array.isArray(data) ? data : (data.markets || []);
-      
       let cachedCount = 0;
-      for (const market of markets) {
-        if (market.image) {
-          // Cache by condition_id (primary key for accuracy)
-          if (market.condition_id) {
-            imageCacheRef.current.set(market.condition_id, market.image);
-            cachedCount++;
+      for (const event of data.events) {
+        // Cache event image by all its outcome condition_ids
+        if (event.image) {
+          for (const outcome of event.outcomes || []) {
+            if (outcome.conditionId) {
+              imageCacheRef.current.set(outcome.conditionId, event.image);
+              cachedCount++;
+            }
           }
-          // Also cache by slug as secondary lookup
-          if (market.slug) {
-            imageCacheRef.current.set(market.slug, market.image);
+        }
+        // Also cache individual outcome images if available
+        for (const outcome of event.outcomes || []) {
+          if (outcome.image && outcome.conditionId) {
+            imageCacheRef.current.set(outcome.conditionId, outcome.image);
           }
         }
       }
-      console.log(`[LiveTrades] Pre-cached ${cachedCount} market images`);
+      
+      console.log(`[LiveTrades] Pre-cached ${cachedCount} market images from polymarket-data`);
     } catch (err) {
-      // Optional pre-cache, don't block on failure
-      console.warn('[LiveTrades] Pre-cache error (optional):', err);
+      console.warn('[LiveTrades] Pre-cache error:', err);
     }
   }, []);
 
@@ -302,46 +312,60 @@ export default function LiveTrades() {
   const pendingImageFetches = useRef<Set<string>>(new Set());
   const imagesFetchTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Batch fetch images for multiple condition_ids at once (reduces 100 req/s to 1-2 req/s)
+  // Batch fetch images from Gamma API directly (same source as Markets page)
   const batchFetchImages = useCallback(async (conditionIds: string[]) => {
     if (conditionIds.length === 0) return;
 
     try {
-      console.log(`[LiveTrades] Batch fetching images for ${conditionIds.length} markets`);
+      console.log(`[LiveTrades] Batch fetching images for ${conditionIds.length} markets from Gamma API`);
       
-      const { data, error } = await supabase.functions.invoke('get-market-previews', {
-        body: { conditionIds }
+      // Fetch each condition_id from Gamma API (same source as Markets page)
+      const fetchPromises = conditionIds.map(async (conditionId) => {
+        try {
+          const response = await fetch(
+            `https://gamma-api.polymarket.com/markets?condition_id=${conditionId}`
+          );
+          if (!response.ok) return null;
+          const markets = await response.json();
+          if (markets.length > 0 && markets[0].image) {
+            return { conditionId, image: markets[0].image };
+          }
+          return null;
+        } catch {
+          return null;
+        }
       });
 
-      if (error || !data?.markets) {
-        console.warn('[LiveTrades] Batch fetch failed:', error);
-        // Mark as checked so we don't retry
-        conditionIds.forEach(id => imageCacheRef.current.set(id, ''));
-        return;
-      }
-
+      const results = await Promise.all(fetchPromises);
+      
       // Cache all returned images
       let cachedCount = 0;
-      data.markets.forEach((market: any) => {
-        if (market.conditionId && market.image) {
-          imageCacheRef.current.set(market.conditionId, market.image);
+      results.forEach((result) => {
+        if (result?.conditionId && result?.image) {
+          imageCacheRef.current.set(result.conditionId, result.image);
           cachedCount++;
-          if (market.marketSlug) {
-            imageCacheRef.current.set(market.marketSlug, market.image);
-          }
         }
       });
 
-      console.log(`[LiveTrades] Cached ${cachedCount} images from batch`);
+      // Mark uncached ones as checked to avoid retrying
+      conditionIds.forEach(id => {
+        if (!imageCacheRef.current.has(id)) {
+          imageCacheRef.current.set(id, '');
+        }
+      });
+
+      console.log(`[LiveTrades] Cached ${cachedCount} images from Gamma API`);
       
       // Trigger re-render to show newly cached images
-      setTrades(prev => prev.map(trade => {
-        const cachedImg = imageCacheRef.current.get(trade.condition_id);
-        if (cachedImg && !trade.image) {
-          return { ...trade, image: cachedImg };
-        }
-        return trade;
-      }));
+      if (cachedCount > 0) {
+        setTrades(prev => prev.map(trade => {
+          const cachedImg = imageCacheRef.current.get(trade.condition_id);
+          if (cachedImg && !trade.image) {
+            return { ...trade, image: cachedImg };
+          }
+          return trade;
+        }));
+      }
     } catch (err) {
       console.error('[LiveTrades] Batch image fetch error:', err);
     }
