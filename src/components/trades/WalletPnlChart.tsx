@@ -20,6 +20,7 @@ type TimeframeOption = '7D' | '30D' | 'ALL';
 
 export function WalletPnlChart({ series, totalPnl, className, compact = false }: WalletPnlChartProps) {
   const [timeframe, setTimeframe] = useState<TimeframeOption>('ALL');
+  const safeTotalPnl = totalPnl ?? 0;
 
   const filteredData = useMemo(() => {
     if (!series || series.length === 0) return [];
@@ -45,7 +46,7 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
     }));
   }, [series, timeframe]);
 
-  const isPositive = totalPnl >= 0;
+  const isPositive = safeTotalPnl >= 0;
   const gradientId = 'pnlGradient';
   
   // Determine color based on PnL
@@ -140,6 +141,7 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
                 const data = payload[0].payload;
                 const pnl = data.pnl;
                 const isPos = pnl >= 0;
+                const safePnl = pnl ?? 0;
                 return (
                   <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-xl">
                     <p className="text-xs text-muted-foreground">{data.date}</p>
@@ -147,7 +149,7 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
                       "text-sm font-bold",
                       isPos ? "text-success" : "text-destructive"
                     )}>
-                      {isPos ? '+' : ''}{pnl >= 1000 ? `$${(pnl / 1000).toFixed(1)}K` : `$${pnl.toFixed(2)}`}
+                      {isPos ? '+' : ''}{Math.abs(safePnl) >= 1000 ? `$${(safePnl / 1000).toFixed(1)}K` : `$${safePnl.toFixed(2)}`}
                     </p>
                   </div>
                 );
@@ -174,7 +176,7 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
           compact ? "text-sm" : "text-base",
           isPositive ? "text-success" : "text-destructive"
         )}>
-          {isPositive ? '+' : ''}{totalPnl >= 1000000 ? `$${(totalPnl / 1000000).toFixed(2)}M` : totalPnl >= 1000 ? `$${(totalPnl / 1000).toFixed(1)}K` : `$${totalPnl.toFixed(2)}`}
+          {isPositive ? '+' : ''}{Math.abs(safeTotalPnl) >= 1000000 ? `$${(safeTotalPnl / 1000000).toFixed(2)}M` : Math.abs(safeTotalPnl) >= 1000 ? `$${(safeTotalPnl / 1000).toFixed(1)}K` : `$${safeTotalPnl.toFixed(2)}`}
         </span>
       </div>
     </motion.div>

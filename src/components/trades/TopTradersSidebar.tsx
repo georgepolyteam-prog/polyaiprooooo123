@@ -15,9 +15,10 @@ interface TopTradersSidebarProps {
 }
 
 function formatVolume(vol: number): string {
-  if (vol >= 1000000) return `$${(vol / 1000000).toFixed(2)}M`;
-  if (vol >= 1000) return `$${(vol / 1000).toFixed(1)}k`;
-  return `$${vol.toFixed(0)}`;
+  const v = vol ?? 0;
+  if (v >= 1000000) return `$${(v / 1000000).toFixed(2)}M`;
+  if (v >= 1000) return `$${(v / 1000).toFixed(1)}k`;
+  return `$${v.toFixed(0)}`;
 }
 
 function getRankBadge(rank: number) {
@@ -66,8 +67,8 @@ export function TopTradersSidebar({ traders, onWalletClick }: TopTradersSidebarP
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{trader.trades} trades • {trader.markets} markets</span>
-                <span className={trader.buyPercent > 50 ? 'text-success' : 'text-destructive'}>
-                  {trader.buyPercent.toFixed(0)}% buy
+                <span className={(trader.buyPercent ?? 0) > 50 ? 'text-success' : 'text-destructive'}>
+                  {(trader.buyPercent ?? 0).toFixed(0)}% buy
                 </span>
               </div>
             </button>

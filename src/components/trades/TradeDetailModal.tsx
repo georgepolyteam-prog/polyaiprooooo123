@@ -387,12 +387,20 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     <div className="flex flex-col h-full max-h-[85vh] sm:max-h-[80vh]">
       {/* Compact Header */}
       <div className="bg-card/95 backdrop-blur-xl border-b border-border p-4 flex items-start gap-3">
-        {trade.image && (
+        {trade.image ? (
           <img 
             src={trade.image} 
             alt={trade.title}
             className="w-12 h-12 rounded-xl object-cover shrink-0"
+            onError={(e) => {
+              // Hide broken images
+              e.currentTarget.style.display = 'none';
+            }}
           />
+        ) : (
+          <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
+            <BarChart3 className="w-6 h-6 text-muted-foreground" />
+          </div>
         )}
         <div className="flex-1 min-w-0">
           <h2 className="text-base sm:text-lg font-bold text-foreground line-clamp-2 leading-tight">
@@ -457,7 +465,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             <div className="text-right">
               <div className="font-bold text-lg text-primary">{formatVolume(volume)}</div>
               <div className="text-xs text-muted-foreground">
-                {shares.toFixed(0)} @ ${trade.price.toFixed(3)}
+                {(shares ?? 0).toFixed(0)} @ ${(trade.price ?? 0).toFixed(3)}
               </div>
             </div>
           </div>

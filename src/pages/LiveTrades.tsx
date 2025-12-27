@@ -754,7 +754,7 @@ export default function LiveTrades() {
   };
 
   const formatVolume = (price: number, shares: number) => {
-    const volume = price * shares;
+    const volume = (price ?? 0) * (shares ?? 0);
     if (volume >= 1000) return `$${(volume / 1000).toFixed(1)}k`;
     return `$${volume.toFixed(2)}`;
   };
@@ -1051,7 +1051,7 @@ export default function LiveTrades() {
                       {/* Price */}
                       <div className="sm:col-span-2 flex items-center sm:justify-end">
                         <span className="text-foreground font-mono font-semibold">
-                          ${trade.price.toFixed(3)}
+                          ${(trade.price ?? 0).toFixed(3)}
                         </span>
                       </div>
 
