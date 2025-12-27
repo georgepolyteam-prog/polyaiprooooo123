@@ -15,6 +15,7 @@ import { LiveTradesTour } from '@/components/trades/LiveTradesTour';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trade-data';
 import { useTrackedWallets } from '@/hooks/useTrackedWallets';
 import domeLogo from '@/assets/dome-logo.png';
@@ -1011,12 +1012,22 @@ export default function LiveTrades() {
                             src={trade.image} 
                             alt="" 
                             className="w-10 h-10 rounded-lg object-cover shrink-0"
+                            onError={(e) => {
+                              // Hide broken/wrong images and show fallback
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
                           />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                            <Activity className="w-5 h-5 text-muted-foreground" />
-                          </div>
-                        )}
+                        ) : null}
+                        <div 
+                          className={cn(
+                            "w-10 h-10 rounded-lg bg-muted items-center justify-center shrink-0",
+                            trade.image ? "hidden" : "flex"
+                          )}
+                        >
+                          <Activity className="w-5 h-5 text-muted-foreground" />
+                        </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
                             {trade.title}
