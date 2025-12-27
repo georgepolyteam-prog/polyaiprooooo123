@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, Zap, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Target } from 'lucide-react';
+import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
@@ -577,20 +577,24 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           </Button>
         </div>
 
-        {/* Copy-Trade Coming Soon */}
-        <div className="relative">
-          <Button
-            variant="outline"
-            disabled
-            className="w-full h-12 gap-2 font-semibold rounded-xl border-dashed border-border/50 text-muted-foreground relative overflow-hidden"
-          >
-            <Zap className="w-4 h-4" />
-            Copy-Trade
-          </Button>
-          <div className="absolute -top-1 -right-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg">
-            COMING SOON
+        {/* PnL Chart - Compact Version */}
+        {loading ? (
+          <div className="rounded-xl p-3 bg-muted/20 border border-border/30 animate-pulse">
+            <div className="h-24 flex items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
           </div>
-        </div>
+        ) : pnlSummary && pnlSummary.series.length > 0 ? (
+          <WalletPnlChart 
+            series={pnlSummary.series} 
+            totalPnl={pnlSummary.total_pnl}
+            compact
+          />
+        ) : (
+          <div className="rounded-xl p-3 bg-muted/20 border border-border/30 text-center text-xs text-muted-foreground">
+            No PnL history available
+          </div>
+        )}
 
         {/* View Full Profile Button */}
         <div className="pt-2 border-t border-border/30">

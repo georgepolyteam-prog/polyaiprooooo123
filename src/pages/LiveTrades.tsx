@@ -188,11 +188,11 @@ export default function LiveTrades() {
         const batch = [...tradeQueueRef.current];
         tradeQueueRef.current = [];
         
-        // Add batch index for stagger animation
+        // Add batch index for stagger animation - each trade gets unique delay
         const timestampedBatch = batch.map((trade, i) => ({
           ...trade,
           _batchIndex: i,
-          _batchTime: Date.now()
+          _batchTime: Date.now() + (i * 20) // Stagger each trade by 20ms for smooth realtime feel
         }));
         
         setTrades(prev => {
@@ -736,9 +736,16 @@ export default function LiveTrades() {
         }
       }
       
+      // Tracked wallets filter
+      if (trackedOnly && trackedAddresses.size > 0) {
+        if (!trackedAddresses.has(trade.user.toLowerCase())) {
+          return false;
+        }
+      }
+      
       return true;
     });
-  }, [trades, whaleTrades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown]);
+  }, [trades, whaleTrades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown, trackedOnly, trackedAddresses]);
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleTimeString();
@@ -911,6 +918,9 @@ export default function LiveTrades() {
           totalTrades={filteredTrades.length}
           hideUpDown={hideUpDown}
           setHideUpDown={setHideUpDown}
+          trackedOnly={trackedOnly}
+          setTrackedOnly={setTrackedOnly}
+          hasTrackedWallets={trackedWallets.length > 0}
         />
 
         {/* Banners */}
