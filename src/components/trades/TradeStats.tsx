@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Activity, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, BarChart3 } from "lucide-react";
 
 interface TradeStatsProps {
   totalVolume: number;
@@ -16,14 +16,14 @@ function formatVolume(vol: number): string {
   return `$${vol.toFixed(0)}`;
 }
 
-export function TradeStats({ 
-  totalVolume, 
-  totalTrades, 
-  avgTradeSize, 
+export function TradeStats({
+  totalVolume,
+  totalTrades,
+  avgTradeSize,
   largestTrade,
   buyVolume,
   sellVolume,
-  whaleCount = 0
+  whaleCount = 0,
 }: TradeStatsProps) {
   const totalFlow = buyVolume + sellVolume;
   const imbalance = totalFlow > 0 ? ((buyVolume - sellVolume) / totalFlow) * 100 : 0;
@@ -44,7 +44,7 @@ export function TradeStats({
         <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4">
           <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
             <Activity className="w-4 h-4" />
-            Last 500 Trades
+            Last 200 Trades
           </div>
           <div className="text-xl font-bold text-foreground">{totalTrades.toLocaleString()}</div>
           <div className="text-[10px] text-muted-foreground/70 mt-0.5">Rolling window</div>
@@ -59,9 +59,7 @@ export function TradeStats({
         </div>
 
         <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4">
-          <div className="flex items-center gap-2 text-warning text-xs mb-1">
-            🐋 Largest Trade
-          </div>
+          <div className="flex items-center gap-2 text-warning text-xs mb-1">🐋 Largest Trade</div>
           <div className="text-xl font-bold text-warning">{formatVolume(largestTrade)}</div>
           {whaleCount > 0 && (
             <div className="text-[10px] text-warning/70 mt-0.5">{whaleCount.toLocaleString()} whales tracked</div>
@@ -73,16 +71,16 @@ export function TradeStats({
       <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-muted-foreground text-xs">Order Flow</span>
-          <span className={`text-xs font-bold ${imbalance > 0 ? 'text-success' : imbalance < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-            {imbalance > 0 ? '+' : ''}{imbalance.toFixed(1)}% {imbalance > 0 ? 'Buy' : imbalance < 0 ? 'Sell' : ''} Pressure
+          <span
+            className={`text-xs font-bold ${imbalance > 0 ? "text-success" : imbalance < 0 ? "text-destructive" : "text-muted-foreground"}`}
+          >
+            {imbalance > 0 ? "+" : ""}
+            {imbalance.toFixed(1)}% {imbalance > 0 ? "Buy" : imbalance < 0 ? "Sell" : ""} Pressure
           </span>
         </div>
         <div className="h-3 rounded-full bg-muted overflow-hidden flex">
-          <div 
-            className="h-full bg-success transition-all duration-500"
-            style={{ width: `${buyPressure}%` }}
-          />
-          <div 
+          <div className="h-full bg-success transition-all duration-500" style={{ width: `${buyPressure}%` }} />
+          <div
             className="h-full bg-destructive transition-all duration-500"
             style={{ width: `${100 - buyPressure}%` }}
           />
