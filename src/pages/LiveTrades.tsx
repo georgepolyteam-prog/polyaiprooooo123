@@ -556,9 +556,10 @@ export default function LiveTrades() {
       avgTradeSize: throttledTrades.length > 0 ? totalVolume / throttledTrades.length : 0,
       largestTrade,
       buyVolume,
-      sellVolume
+      sellVolume,
+      whaleCount: whaleTrades.length
     };
-  }, [throttledTrades]);
+  }, [throttledTrades, whaleTrades.length]);
 
   // Compute top traders - use throttledTrades for performance (updates every 1s)
   const topTraders = useMemo(() => {

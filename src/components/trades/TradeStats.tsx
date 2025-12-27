@@ -7,6 +7,7 @@ interface TradeStatsProps {
   largestTrade: number;
   buyVolume: number;
   sellVolume: number;
+  whaleCount?: number; // Total whale trades tracked
 }
 
 function formatVolume(vol: number): string {
@@ -21,7 +22,8 @@ export function TradeStats({
   avgTradeSize, 
   largestTrade,
   buyVolume,
-  sellVolume
+  sellVolume,
+  whaleCount = 0
 }: TradeStatsProps) {
   const totalFlow = buyVolume + sellVolume;
   const imbalance = totalFlow > 0 ? ((buyVolume - sellVolume) / totalFlow) * 100 : 0;
@@ -42,9 +44,10 @@ export function TradeStats({
         <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4">
           <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
             <Activity className="w-4 h-4" />
-            Total Trades
+            Last 500 Trades
           </div>
           <div className="text-xl font-bold text-foreground">{totalTrades.toLocaleString()}</div>
+          <div className="text-[10px] text-muted-foreground/70 mt-0.5">Rolling window</div>
         </div>
 
         <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4">
@@ -57,9 +60,12 @@ export function TradeStats({
 
         <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4">
           <div className="flex items-center gap-2 text-warning text-xs mb-1">
-            🐋 Largest
+            🐋 Largest Trade
           </div>
           <div className="text-xl font-bold text-warning">{formatVolume(largestTrade)}</div>
+          {whaleCount > 0 && (
+            <div className="text-[10px] text-warning/70 mt-0.5">{whaleCount.toLocaleString()} whales tracked</div>
+          )}
         </div>
       </div>
 
