@@ -39,6 +39,20 @@ function extractSlugsFromUrl(url: string): { eventSlug: string | null; marketSlu
       };
     }
     
+    // Sports URL format: /sports/category/games/week/N/event-slug
+    // e.g., /sports/honor-of-kings/games/week/1/hok-rw-wb-2025-12-27
+    // or /sports/nfl/conference-championship-2025-afc
+    if (pathParts[0] === 'sports' && pathParts.length >= 2) {
+      // The last segment is typically the event slug
+      const sportsSlug = pathParts[pathParts.length - 1];
+      console.log(`[URL] Sports URL detected - extracted slug: ${sportsSlug}`);
+      return {
+        eventSlug: sportsSlug,
+        marketSlug: null,
+        tokenId
+      };
+    }
+    
     return { eventSlug: null, marketSlug: null, tokenId };
   } catch {
     return { eventSlug: null, marketSlug: null, tokenId: null };
@@ -406,7 +420,7 @@ serve(async (req) => {
         const events = await gammaResponse.json();
         const event = events?.[0];
         
-        // If we have a tokenId in the URL, find the matching market
+        // If we have a tokenId in the URL, find the matching market and use it directly
         if (urlTokenId && event?.markets) {
           console.log(`[Dashboard] Looking for market with token ID: ${urlTokenId.slice(0, 30)}...`);
           
@@ -415,7 +429,7 @@ serve(async (req) => {
             const matchingToken = tokens.find((t: any) => t.token_id === urlTokenId);
             
             if (matchingToken) {
-              console.log(`[Dashboard] Found market for token: ${m.slug}`);
+              console.log(`[Dashboard] ✅ Found market for token: ${m.slug} (${m.question})`);
               
               // Fetch live price from Dome API for this specific token
               const livePrice = await fetchCurrentPrice(urlTokenId);
@@ -426,13 +440,152 @@ serve(async (req) => {
                 matchingToken.token_label?.toLowerCase() === 'yes' ||
                 matchingToken.label?.toLowerCase() === 'yes';
               
-              // Store the matched market info for later processing
-              // Continue to regular market processing with this specific market
-              const targetMarketSlug = m.slug;
+              let yesPrice = 0.5;
+              if (livePrice !== null) {
+                yesPrice = isYesToken ? livePrice : (1 - livePrice);
+              } else {
+                // Fallback to static price
+                try {
+                  const prices = typeof m.outcomePrices === 'string' 
+                    ? JSON.parse(m.outcomePrices) 
+                    : m.outcomePrices;
+                  yesPrice = parseFloat(prices[0]) || 0.5;
+                } catch { /* ignore */ }
+              }
               
-              // Re-run the function logic with the found market slug
-              // For now, just set effectiveSlug and let the rest of the code handle it
-              // by jumping to the market data fetch section
+              // Find YES and NO tokens
+              const yesToken = tokens.find((t: any) => 
+                t.outcome?.toLowerCase() === 'yes' || 
+                t.token_label?.toLowerCase() === 'yes' ||
+                t.label?.toLowerCase() === 'yes'
+              ) || tokens[0];
+              const noToken = tokens.find((t: any) => 
+                t.outcome?.toLowerCase() === 'no' || 
+                t.token_label?.toLowerCase() === 'no' ||
+                t.label?.toLowerCase() === 'no'
+              ) || tokens[1];
+              
+              // Extract market metadata
+              const marketMetadata = {
+                description: m.description || null,
+                resolutionSource: m.resolutionSource || null,
+                tags: (m.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean),
+                endDate: m.endDate || null
+              };
+              
+              // Build the market object directly and skip to data fetching
+              const tokenMatchedMarket = {
+                title: m.question,
+                market_slug: m.slug,
+                volume_total: parseFloat(m.volume) || 0,
+                status: m.closed ? 'closed' : 'open',
+                side_a: { id: yesToken?.token_id, label: 'Yes' },
+                side_b: { id: noToken?.token_id, label: 'No' },
+                currentPrice: yesPrice,
+                condition_id: m.conditionId || null,
+                start_time: new Date(m.startDate || Date.now()).getTime() / 1000,
+                end_time: m.endDate ? new Date(m.endDate).getTime() / 1000 : null,
+                metadata: marketMetadata
+              };
+              
+              console.log(`[Dashboard] Token-matched market ready - YES: ${yesToken?.token_id?.slice(0, 20)}..., NO: ${noToken?.token_id?.slice(0, 20)}...`);
+              
+              // Return immediately to main processing with this market
+              // We'll process this like we found the market via Dome API
+              const fetchStartTimeInner = Date.now();
+              
+              // Fetch trades and event markets for this specific market
+              const [matchedTrades, matchedEventMarkets] = await Promise.all([
+                fetchTrades(m.slug, 1000, true),
+                fetchEventMarkets(eventSlug)
+              ]);
+              
+              // Continue with the full data processing for this market
+              // This is duplicated code, but ensures we process the correct market
+              const effectiveYesTokenId = yesToken?.token_id;
+              const effectiveNoTokenId = noToken?.token_id;
+              
+              let orderbook = null;
+              let verifiedPrice: number | null = null;
+              if (effectiveYesTokenId) {
+                verifiedPrice = await fetchCurrentPrice(effectiveYesTokenId);
+                if (verifiedPrice !== null) {
+                  console.log(`[Dashboard] Verified price from Dome: ${(verifiedPrice * 100).toFixed(1)}%`);
+                  tokenMatchedMarket.currentPrice = verifiedPrice;
+                }
+                orderbook = await fetchOrderbook(effectiveYesTokenId, effectiveNoTokenId, verifiedPrice || tokenMatchedMarket.currentPrice);
+              }
+              
+              // Process trades (simplified version - full processing happens in main flow)
+              const processedTrades = matchedTrades.slice(0, 50).map((t: any) => {
+                const shares = parseFloat(t.shares_normalized || t.shares || 0);
+                const price = parseFloat(t.price || 0);
+                const usdValue = shares * price;
+                let outcome = 'UNKNOWN';
+                if (t.token_id === effectiveYesTokenId) outcome = 'YES';
+                else if (t.token_id === effectiveNoTokenId) outcome = 'NO';
+                return {
+                  id: t.id || t.order_hash || Math.random().toString(36),
+                  side: (t.side || 'UNKNOWN').toUpperCase(),
+                  outcome,
+                  size: usdValue,
+                  price: price * 100,
+                  timestamp: t.timestamp ? new Date(t.timestamp * 1000).toISOString() : new Date().toISOString(),
+                  timeAgo: t.timestamp ? formatTimeAgo(t.timestamp) : 'Unknown',
+                  wallet: t.user || t.taker || '0x' + Math.random().toString(16).slice(2, 10),
+                  shares,
+                  rawPrice: price
+                };
+              }).filter((t: any) => t.size >= 0.10 && t.rawPrice >= 0.001);
+              
+              // Calculate basic stats
+              const volume24h = matchedTrades.reduce((sum: number, t: any) => {
+                const shares = parseFloat(t.shares_normalized || t.shares || 0);
+                const price = parseFloat(t.price || 0);
+                return sum + (shares * price);
+              }, 0);
+              
+              // Return the response for this token-matched market
+              return new Response(
+                JSON.stringify({
+                  market: {
+                    question: tokenMatchedMarket.title,
+                    odds: Math.round(tokenMatchedMarket.currentPrice * 100),
+                    volume: tokenMatchedMarket.volume_total,
+                    status: tokenMatchedMarket.status,
+                    endDate: tokenMatchedMarket.end_time ? new Date(tokenMatchedMarket.end_time * 1000).toISOString() : null,
+                    yesTokenId: effectiveYesTokenId,
+                    noTokenId: effectiveNoTokenId,
+                    conditionId: tokenMatchedMarket.condition_id,
+                    metadata: tokenMatchedMarket.metadata,
+                    marketSlug: m.slug
+                  },
+                  whales: [],
+                  orderbook: orderbook ? {
+                    bids: (orderbook.bids || []).slice(0, 10).map((b: any) => ({
+                      price: parseFloat(b.price) * 100,
+                      size: parseFloat(b.size || b.amount || 0)
+                    })),
+                    asks: (orderbook.asks || []).slice(0, 10).map((a: any) => ({
+                      price: parseFloat(a.price) * 100,
+                      size: parseFloat(a.size || a.amount || 0)
+                    }))
+                  } : null,
+                  priceHistory: [],
+                  recentTrades: processedTrades,
+                  tradeStats: {
+                    volume24h,
+                    buyPressure: 50,
+                    sellPressure: 50,
+                    totalTrades: matchedTrades.length,
+                    uniqueTraders: new Set(matchedTrades.map((t: any) => t.user || t.taker)).size,
+                    avgTradeSize: volume24h / Math.max(matchedTrades.length, 1)
+                  },
+                  arbitrage: null,
+                  fetchTime: Date.now() - fetchStartTimeInner
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
             }
           }
         }
