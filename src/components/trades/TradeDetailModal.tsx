@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Trophy, CheckCircle2 } from 'lucide-react';
+import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Trophy, CheckCircle2, LineChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +11,7 @@ import { useTrackedWallets } from '@/hooks/useTrackedWallets';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { WalletPnlChart } from './WalletPnlChart';
+import { MarketChartView } from './MarketChartView';
 
 interface Trade {
   token_id: string;
@@ -86,6 +87,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   const [canonicalMarketUrl, setCanonicalMarketUrl] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [showFullProfile, setShowFullProfile] = useState(false);
+  const [showChartView, setShowChartView] = useState(false);
   const [fetchedImage, setFetchedImage] = useState<string | null>(null);
   
   // Image cache to avoid refetching for same condition_id
@@ -553,6 +555,17 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           </div>
         </div>
 
+        {/* View Chart Button */}
+        <Button
+          variant="outline"
+          className="w-full h-12 gap-2 font-semibold rounded-xl bg-gradient-to-r from-primary/10 to-primary/5 border-primary/30 hover:border-primary/50 hover:bg-primary/15 transition-all group"
+          onClick={() => setShowChartView(true)}
+        >
+          <LineChart className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
+          <span className="text-foreground">View Chart</span>
+          <span className="text-xs text-muted-foreground ml-auto">Candlesticks</span>
+        </Button>
+
         {/* Quick Stats Row with PnL and Win Rate */}
         {!loading && walletMetrics && (
           <div className="space-y-2">
@@ -764,7 +777,19 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
 
   const modalContent = (
     <AnimatePresence mode="wait">
-      {showFullProfile ? (
+      {showChartView ? (
+        <MarketChartView
+          conditionId={trade.condition_id}
+          marketUrl={canonicalMarketUrl || resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`}
+          title={trade.title}
+          image={fetchedImage || trade.image}
+          onBack={() => setShowChartView(false)}
+          onClose={onClose}
+          onTrade={(side) => handleTrade(side)}
+          onAnalyze={handleAnalyze}
+          isMobile={isMobile}
+        />
+      ) : showFullProfile ? (
         <motion.div
           key="full-profile"
           initial={{ opacity: 0, x: 50 }}
