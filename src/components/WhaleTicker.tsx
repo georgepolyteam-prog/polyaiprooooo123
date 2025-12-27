@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Activity } from "lucide-react";
+import { X, Activity, Zap, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface WhaleTrade {
@@ -18,8 +18,8 @@ const DISMISS_KEY = "liveTickerDismissed";
 const DISMISS_DURATION = 3600000; // 1 hour
 const WHALE_THRESHOLD = 1000; // $1k+ shows whale emoji
 const FILTER_KEY = "liveTickerFilter";
-const TRADE_CAP = 50; // Reduced from 100 for better performance
-const FLUSH_INTERVAL = 500; // Batch updates every 500ms
+const TRADE_CAP = 50;
+const FLUSH_INTERVAL = 500;
 
 export function WhaleTicker() {
   const [trades, setTrades] = useState<WhaleTrade[]>([]);
@@ -43,15 +43,16 @@ export function WhaleTicker() {
     }
     return false;
   });
-  const [, setTick] = useState(0); // For forcing timestamp updates
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const [, setTick] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const wsUrlRef = useRef<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const tradeQueueRef = useRef<WhaleTrade[]>([]); // Queue for batching
+  const tradeQueueRef = useRef<WhaleTrade[]>([]);
   const flushIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
 
-  // Force re-render every 30 seconds to update timestamps (reduced from 10s)
+  // Force re-render every 30 seconds to update timestamps
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 30000);
     return () => clearInterval(interval);
@@ -73,7 +74,6 @@ export function WhaleTicker() {
         setTrades(prev => {
           const newTrades = [...tradeQueueRef.current, ...prev];
           tradeQueueRef.current = [];
-          // Deduplicate by id
           const seen = new Set<string>();
           const unique = newTrades.filter(t => {
             if (seen.has(t.id)) return false;
@@ -96,7 +96,6 @@ export function WhaleTicker() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
-      // Get authenticated Dome WebSocket URL
       if (!wsUrlRef.current) {
         const { data, error } = await supabase.functions.invoke('dome-ws-url');
         if (error || !data?.wsUrl) {
@@ -114,7 +113,6 @@ export function WhaleTicker() {
         console.log("WhaleTicker: Connected to Dome WebSocket");
         setIsConnected(true);
         
-        // Subscribe to Polymarket orders (same as LiveTrades)
         ws.send(JSON.stringify({
           action: "subscribe",
           platform: "polymarket",
@@ -132,11 +130,8 @@ export function WhaleTicker() {
           
           if (msg.type === 'event') {
             const rawTrade = msg.data;
-            
-            // Calculate volume same as LiveTrades
             const volume = rawTrade.price * (rawTrade.shares_normalized || rawTrade.shares);
             
-            // Only show trades with volume >= $100 for the ticker
             if (volume >= 100) {
               const newTrade: WhaleTrade = {
                 id: `${Date.now()}-${Math.random()}`,
@@ -146,7 +141,6 @@ export function WhaleTicker() {
                 timestamp: new Date()
               };
 
-              // Queue trade instead of immediate state update
               tradeQueueRef.current.push(newTrade);
             }
           }
@@ -165,7 +159,6 @@ export function WhaleTicker() {
         setIsConnected(false);
         wsRef.current = null;
         
-        // Reconnect unless intentionally closed
         if (event.code !== 1000) {
           reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
         }
@@ -223,39 +216,54 @@ export function WhaleTicker() {
     ? [...filteredTrades, ...filteredTrades, ...filteredTrades] 
     : [];
 
-  // Calculate marquee duration based on trade count (consistent speed)
   const marqueeDuration = Math.max(25, Math.min(60, filteredTrades.length * 3));
+  
+  // Calculate trades per minute
+  const recentTrades = trades.filter(t => Date.now() - t.timestamp.getTime() < 60000);
+  const tradesPerMin = recentTrades.length;
+
+  if (isDismissed) return null;
 
   return (
-    <AnimatePresence>
-      {!isDismissed && (
+    <>
+      {/* Desktop: Full premium ticker */}
+      <AnimatePresence>
         <motion.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="fixed top-16 left-0 right-0 z-40"
+          className="hidden md:block fixed top-16 left-0 right-0 z-40"
         >
-          {/* Background - pointer-events-none so clicks pass through */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background border-b border-border/50" />
+          {/* Premium glassmorphism background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/90 to-background/95 backdrop-blur-xl border-b border-primary/10" />
           
-          {/* Accent line - pointer-events-none */}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          {/* Animated accent glow */}
+          <div className="absolute inset-x-0 bottom-0 h-px">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/60 to-transparent animate-pulse" />
+          </div>
+          
+          {/* Subtle scan line effect */}
+          <div className="absolute inset-0 opacity-[0.02] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)] pointer-events-none" />
 
-          <div className="relative flex items-center h-9 md:h-8">
-            {/* Live badge with filters */}
-            <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-2 px-2 md:px-3 h-full bg-primary/5 border-r border-border/30">
-              {/* Live indicator */}
-              <span className="relative flex h-1.5 w-1.5">
+          <div className="relative flex items-center h-10">
+            {/* Premium live badge */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-4 h-full bg-gradient-to-r from-primary/10 to-transparent border-r border-primary/20">
+              {/* Animated live dot */}
+              <span className="relative flex h-2 w-2">
                 <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-red-500 animate-ping' : 'bg-muted-foreground'}`} />
-                <span className={`relative inline-flex rounded-full h-full w-full ${isConnected ? 'bg-red-500' : 'bg-muted-foreground'}`} />
-              </span>
-              <span className="text-[10px] font-semibold tracking-wide text-foreground uppercase">
-                LIVE
+                <span className={`relative inline-flex rounded-full h-full w-full ${isConnected ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]' : 'bg-muted-foreground'}`} />
               </span>
               
-              {/* Quick filter buttons */}
-              <div className="hidden md:flex items-center gap-0.5 ml-1">
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-bold tracking-wider text-foreground">
+                  LIVE
+                </span>
+              </div>
+              
+              {/* Filter pills */}
+              <div className="flex items-center gap-1 ml-2 pl-2 border-l border-primary/20">
                 {(['ALL', 'BUYS', 'SELLS'] as FilterType[]).map((f) => (
                   <button
                     key={f}
@@ -263,14 +271,14 @@ export function WhaleTicker() {
                       e.stopPropagation();
                       setFilter(f);
                     }}
-                    className={`px-1.5 py-0.5 text-[9px] font-medium rounded transition-colors ${
+                    className={`px-2 py-1 text-[10px] font-semibold rounded-md transition-all duration-200 ${
                       filter === f 
                         ? f === 'BUYS' 
-                          ? 'bg-emerald-500/20 text-emerald-400' 
+                          ? 'bg-emerald-500/20 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
                           : f === 'SELLS'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-primary/20 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                            ? 'bg-red-500/20 text-red-400 shadow-[0_0_10px_rgba(239,68,68,0.2)]'
+                            : 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(139,92,246,0.2)]'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
                     }`}
                   >
                     {f}
@@ -279,9 +287,9 @@ export function WhaleTicker() {
               </div>
             </div>
 
-            {/* Scrolling content area - clicks navigate to LiveTrades */}
+            {/* Scrolling trades area */}
             <div 
-              className="flex-1 overflow-hidden mx-2 md:mx-0 cursor-pointer"
+              className="flex-1 overflow-hidden cursor-pointer"
               onClick={() => navigate("/live-trades")}
             >
               {filteredTrades.length > 0 ? (
@@ -294,84 +302,218 @@ export function WhaleTicker() {
                   {displayTrades.map((trade, idx) => (
                     <div
                       key={`${trade.id}-${idx}`}
-                      className="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 text-xs"
+                      className={`inline-flex items-center gap-2 px-4 py-1 mx-1 rounded-lg transition-all ${
+                        trade.amount >= WHALE_THRESHOLD 
+                          ? 'bg-gradient-to-r from-primary/10 to-transparent border border-primary/20' 
+                          : ''
+                      }`}
                     >
-                      {/* Whale emoji for $1k+ trades only */}
+                      {/* Whale emoji with glow for big trades */}
                       {trade.amount >= WHALE_THRESHOLD && (
-                        <span className="text-sm opacity-80">🐋</span>
+                        <span className="text-base drop-shadow-[0_0_4px_rgba(139,92,246,0.5)]">🐋</span>
                       )}
                       
-                      {/* Amount with color */}
-                      <span className={`font-semibold tabular-nums ${
-                        trade.side === "BUY" 
-                          ? "text-emerald-400" 
-                          : "text-red-400"
+                      {/* Amount with gradient text for big trades */}
+                      <span className={`font-bold tabular-nums text-sm ${
+                        trade.amount >= WHALE_THRESHOLD
+                          ? trade.side === "BUY" 
+                            ? "text-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.4)]" 
+                            : "text-red-400 drop-shadow-[0_0_6px_rgba(239,68,68,0.4)]"
+                          : trade.side === "BUY" 
+                            ? "text-emerald-400" 
+                            : "text-red-400"
                       }`}>
                         {formatAmount(trade.amount)}
                       </span>
                       
-                      {/* Side badge */}
-                      <span className={`text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                      {/* Side badge with glow */}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                         trade.side === "BUY" 
-                          ? "bg-emerald-500/10 text-emerald-400" 
-                          : "bg-red-500/10 text-red-400"
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" 
+                          : "bg-red-500/15 text-red-400 border border-red-500/30"
                       }`}>
                         {trade.side}
                       </span>
                       
                       {/* Market name */}
-                      <span className="text-muted-foreground truncate max-w-[100px] md:max-w-[180px]">
+                      <span className="text-muted-foreground text-xs truncate max-w-[200px]">
                         {trade.market}
                       </span>
                       
-                      {/* Time ago */}
-                      <span className="text-muted-foreground/50 text-[10px] tabular-nums">
+                      {/* Time */}
+                      <span className="text-muted-foreground/40 text-[10px] tabular-nums">
                         {formatTimeAgo(trade.timestamp)}
                       </span>
                       
-                      {/* Separator */}
-                      <span className="text-border mx-1 md:mx-2">•</span>
+                      {/* Separator dot */}
+                      <span className="text-primary/30 mx-2">•</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 px-2 md:px-4 text-xs">
+                <div className="flex items-center gap-3 px-4 text-sm">
                   <motion.div
                     className="flex items-center gap-2"
                     animate={{ opacity: [0.5, 1, 0.5] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   >
-                    <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+                    <Activity className="w-4 h-4 text-primary/60" />
                     <span className="text-muted-foreground">
                       Waiting for live trades...
                     </span>
                   </motion.div>
-                  <span className="hidden md:inline text-muted-foreground/50 text-[10px]">
-                    Powered by Dome API
-                  </span>
                 </div>
               )}
             </div>
 
-            {/* Customize hint - desktop only */}
-            <button
-              className="hidden md:flex flex-shrink-0 items-center px-3 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors font-medium cursor-pointer bg-transparent border-none"
-              onClick={() => navigate("/live-trades")}
-            >
-              Customize filters →
-            </button>
-
-            {/* Dismiss button */}
-            <button
-              onClick={handleDismiss}
-              className="flex-shrink-0 flex items-center justify-center w-8 h-full md:w-9 hover:bg-muted/50 transition-colors border-l border-border/30"
-              aria-label="Dismiss live trades ticker"
-            >
-              <X className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
-            </button>
+            {/* Stats & actions */}
+            <div className="flex-shrink-0 flex items-center gap-3 px-4 border-l border-primary/20">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Activity className="w-3.5 h-3.5 text-primary/60" />
+                <span className="tabular-nums font-medium">{tradesPerMin}/min</span>
+              </div>
+              
+              <button
+                onClick={handleDismiss}
+                className="flex items-center justify-center w-7 h-7 rounded-lg hover:bg-muted/50 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+              </button>
+            </div>
           </div>
         </motion.div>
-      )}
-    </AnimatePresence>
+      </AnimatePresence>
+
+      {/* Mobile: Compact floating pill */}
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.8, y: 20 }}
+          transition={{ duration: 0.2 }}
+          className="md:hidden fixed bottom-20 right-3 z-40"
+        >
+          <motion.div
+            layout
+            className={`bg-background/95 backdrop-blur-xl border border-primary/20 shadow-[0_0_20px_rgba(0,0,0,0.3),0_0_40px_rgba(139,92,246,0.1)] rounded-2xl overflow-hidden ${
+              mobileExpanded ? 'w-72' : 'w-auto'
+            }`}
+          >
+            {/* Collapsed: Simple pill */}
+            <button
+              onClick={() => setMobileExpanded(!mobileExpanded)}
+              className="flex items-center gap-2 px-3 py-2 w-full"
+            >
+              {/* Live dot */}
+              <span className="relative flex h-1.5 w-1.5">
+                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-red-500 animate-ping' : 'bg-muted-foreground'}`} />
+                <span className={`relative inline-flex rounded-full h-full w-full ${isConnected ? 'bg-red-500' : 'bg-muted-foreground'}`} />
+              </span>
+              
+              <span className="text-xs font-bold text-foreground">🐋</span>
+              <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">
+                {tradesPerMin}/min
+              </span>
+              
+              <ChevronUp className={`w-3 h-3 text-muted-foreground transition-transform ${mobileExpanded ? '' : 'rotate-180'}`} />
+            </button>
+
+            {/* Expanded: Show recent trades */}
+            <AnimatePresence>
+              {mobileExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="border-t border-primary/10"
+                >
+                  {/* Quick filters */}
+                  <div className="flex items-center gap-1 p-2 border-b border-primary/10">
+                    {(['ALL', 'BUYS', 'SELLS'] as FilterType[]).map((f) => (
+                      <button
+                        key={f}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilter(f);
+                        }}
+                        className={`flex-1 px-2 py-1 text-[10px] font-semibold rounded-md transition-all ${
+                          filter === f 
+                            ? f === 'BUYS' 
+                              ? 'bg-emerald-500/20 text-emerald-400' 
+                              : f === 'SELLS'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-primary/20 text-primary'
+                            : 'text-muted-foreground'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Recent trades list */}
+                  <div className="max-h-40 overflow-y-auto">
+                    {filteredTrades.slice(0, 5).map((trade) => (
+                      <div
+                        key={trade.id}
+                        className="flex items-center gap-2 px-3 py-2 border-b border-primary/5 last:border-0"
+                        onClick={() => navigate("/live-trades")}
+                      >
+                        {trade.amount >= WHALE_THRESHOLD && (
+                          <span className="text-sm">🐋</span>
+                        )}
+                        <span className={`font-bold text-xs tabular-nums ${
+                          trade.side === "BUY" ? "text-emerald-400" : "text-red-400"
+                        }`}>
+                          {formatAmount(trade.amount)}
+                        </span>
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${
+                          trade.side === "BUY" 
+                            ? "bg-emerald-500/10 text-emerald-400" 
+                            : "bg-red-500/10 text-red-400"
+                        }`}>
+                          {trade.side}
+                        </span>
+                        <span className="text-muted-foreground text-[10px] truncate flex-1">
+                          {trade.market}
+                        </span>
+                        <span className="text-muted-foreground/40 text-[9px]">
+                          {formatTimeAgo(trade.timestamp)}
+                        </span>
+                      </div>
+                    ))}
+                    
+                    {filteredTrades.length === 0 && (
+                      <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+                        <Activity className="w-4 h-4" />
+                        <span>Waiting for trades...</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* View all button */}
+                  <button
+                    onClick={() => navigate("/live-trades")}
+                    className="w-full px-3 py-2 text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors border-t border-primary/10"
+                  >
+                    View All Trades →
+                  </button>
+                  
+                  {/* Dismiss */}
+                  <button
+                    onClick={handleDismiss}
+                    className="w-full px-3 py-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Dismiss for 1 hour
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    </>
   );
 }
