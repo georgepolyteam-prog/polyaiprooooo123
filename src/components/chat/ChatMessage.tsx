@@ -783,7 +783,7 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
             <PolyfactualResultHeader />
             
             {/* Research content with enhanced formatting */}
-            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-[#0d1117] to-[#161b22] border border-cyan-500/20 shadow-lg shadow-cyan-500/5 backdrop-blur-sm">
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-[#0d1117] to-[#161b22] border border-cyan-500/20 shadow-lg shadow-cyan-500/5 backdrop-blur-sm overflow-hidden">
               <PolyfactualContent content={polyfactualResult.content} />
             </div>
             
@@ -818,8 +818,8 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
           <>
             {/* Intro text */}
             {introText && (
-              <div className="p-3 sm:p-4 rounded-2xl rounded-tl-sm bg-muted/60 border border-border/60 shadow-soft backdrop-blur-sm">
-                <div className="text-sm leading-relaxed">
+              <div className="p-3 sm:p-4 rounded-2xl rounded-tl-sm bg-muted/60 border border-border/60 shadow-soft backdrop-blur-sm overflow-hidden">
+                <div className="text-sm leading-relaxed break-words" style={{ overflowWrap: 'anywhere' }}>
                   {formatText(introText)}
                 </div>
               </div>

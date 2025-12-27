@@ -233,15 +233,15 @@ export const PolyfactualContent = ({ content }: PolyfactualContentProps) => {
       if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
         return (
           <div key={idx} className="flex gap-2 my-1.5 ml-1">
-            <span className="text-primary mt-0.5">•</span>
-            <span>{formatInlineContent(trimmed.slice(1).trim())}</span>
+            <span className="text-primary mt-0.5 flex-shrink-0">•</span>
+            <span className="break-words overflow-hidden" style={{ overflowWrap: 'anywhere' }}>{formatInlineContent(trimmed.slice(1).trim())}</span>
           </div>
         );
       }
       
       // Regular paragraph
       return (
-        <p key={idx} className="my-2">
+        <p key={idx} className="my-2 break-words overflow-hidden" style={{ overflowWrap: 'anywhere' }}>
           {formatInlineContent(trimmed)}
         </p>
       );
@@ -278,7 +278,7 @@ export const PolyfactualContent = ({ content }: PolyfactualContentProps) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-hidden">
       {/* Key Stats Panel */}
       {keyStats.length > 0 && (
         <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-card border border-border">
