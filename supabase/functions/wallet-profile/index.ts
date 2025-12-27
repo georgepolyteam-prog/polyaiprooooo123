@@ -115,9 +115,8 @@ serve(async (req) => {
       }
     });
 
-    // Format recent trades
+    // Format recent trades - return all trades (up to 1000 from API limit)
     const recentTrades = orders
-      .slice(0, 30)
       .map((order: any) => {
         const shares = parseFloat(order.shares_normalized || order.shares || 0);
         const price = parseFloat(order.price || 0);

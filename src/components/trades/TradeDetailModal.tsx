@@ -441,8 +441,8 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
                   <Clock className="w-5 h-5 text-primary" />
                   Recent Trades ({walletTrades.length})
                 </h3>
-                <div className="space-y-2 max-h-[300px] sm:max-h-[350px] overflow-y-auto overscroll-contain">
-                  {walletTrades.slice(0, 20).map((t, i) => (
+                <div className="space-y-2 max-h-[50vh] sm:max-h-[400px] overflow-y-auto overscroll-contain">
+                  {walletTrades.map((t, i) => (
                     <a
                       key={i}
                       href={`https://polymarket.com/event/${t.market_slug}`}
