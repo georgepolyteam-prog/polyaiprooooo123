@@ -139,7 +139,8 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
       
       // Check cache first
       if (imageCache.has(trade.condition_id)) {
-        setFetchedImage(imageCache.get(trade.condition_id) || null);
+        const cached = imageCache.get(trade.condition_id);
+        setFetchedImage(cached || null);
         return;
       }
       
@@ -148,13 +149,25 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           body: { conditionIds: [trade.condition_id] }
         });
         
-        if (!error && data?.markets?.[0]?.image) {
-          const image = data.markets[0].image;
-          imageCache.set(trade.condition_id, image);
-          setFetchedImage(image);
+        if (!error && data?.markets) {
+          // Find the exact matching market by conditionId (not just markets[0])
+          const normalizedId = trade.condition_id.toLowerCase().trim();
+          const matchedMarket = data.markets.find((m: any) => 
+            (m.conditionId || '').toLowerCase().trim() === normalizedId
+          );
+          
+          if (matchedMarket?.image) {
+            imageCache.set(trade.condition_id, matchedMarket.image);
+            setFetchedImage(matchedMarket.image);
+          } else {
+            // Store null to prevent re-fetching
+            imageCache.set(trade.condition_id, '');
+            setFetchedImage(null);
+          }
         }
       } catch (err) {
         console.error('Error fetching market image:', err);
+        setFetchedImage(null);
       }
     }
     
@@ -471,9 +484,10 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     <div className="flex flex-col h-full max-h-[85vh] sm:max-h-[80vh]">
       {/* Compact Header */}
       <div className="bg-card/95 backdrop-blur-xl border-b border-border p-4 flex items-start gap-3">
-        {(fetchedImage || trade.image) ? (
+        {/* Only use fetchedImage - never trust trade.image (can be poisoned by cache) */}
+        {fetchedImage ? (
           <img 
-            src={fetchedImage || trade.image} 
+            src={fetchedImage} 
             alt={trade.title}
             className="w-12 h-12 rounded-xl object-cover shrink-0"
             onError={(e) => {
@@ -482,8 +496,8 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             }}
           />
         ) : (
-          <div className="w-12 h-12 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
-            <BarChart3 className="w-6 h-6 text-muted-foreground" />
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+            <BarChart3 className="w-6 h-6 text-primary" />
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -782,7 +796,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           conditionId={trade.condition_id}
           marketUrl={canonicalMarketUrl || resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`}
           title={trade.title}
-          image={fetchedImage || trade.image}
+          image={fetchedImage}
           onBack={() => setShowChartView(false)}
           onClose={onClose}
           onTrade={(side) => handleTrade(side)}
