@@ -91,6 +91,10 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
   // Check if user holds the LOSING outcome (their outcome doesn't match the winning outcome)
   const userHoldsLosingOutcome = !isCheckingSettlement && readyForRedemption && winningOutcome && 
     position.outcome.toUpperCase() !== winningOutcome.toUpperCase();
+  
+  // User holds WINNING outcome - only then is it truly claimable
+  const userHoldsWinningOutcome = !isCheckingSettlement && readyForRedemption && winningOutcome && 
+    position.outcome.toUpperCase() === winningOutcome.toUpperCase();
 
   const polymarketUrl = `https://polymarket.com/event/${position.eventSlug}`;
 
@@ -311,12 +315,12 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   Verifying USDC transfer...
                 </Button>
               </motion.div>
-            ) : readyForRedemption ? (
+            ) : userHoldsWinningOutcome ? (
               <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-                {/* Ready indicator */}
+                {/* Ready indicator - only show when user actually holds the winning outcome */}
                 <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>✓ Ready to claim - Payouts confirmed on-chain</span>
+                  <span>✓ Ready to claim - You hold the winning {winningOutcome} outcome</span>
                 </div>
                 <Button
                   onClick={handleClaim}
