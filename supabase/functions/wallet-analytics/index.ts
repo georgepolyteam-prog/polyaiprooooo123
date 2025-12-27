@@ -41,7 +41,7 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         }
       }),
-      fetch(`${DOME_API}/polymarket/orders?user=${address}&limit=50`, {
+      fetch(`${DOME_API}/polymarket/orders?user=${address}&limit=1000`, {
         headers: {
           'Authorization': `Bearer ${DOME_API_KEY}`,
           'Content-Type': 'application/json'

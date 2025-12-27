@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Activity, Copy, Sparkles, Check, Loader2, Star, Zap, BarChart3 } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, Zap, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +34,23 @@ interface WalletMetrics {
   unique_markets: number;
 }
 
+interface PnlData {
+  total_pnl?: number;
+  realized_pnl?: number;
+  unrealized_pnl?: number;
+}
+
+interface RecentTrade {
+  token_label: string;
+  side: string;
+  market_slug: string;
+  title: string;
+  shares_normalized?: number;
+  shares?: number;
+  price: number;
+  timestamp: number;
+}
+
 interface TradeDetailModalProps {
   trade: Trade;
   onClose: () => void;
@@ -44,10 +61,12 @@ interface TradeDetailModalProps {
 export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDetailModalProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { isWalletTracked, trackWallet, untrackWallet } = useTrackedWallets();
   
   const [walletMetrics, setWalletMetrics] = useState<WalletMetrics | null>(null);
+  const [pnlData, setPnlData] = useState<PnlData | null>(null);
+  const [recentTrades, setRecentTrades] = useState<RecentTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(trade.resolved_url || null);
@@ -55,6 +74,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   const [loadingSide, setLoadingSide] = useState<'YES' | 'NO' | null>(null);
   const [canonicalMarketUrl, setCanonicalMarketUrl] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [showFullProfile, setShowFullProfile] = useState(false);
   
   const isTracked = isWalletTracked(trade.user);
   
@@ -95,11 +115,8 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     resolveMarketUrl();
   }, [trade.market_slug, trade.condition_id, trade.resolved_url, trade.token_id]);
 
-  useEffect(() => {
-    fetchWalletData();
-  }, [trade.user]);
-
-  async function fetchWalletData() {
+  const fetchWalletData = useCallback(async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('wallet-analytics', {
         body: { address: trade.user }
@@ -113,13 +130,19 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
 
       if (data) {
         setWalletMetrics(data.walletMetrics);
+        setPnlData(data.pnlData);
+        setRecentTrades(data.recentTrades || []);
       }
     } catch (error) {
       console.error('Error fetching wallet data:', error);
     } finally {
       setLoading(false);
     }
-  }
+  }, [trade.user]);
+
+  useEffect(() => {
+    fetchWalletData();
+  }, [fetchWalletData]);
 
   const copyWallet = async () => {
     await navigator.clipboard.writeText(trade.user);
@@ -143,6 +166,9 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   };
 
   const handleTrackWallet = async () => {
+    // Wait for auth to load before checking
+    if (authLoading) return;
+    
     if (!user) {
       toast({ title: "Sign in to track wallets", variant: "destructive" });
       navigate('/auth');
@@ -167,7 +193,173 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     return `$${vol.toFixed(2)}`;
   };
 
-  const modalContent = (
+  const formatPnl = (pnl: number) => {
+    const formatted = formatVolume(Math.abs(pnl));
+    return pnl >= 0 ? `+${formatted}` : `-${formatted.slice(1)}`;
+  };
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Full profile view content
+  const fullProfileContent = (
+    <div className="flex flex-col h-full max-h-[85vh] sm:max-h-[80vh]">
+      {/* Header with back button */}
+      <div className="bg-card/95 backdrop-blur-xl border-b border-border p-4 flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => setShowFullProfile(false)} className="shrink-0">
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-bold text-foreground">Wallet Profile</h2>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="font-mono text-xs text-muted-foreground">
+              {trade.user.slice(0, 10)}...{trade.user.slice(-8)}
+            </span>
+            <button onClick={copyWallet} className="p-1 hover:bg-muted rounded">
+              {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
+            </button>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" onClick={fetchWalletData} disabled={loading} className="shrink-0">
+          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+        </Button>
+        {!isMobile && (
+          <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
+            <X className="w-5 h-5" />
+          </Button>
+        )}
+      </div>
+
+      {/* Full profile content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl p-4 bg-muted/20 border border-border/30">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Volume</span>
+            </div>
+            <div className="font-bold text-lg">{walletMetrics ? formatVolume(walletMetrics.total_volume) : '—'}</div>
+          </div>
+          <div className="rounded-xl p-4 bg-muted/20 border border-border/30">
+            <div className="flex items-center gap-2 mb-2">
+              <Activity className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Trades</span>
+            </div>
+            <div className="font-bold text-lg">{walletMetrics?.total_trades ?? '—'}</div>
+          </div>
+          <div className="rounded-xl p-4 bg-muted/20 border border-border/30">
+            <div className="flex items-center gap-2 mb-2">
+              <Layers className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Markets</span>
+            </div>
+            <div className="font-bold text-lg">{walletMetrics?.unique_markets ?? '—'}</div>
+          </div>
+          <div className="rounded-xl p-4 bg-muted/20 border border-border/30">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Total PnL</span>
+            </div>
+            <div className={cn(
+              "font-bold text-lg",
+              pnlData?.total_pnl !== undefined && pnlData.total_pnl >= 0 ? "text-success" : "text-destructive"
+            )}>
+              {pnlData?.total_pnl !== undefined ? formatPnl(pnlData.total_pnl) : '—'}
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Trades */}
+        <div className="rounded-xl border border-border/30 overflow-hidden">
+          <div className="p-3 border-b border-border/30 bg-muted/10">
+            <h3 className="font-semibold text-sm">Recent Activity</h3>
+          </div>
+          <div className="divide-y divide-border/20 max-h-[300px] overflow-y-auto">
+            {recentTrades.length === 0 ? (
+              <div className="p-6 text-center text-muted-foreground text-sm">
+                No recent trades
+              </div>
+            ) : (
+              recentTrades.slice(0, 20).map((t, i) => {
+                const tradeShares = t.shares_normalized || t.shares || 0;
+                const tradeVolume = t.price * tradeShares;
+                return (
+                  <div key={i} className="p-3 hover:bg-muted/10 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{t.title}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          <span className={cn(
+                            "flex items-center gap-1 font-semibold",
+                            t.side?.toUpperCase() === 'BUY' ? "text-success" : "text-destructive"
+                          )}>
+                            {t.side?.toUpperCase() === 'BUY' ? (
+                              <ArrowUpRight className="w-3 h-3" />
+                            ) : (
+                              <ArrowDownRight className="w-3 h-3" />
+                            )}
+                            {t.token_label || (t.side?.toUpperCase() === 'BUY' ? 'YES' : 'NO')}
+                          </span>
+                          <span>•</span>
+                          <span>{formatTime(t.timestamp)}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-sm">{formatVolume(tradeVolume)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          @{(t.price * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* External Links */}
+        <div className="flex gap-2">
+          <a
+            href={`https://polymarket.com/profile/${trade.user}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1"
+          >
+            <Button variant="outline" className="w-full gap-2 h-10 rounded-xl">
+              <ExternalLink className="w-4 h-4" />
+              Polymarket Profile
+            </Button>
+          </a>
+          <a
+            href={`https://polygonscan.com/address/${trade.user}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1"
+          >
+            <Button variant="outline" className="w-full gap-2 h-10 rounded-xl">
+              <ExternalLink className="w-4 h-4" />
+              Polygonscan
+            </Button>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main modal content
+  const mainContent = (
     <div className="flex flex-col h-full max-h-[85vh] sm:max-h-[80vh]">
       {/* Compact Header */}
       <div className="bg-card/95 backdrop-blur-xl border-b border-border p-4 flex items-start gap-3">
@@ -183,13 +375,12 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             {trade.title}
           </h2>
           <div className="flex items-center gap-2 mt-1">
-            <Link 
-              to={`/wallet/${trade.user}`}
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
+            <button 
+              onClick={() => setShowFullProfile(true)}
               className="font-mono text-xs text-primary hover:underline"
             >
               {trade.user.slice(0, 6)}...{trade.user.slice(-4)}
-            </Link>
+            </button>
             <button onClick={copyWallet} className="p-1 hover:bg-muted rounded">
               {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
             </button>
@@ -248,9 +439,9 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           </div>
         </div>
 
-        {/* Quick Stats Row */}
+        {/* Quick Stats Row with PnL */}
         {!loading && walletMetrics && (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div className="rounded-lg p-3 bg-muted/20 text-center">
               <div className="text-xs text-muted-foreground mb-1">Volume</div>
               <div className="font-bold text-sm">{formatVolume(walletMetrics.total_volume)}</div>
@@ -263,6 +454,26 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
               <div className="text-xs text-muted-foreground mb-1">Markets</div>
               <div className="font-bold text-sm">{walletMetrics.unique_markets}</div>
             </div>
+            <div className="rounded-lg p-3 bg-muted/20 text-center">
+              <div className="text-xs text-muted-foreground mb-1">PnL</div>
+              <div className={cn(
+                "font-bold text-sm",
+                pnlData?.total_pnl !== undefined && pnlData.total_pnl >= 0 ? "text-success" : "text-destructive"
+              )}>
+                {pnlData?.total_pnl !== undefined ? formatPnl(pnlData.total_pnl) : '—'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div className="grid grid-cols-4 gap-2">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-lg p-3 bg-muted/20 text-center animate-pulse">
+                <div className="h-3 bg-muted/40 rounded mb-2 w-12 mx-auto" />
+                <div className="h-5 bg-muted/40 rounded w-16 mx-auto" />
+              </div>
+            ))}
           </div>
         )}
 
@@ -317,9 +528,9 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
                 : "border-border/50 hover:border-primary/50 hover:bg-primary/10"
             )}
             onClick={handleTrackWallet}
-            disabled={trackingLoading}
+            disabled={trackingLoading || authLoading}
           >
-            {trackingLoading ? (
+            {trackingLoading || authLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Star className={cn("w-4 h-4", isTracked && "fill-primary")} />
@@ -353,17 +564,16 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           </div>
         </div>
 
-        {/* View Full Profile Link */}
+        {/* View Full Profile Button */}
         <div className="pt-2 border-t border-border/30">
           <div className="flex items-center justify-between text-sm">
-            <Link
-              to={`/wallet/${trade.user}`}
-              onClick={onClose}
+            <button
+              onClick={() => setShowFullProfile(true)}
               className="text-primary hover:underline flex items-center gap-1"
             >
               <BarChart3 className="w-4 h-4" />
               View Full Wallet Profile
-            </Link>
+            </button>
             <a
               href={resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`}
               target="_blank"
@@ -377,6 +587,34 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
         </div>
       </div>
     </div>
+  );
+
+  const modalContent = (
+    <AnimatePresence mode="wait">
+      {showFullProfile ? (
+        <motion.div
+          key="full-profile"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 50 }}
+          transition={{ duration: 0.15 }}
+          className="h-full"
+        >
+          {fullProfileContent}
+        </motion.div>
+      ) : (
+        <motion.div
+          key="main"
+          initial={{ opacity: 0, x: -50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.15 }}
+          className="h-full"
+        >
+          {mainContent}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 
   if (isMobile) {
