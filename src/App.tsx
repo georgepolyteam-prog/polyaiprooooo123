@@ -33,11 +33,11 @@ const AppContent = () => {
 
   return (
     <>
-      <WhaleTicker />
       <HighTrafficBanner isVisible={isHighTraffic} />
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <WhaleTicker />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/chat" element={<Index />} />
