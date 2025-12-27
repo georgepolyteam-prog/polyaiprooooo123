@@ -13,6 +13,7 @@ interface WhaleTrade {
 export function WhaleTicker() {
   const [trades, setTrades] = useState<WhaleTrade[]>([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
@@ -20,55 +21,60 @@ export function WhaleTicker() {
   useEffect(() => {
     const connectWebSocket = () => {
       try {
-        const ws = new WebSocket("wss://ws-subscriptions-clob.polymarket.com/ws/market");
+        // Use Dome's WebSocket for real-time trades (same as LiveTrades)
+        const ws = new WebSocket("wss://data.dfrn.io/ws/v1/trades");
         wsRef.current = ws;
 
         ws.onopen = () => {
-          // Subscribe to all markets
+          console.log("WhaleTicker: WebSocket connected");
+          setIsConnected(true);
+          // Subscribe to all Polymarket trades
           ws.send(JSON.stringify({
-            type: "Market",
-            assets_ids: []
+            action: "subscribe",
+            data: {
+              channel: "trades",
+              platform: "polymarket"
+            }
           }));
         };
 
         ws.onmessage = (event) => {
           try {
-            const messages = JSON.parse(event.data);
-            const msgArray = Array.isArray(messages) ? messages : [messages];
+            const msg = JSON.parse(event.data);
+            
+            // Handle trade messages
+            if (msg.type === "trade" || msg.data?.type === "trade") {
+              const tradeData = msg.data || msg;
+              const amount = parseFloat(tradeData.amount || tradeData.size || "0");
+              
+              // Only show whale trades ($1,000+)
+              if (amount >= 1000) {
+                const newTrade: WhaleTrade = {
+                  id: `${Date.now()}-${Math.random()}`,
+                  amount,
+                  side: tradeData.side?.toUpperCase() === "SELL" ? "SELL" : "BUY",
+                  market: tradeData.market_title || tradeData.market || tradeData.question?.slice(0, 40) || "Market",
+                  timestamp: new Date()
+                };
 
-            msgArray.forEach((msg: any) => {
-              if (msg.event_type === "trade" || msg.price) {
-                const size = parseFloat(msg.size || msg.count || "0");
-                const price = parseFloat(msg.price || "0");
-                const amount = size * price;
-
-                // Only show whale trades ($1,000+)
-                if (amount >= 1000) {
-                  const newTrade: WhaleTrade = {
-                    id: `${Date.now()}-${Math.random()}`,
-                    amount,
-                    side: msg.side?.toUpperCase() === "SELL" ? "SELL" : "BUY",
-                    market: msg.market || msg.asset_id?.slice(0, 12) || "Unknown Market",
-                    timestamp: new Date()
-                  };
-
-                  setTrades(prev => {
-                    const updated = [newTrade, ...prev].slice(0, 20);
-                    return updated;
-                  });
-                }
+                setTrades(prev => {
+                  const updated = [newTrade, ...prev].slice(0, 20);
+                  return updated;
+                });
               }
-            });
+            }
           } catch (e) {
             // Silent parse error
           }
         };
 
         ws.onerror = () => {
+          setIsConnected(false);
           ws.close();
         };
 
         ws.onclose = () => {
+          setIsConnected(false);
           // Reconnect after 5 seconds
           reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
         };
@@ -102,13 +108,8 @@ export function WhaleTicker() {
     return `${Math.floor(minutes / 60)}h ago`;
   };
 
-  // Don't render if no trades yet
-  if (trades.length === 0) {
-    return null;
-  }
-
   // Duplicate trades for seamless loop
-  const displayTrades = [...trades, ...trades];
+  const displayTrades = trades.length > 0 ? [...trades, ...trades] : [];
 
   return (
     <div
@@ -137,54 +138,66 @@ export function WhaleTicker() {
         {/* Live badge */}
         <div className="flex-shrink-0 flex items-center gap-2 px-4 bg-red-900/50 border-r border-orange-500/30 h-full">
           <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isConnected ? 'bg-red-400' : 'bg-yellow-400'} opacity-75`} />
+            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isConnected ? 'bg-red-500' : 'bg-yellow-500'}`} />
           </span>
-          <span className="text-xs font-bold text-red-300 tracking-wider">WHALE ALERTS</span>
+          <span className="text-xs font-bold text-red-300 tracking-wider">🐋 WHALE ALERTS</span>
         </div>
 
         {/* Scrolling content */}
         <div className="flex-1 overflow-hidden">
-          <motion.div
-            className="flex whitespace-nowrap"
-            animate={{
-              x: isPaused ? 0 : [0, -50 * trades.length]
-            }}
-            transition={{
-              x: {
-                duration: trades.length * 4,
-                repeat: Infinity,
-                ease: "linear"
-              }
-            }}
-          >
-            {displayTrades.map((trade, idx) => (
-              <div
-                key={`${trade.id}-${idx}`}
-                className="inline-flex items-center gap-2 px-6 text-sm"
+          {trades.length > 0 ? (
+            <motion.div
+              className="flex whitespace-nowrap"
+              animate={{
+                x: isPaused ? 0 : [0, -50 * trades.length]
+              }}
+              transition={{
+                x: {
+                  duration: trades.length * 4,
+                  repeat: Infinity,
+                  ease: "linear"
+                }
+              }}
+            >
+              {displayTrades.map((trade, idx) => (
+                <div
+                  key={`${trade.id}-${idx}`}
+                  className="inline-flex items-center gap-2 px-6 text-sm"
+                >
+                  <span className="text-lg">🐋</span>
+                  <span className={trade.side === "BUY" 
+                    ? "font-bold text-emerald-400" 
+                    : "font-bold text-red-400"
+                  }>
+                    {formatAmount(trade.amount)}
+                  </span>
+                  <span className={trade.side === "BUY" 
+                    ? "text-emerald-500 font-medium" 
+                    : "text-red-500 font-medium"
+                  }>
+                    {trade.side}
+                  </span>
+                  <span className="text-orange-200/70 truncate max-w-[200px]">
+                    on {trade.market}
+                  </span>
+                  <span className="text-orange-400/50 text-xs">
+                    • {formatTimeAgo(trade.timestamp)}
+                  </span>
+                </div>
+              ))}
+            </motion.div>
+          ) : (
+            <div className="flex items-center gap-3 px-6 text-sm text-orange-300/70">
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity }}
               >
-                <span className="text-lg">🐋</span>
-                <span className={trade.side === "BUY" 
-                  ? "font-bold text-emerald-400" 
-                  : "font-bold text-red-400"
-                }>
-                  {formatAmount(trade.amount)}
-                </span>
-                <span className={trade.side === "BUY" 
-                  ? "text-emerald-500 font-medium" 
-                  : "text-red-500 font-medium"
-                }>
-                  {trade.side}
-                </span>
-                <span className="text-orange-200/70 truncate max-w-[200px]">
-                  on {trade.market}
-                </span>
-                <span className="text-orange-400/50 text-xs">
-                  • {formatTimeAgo(trade.timestamp)}
-                </span>
-              </div>
-            ))}
-          </motion.div>
+                Monitoring for whale trades ($1k+)...
+              </motion.span>
+              <span className="text-orange-400/50">Live feed from Polymarket</span>
+            </div>
+          )}
         </div>
 
         {/* Click hint */}
