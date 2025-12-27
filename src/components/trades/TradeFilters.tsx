@@ -117,8 +117,8 @@ export function TradeFilters({
           <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </Button>
 
-        <div className="ml-auto text-sm text-muted-foreground">
-          Keeping {totalTrades} trades
+        <div className="ml-auto text-xs sm:text-sm text-muted-foreground">
+          Showing {totalTrades} of last 500
         </div>
       </div>
 
