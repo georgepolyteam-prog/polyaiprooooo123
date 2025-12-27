@@ -424,46 +424,38 @@ serve(async (req) => {
         if (urlTokenId && event?.markets) {
           console.log(`[Dashboard] Looking for market with token ID: ${urlTokenId.slice(0, 30)}...`);
           
+          // Check if this is a multi-outcome market (not binary YES/NO)
+          // Multi-outcome markets have multiple markets in the event, each with its own outcomes
+          const isMultiOutcomeEvent = event.markets?.length > 1;
+          
           for (const m of event.markets) {
             const tokens = m.tokens || [];
             const matchingToken = tokens.find((t: any) => t.token_id === urlTokenId);
             
             if (matchingToken) {
               console.log(`[Dashboard] ✅ Found market for token: ${m.slug} (${m.question})`);
+              console.log(`[Dashboard] Is multi-outcome event: ${isMultiOutcomeEvent}`);
+              
+              // For multi-outcome markets, the matching token IS the outcome we care about
+              // The outcome label is the market question or the token outcome field
+              const outcomeLabel = matchingToken.outcome || m.question || 'Unknown';
+              console.log(`[Dashboard] Outcome label: ${outcomeLabel}`);
               
               // Fetch live price from Dome API for this specific token
               const livePrice = await fetchCurrentPrice(urlTokenId);
               console.log(`[Dashboard] Live price for token: ${livePrice}`);
               
-              // Determine if this is YES or NO token and get correct price
-              const isYesToken = matchingToken.outcome?.toLowerCase() === 'yes' || 
-                matchingToken.token_label?.toLowerCase() === 'yes' ||
-                matchingToken.label?.toLowerCase() === 'yes';
-              
-              let yesPrice = 0.5;
+              // For multi-outcome markets, the price IS the probability of this outcome
+              // There's no YES/NO inversion needed
+              let outcomePrice = 0.5;
               if (livePrice !== null) {
-                yesPrice = isYesToken ? livePrice : (1 - livePrice);
+                outcomePrice = livePrice;
               } else {
-                // Fallback to static price
+                // Fallback to static price from tokens
                 try {
-                  const prices = typeof m.outcomePrices === 'string' 
-                    ? JSON.parse(m.outcomePrices) 
-                    : m.outcomePrices;
-                  yesPrice = parseFloat(prices[0]) || 0.5;
+                  outcomePrice = parseFloat(matchingToken.price) || 0.5;
                 } catch { /* ignore */ }
               }
-              
-              // Find YES and NO tokens
-              const yesToken = tokens.find((t: any) => 
-                t.outcome?.toLowerCase() === 'yes' || 
-                t.token_label?.toLowerCase() === 'yes' ||
-                t.label?.toLowerCase() === 'yes'
-              ) || tokens[0];
-              const noToken = tokens.find((t: any) => 
-                t.outcome?.toLowerCase() === 'no' || 
-                t.token_label?.toLowerCase() === 'no' ||
-                t.label?.toLowerCase() === 'no'
-              ) || tokens[1];
               
               // Extract market metadata
               const marketMetadata = {
@@ -473,25 +465,29 @@ serve(async (req) => {
                 endDate: m.endDate || null
               };
               
-              // Build the market object directly and skip to data fetching
+              // For multi-outcome: the token we're viewing is the "target" token
+              // All trades for this token are relevant
+              const targetTokenId = urlTokenId;
+              
+              // Build the market object
               const tokenMatchedMarket = {
                 title: m.question,
                 market_slug: m.slug,
                 volume_total: parseFloat(m.volume) || 0,
                 status: m.closed ? 'closed' : 'open',
-                side_a: { id: yesToken?.token_id, label: 'Yes' },
-                side_b: { id: noToken?.token_id, label: 'No' },
-                currentPrice: yesPrice,
+                targetTokenId: targetTokenId,
+                outcomeLabel: outcomeLabel,
+                isMultiOutcome: isMultiOutcomeEvent,
+                currentPrice: outcomePrice,
                 condition_id: m.conditionId || null,
                 start_time: new Date(m.startDate || Date.now()).getTime() / 1000,
                 end_time: m.endDate ? new Date(m.endDate).getTime() / 1000 : null,
                 metadata: marketMetadata
               };
               
-              console.log(`[Dashboard] Token-matched market ready - YES: ${yesToken?.token_id?.slice(0, 20)}..., NO: ${noToken?.token_id?.slice(0, 20)}...`);
+              console.log(`[Dashboard] Token-matched market ready - Target token: ${targetTokenId?.slice(0, 20)}...`);
               
               // Return immediately to main processing with this market
-              // We'll process this like we found the market via Dome API
               const fetchStartTimeInner = Date.now();
               
               // Fetch trades and event markets for this specific market
@@ -500,30 +496,58 @@ serve(async (req) => {
                 fetchEventMarkets(eventSlug)
               ]);
               
-              // Continue with the full data processing for this market
-              // This is duplicated code, but ensures we process the correct market
-              const effectiveYesTokenId = yesToken?.token_id;
-              const effectiveNoTokenId = noToken?.token_id;
-              
+              // Fetch orderbook for this specific token
               let orderbook = null;
               let verifiedPrice: number | null = null;
-              if (effectiveYesTokenId) {
-                verifiedPrice = await fetchCurrentPrice(effectiveYesTokenId);
+              if (targetTokenId) {
+                verifiedPrice = await fetchCurrentPrice(targetTokenId);
                 if (verifiedPrice !== null) {
                   console.log(`[Dashboard] Verified price from Dome: ${(verifiedPrice * 100).toFixed(1)}%`);
                   tokenMatchedMarket.currentPrice = verifiedPrice;
                 }
-                orderbook = await fetchOrderbook(effectiveYesTokenId, effectiveNoTokenId, verifiedPrice || tokenMatchedMarket.currentPrice);
+                // For multi-outcome, just fetch orderbook for this token (no NO token to invert)
+                orderbook = await fetchOrderbook(targetTokenId, undefined, verifiedPrice || tokenMatchedMarket.currentPrice);
               }
               
-              // Process trades (simplified version - full processing happens in main flow)
-              const processedTrades = matchedTrades.slice(0, 50).map((t: any) => {
+              // Fetch candlesticks for price history
+              let priceHistory: Array<{ date: string; price: number }> = [];
+              let priceChange = 0;
+              if (tokenMatchedMarket.condition_id) {
+                const candlesticks = await fetchCandlesticks(tokenMatchedMarket.condition_id, targetTokenId);
+                if (candlesticks.length > 0) {
+                  const toPct = (v: any) => {
+                    const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+                    if (!Number.isFinite(n)) return 0;
+                    const pct = n <= 1.5 ? n * 100 : n;
+                    return Math.max(0, Math.min(100, pct));
+                  };
+                  priceHistory = candlesticks
+                    .filter((c: any) => (c?.price?.close_dollars ?? 0) > 0)
+                    .map((c: any) => ({
+                      date: new Date(c.end_period_ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                      price: toPct(c.price.close_dollars)
+                    }));
+                  if (priceHistory.length >= 2) {
+                    const oldPrice = priceHistory[0].price;
+                    const newPrice = priceHistory[priceHistory.length - 1].price;
+                    priceChange = ((newPrice - oldPrice) / oldPrice) * 100;
+                  }
+                }
+              }
+              
+              // Process trades - for multi-outcome markets, identify trades by token
+              const processedTrades = matchedTrades.slice(0, 100).map((t: any) => {
                 const shares = parseFloat(t.shares_normalized || t.shares || 0);
                 const price = parseFloat(t.price || 0);
                 const usdValue = shares * price;
-                let outcome = 'UNKNOWN';
-                if (t.token_id === effectiveYesTokenId) outcome = 'YES';
-                else if (t.token_id === effectiveNoTokenId) outcome = 'NO';
+                
+                // For multi-outcome: if trade is for our target token, it's for THIS outcome
+                // Otherwise show it as "Other" or the actual outcome
+                let outcome = 'Other';
+                if (t.token_id === targetTokenId) {
+                  outcome = outcomeLabel; // e.g., "Magnus Carlsen"
+                }
+                
                 return {
                   id: t.id || t.order_hash || Math.random().toString(36),
                   side: (t.side || 'UNKNOWN').toUpperCase(),
@@ -532,18 +556,41 @@ serve(async (req) => {
                   price: price * 100,
                   timestamp: t.timestamp ? new Date(t.timestamp * 1000).toISOString() : new Date().toISOString(),
                   timeAgo: t.timestamp ? formatTimeAgo(t.timestamp) : 'Unknown',
-                  wallet: t.user || t.taker || '0x' + Math.random().toString(16).slice(2, 10),
+                  wallet: t.user || t.taker || null,
                   shares,
                   rawPrice: price
                 };
               }).filter((t: any) => t.size >= 0.10 && t.rawPrice >= 0.001);
               
-              // Calculate basic stats
-              const volume24h = matchedTrades.reduce((sum: number, t: any) => {
-                const shares = parseFloat(t.shares_normalized || t.shares || 0);
-                const price = parseFloat(t.price || 0);
-                return sum + (shares * price);
-              }, 0);
+              // Filter to only show trades for this specific outcome (target token)
+              const filteredTrades = processedTrades.filter((t: any) => t.outcome === outcomeLabel);
+              
+              // Calculate basic stats from filtered trades
+              const volume24h = filteredTrades.reduce((sum: number, t: any) => sum + t.size, 0);
+              const buyTrades = filteredTrades.filter((t: any) => t.side === 'BUY');
+              const buyVolume = buyTrades.reduce((sum: number, t: any) => sum + t.size, 0);
+              const buyPressure = volume24h > 0 ? (buyVolume / volume24h) * 100 : 50;
+              
+              // Process orderbook
+              const processedOrderbook = orderbook ? {
+                bids: (orderbook.bids || []).slice(0, 10).map((b: any) => ({
+                  price: parseFloat(b.price) * 100,
+                  size: parseFloat(b.size || b.amount || 0)
+                })).filter((b: any) => b.size > 0).sort((a: any, b: any) => b.price - a.price),
+                asks: (orderbook.asks || []).slice(0, 10).map((a: any) => ({
+                  price: parseFloat(a.price) * 100,
+                  size: parseFloat(a.size || a.amount || 0)
+                })).filter((a: any) => a.size > 0).sort((a: any, b: any) => a.price - b.price),
+                spread: 0,
+                bidTotal: 0,
+                askTotal: 0
+              } : { bids: [], asks: [], spread: 0, bidTotal: 0, askTotal: 0 };
+              
+              if (processedOrderbook.bids.length && processedOrderbook.asks.length) {
+                processedOrderbook.spread = processedOrderbook.asks[0].price - processedOrderbook.bids[0].price;
+              }
+              processedOrderbook.bidTotal = processedOrderbook.bids.reduce((sum: number, b: any) => sum + b.size, 0);
+              processedOrderbook.askTotal = processedOrderbook.asks.reduce((sum: number, a: any) => sum + a.size, 0);
               
               // Return the response for this token-matched market
               return new Response(
@@ -554,32 +601,26 @@ serve(async (req) => {
                     volume: tokenMatchedMarket.volume_total,
                     status: tokenMatchedMarket.status,
                     endDate: tokenMatchedMarket.end_time ? new Date(tokenMatchedMarket.end_time * 1000).toISOString() : null,
-                    yesTokenId: effectiveYesTokenId,
-                    noTokenId: effectiveNoTokenId,
+                    tokenId: targetTokenId,
                     conditionId: tokenMatchedMarket.condition_id,
                     metadata: tokenMatchedMarket.metadata,
-                    marketSlug: m.slug
+                    marketSlug: m.slug,
+                    // Multi-outcome info
+                    isMultiOutcome: true,
+                    outcomeLabel: outcomeLabel
                   },
                   whales: [],
-                  orderbook: orderbook ? {
-                    bids: (orderbook.bids || []).slice(0, 10).map((b: any) => ({
-                      price: parseFloat(b.price) * 100,
-                      size: parseFloat(b.size || b.amount || 0)
-                    })),
-                    asks: (orderbook.asks || []).slice(0, 10).map((a: any) => ({
-                      price: parseFloat(a.price) * 100,
-                      size: parseFloat(a.size || a.amount || 0)
-                    }))
-                  } : null,
-                  priceHistory: [],
-                  recentTrades: processedTrades,
+                  orderbook: processedOrderbook,
+                  priceHistory,
+                  priceChange,
+                  recentTrades: filteredTrades.slice(0, 50),
                   tradeStats: {
                     volume24h,
-                    buyPressure: 50,
-                    sellPressure: 50,
-                    totalTrades: matchedTrades.length,
-                    uniqueTraders: new Set(matchedTrades.map((t: any) => t.user || t.taker)).size,
-                    avgTradeSize: volume24h / Math.max(matchedTrades.length, 1)
+                    buyPressure,
+                    sellPressure: 100 - buyPressure,
+                    totalTrades: filteredTrades.length,
+                    uniqueTraders: new Set(filteredTrades.map((t: any) => t.wallet).filter(Boolean)).size,
+                    avgTradeSize: volume24h / Math.max(filteredTrades.length, 1)
                   },
                   arbitrage: null,
                   fetchTime: Date.now() - fetchStartTimeInner
