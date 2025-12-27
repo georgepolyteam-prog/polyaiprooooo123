@@ -727,7 +727,10 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
   if (isUser) {
     return (
       <div className="flex justify-end animate-fade-in">
-        <div className="message-user px-3 py-2 sm:px-4 sm:py-3 rounded-2xl rounded-br-sm text-white max-w-[85%] sm:max-w-lg shadow-soft text-sm sm:text-base">
+        <div 
+          className="message-user px-3 py-2 sm:px-4 sm:py-3 rounded-2xl rounded-br-sm text-white max-w-[85%] sm:max-w-lg shadow-soft text-sm sm:text-base overflow-hidden break-words"
+          style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+        >
           {content}
         </div>
       </div>
