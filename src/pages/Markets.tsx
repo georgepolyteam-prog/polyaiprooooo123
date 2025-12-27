@@ -350,6 +350,7 @@ const Markets = () => {
     navigate('/chat', { 
       state: { 
         autoAnalyze: true,
+        deepResearch: type === 'deep',
         marketContext: analysisContext
       }
     });

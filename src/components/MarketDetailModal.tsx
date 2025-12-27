@@ -292,6 +292,7 @@ export function MarketDetailModal({
     navigate('/chat', { 
       state: { 
         autoAnalyze: true,
+        deepResearch: type === 'deep',
         marketContext: analysisContext
       }
     });
