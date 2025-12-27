@@ -20,17 +20,23 @@ const parseMarkdownLinks = (text: string): React.ReactNode[] => {
       parts.push(text.slice(lastIndex, match.index));
     }
     
-    // Add the styled link
+    // Add the styled link - truncate long URLs to prevent overflow
+    const displayText = match[1].length > 50 
+      ? match[1].slice(0, 47) + '...' 
+      : match[1];
+    
     parts.push(
       <a
         key={`link-${keyCounter++}`}
         href={match[2]}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-primary hover:text-primary/80 underline underline-offset-2 decoration-primary/40 hover:decoration-primary/60 transition-colors"
+        className="inline-flex items-center gap-1 text-primary hover:text-primary/80 underline underline-offset-2 decoration-primary/40 hover:decoration-primary/60 transition-colors break-all max-w-full"
+        style={{ overflowWrap: 'anywhere', wordBreak: 'break-all' }}
+        title={match[1]} // Show full text on hover
       >
-        {match[1]}
-        <ExternalLink className="w-3 h-3 inline opacity-60" />
+        <span className="truncate max-w-[200px] sm:max-w-[300px]">{displayText}</span>
+        <ExternalLink className="w-3 h-3 inline opacity-60 flex-shrink-0" />
       </a>
     );
     
