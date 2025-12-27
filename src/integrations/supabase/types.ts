@@ -392,6 +392,30 @@ export type Database = {
         }
         Relationships: []
       }
+      tracked_wallets: {
+        Row: {
+          created_at: string | null
+          id: string
+          nickname: string | null
+          user_id: string
+          wallet_address: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          nickname?: string | null
+          user_id: string
+          wallet_address: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          nickname?: string | null
+          user_id?: string
+          wallet_address?: string
+        }
+        Relationships: []
+      }
       twitter_bot_status: {
         Row: {
           id: number
