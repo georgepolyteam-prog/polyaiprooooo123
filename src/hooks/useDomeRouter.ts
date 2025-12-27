@@ -68,14 +68,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   'size too small': 'Order size is too small (min 5 shares).',
   
   // FOK order issues - liquidity problems (BUYS)
-  'couldn\'t be fully filled': 'Not enough liquidity at this price. Try a limit order instead.',
-  'fok orders are fully filled': 'Not enough liquidity at this price. Try a limit order instead.',
-  'fill or kill': 'Not enough liquidity for instant fill. Try a limit order.',
+  'couldn\'t be fully filled': 'Couldn\'t fill at current price. Try a limit order instead.',
+  'fok orders are fully filled': 'Couldn\'t fill at current price. Try a limit order instead.',
+  'fill or kill': 'Couldn\'t fill at current price. Try a limit order.',
   
   // FAK order issues - no buyers at all (SELLS)
-  'no orders found to match': 'No buyers available right now. Place a limit order to wait for buyers.',
-  'fak orders are partially filled': 'No buyers available. Try a limit sell order instead.',
-  'no match is found': 'No buyers at any price. This market may be inactive or resolved.',
+  'no orders found to match': 'No buyers at current price. Try a limit sell order.',
+  'fak orders are partially filled': 'Couldn\'t fill at current price. Try a limit sell order.',
+  'no match is found': 'No buyers at current price. Try a limit sell order.',
   
   // Market closed/resolved
   'orderbook': 'This market is closed or resolved. Check the Claimable tab.',
@@ -414,8 +414,16 @@ export function useDomeRouter() {
       );
 
       // Create the order using ClobClient
-      // For FOK/FAK (market orders), we use a marketable price to ensure instant fill
-      const orderType = params.orderType || 'GTC';
+      // For market orders: FOK for buys (must fill entirely), FAK for sells (fill what you can)
+      // For limit orders: GTC (Good Till Cancel)
+      let orderType: 'GTC' | 'FOK' | 'FAK' = 'GTC';
+      if (params.isMarketOrder) {
+        orderType = params.side === 'BUY' ? 'FOK' : 'FAK';
+      }
+      // Allow explicit override if passed
+      if (params.orderType) {
+        orderType = params.orderType;
+      }
       const orderArgs = {
         tokenID: params.tokenId,
         price,
@@ -541,33 +549,40 @@ export function useDomeRouter() {
         }
       }
       
-      // Show error toast immediately (don't wait for overlay to clear)
-      // Handle specific error types with contextual descriptions
+      // Show error toast immediately with high priority (persists 8s, shows above whale alerts)
+      const toastOptions = { duration: 8000, important: true };
+      
       if (message.includes('rejected') || message.includes('denied') || message.includes('User rejected')) {
-        toast.error('Order signature rejected');
+        toast.error('Order signature rejected', toastOptions);
       } else if (message.includes('expired') || message.includes('re-link')) {
         toast.error('Session expired', {
+          ...toastOptions,
           description: 'Please re-link your wallet to continue trading.',
         });
         clearSession();
-      } else if (message.includes('No buyers')) {
+      } else if (message.includes('No buyers') || message.includes('limit sell')) {
         toast.error(message, {
-          description: 'Try placing a limit sell order at your desired price.',
+          ...toastOptions,
+          description: 'Set a price with a limit order to wait for buyers.',
         });
-      } else if (message.includes('limit order') || message.includes('liquidity')) {
+      } else if (message.includes('limit order') || message.includes('Couldn\'t fill')) {
         toast.error(message, {
+          ...toastOptions,
           description: 'Set a specific price with a limit order for better control.',
         });
       } else if (message.includes('inactive') || message.includes('resolved') || message.includes('closed') || message.includes('Claimable')) {
         toast.error(message, {
+          ...toastOptions,
           description: 'Go to My Trades → Claimable to collect any winnings.',
         });
       } else if (message.includes('balance') || message.includes('USDC')) {
         toast.error(message, {
+          ...toastOptions,
           description: 'Add more USDC to your wallet to continue trading.',
         });
       } else {
         toast.error(message, {
+          ...toastOptions,
           description: 'Check your order details and try again.',
         });
       }
