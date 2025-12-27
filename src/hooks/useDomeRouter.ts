@@ -67,11 +67,15 @@ const ERROR_MESSAGES: Record<string, string> = {
   'min tick size': 'Price doesn\'t meet minimum tick size.',
   'size too small': 'Order size is too small (min 5 shares).',
   
-  // FOK/FAK order issues - liquidity problems
+  // FOK order issues - liquidity problems (BUYS)
   'couldn\'t be fully filled': 'Not enough liquidity at this price. Try a limit order instead.',
   'fok orders are fully filled': 'Not enough liquidity at this price. Try a limit order instead.',
   'fill or kill': 'Not enough liquidity for instant fill. Try a limit order.',
-  'partially filled': 'Order was partially filled.',
+  
+  // FAK order issues - no buyers at all (SELLS)
+  'no orders found to match': 'No buyers available right now. Place a limit order to wait for buyers.',
+  'fak orders are partially filled': 'No buyers available. Try a limit sell order instead.',
+  'no match is found': 'No buyers at any price. This market may be inactive or resolved.',
   
   // Market closed/resolved
   'orderbook': 'This market is closed or resolved. Check the Claimable tab.',
@@ -547,11 +551,15 @@ export function useDomeRouter() {
           description: 'Please re-link your wallet to continue trading.',
         });
         clearSession();
-      } else if (message.includes('limit order')) {
+      } else if (message.includes('No buyers')) {
+        toast.error(message, {
+          description: 'Try placing a limit sell order at your desired price.',
+        });
+      } else if (message.includes('limit order') || message.includes('liquidity')) {
         toast.error(message, {
           description: 'Set a specific price with a limit order for better control.',
         });
-      } else if (message.includes('Claimable') || message.includes('resolved') || message.includes('closed')) {
+      } else if (message.includes('inactive') || message.includes('resolved') || message.includes('closed') || message.includes('Claimable')) {
         toast.error(message, {
           description: 'Go to My Trades → Claimable to collect any winnings.',
         });
@@ -561,7 +569,7 @@ export function useDomeRouter() {
         });
       } else {
         toast.error(message, {
-          description: 'Check your balance and order details.',
+          description: 'Check your order details and try again.',
         });
       }
 
