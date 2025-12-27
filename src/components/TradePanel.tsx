@@ -178,14 +178,15 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     
     const expectedShares = amountNum / Math.max(isMarketOrder ? marketPrice : orderPrice, 0.01);
 
-    // Always use GTC - for "market" orders the aggressive price ensures instant fill
+    // For market orders: useDomeRouter uses FOK (buys) / FAK (sells) for instant fill
+    // For limit orders: GTC (Good Till Cancel) stays on order book
     const result = await placeOrder({
       tokenId: tokenId!,
       side: 'BUY',
       amount: amountNum,
       price: orderPrice,
       isMarketOrder,
-      orderType: 'GTC', // Always GTC - aggressive pricing handles "market" orders
+      // Don't pass orderType - let useDomeRouter decide based on isMarketOrder
     });
 
     if (result.success) {
