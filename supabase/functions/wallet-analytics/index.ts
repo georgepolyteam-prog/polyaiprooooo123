@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const DOME_API = 'https://api.domeapi.io/v1';
+const DATA_API_URL = 'https://data-api.polymarket.com';
 const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
 const ORDERS_LIMIT = 1000;
 
@@ -8,6 +9,40 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Fetch unrealized PnL from Polymarket Data API (positions)
+async function fetchUnrealizedPnl(address: string): Promise<{ totalUnrealized: number; positionCount: number; positionsValue: number }> {
+  try {
+    const response = await fetch(
+      `${DATA_API_URL}/positions?user=${address.toLowerCase()}&sizeThreshold=0.01`,
+      { headers: { 'Accept': 'application/json' } }
+    );
+
+    if (!response.ok) {
+      console.log(`[WalletAnalytics] Positions API returned ${response.status}`);
+      return { totalUnrealized: 0, positionCount: 0, positionsValue: 0 };
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      return { totalUnrealized: 0, positionCount: 0, positionsValue: 0 };
+    }
+
+    let totalUnrealized = 0;
+    let positionsValue = 0;
+
+    data.forEach((p: any) => {
+      totalUnrealized += parseFloat(p.cashPnl || '0');
+      positionsValue += parseFloat(p.currentValue || '0');
+    });
+
+    console.log(`[WalletAnalytics] Unrealized PnL: $${totalUnrealized.toFixed(2)} from ${data.length} positions`);
+    return { totalUnrealized, positionCount: data.length, positionsValue };
+  } catch (error) {
+    console.error('[WalletAnalytics] Failed to fetch positions:', error);
+    return { totalUnrealized: 0, positionCount: 0, positionsValue: 0 };
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -34,8 +69,8 @@ serve(async (req) => {
       );
     }
 
-    // Fetch wallet PnL, orders, and metrics in parallel
-    const [pnlResponse, ordersResponse, walletResponse] = await Promise.all([
+    // Fetch wallet PnL (realized), orders, metrics, AND unrealized PnL in parallel
+    const [pnlResponse, ordersResponse, walletResponse, unrealizedData] = await Promise.all([
       fetch(`${DOME_API}/polymarket/wallet/pnl/${address}?granularity=day`, {
         headers: {
           'Authorization': `Bearer ${DOME_API_KEY}`,
@@ -53,7 +88,8 @@ serve(async (req) => {
           'Authorization': `Bearer ${DOME_API_KEY}`,
           'Content-Type': 'application/json'
         }
-      })
+      }),
+      fetchUnrealizedPnl(address)
     ]);
 
     let pnlData = null;
@@ -182,20 +218,28 @@ serve(async (req) => {
       user: order.user
     }));
 
-    // Build normalized PnL summary with both camelCase and snake_case keys
+    // Build normalized PnL summary with BOTH realized and unrealized
     const pnlSummary = {
       totalPnl,
       total_pnl: totalPnl,
       series: pnlSeries,
       winRate: walletMetrics.winRate,
-      avgTradeSize
+      avgTradeSize,
+      // NEW: Unrealized PnL from positions
+      unrealizedPnl: unrealizedData.totalUnrealized,
+      unrealized_pnl: unrealizedData.totalUnrealized,
+      positionCount: unrealizedData.positionCount,
+      positionsValue: unrealizedData.positionsValue,
+      // Combined for "Portfolio PnL" view (realized + unrealized)
+      combinedPnl: totalPnl + unrealizedData.totalUnrealized,
+      combined_pnl: totalPnl + unrealizedData.totalUnrealized,
     };
 
-    console.log(`[WalletAnalytics] Final metrics - PnL: ${totalPnl}, WinRate: ${walletMetrics.winRate}%, AvgTrade: ${avgTradeSize}`);
+    console.log(`[WalletAnalytics] Final - Realized: $${totalPnl.toFixed(2)}, Unrealized: $${unrealizedData.totalUnrealized.toFixed(2)}, Combined: $${(totalPnl + unrealizedData.totalUnrealized).toFixed(2)}`);
 
     return new Response(
       JSON.stringify({
-        pnlData: pnlSeries,  // Return the array format that frontend expects
+        pnlData: pnlSeries,
         pnlSummary,
         recentTrades,
         walletMetrics
