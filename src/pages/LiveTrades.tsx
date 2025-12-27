@@ -1065,10 +1065,11 @@ export default function LiveTrades() {
               if (res.ok === false) {
                 setTradeModalOpen(false);
                 if (res.reason === 'needs_market_selection') {
-                  toast.info("Multiple markets - please select a specific one");
-                  navigate('/chat', {
-                    state: {
-                      initialMessage: `Show me the markets for: ${marketUrl}`
+                  toast.error("This event has multiple markets", {
+                    description: "Open Polymarket to select a specific outcome",
+                    action: {
+                      label: "Open on Polymarket",
+                      onClick: () => window.open(marketUrl, '_blank')
                     }
                   });
                 } else {
