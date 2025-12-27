@@ -1,14 +1,27 @@
-import { useState, useEffect } from 'react';
-import { useWaitForTransactionReceipt } from 'wagmi';
-import { Wallet, Loader2, CheckCircle2, AlertCircle, TrendingUp, TrendingDown, ExternalLink, Gift, Clock, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { GlassCard } from '@/components/dashboard/GlassCard';
-import { AnimatedNumber } from '@/components/dashboard/AnimatedNumber';
-import { useClaimWinnings, ClaimablePosition, usePayoutStatus, verifyUsdcTransfer } from '@/hooks/useClaimWinnings';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from "react";
+import { useWaitForTransactionReceipt } from "wagmi";
+import {
+  Wallet,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  ExternalLink,
+  Gift,
+  Clock,
+  XCircle,
+  AlertTriangle,
+  HelpCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { GlassCard } from "@/components/dashboard/GlassCard";
+import { AnimatedNumber } from "@/components/dashboard/AnimatedNumber";
+import { useClaimWinnings, ClaimablePosition, usePayoutStatus, verifyUsdcTransfer } from "@/hooks/useClaimWinnings";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ClaimWinningsCardProps {
   position: ClaimablePosition;
@@ -20,38 +33,42 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
   const claimState = getClaimState(position.conditionId);
   const [verifiedAmount, setVerifiedAmount] = useState<number | null>(null);
   const [usdcVerified, setUsdcVerified] = useState<boolean | null>(null);
-  
+
   // Check if payouts are settled before allowing redemption (comprehensive check)
-  const { 
-    readyForRedemption, 
-    payoutsReported, 
-    winningOutcome, 
-    denominator, 
+  const {
+    readyForRedemption,
+    payoutsReported,
+    winningOutcome,
+    denominator,
     numerators,
-    isLoading: isCheckingSettlement 
+    isLoading: isCheckingSettlement,
   } = usePayoutStatus(position.conditionId);
-  
+
   // Watch for transaction confirmation
-  const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({
+  const {
+    isLoading: isConfirming,
+    isSuccess,
+    data: receipt,
+  } = useWaitForTransactionReceipt({
     hash: claimState.hash,
   });
 
   // Verify USDC transfer when transaction confirms
   useEffect(() => {
-    if (isSuccess && receipt && claimState.status === 'confirming') {
-      updateClaimState(position.conditionId, { status: 'verifying' });
-      
+    if (isSuccess && receipt && claimState.status === "confirming") {
+      updateClaimState(position.conditionId, { status: "verifying" });
+
       // Verify USDC was actually transferred
       const usdcAmount = verifyUsdcTransfer(receipt.logs);
-      
+
       if (usdcAmount !== null && usdcAmount > 0) {
         // SUCCESS - USDC transfer verified
         setVerifiedAmount(usdcAmount);
         setUsdcVerified(true);
-        updateClaimState(position.conditionId, { 
-          status: 'success', 
+        updateClaimState(position.conditionId, {
+          status: "success",
           verifiedAmount: usdcAmount,
-          usdcTransferred: true 
+          usdcTransferred: true,
         });
         toast.success(`Successfully claimed $${usdcAmount.toFixed(2)} USDC!`);
         onClaimSuccess?.();
@@ -59,41 +76,47 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
         // FAILED - Transaction succeeded but no USDC transferred
         setVerifiedAmount(0);
         setUsdcVerified(false);
-        updateClaimState(position.conditionId, { 
-          status: 'failed',
+        updateClaimState(position.conditionId, {
+          status: "failed",
           verifiedAmount: 0,
           usdcTransferred: false,
-          error: 'Transaction completed but no USDC was received. Your tokens may have been burned.'
+          error: "Transaction completed but no USDC was received. Your tokens may have been burned.",
         });
-        toast.error('Claim failed - no USDC received');
+        toast.error("Claim failed - no USDC received");
       }
     }
   }, [isSuccess, receipt, claimState.status, position.conditionId, updateClaimState, onClaimSuccess]);
 
   const handleClaim = async () => {
     if (!readyForRedemption) {
-      toast.error('Payouts not settled yet. Please try again later.');
+      toast.error("Payouts not settled yet. Please try again later.");
       return;
     }
     await claimWinnings(position);
   };
 
-  const isPending = claimState.status === 'pending' || isWritePending;
-  const isConfirmingTx = claimState.status === 'confirming' || isConfirming;
-  const isVerifying = claimState.status === 'verifying';
-  const isClaimSuccess = claimState.status === 'success';
-  const isClaimFailed = claimState.status === 'failed';
-  const isError = claimState.status === 'error';
-  
+  const isPending = claimState.status === "pending" || isWritePending;
+  const isConfirmingTx = claimState.status === "confirming" || isConfirming;
+  const isVerifying = claimState.status === "verifying";
+  const isClaimSuccess = claimState.status === "success";
+  const isClaimFailed = claimState.status === "failed";
+  const isError = claimState.status === "error";
+
   // Not settled: denominator is 0 OR both numerators are 0
   const isNotSettled = !isCheckingSettlement && !readyForRedemption;
-  
+
   // Check if user holds the LOSING outcome (their outcome doesn't match the winning outcome)
-  const userHoldsLosingOutcome = !isCheckingSettlement && readyForRedemption && winningOutcome && 
+  const userHoldsLosingOutcome =
+    !isCheckingSettlement &&
+    readyForRedemption &&
+    winningOutcome &&
     position.outcome.toUpperCase() !== winningOutcome.toUpperCase();
-  
+
   // User holds WINNING outcome - only then is it truly claimable
-  const userHoldsWinningOutcome = !isCheckingSettlement && readyForRedemption && winningOutcome && 
+  const userHoldsWinningOutcome =
+    !isCheckingSettlement &&
+    readyForRedemption &&
+    winningOutcome &&
     position.outcome.toUpperCase() === winningOutcome.toUpperCase();
 
   const polymarketUrl = `https://polymarket.com/event/${position.eventSlug}`;
@@ -105,30 +128,28 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
     >
-      <GlassCard 
-        cyber 
-        glow 
+      <GlassCard
+        cyber
+        glow
         className={cn(
           "p-4 transition-all duration-300",
           isClaimSuccess && "border-emerald-500/50 bg-emerald-500/5",
-          isClaimFailed && "border-rose-500/50 bg-rose-500/5"
+          isClaimFailed && "border-rose-500/50 bg-rose-500/5",
         )}
       >
         <div className="flex flex-col gap-4">
           {/* Header */}
           <div className="flex items-start gap-3">
             {/* Outcome Badge */}
-            <div className={cn(
-              "w-12 h-12 rounded-lg flex items-center justify-center border font-bold text-sm shrink-0",
-              position.outcome === 'YES'
-                ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-400/10 text-emerald-400 border-emerald-500/50'
-                : 'bg-gradient-to-br from-rose-500/30 to-rose-400/10 text-rose-400 border-rose-500/50'
-            )}>
-              {position.outcome === 'YES' ? (
-                <TrendingUp className="w-5 h-5" />
-              ) : (
-                <TrendingDown className="w-5 h-5" />
+            <div
+              className={cn(
+                "w-12 h-12 rounded-lg flex items-center justify-center border font-bold text-sm shrink-0",
+                position.outcome === "YES"
+                  ? "bg-gradient-to-br from-emerald-500/30 to-emerald-400/10 text-emerald-400 border-emerald-500/50"
+                  : "bg-gradient-to-br from-rose-500/30 to-rose-400/10 text-rose-400 border-rose-500/50",
               )}
+            >
+              {position.outcome === "YES" ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
             </div>
 
             {/* Market Info */}
@@ -139,13 +160,16 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                     Checking resolution...
                   </Badge>
                 ) : winningOutcome && readyForRedemption ? (
-                  <Badge variant="secondary" className={cn(
-                    "text-xs",
-                    userHoldsLosingOutcome
-                      ? "bg-rose-500/20 text-rose-400 border-rose-500/30"
-                      : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                  )}>
-                    {userHoldsLosingOutcome ? '❌' : '✅'} Resolved: {winningOutcome}
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-xs",
+                      userHoldsLosingOutcome
+                        ? "bg-rose-500/20 text-rose-400 border-rose-500/30"
+                        : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+                    )}
+                  >
+                    {userHoldsLosingOutcome ? "❌" : "✅"} Resolved: {winningOutcome}
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
@@ -153,7 +177,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   </Badge>
                 )}
               </div>
-              <a 
+              <a
                 href={polymarketUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -222,7 +246,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   </div>
                 </div>
                 <a
-                  href="https://x.com/trypolyai"
+                  href="https://t.me/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-muted/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm"
@@ -243,10 +267,12 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   <div className="text-rose-400">
                     <p className="font-semibold text-sm">You Didn't Win This Market</p>
                     <p className="text-xs opacity-80 mt-1">
-                      The market resolved to <span className="font-bold">{winningOutcome}</span>, but you held <span className="font-bold">{position.outcome}</span> shares.
+                      The market resolved to <span className="font-bold">{winningOutcome}</span>, but you held{" "}
+                      <span className="font-bold">{position.outcome}</span> shares.
                     </p>
                     <p className="text-xs opacity-70 mt-2">
-                      Your {position.winningShares.toFixed(2)} {position.outcome} shares have no value as the outcome was {winningOutcome}.
+                      Your {position.winningShares.toFixed(2)} {position.outcome} shares have no value as the outcome
+                      was {winningOutcome}.
                     </p>
                   </div>
                 </div>
@@ -263,11 +289,11 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   <div className="text-amber-400">
                     <p className="font-semibold text-sm">⚠️ Payouts Not Settled Yet</p>
                     <p className="text-xs opacity-80 mt-1">
-                      This market has resolved but payouts haven't been reported on-chain yet. 
-                      Your {position.winningShares.toFixed(2)} shares are safe - check back in a few hours.
+                      This market has resolved but payouts haven't been reported on-chain yet. Your{" "}
+                      {position.winningShares.toFixed(2)} shares are safe - check back in a few hours.
                     </p>
                     <p className="text-xs opacity-60 mt-2 font-mono">
-                      Status: Denominator = {denominator}, Numerators = [{numerators.join(', ')}]
+                      Status: Denominator = {denominator}, Numerators = [{numerators.join(", ")}]
                     </p>
                     <p className="text-xs text-amber-500 mt-2 font-medium">
                       ⛔ DO NOT claim yet - tokens will be burned with no USDC received
@@ -284,7 +310,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
               >
                 <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400">
                   <AlertCircle className="w-5 h-5" />
-                  <span className="font-semibold">{claimState.error || 'Claim failed'}</span>
+                  <span className="font-semibold">{claimState.error || "Claim failed"}</span>
                 </div>
                 <Button
                   onClick={handleClaim}
@@ -329,7 +355,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                     "w-full font-semibold py-3 rounded-lg transition-all duration-200",
                     isPending || isConfirmingTx
                       ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
-                      : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]"
+                      : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]",
                   )}
                 >
                   {isPending ? (
@@ -359,7 +385,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                     "w-full font-semibold py-3 rounded-lg transition-all duration-200",
                     isPending || isConfirmingTx || !readyForRedemption
                       ? "bg-zinc-700 text-zinc-400 cursor-not-allowed"
-                      : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]"
+                      : "bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_0_20px_rgba(191,255,10,0.3)]",
                   )}
                 >
                   {isPending ? (
@@ -427,7 +453,7 @@ export function ClaimableWinningsSummary({ positions, onClaimAll, isClaimingAll 
               $<AnimatedNumber value={totalClaimable} format={(n) => n.toFixed(2)} /> USDC
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              From {marketCount} resolved market{marketCount !== 1 ? 's' : ''}
+              From {marketCount} resolved market{marketCount !== 1 ? "s" : ""}
             </p>
           </div>
         </div>

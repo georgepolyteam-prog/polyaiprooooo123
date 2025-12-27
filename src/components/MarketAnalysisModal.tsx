@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { TrendingUp, TrendingDown, Target, BarChart2, Clock, Zap, AlertTriangle, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import polyAvatar from "@/assets/vera-character-new.png";
 
 interface AnalyzedMarket {
   id: string;
@@ -36,7 +35,8 @@ const formatVolume = (vol: number) => {
 const getCategoryIcon = (category: string): string => {
   const cat = category?.toLowerCase() || "";
   if (cat.includes("sport") || cat.includes("nfl") || cat.includes("nba") || cat.includes("soccer")) return "🏈";
-  if (cat.includes("politic") || cat.includes("election") || cat.includes("trump") || cat.includes("biden")) return "🏛️";
+  if (cat.includes("politic") || cat.includes("election") || cat.includes("trump") || cat.includes("biden"))
+    return "🏛️";
   if (cat.includes("crypto") || cat.includes("bitcoin") || cat.includes("eth")) return "💰";
   if (cat.includes("tech") || cat.includes("ai")) return "🤖";
   if (cat.includes("entertainment") || cat.includes("movie") || cat.includes("oscar")) return "🎬";
@@ -50,9 +50,9 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
   const generateDetailedAnalysis = (m: AnalyzedMarket): string => {
     const absEdge = Math.abs(m.edge);
     const isUnderpriced = m.edge > 0;
-    
+
     let analysis = "";
-    
+
     // Market assessment
     if (absEdge >= 10) {
       analysis += `This market shows significant mispricing. `;
@@ -61,7 +61,7 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
     } else {
       analysis += `This market appears fairly priced with minimal edge. `;
     }
-    
+
     // Direction explanation
     if (m.recommendation === "BUY YES") {
       analysis += `The current YES price of ${m.currentOdds}% appears undervalued. My probability estimate is ${m.polyProbability}%, suggesting YES shares offer value at current levels. `;
@@ -70,16 +70,16 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
     } else {
       analysis += `At ${m.currentOdds}%, this market is close to fair value. Waiting for better entry is recommended. `;
     }
-    
+
     // Volume context
     if (m.volume24h >= 500000) {
-      analysis += `High volume ($${(m.volume24h/1000000).toFixed(1)}M) indicates strong market interest and liquidity. `;
+      analysis += `High volume ($${(m.volume24h / 1000000).toFixed(1)}M) indicates strong market interest and liquidity. `;
     } else if (m.volume24h >= 100000) {
       analysis += `Decent volume supports trade execution. `;
     } else {
       analysis += `Lower volume may impact execution. Consider position sizing. `;
     }
-    
+
     // Risk factors
     if (m.confidence === "HIGH") {
       analysis += `High confidence in this analysis based on available data and market conditions.`;
@@ -88,19 +88,19 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
     } else {
       analysis += `Lower confidence signal - high uncertainty. Small position or skip recommended.`;
     }
-    
+
     return analysis;
   };
 
   const getKeyFactors = (m: AnalyzedMarket): string[] => {
     const factors: string[] = [];
-    
+
     if (Math.abs(m.edge) >= 10) factors.push("Strong edge detected");
     if (m.volume24h >= 500000) factors.push("High liquidity market");
     if (m.confidence === "HIGH") factors.push("High model confidence");
     if (m.currentOdds < 20 || m.currentOdds > 80) factors.push("Extreme odds - higher risk");
     if (m.polyProbability !== m.currentOdds) factors.push("Price-probability divergence");
-    
+
     return factors.length > 0 ? factors : ["Market shows normal trading patterns"];
   };
 
@@ -108,7 +108,7 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl bg-card border-border max-h-[90vh] overflow-y-auto">
         {/* Mobile close button */}
-        <button 
+        <button
           onClick={onClose}
           className="absolute right-4 top-4 z-50 rounded-full p-2 bg-muted hover:bg-muted/80 transition-colors md:hidden"
           aria-label="Close"
@@ -118,22 +118,20 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
         <DialogHeader>
           <div className="flex items-start gap-4">
             {market.imageUrl ? (
-              <img 
-                src={market.imageUrl} 
-                alt={market.title} 
+              <img
+                src={market.imageUrl}
+                alt={market.title}
                 className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  e.currentTarget.style.display = "none";
+                  e.currentTarget.nextElementSibling?.classList.remove("hidden");
                 }}
               />
             ) : null}
             <span className={cn("text-3xl", market.imageUrl && "hidden")}>{getCategoryIcon(market.category)}</span>
             <div className="flex-1">
               <div className="text-xs text-primary font-medium mb-1">{market.category}</div>
-              <DialogTitle className="text-xl font-semibold text-foreground leading-tight">
-                {market.title}
-              </DialogTitle>
+              <DialogTitle className="text-xl font-semibold text-foreground leading-tight">{market.title}</DialogTitle>
             </div>
           </div>
         </DialogHeader>
@@ -151,49 +149,60 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
             </div>
             <div className="bg-muted/50 rounded-xl p-4 text-center">
               <div className="text-xs text-muted-foreground mb-1">Edge</div>
-              <div className={cn(
-                "text-2xl font-bold font-mono flex items-center justify-center gap-1",
-                market.edge > 0 ? "text-primary" : market.edge < 0 ? "text-destructive" : "text-muted-foreground"
-              )}>
+              <div
+                className={cn(
+                  "text-2xl font-bold font-mono flex items-center justify-center gap-1",
+                  market.edge > 0 ? "text-primary" : market.edge < 0 ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
                 {market.edge > 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                {market.edge > 0 ? "+" : ""}{market.edge}%
+                {market.edge > 0 ? "+" : ""}
+                {market.edge}%
               </div>
             </div>
             <div className="bg-muted/50 rounded-xl p-4 text-center">
               <div className="text-xs text-muted-foreground mb-1">Score</div>
-              <div className={cn(
-                "text-2xl font-bold font-mono",
-                market.edgeScore && market.edgeScore >= 80 ? "text-primary" : "text-foreground"
-              )}>
+              <div
+                className={cn(
+                  "text-2xl font-bold font-mono",
+                  market.edgeScore && market.edgeScore >= 80 ? "text-primary" : "text-foreground",
+                )}
+              >
                 {market.edgeScore || 50}
               </div>
             </div>
           </div>
 
           {/* Recommendation Banner */}
-          <div className={cn(
-            "rounded-xl p-5 flex items-center gap-4",
-            market.recommendation === "BUY YES" && "bg-primary/10 border border-primary/30",
-            market.recommendation === "BUY NO" && "bg-destructive/10 border border-destructive/30",
-            market.recommendation === "HOLD" && "bg-muted border border-border"
-          )}>
-            <div className={cn(
-              "w-14 h-14 rounded-full flex items-center justify-center",
-              market.recommendation === "BUY YES" && "bg-primary/20",
-              market.recommendation === "BUY NO" && "bg-destructive/20",
-              market.recommendation === "HOLD" && "bg-muted"
-            )}>
+          <div
+            className={cn(
+              "rounded-xl p-5 flex items-center gap-4",
+              market.recommendation === "BUY YES" && "bg-primary/10 border border-primary/30",
+              market.recommendation === "BUY NO" && "bg-destructive/10 border border-destructive/30",
+              market.recommendation === "HOLD" && "bg-muted border border-border",
+            )}
+          >
+            <div
+              className={cn(
+                "w-14 h-14 rounded-full flex items-center justify-center",
+                market.recommendation === "BUY YES" && "bg-primary/20",
+                market.recommendation === "BUY NO" && "bg-destructive/20",
+                market.recommendation === "HOLD" && "bg-muted",
+              )}
+            >
               {market.recommendation === "BUY YES" && <TrendingUp className="w-7 h-7 text-primary" />}
               {market.recommendation === "BUY NO" && <TrendingDown className="w-7 h-7 text-destructive" />}
               {market.recommendation === "HOLD" && <Target className="w-7 h-7 text-muted-foreground" />}
             </div>
             <div>
-              <div className={cn(
-                "text-xl font-bold",
-                market.recommendation === "BUY YES" && "text-primary",
-                market.recommendation === "BUY NO" && "text-destructive",
-                market.recommendation === "HOLD" && "text-muted-foreground"
-              )}>
+              <div
+                className={cn(
+                  "text-xl font-bold",
+                  market.recommendation === "BUY YES" && "text-primary",
+                  market.recommendation === "BUY NO" && "text-destructive",
+                  market.recommendation === "HOLD" && "text-muted-foreground",
+                )}
+              >
                 {market.recommendation}
               </div>
               <div className="text-sm text-muted-foreground">
@@ -202,12 +211,14 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
                 {market.recommendation === "HOLD" && "No clear edge - wait for better entry"}
               </div>
             </div>
-            <div className={cn(
-              "ml-auto px-4 py-2 rounded-full text-sm font-semibold",
-              market.confidence === "HIGH" && "bg-primary/20 text-primary",
-              market.confidence === "MEDIUM" && "bg-warning/20 text-warning",
-              market.confidence === "LOW" && "bg-muted text-muted-foreground"
-            )}>
+            <div
+              className={cn(
+                "ml-auto px-4 py-2 rounded-full text-sm font-semibold",
+                market.confidence === "HIGH" && "bg-primary/20 text-primary",
+                market.confidence === "MEDIUM" && "bg-warning/20 text-warning",
+                market.confidence === "LOW" && "bg-muted text-muted-foreground",
+              )}
+            >
               {market.confidence} Confidence
             </div>
           </div>
@@ -233,7 +244,10 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
             </div>
             <div className="flex flex-wrap gap-2">
               {getKeyFactors(market).map((factor, i) => (
-                <span key={i} className="px-3 py-1.5 bg-muted rounded-full text-xs text-foreground flex items-center gap-1.5">
+                <span
+                  key={i}
+                  className="px-3 py-1.5 bg-muted rounded-full text-xs text-foreground flex items-center gap-1.5"
+                >
                   <CheckCircle className="w-3 h-3 text-primary" />
                   {factor}
                 </span>
@@ -263,7 +277,8 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
           <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
             <p className="text-xs text-warning">
-              This is AI-generated analysis for informational purposes. Always do your own research before trading. Past performance doesn't guarantee future results.
+              This is AI-generated analysis for informational purposes. Always do your own research before trading. Past
+              performance doesn't guarantee future results.
             </p>
           </div>
         </div>
