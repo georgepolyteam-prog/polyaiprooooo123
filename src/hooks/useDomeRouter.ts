@@ -49,16 +49,39 @@ interface OrderResult {
 
 // User-friendly error messages for common API errors
 const ERROR_MESSAGES: Record<string, string> = {
-  'not enough balance': 'Insufficient balance: You don\'t have enough shares or USDC',
-  'insufficient balance': 'Insufficient balance: You don\'t have enough shares or USDC',
-  'not enough allowance': 'Insufficient allowance: Please approve USDC spending first',
-  'allowance': 'Please approve USDC spending in your wallet',
-  'ORDER_REJECTED': 'Order rejected by the exchange',
-  'invalid api key': 'API credentials invalid - please re-link your wallet',
-  'unauthorized': 'Authorization failed - please re-link your wallet',
-  'price out of range': 'Price is out of valid range (must be 0.01-0.99)',
-  'min tick size': 'Price doesn\'t meet minimum tick size requirement',
-  'size too small': 'Order size is too small',
+  // Balance/allowance issues
+  'not enough balance': 'Insufficient balance. You don\'t have enough shares or USDC.',
+  'insufficient balance': 'Insufficient balance. You don\'t have enough shares or USDC.',
+  'not enough allowance': 'Please approve USDC spending first.',
+  'allowance': 'Please approve USDC spending in your wallet.',
+  
+  // Order rejection
+  'ORDER_REJECTED': 'Order rejected by the exchange.',
+  
+  // Credential issues
+  'invalid api key': 'Session expired. Please re-link your wallet.',
+  'unauthorized': 'Session expired. Please re-link your wallet.',
+  
+  // Price/size validation
+  'price out of range': 'Price must be between 1¢ and 99¢.',
+  'min tick size': 'Price doesn\'t meet minimum tick size.',
+  'size too small': 'Order size is too small (min 5 shares).',
+  
+  // FOK/FAK order issues - liquidity problems
+  'couldn\'t be fully filled': 'Not enough liquidity at this price. Try a limit order instead.',
+  'fok orders are fully filled': 'Not enough liquidity at this price. Try a limit order instead.',
+  'fill or kill': 'Not enough liquidity for instant fill. Try a limit order.',
+  'partially filled': 'Order was partially filled.',
+  
+  // Market closed/resolved
+  'orderbook': 'This market is closed or resolved. Check the Claimable tab.',
+  'does not exist': 'This market is no longer tradeable. It may be resolved.',
+  'market is closed': 'This market is closed. Check the Claimable tab for winnings.',
+  
+  // Network issues
+  'timeout': 'Request timed out. Please try again.',
+  'network': 'Network error. Check your connection and try again.',
+  'failed to fetch': 'Connection failed. Check your network and try again.',
 };
 
 interface PolymarketCredentials {
@@ -516,15 +539,29 @@ export function useDomeRouter() {
       
       updateStage('error', message);
       
-      // Handle specific error types
+      // Handle specific error types with contextual descriptions
       if (message.includes('rejected') || message.includes('denied') || message.includes('User rejected')) {
         toast.error('Order signature rejected');
-      } else if (message.includes('Invalid api key') || message.includes('invalid') || message.includes('re-link')) {
-        toast.error('API credentials invalid - please re-link your wallet');
+      } else if (message.includes('expired') || message.includes('re-link')) {
+        toast.error('Session expired', {
+          description: 'Please re-link your wallet to continue trading.',
+        });
         clearSession();
+      } else if (message.includes('limit order')) {
+        toast.error(message, {
+          description: 'Set a specific price with a limit order for better control.',
+        });
+      } else if (message.includes('Claimable') || message.includes('resolved') || message.includes('closed')) {
+        toast.error(message, {
+          description: 'Go to My Trades → Claimable to collect any winnings.',
+        });
+      } else if (message.includes('balance') || message.includes('USDC')) {
+        toast.error(message, {
+          description: 'Add more USDC to your wallet to continue trading.',
+        });
       } else {
         toast.error(message, {
-          description: 'Check your balance and try again',
+          description: 'Check your balance and order details.',
         });
       }
 

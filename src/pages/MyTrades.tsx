@@ -474,18 +474,28 @@ export default function MyTrades() {
   const handleSellPosition = async (amount: number, price: number, isMarketOrder?: boolean) => {
     if (!sellModalPosition || !address) return;
     
+    // Check if position is redeemable (resolved) - can't sell, must claim
+    if (sellModalPosition.redeemable) {
+      toast.error('This market is resolved', {
+        description: 'Go to the Claimable tab to collect your winnings.',
+      });
+      return;
+    }
+    
     try {
       // For market sell orders, use a low price to ensure fill
       // For limit orders, use the user's specified price
       const orderPrice = isMarketOrder ? Math.max(0.01, price * 0.9) : price;
       
+      // Use FAK for market sells - allows partial fills instead of all-or-nothing
+      // FOK is too strict for sells and often fails due to liquidity
       const result = await placeOrder({
         tokenId: sellModalPosition.asset,
         side: "SELL",
         amount: amount,
         price: orderPrice,
         isMarketOrder: isMarketOrder,
-        orderType: isMarketOrder ? 'FOK' : 'GTC',
+        orderType: isMarketOrder ? 'FAK' : 'GTC',
       });
 
       if (result?.success) {
