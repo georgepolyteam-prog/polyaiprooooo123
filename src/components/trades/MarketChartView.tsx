@@ -181,7 +181,7 @@ export function MarketChartView({
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'hsl(240 5% 64.9%)',
+        textColor: '#a1a1aa', // zinc-400 equivalent - lightweight-charts can't parse hsl()
         fontFamily: 'inherit',
       },
       grid: {
@@ -204,13 +204,13 @@ export function MarketChartView({
           color: 'rgba(139, 92, 246, 0.5)', 
           width: 1, 
           style: 2, 
-          labelBackgroundColor: 'hsl(240 10% 12%)' 
+          labelBackgroundColor: '#1c1c22' // dark background - hex for compatibility
         },
         horzLine: { 
           color: 'rgba(139, 92, 246, 0.5)', 
           width: 1, 
           style: 2, 
-          labelBackgroundColor: 'hsl(240 10% 12%)' 
+          labelBackgroundColor: '#1c1c22' // dark background - hex for compatibility
         },
       },
     });
