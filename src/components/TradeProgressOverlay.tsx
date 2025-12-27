@@ -1,12 +1,15 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Loader2, XCircle, Wallet } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, XCircle, Wallet, ArrowRight, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import type { TradeStage } from '@/hooks/useDomeRouter';
 
 interface TradeProgressOverlayProps {
   tradeStage: TradeStage;
   tradeStageMessage: string;
   selectedSide: 'YES' | 'NO';
+  onDismiss?: () => void;
 }
 
 const TRADE_STEPS = [
@@ -38,12 +41,20 @@ function getStepStatus(step: typeof TRADE_STEPS[0], currentStage: TradeStage): '
   return 'pending';
 }
 
-export function TradeProgressOverlay({ tradeStage, tradeStageMessage, selectedSide }: TradeProgressOverlayProps) {
+export function TradeProgressOverlay({ tradeStage, tradeStageMessage, selectedSide, onDismiss }: TradeProgressOverlayProps) {
+  const navigate = useNavigate();
   const isActive = tradeStage !== 'idle';
   const isCompleted = tradeStage === 'completed';
   const isError = tradeStage === 'error';
   
-  const accentColor = selectedSide === 'YES' ? 'emerald' : 'red';
+  const handleViewTrades = () => {
+    onDismiss?.();
+    navigate('/my-trades');
+  };
+
+  const handleClose = () => {
+    onDismiss?.();
+  };
 
   return (
     <AnimatePresence>
@@ -207,6 +218,36 @@ export function TradeProgressOverlay({ tradeStage, tradeStageMessage, selectedSi
                       )}>
                         Check your wallet for the signature popup
                       </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Success Actions */}
+              <AnimatePresence>
+                {isCompleted && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden pt-2"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={handleViewTrades}
+                        className="w-full gap-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30"
+                      >
+                        See My Trades
+                        <ArrowRight className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={handleClose}
+                        className="w-full gap-2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4" />
+                        Close
+                      </Button>
                     </div>
                   </motion.div>
                 )}

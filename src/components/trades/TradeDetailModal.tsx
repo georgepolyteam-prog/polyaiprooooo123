@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Target } from 'lucide-react';
+import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Trophy, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
@@ -134,8 +134,21 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
       }
 
       if (data) {
-        setWalletMetrics(data.walletMetrics);
-        setPnlSummary(data.pnlSummary);
+        // Normalize camelCase/snake_case fields from backend
+        const metrics = data.walletMetrics;
+        if (metrics) {
+          metrics.total_volume = metrics.total_volume ?? metrics.totalVolume ?? 0;
+          metrics.total_trades = metrics.total_trades ?? metrics.totalTrades ?? 0;
+          metrics.unique_markets = metrics.unique_markets ?? metrics.uniqueMarkets ?? 0;
+          metrics.orders_capped = metrics.orders_capped ?? metrics.ordersCapped ?? false;
+        }
+        setWalletMetrics(metrics);
+        
+        const pnl = data.pnlSummary;
+        if (pnl) {
+          pnl.total_pnl = pnl.total_pnl ?? pnl.totalPnl ?? 0;
+        }
+        setPnlSummary(pnl);
         setRecentTrades(data.recentTrades || []);
       }
     } catch (error) {
@@ -195,13 +208,19 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     setTrackingLoading(false);
   };
 
-  const shares = trade.shares_normalized || trade.shares || 0;
-  const safePrice = trade.price ?? 0;
+  // Helper to ensure we always get a safe number (never NaN/undefined)
+  const toNumber = (val: unknown, fallback = 0): number => {
+    if (val === null || val === undefined) return fallback;
+    const num = typeof val === 'number' ? val : parseFloat(String(val));
+    return isNaN(num) || !isFinite(num) ? fallback : num;
+  };
+
+  const shares = toNumber(trade.shares_normalized) || toNumber(trade.shares) || 0;
+  const safePrice = toNumber(trade.price);
   const volume = safePrice * shares;
 
   const formatVolume = (vol: number | undefined | null) => {
-    const safeVol = vol ?? 0;
-    if (isNaN(safeVol)) return '$0.00';
+    const safeVol = toNumber(vol);
     if (safeVol >= 1000000) return `$${(safeVol / 1000000).toFixed(2)}M`;
     if (safeVol >= 1000) return `$${(safeVol / 1000).toFixed(1)}K`;
     return `$${safeVol.toFixed(2)}`;
@@ -472,7 +491,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             <div className="text-right">
               <div className="font-bold text-lg text-primary">{formatVolume(volume)}</div>
               <div className="text-xs text-muted-foreground">
-                {(shares ?? 0).toFixed(0)} @ ${(trade.price ?? 0).toFixed(3)}
+                {toNumber(shares).toFixed(0)} @ ${toNumber(trade.price).toFixed(3)}
               </div>
             </div>
           </div>
@@ -513,34 +532,44 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             
             {/* Win Rate Row - Professional UI */}
             {pnlSummary?.winRate !== undefined && (
-              <div className="rounded-lg p-3 bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/10 border border-primary/20">
+              <div className={cn(
+                "rounded-xl p-3 border",
+                pnlSummary.winRate >= 50 
+                  ? "bg-gradient-to-r from-success/5 via-success/10 to-success/5 border-success/20" 
+                  : "bg-gradient-to-r from-destructive/5 via-destructive/10 to-destructive/5 border-destructive/20"
+              )}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Target className="w-4 h-4 text-primary" />
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center",
+                      pnlSummary.winRate >= 50 ? "bg-success/20" : "bg-destructive/20"
+                    )}>
+                      <Trophy className={cn(
+                        "w-5 h-5",
+                        pnlSummary.winRate >= 50 ? "text-success" : "text-destructive"
+                      )} />
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Win Rate</div>
+                      <div className="text-xs text-muted-foreground font-medium">Win Rate</div>
                       <div className={cn(
-                        "font-bold text-lg",
+                        "font-bold text-xl tabular-nums",
                         pnlSummary.winRate >= 50 ? "text-success" : "text-destructive"
                       )}>
-                        {pnlSummary.winRate}%
+                        {toNumber(pnlSummary.winRate).toFixed(0)}%
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {pnlSummary.winRate >= 60 && <span className="text-lg">🏆</span>}
-                    {pnlSummary.winRate >= 50 && pnlSummary.winRate < 60 && <span className="text-lg">✓</span>}
-                    <div className={cn(
-                      "px-2 py-0.5 rounded-full text-xs font-medium",
-                      pnlSummary.winRate >= 60 ? "bg-success/20 text-success" :
-                      pnlSummary.winRate >= 50 ? "bg-success/10 text-success/80" :
-                      "bg-destructive/20 text-destructive"
-                    )}>
-                      {pnlSummary.winRate >= 60 ? 'Excellent' : 
-                       pnlSummary.winRate >= 50 ? 'Good' : 'Below Avg'}
-                    </div>
+                  <div className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold",
+                    pnlSummary.winRate >= 60 ? "bg-success/20 text-success" :
+                    pnlSummary.winRate >= 50 ? "bg-success/15 text-success" :
+                    "bg-destructive/20 text-destructive"
+                  )}>
+                    {pnlSummary.winRate >= 50 && (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    {pnlSummary.winRate >= 60 ? 'Excellent' : 
+                     pnlSummary.winRate >= 50 ? 'Good' : 'Below Avg'}
                   </div>
                 </div>
               </div>

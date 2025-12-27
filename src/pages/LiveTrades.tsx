@@ -469,17 +469,32 @@ export default function LiveTrades() {
             (rawTrade.condition_id && imageCacheRef.current.get(rawTrade.condition_id)) ||
             null;
           
+          // Only trust rawTrade.image if it looks specific to this market
+          // Avoid generic/placeholder images that get reused across markets
+          let tradeImage = cachedImage;
+          if (!tradeImage && rawTrade.image) {
+            // Trust market-specific images but NOT generic placeholders
+            const img = rawTrade.image || rawTrade.market_image || rawTrade.icon;
+            // Skip if image looks like a generic placeholder (contains common avatar patterns)
+            const looksGeneric = img && (
+              img.includes('avatar') || 
+              img.includes('default') || 
+              img.includes('placeholder')
+            );
+            if (img && !looksGeneric) {
+              tradeImage = img;
+            }
+          }
+          
           const newTrade: Trade = {
             ...rawTrade,
-            image: rawTrade.image || rawTrade.market_image || rawTrade.icon || cachedImage || null
+            image: tradeImage || null
           };
-          
+
           // Queue for image fetch using both keys if not cached
           if (!newTrade.image && (newTrade.market_slug || newTrade.condition_id)) {
             queueImageFetch(newTrade.market_slug, newTrade.condition_id);
           }
-
-          // Check for whale and show alert
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
           if (volume >= WHALE_THRESHOLD) {
             showWhaleAlert(newTrade, volume);
