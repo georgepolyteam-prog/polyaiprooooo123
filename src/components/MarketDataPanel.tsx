@@ -199,50 +199,97 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
           />
         </section>
 
-        {/* Trade Activity - Dashboard Style */}
-        <section className="bg-card border rounded-lg p-3">
-          {/* Volume Summary - Using full 24h data from dashboard */}
-          {(data.tradeStats.totalVolume24h || data.tradeStats.totalCount) && (
-            <div className="mb-3 pb-3 border-b">
-              <h3 className="font-semibold text-sm mb-2">Volume Summary (24h)</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-muted-foreground">
-                    {data.tradeStats.uniqueTraders24h 
-                      ? `${data.tradeStats.uniqueTraders24h} traders` 
-                      : `${data.tradeStats.totalCount || 0} trades`}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="font-semibold text-foreground">
-                    {formatVolume(data.tradeStats.totalVolume24h || (data.tradeStats.buyVolume || 0) + (data.tradeStats.sellVolume || 0))} total
-                  </span>
-                </div>
-                <div>
-                  <span className="text-success">
-                    {formatVolume(data.tradeStats.yesVolume24h || data.tradeStats.buyVolume || 0)} YES
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-destructive">
-                    {formatVolume(data.tradeStats.noVolume24h || data.tradeStats.sellVolume || 0)} NO
-                  </span>
-                </div>
-              </div>
-              {/* Net Flow */}
-              <div className="mt-2 pt-2 border-t border-border/50 text-center">
-                <span className={cn(
-                  "font-semibold text-xs",
-                  (data.tradeStats.yesVolume24h || 0) - (data.tradeStats.noVolume24h || 0) > 0 ? 'text-success' : 'text-destructive'
-                )}>
-                  {(data.tradeStats.yesVolume24h || 0) - (data.tradeStats.noVolume24h || 0) > 0 ? '+' : ''}
-                  {formatVolume((data.tradeStats.yesVolume24h || data.tradeStats.buyVolume || 0) - (data.tradeStats.noVolume24h || data.tradeStats.sellVolume || 0))} net flow
-                </span>
+        {/* Price Chart - Moved to top */}
+        <section className="bg-card border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <h3 className="font-semibold">Price History (7d)</h3>
+              <div className={cn(
+                "text-xs font-medium",
+                priceChange >= 0 ? "text-success" : "text-destructive"
+              )}>
+                {priceChange >= 0 ? '↑' : '↓'} {Math.abs(priceChange).toFixed(1)}%
               </div>
             </div>
+          </div>
+          
+          {data.priceHistory.length > 0 ? (
+            <>
+              <div className="h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.priceHistory}>
+                    <defs>
+                      <linearGradient id="priceGradientSidebar" x1="0" y1="0" x2="0" y2="1">
+                        <stop 
+                          offset="5%" 
+                          stopColor={priceChange >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} 
+                          stopOpacity={0.3}
+                        />
+                        <stop 
+                          offset="95%" 
+                          stopColor={priceChange >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} 
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
+                    />
+                    <YAxis 
+                      domain={[Math.max(0, priceLow - 5), Math.min(100, priceHigh + 5)]}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
+                      tickFormatter={(value) => `${value.toFixed(0)}%`}
+                      width={35}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      labelStyle={{ color: 'hsl(var(--foreground))' }}
+                      formatter={(value: number) => [`${value.toFixed(1)}%`, 'Price']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="price" 
+                      stroke={priceChange >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} 
+                      strokeWidth={2}
+                      fill="url(#priceGradientSidebar)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              
+              <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between text-xs">
+                <div>
+                  <div className="text-muted-foreground">Current Price</div>
+                  <div className="font-bold">{data.market.odds.toFixed(1)}%</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-muted-foreground">7d High / Low</div>
+                  <div className="font-mono">
+                    {priceHigh.toFixed(1)}% / {priceLow.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-sm font-medium text-foreground">Price history unavailable</p>
+              <p className="text-xs text-muted-foreground mt-1">Historical data may start from Oct 14, 2025</p>
+            </div>
           )}
+        </section>
 
-          {/* Filter Buttons - Dashboard Style */}
+        {/* Trade Activity - Dashboard Style */}
+        <section className="bg-card border rounded-lg p-3">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm flex items-center gap-1.5">
               Live Data{" "}
@@ -468,95 +515,6 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
                 );
               })()}
             </>
-          )}
-        </section>
-
-        {/* Price Chart */}
-        <section className="bg-card border rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <h3 className="font-semibold">Price History (7d)</h3>
-              <div className={cn(
-                "text-xs font-medium",
-                priceChange >= 0 ? "text-success" : "text-destructive"
-              )}>
-                {priceChange >= 0 ? '↑' : '↓'} {Math.abs(priceChange).toFixed(1)}%
-              </div>
-            </div>
-          </div>
-          
-          {data.priceHistory.length > 0 ? (
-            <>
-              <div className="h-32">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.priceHistory}>
-                    <defs>
-                      <linearGradient id="priceGradientSidebar" x1="0" y1="0" x2="0" y2="1">
-                        <stop 
-                          offset="5%" 
-                          stopColor={priceChange >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} 
-                          stopOpacity={0.3}
-                        />
-                        <stop 
-                          offset="95%" 
-                          stopColor={priceChange >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} 
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <XAxis 
-                      dataKey="date" 
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
-                    />
-                    <YAxis 
-                      domain={[Math.max(0, priceLow - 5), Math.min(100, priceHigh + 5)]}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
-                      tickFormatter={(value) => `${value.toFixed(0)}%`}
-                      width={35}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
-                      labelStyle={{ color: 'hsl(var(--foreground))' }}
-                      formatter={(value: number) => [`${value.toFixed(1)}%`, 'Price']}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="price" 
-                      stroke={priceChange >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} 
-                      strokeWidth={2}
-                      fill="url(#priceGradientSidebar)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              
-              <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-between text-xs">
-                <div>
-                  <div className="text-muted-foreground">Current Price</div>
-                  <div className="font-bold">{data.market.odds.toFixed(1)}%</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-muted-foreground">7d High / Low</div>
-                  <div className="font-mono">
-                    {priceHigh.toFixed(1)}% / {priceLow.toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-6">
-              <p className="text-sm font-medium text-foreground">Price history unavailable</p>
-              <p className="text-xs text-muted-foreground mt-1">Historical data may start from Oct 14, 2025</p>
-            </div>
           )}
         </section>
 
