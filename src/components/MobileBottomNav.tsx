@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Settings, HelpCircle, FileText } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -19,7 +19,7 @@ const menuItems = [
 ];
 
 const additionalMenuItems = [
-  { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
+  { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
   { id: "help", label: "Help & Support", icon: HelpCircle, path: "/help" },
   { id: "docs", label: "Documentation", icon: FileText, path: "/docs" },
 ];
