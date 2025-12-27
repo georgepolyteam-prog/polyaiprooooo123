@@ -149,12 +149,16 @@ serve(async (req) => {
     // Calculate average trade size
     const avgTradeSize = totalTrades > 0 ? totalVolume / totalTrades : 0;
 
-    // Build wallet metrics
+    // Build wallet metrics with both camelCase and snake_case keys for compatibility
     walletMetrics = {
       totalVolume,
+      total_volume: totalVolume,
       totalTrades,
+      total_trades: totalTrades,
       uniqueMarkets: markets.size,
+      unique_markets: markets.size,
       ordersCapped,
+      orders_capped: ordersCapped,
       winRate: Math.round(winRate * 100), // As percentage
       avgTradeSize,
       totalBuys,
@@ -178,9 +182,10 @@ serve(async (req) => {
       user: order.user
     }));
 
-    // Build normalized PnL summary with camelCase keys
+    // Build normalized PnL summary with both camelCase and snake_case keys
     const pnlSummary = {
       totalPnl,
+      total_pnl: totalPnl,
       series: pnlSeries,
       winRate: walletMetrics.winRate,
       avgTradeSize

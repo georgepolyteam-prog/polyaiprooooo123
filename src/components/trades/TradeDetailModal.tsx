@@ -134,21 +134,32 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
       }
 
       if (data) {
-        // Normalize camelCase/snake_case fields from backend
-        const metrics = data.walletMetrics;
-        if (metrics) {
-          metrics.total_volume = metrics.total_volume ?? metrics.totalVolume ?? 0;
-          metrics.total_trades = metrics.total_trades ?? metrics.totalTrades ?? 0;
-          metrics.unique_markets = metrics.unique_markets ?? metrics.uniqueMarkets ?? 0;
-          metrics.orders_capped = metrics.orders_capped ?? metrics.ordersCapped ?? false;
-        }
-        setWalletMetrics(metrics);
+        console.log('[TradeDetailModal] Raw wallet-analytics response:', data);
         
-        const pnl = data.pnlSummary;
-        if (pnl) {
-          pnl.total_pnl = pnl.total_pnl ?? pnl.totalPnl ?? 0;
-        }
-        setPnlSummary(pnl);
+        // Normalize walletMetrics - prefer snake_case, fallback to camelCase
+        const rawMetrics = data.walletMetrics || {};
+        const normalizedMetrics: WalletMetrics = {
+          total_volume: rawMetrics.total_volume ?? rawMetrics.totalVolume ?? 0,
+          total_trades: rawMetrics.total_trades ?? rawMetrics.totalTrades ?? 0,
+          unique_markets: rawMetrics.unique_markets ?? rawMetrics.uniqueMarkets ?? 0,
+          orders_capped: rawMetrics.orders_capped ?? rawMetrics.ordersCapped ?? false,
+        };
+        setWalletMetrics(normalizedMetrics);
+        
+        // Normalize pnlSummary - prefer snake_case, fallback to camelCase
+        const rawPnl = data.pnlSummary || {};
+        const seriesData = rawPnl.series || [];
+        const lastSeriesValue = seriesData.length > 0 ? (seriesData[seriesData.length - 1]?.pnl_to_date ?? 0) : 0;
+        
+        const normalizedPnl: PnlSummary = {
+          total_pnl: rawPnl.total_pnl ?? rawPnl.totalPnl ?? lastSeriesValue ?? 0,
+          series: seriesData,
+          winRate: rawPnl.winRate ?? 0,
+          avgTradeSize: rawPnl.avgTradeSize ?? 0,
+        };
+        
+        console.log('[TradeDetailModal] Normalized PnL:', normalizedPnl);
+        setPnlSummary(normalizedPnl);
         setRecentTrades(data.recentTrades || []);
       }
     } catch (error) {
