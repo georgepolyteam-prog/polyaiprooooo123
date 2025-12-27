@@ -200,20 +200,29 @@ serve(async (req) => {
       eventSlug = resolvedMarketSlug;
     }
 
-    // Build the full URL
-    // For multi-market events, use ?tid= parameter for correct routing
-    // For single-market events, use /event/{eventSlug} or /event/{eventSlug}/{marketSlug}
-    let fullUrl: string;
+    // Build URLs:
+    // - shareUrl: For external sharing/viewing (uses ?tid= for multi-market)
+    // - canonicalMarketUrl: For internal API calls (always uses /event/{slug}/{marketSlug} format)
+    let shareUrl: string;
+    let canonicalMarketUrl: string;
+    
     if (isMultiMarket && resolvedTokenId) {
-      // Multi-market: use tid parameter for exact routing
-      fullUrl = `https://polymarket.com/event/${eventSlug}?tid=${resolvedTokenId}`;
+      // Multi-market: shareUrl uses tid parameter for exact routing in browser
+      shareUrl = `https://polymarket.com/event/${eventSlug}?tid=${resolvedTokenId}`;
+      // canonicalMarketUrl uses /event/{eventSlug}/{marketSlug} for API calls
+      canonicalMarketUrl = `https://polymarket.com/event/${eventSlug}/${resolvedMarketSlug}`;
     } else if (eventSlug === resolvedMarketSlug) {
-      fullUrl = `https://polymarket.com/event/${eventSlug}`;
+      shareUrl = `https://polymarket.com/event/${eventSlug}`;
+      canonicalMarketUrl = shareUrl;
     } else {
-      fullUrl = `https://polymarket.com/event/${eventSlug}/${resolvedMarketSlug}`;
+      shareUrl = `https://polymarket.com/event/${eventSlug}/${resolvedMarketSlug}`;
+      canonicalMarketUrl = shareUrl;
     }
+    
+    // fullUrl is kept for backwards compatibility (same as shareUrl)
+    const fullUrl = shareUrl;
 
-    console.log(`Resolved URL: ${fullUrl} (multiMarket: ${isMultiMarket}, markets: ${eventMarketCount})`);
+    console.log(`Resolved URLs: shareUrl=${shareUrl}, canonicalMarketUrl=${canonicalMarketUrl} (multiMarket: ${isMultiMarket}, markets: ${eventMarketCount})`);
 
     // Cache the result
     urlCache.set(cacheKey, {
@@ -229,7 +238,9 @@ serve(async (req) => {
       JSON.stringify({
         eventSlug,
         marketSlug: resolvedMarketSlug,
-        fullUrl,
+        fullUrl, // Backwards compatible (same as shareUrl)
+        shareUrl, // For external links (browser viewing)
+        canonicalMarketUrl, // For internal API calls (fetching market data)
         tokenId: resolvedTokenId,
         isMultiMarket,
         cached: false

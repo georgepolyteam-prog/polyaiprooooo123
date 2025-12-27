@@ -541,8 +541,7 @@ export function useDomeRouter() {
         }
       }
       
-      updateStage('error', message);
-      
+      // Show error toast immediately (don't wait for overlay to clear)
       // Handle specific error types with contextual descriptions
       if (message.includes('rejected') || message.includes('denied') || message.includes('User rejected')) {
         toast.error('Order signature rejected');
@@ -573,6 +572,9 @@ export function useDomeRouter() {
         });
       }
 
+      // Clear overlay immediately on error so toast is visible
+      updateStage('idle');
+
       const result: OrderResult = {
         success: false,
         error: message,
@@ -582,7 +584,8 @@ export function useDomeRouter() {
       return result;
     } finally {
       setIsPlacingOrder(false);
-      setTimeout(() => updateStage('idle'), 2000);
+      // Only reset to idle after success (errors already reset immediately above)
+      // This prevents the 2-second delay from blocking error toasts
     }
   }, [address, walletClient, chainId, switchChainAsync, isLinked, credentials, updateStage, clearSession]);
 

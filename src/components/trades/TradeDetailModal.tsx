@@ -23,7 +23,7 @@ interface Trade {
   timestamp: number;
   user: string;
   image?: string;
-  resolved_url?: string; // Cached resolved URL
+  resolved_url?: string; // Cached resolved URL (shareUrl for external links)
 }
 
 interface PnLData {
@@ -57,11 +57,16 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(trade.resolved_url || null);
   const [resolvingUrl, setResolvingUrl] = useState(false);
   const [loadingSide, setLoadingSide] = useState<'YES' | 'NO' | null>(null);
+  // Store both shareUrl (for external links) and canonicalMarketUrl (for trading API calls)
+  const [canonicalMarketUrl, setCanonicalMarketUrl] = useState<string | null>(null);
+  
   // Resolve correct market URL on mount
   useEffect(() => {
     async function resolveMarketUrl() {
       if (trade.resolved_url) {
         setResolvedUrl(trade.resolved_url);
+        // For backwards compatibility, use resolved_url as canonical too
+        setCanonicalMarketUrl(trade.resolved_url);
         return;
       }
       
@@ -70,25 +75,31 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
       setResolvingUrl(true);
       try {
         const { data, error } = await supabase.functions.invoke('resolve-market-url', {
-          body: { marketSlug: trade.market_slug, conditionId: trade.condition_id }
+          body: { marketSlug: trade.market_slug, conditionId: trade.condition_id, tokenId: trade.token_id }
         });
         
-        if (!error && data?.fullUrl) {
-          setResolvedUrl(data.fullUrl);
+        if (!error && data) {
+          // Use shareUrl for external links, canonicalMarketUrl for trading
+          setResolvedUrl(data.shareUrl || data.fullUrl);
+          setCanonicalMarketUrl(data.canonicalMarketUrl || data.fullUrl);
         } else {
           // Fallback to market_slug based URL
-          setResolvedUrl(`https://polymarket.com/event/${trade.market_slug}`);
+          const fallbackUrl = `https://polymarket.com/event/${trade.market_slug}`;
+          setResolvedUrl(fallbackUrl);
+          setCanonicalMarketUrl(fallbackUrl);
         }
       } catch (err) {
         console.error('Error resolving market URL:', err);
-        setResolvedUrl(`https://polymarket.com/event/${trade.market_slug}`);
+        const fallbackUrl = `https://polymarket.com/event/${trade.market_slug}`;
+        setResolvedUrl(fallbackUrl);
+        setCanonicalMarketUrl(fallbackUrl);
       } finally {
         setResolvingUrl(false);
       }
     }
     
     resolveMarketUrl();
-  }, [trade.market_slug, trade.condition_id, trade.resolved_url]);
+  }, [trade.market_slug, trade.condition_id, trade.resolved_url, trade.token_id]);
 
   useEffect(() => {
     fetchWalletData();
@@ -127,7 +138,9 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
 
   const handleTrade = (side: 'YES' | 'NO') => {
     setLoadingSide(side);
-    const marketUrl = resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
+    // Use canonicalMarketUrl for trading (proper /event/{slug}/{marketSlug} format)
+    // This ensures market-dashboard can parse it correctly, even for multi-market events
+    const marketUrl = canonicalMarketUrl || resolvedUrl || `https://polymarket.com/event/${trade.market_slug}`;
     // Small delay for loading state visibility
     setTimeout(() => {
       onTrade?.(marketUrl, trade, side);
