@@ -221,11 +221,13 @@ export function usePayoutStatus(conditionId: string | undefined, enabled: boolea
   const readyForRedemption = payoutsReported && !bothNumeratorsZero;
   
   // Determine winning outcome
+  // In Polymarket CTF: index 0 = YES outcome, index 1 = NO outcome
+  // If numerators[0] > 0, YES won; if numerators[1] > 0, NO won
   let winningOutcome: 'YES' | 'NO' | null = null;
   if (numerators && numerators.length >= 2) {
-    if (numerators[1] > BigInt(0)) {
+    if (numerators[0] > BigInt(0)) {
       winningOutcome = 'YES';
-    } else if (numerators[0] > BigInt(0)) {
+    } else if (numerators[1] > BigInt(0)) {
       winningOutcome = 'NO';
     }
   }

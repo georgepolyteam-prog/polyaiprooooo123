@@ -553,9 +553,11 @@ export default function MyTrades() {
     });
   };
 
-  // Handle trading from a position
+  // Handle trading from a position - include token ID for multi-market events
   const handleTradeFromPosition = useCallback(async (pos: Position) => {
-    const url = getPolymarketUrl(pos.eventSlug);
+    // Build URL with token ID to ensure correct market is selected for multi-market events
+    const baseUrl = getPolymarketUrl(pos.eventSlug);
+    const url = pos.asset ? `${baseUrl}?tid=${pos.asset}` : baseUrl;
     const res = await fetchTradeableMarketData(url);
 
     if (res.ok === false) {
