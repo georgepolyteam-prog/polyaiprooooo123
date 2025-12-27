@@ -318,7 +318,12 @@ export default function LiveTrades() {
     if (conditionIds.length === 0 && slugs.length === 0) return;
     
     try {
-      console.log(`[LiveTrades] Batch fetching: ${conditionIds.length} condition_ids + ${slugs.length} slugs`);
+      console.log(`[LiveTrades] 🔍 Fetching images for:`, {
+        conditionIds: conditionIds.slice(0, 3),
+        slugs: slugs.slice(0, 3),
+        totalConditionIds: conditionIds.length,
+        totalSlugs: slugs.length
+      });
       
       // Call get-market-previews with separated arrays
       const { data, error } = await supabase.functions.invoke('get-market-previews', {
@@ -328,10 +333,22 @@ export default function LiveTrades() {
         }
       });
       
-      if (error || !data?.markets) {
-        console.warn('[LiveTrades] Batch fetch failed:', error);
+      if (error) {
+        console.error('[LiveTrades] ❌ Fetch error:', error);
         return;
       }
+      
+      if (!data?.markets) {
+        console.warn('[LiveTrades] ⚠️ No markets returned');
+        return;
+      }
+      
+      console.log(`[LiveTrades] ✅ Received ${data.markets.length} markets`);
+      
+      // Count markets with/without images
+      const withImages = data.markets.filter((m: any) => m.image).length;
+      const withoutImages = data.markets.filter((m: any) => !m.image).length;
+      console.log(`[LiveTrades] 🖼️ ${withImages} with images, ${withoutImages} without`);
       
       let cached = 0;
       for (const market of data.markets) {
@@ -356,7 +373,54 @@ export default function LiveTrades() {
         }
       }
       
-      console.log(`[LiveTrades] Cached ${cached} image keys from ${data.markets.length} markets`);
+      console.log(`[LiveTrades] 💾 Cached ${cached} image keys (total cache size: ${imageCacheRef.current.size})`);
+      
+      // Find condition_ids that didn't get images - try Gamma API fallback
+      const missingConditionIds = conditionIds.filter(id => 
+        !data.markets.find((m: any) => m.conditionId === id && m.image)
+      );
+      
+      if (missingConditionIds.length > 0) {
+        console.log(`[LiveTrades] 🔄 Trying Gamma fallback for ${missingConditionIds.length} missing images`);
+        
+        // Try fetching directly from Gamma API for missing condition_ids (limit to 5)
+        for (const conditionId of missingConditionIds.slice(0, 5)) {
+          try {
+            const response = await fetch(
+              `https://gamma-api.polymarket.com/markets?condition_id=${conditionId}`
+            );
+            if (response.ok) {
+              const markets = await response.json();
+              if (markets?.[0]) {
+                const market = markets[0];
+                const eventSlug = market.eventSlug || market.event_slug || market.groupSlug;
+                
+                // First check if market has an image directly
+                if (market.image) {
+                  imageCacheRef.current.set(conditionId, market.image);
+                  console.log(`[LiveTrades] ✅ Fallback found market image for ${conditionId.slice(0, 10)}...`);
+                  continue;
+                }
+                
+                // Try to get event image if eventSlug exists
+                if (eventSlug) {
+                  const eventRes = await fetch(`https://gamma-api.polymarket.com/events?slug=${eventSlug}`);
+                  if (eventRes.ok) {
+                    const events = await eventRes.json();
+                    const image = events?.[0]?.image;
+                    if (image) {
+                      imageCacheRef.current.set(conditionId, image);
+                      console.log(`[LiveTrades] ✅ Fallback found event image for ${conditionId.slice(0, 10)}...`);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            // Ignore fallback errors silently
+          }
+        }
+      }
       
       // Update existing trades with newly cached images
       setTrades(prev => prev.map(trade => {
@@ -370,7 +434,7 @@ export default function LiveTrades() {
         return trade;
       }));
     } catch (err) {
-      console.error('[LiveTrades] Batch fetch error:', err);
+      console.error('[LiveTrades] 💥 Batch fetch exception:', err);
     }
   }, []);
 
