@@ -43,7 +43,7 @@ export function MarketChartView({
   const [candlesticks, setCandlesticks] = useState<CandlestickData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState<'7D' | '30D' | 'ALL'>('7D');
+  const [timeframe, setTimeframe] = useState<'1H' | '1D' | '7D' | '30D' | 'ALL'>('1D');
   const [loadingSide, setLoadingSide] = useState<'YES' | 'NO' | null>(null);
   
   const [stats, setStats] = useState<{
@@ -65,6 +65,14 @@ export function MarketChartView({
       let interval: number;
       
       switch (timeframe) {
+        case '1H':
+          startTime = now - 60 * 60;
+          interval = 1; // 1min candles
+          break;
+        case '1D':
+          startTime = now - 24 * 60 * 60;
+          interval = 1; // 1min candles
+          break;
         case '7D':
           startTime = now - 7 * 24 * 60 * 60;
           interval = 60; // 1h candles
@@ -78,8 +86,8 @@ export function MarketChartView({
           interval = 1440; // 1d candles
           break;
         default:
-          startTime = now - 7 * 24 * 60 * 60;
-          interval = 60;
+          startTime = now - 24 * 60 * 60;
+          interval = 1;
       }
       
       // Use backend function to proxy the request (avoids 403)
@@ -132,17 +140,22 @@ export function MarketChartView({
       
       if (!error && data) {
         const orderbook = data.orderbook || {};
-        const marketInfo = data.marketInfo || {};
+        const tradeStats = data.tradeStats || {};
+        const market = data.market || {};
         
         // Calculate spread from orderbook
         const bestAsk = orderbook.asks?.[0]?.price;
         const bestBid = orderbook.bids?.[0]?.price;
         const spread = bestAsk && bestBid ? ((bestAsk - bestBid) * 100) : null;
         
+        // Calculate liquidity from orderbook totals if not in market data
+        const liquidity = market.liquidity || 
+          ((orderbook.bidTotal || 0) + (orderbook.askTotal || 0)) || null;
+        
         setStats(prev => ({
           ...prev,
-          volume24h: marketInfo.volume24h || null,
-          liquidity: marketInfo.liquidity || null,
+          volume24h: tradeStats.totalVolume24h || tradeStats.volume24h || market.volume24h || null,
+          liquidity: liquidity,
           spread: spread
         }));
       }
@@ -305,12 +318,12 @@ export function MarketChartView({
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
         {/* Timeframe Tabs */}
         <div className="flex items-center justify-center gap-1 p-1 bg-muted/30 rounded-xl w-fit mx-auto">
-          {(['7D', '30D', 'ALL'] as const).map((tf) => (
+          {(['1H', '1D', '7D', '30D', 'ALL'] as const).map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                "px-3 py-2 rounded-lg text-sm font-medium transition-all",
                 timeframe === tf 
                   ? "bg-primary text-primary-foreground shadow-md" 
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
