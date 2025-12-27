@@ -68,20 +68,24 @@ const ERROR_MESSAGES: Record<string, string> = {
   'min tick size': 'Price doesn\'t meet minimum tick size.',
   'size too small': 'Order size is too small (min 5 shares).',
   
-  // FOK order issues - liquidity problems (BUYS)
-  'couldn\'t be fully filled': 'Couldn\'t fill at current price. Try a limit order instead.',
-  'fok orders are fully filled': 'Couldn\'t fill at current price. Try a limit order instead.',
-  'fill or kill': 'Couldn\'t fill at current price. Try a limit order.',
+  // Low liquidity issues - common with NO side orders
+  'couldn\'t be fully filled': 'Low liquidity at this price. Try a smaller amount or limit order.',
+  'fok orders are fully filled': 'Low liquidity at this price. Try a smaller amount or limit order.',
+  'fill or kill': 'Low liquidity at this price. Try a limit order.',
+  'no liquidity': 'No liquidity available at this price. Try a limit order.',
+  'insufficient liquidity': 'Not enough liquidity. Try a smaller amount or limit order.',
   
-  // FAK order issues - no buyers at all (SELLS)
-  'no orders found to match': 'No buyers at current price. Try a limit sell order.',
-  'fak orders are partially filled': 'Couldn\'t fill at current price. Try a limit sell order.',
-  'no match is found': 'No buyers at current price. Try a limit sell order.',
+  // FAK order issues - partial/no fills
+  'no orders found to match': 'No orders at current price. Try a limit order.',
+  'fak orders are partially filled': 'Only partial fill available. Try a limit order.',
+  'no match is found': 'No matching orders. Try a limit order at a different price.',
+  'could not fill': 'Order couldn\'t be filled. Try a limit order.',
   
   // Market closed/resolved
   'orderbook': 'This market is closed or resolved. Check the Claimable tab.',
   'does not exist': 'This market is no longer tradeable. It may be resolved.',
   'market is closed': 'This market is closed. Check the Claimable tab for winnings.',
+  'inactive': 'This market is inactive or resolved.',
   
   // Network issues
   'timeout': 'Request timed out. Please try again.',
@@ -397,11 +401,15 @@ export function useDomeRouter() {
       );
 
       // Determine order type:
-      // - Market orders: FOK for buys (must fill entirely), FAK for sells (fill what you can)
+      // - Market orders: FAK for both buys and sells (fill what's available, cancel rest)
+      //   This prevents failures when one side has low liquidity (common with NO orders)
       // - Limit orders: GTC (Good Till Cancel)
       let orderType: 'GTC' | 'FOK' | 'FAK' = 'GTC';
       if (params.isMarketOrder) {
-        orderType = params.side === 'BUY' ? 'FOK' : 'FAK';
+        // Use FAK (Fill-Any-Kill) for all market orders - more forgiving than FOK
+        // FAK fills whatever liquidity is available and cancels the rest
+        // This is better UX than FOK which fails entirely if full amount can't be filled
+        orderType = 'FAK';
       }
       // Allow explicit override if passed
       if (params.orderType) {
