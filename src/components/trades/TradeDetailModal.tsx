@@ -42,6 +42,12 @@ interface PnlSummary {
   series: Array<{ timestamp: number; pnl_to_date: number }>;
   winRate?: number;
   avgTradeSize?: number;
+  unrealizedPnl?: number;
+  unrealized_pnl?: number;
+  combinedPnl?: number;
+  combined_pnl?: number;
+  positionCount?: number;
+  positionsValue?: number;
 }
 
 interface RecentTrade {
@@ -156,6 +162,10 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           series: seriesData,
           winRate: rawPnl.winRate ?? 0,
           avgTradeSize: rawPnl.avgTradeSize ?? 0,
+          unrealizedPnl: rawPnl.unrealizedPnl ?? rawPnl.unrealized_pnl ?? 0,
+          combinedPnl: rawPnl.combinedPnl ?? rawPnl.combined_pnl ?? 0,
+          positionCount: rawPnl.positionCount ?? 0,
+          positionsValue: rawPnl.positionsValue ?? 0,
         };
         
         console.log('[TradeDetailModal] Normalized PnL:', normalizedPnl);
@@ -336,7 +346,9 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
         {pnlSummary && pnlSummary.series.length > 0 && (
           <WalletPnlChart 
             series={pnlSummary.series} 
-            totalPnl={pnlSummary.total_pnl} 
+            totalPnl={pnlSummary.total_pnl}
+            unrealizedPnl={pnlSummary.unrealizedPnl}
+            combinedPnl={pnlSummary.combinedPnl}
           />
         )}
 
@@ -682,6 +694,8 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           <WalletPnlChart 
             series={pnlSummary.series} 
             totalPnl={pnlSummary.total_pnl}
+            unrealizedPnl={pnlSummary.unrealizedPnl}
+            combinedPnl={pnlSummary.combinedPnl}
             compact
           />
         ) : (

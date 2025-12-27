@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PnlDataPoint {
   timestamp: number;
@@ -12,15 +13,36 @@ interface PnlDataPoint {
 interface WalletPnlChartProps {
   series: PnlDataPoint[];
   totalPnl: number;
+  unrealizedPnl?: number;
+  combinedPnl?: number;
   className?: string;
   compact?: boolean;
 }
 
 type TimeframeOption = '7D' | '30D' | 'ALL';
+type PnlType = 'realized' | 'unrealized' | 'combined';
 
-export function WalletPnlChart({ series, totalPnl, className, compact = false }: WalletPnlChartProps) {
+export function WalletPnlChart({ 
+  series, 
+  totalPnl, 
+  unrealizedPnl = 0,
+  combinedPnl,
+  className, 
+  compact = false 
+}: WalletPnlChartProps) {
   const [timeframe, setTimeframe] = useState<TimeframeOption>('ALL');
+  const [pnlType, setPnlType] = useState<PnlType>('combined');
+  
   const safeTotalPnl = totalPnl ?? 0;
+  const safeUnrealizedPnl = unrealizedPnl ?? 0;
+  const safeCombinedPnl = combinedPnl ?? (safeTotalPnl + safeUnrealizedPnl);
+  
+  // Get the PnL value based on selected type
+  const displayPnl = pnlType === 'realized' 
+    ? safeTotalPnl 
+    : pnlType === 'unrealized' 
+      ? safeUnrealizedPnl 
+      : safeCombinedPnl;
 
   const filteredData = useMemo(() => {
     if (!series || series.length === 0) return [];
@@ -46,12 +68,25 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
     }));
   }, [series, timeframe]);
 
-  const isPositive = safeTotalPnl >= 0;
+  const isPositive = displayPnl >= 0;
   const gradientId = 'pnlGradient';
   
   // Determine color based on PnL
   const chartColor = isPositive ? 'hsl(var(--success))' : 'hsl(var(--destructive))';
   const glowColor = isPositive ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+
+  const formatPnlValue = (val: number) => {
+    const prefix = val >= 0 ? '+' : '';
+    if (Math.abs(val) >= 1000000) return `${prefix}$${(val / 1000000).toFixed(2)}M`;
+    if (Math.abs(val) >= 1000) return `${prefix}$${(val / 1000).toFixed(1)}K`;
+    return `${prefix}$${val.toFixed(2)}`;
+  };
+
+  const pnlTypeLabels: Record<PnlType, { label: string; description: string }> = {
+    combined: { label: 'Portfolio', description: 'Realized + unrealized gains from all trades' },
+    realized: { label: 'Realized', description: 'Confirmed gains from sells & redeems only' },
+    unrealized: { label: 'Unrealized', description: 'Unrealized gains from open positions' },
+  };
 
   if (!series || series.length === 0) {
     return (
@@ -84,6 +119,18 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
             <TrendingDown className={cn(compact ? "w-3.5 h-3.5" : "w-4 h-4", "text-destructive")} />
           )}
           <span className={cn(compact ? "text-xs" : "text-sm", "font-medium")}>PnL History</span>
+          
+          <TooltipProvider>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <HelpCircle className="w-3 h-3 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[260px]">
+                <p className="text-xs"><strong>Chart:</strong> Realized PnL over time (confirmed sells/redeems).</p>
+                <p className="text-xs mt-1"><strong>Portfolio:</strong> Total = Realized + Unrealized (open positions).</p>
+              </TooltipContent>
+            </UITooltip>
+          </TooltipProvider>
         </div>
         
         {/* Timeframe Toggle */}
@@ -151,6 +198,7 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
                     )}>
                       {isPos ? '+' : ''}{Math.abs(safePnl) >= 1000 ? `$${(safePnl / 1000).toFixed(1)}K` : `$${safePnl.toFixed(2)}`}
                     </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Realized only</p>
                   </div>
                 );
               }}
@@ -168,16 +216,58 @@ export function WalletPnlChart({ series, totalPnl, className, compact = false }:
         </ResponsiveContainer>
       </div>
 
-      {/* Total PnL Display */}
-      <div className={cn("border-t border-border/20 flex items-center justify-between", compact ? "mt-1.5 pt-1.5" : "mt-2 pt-2")}>
-        <span className={cn(compact ? "text-[10px]" : "text-xs", "text-muted-foreground")}>Total PnL</span>
-        <span className={cn(
-          "font-bold",
-          compact ? "text-sm" : "text-base",
-          isPositive ? "text-success" : "text-destructive"
-        )}>
-          {isPositive ? '+' : ''}{Math.abs(safeTotalPnl) >= 1000000 ? `$${(safeTotalPnl / 1000000).toFixed(2)}M` : Math.abs(safeTotalPnl) >= 1000 ? `$${(safeTotalPnl / 1000).toFixed(1)}K` : `$${safeTotalPnl.toFixed(2)}`}
-        </span>
+      {/* PnL Type Toggle */}
+      <div className={cn("border-t border-border/20", compact ? "mt-1.5 pt-1.5" : "mt-2 pt-2")}>
+        <div className="flex gap-0.5 p-0.5 rounded-lg bg-muted/30 w-fit mb-2">
+          {(['combined', 'realized', 'unrealized'] as PnlType[]).map((type) => (
+            <TooltipProvider key={type}>
+              <UITooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setPnlType(type)}
+                    className={cn(
+                      "font-medium rounded-md transition-all",
+                      compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-xs",
+                      pnlType === type
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {pnlTypeLabels[type].label}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">{pnlTypeLabels[type].description}</p>
+                </TooltipContent>
+              </UITooltip>
+            </TooltipProvider>
+          ))}
+        </div>
+        
+        {/* Display selected PnL value */}
+        <div className="flex items-center justify-between">
+          <span className={cn(compact ? "text-[10px]" : "text-xs", "text-muted-foreground")}>
+            {pnlTypeLabels[pnlType].label} PnL
+          </span>
+          <span className={cn(
+            "font-bold",
+            compact ? "text-sm" : "text-base",
+            displayPnl >= 0 ? "text-success" : "text-destructive"
+          )}>
+            {formatPnlValue(displayPnl)}
+          </span>
+        </div>
+
+        {/* Show breakdown when combined is selected */}
+        {pnlType === 'combined' && (
+          <div className={cn("flex items-center justify-between mt-1", compact ? "text-[9px]" : "text-[10px]", "text-muted-foreground")}>
+            <span>
+              Realized: <span className={safeTotalPnl >= 0 ? "text-success" : "text-destructive"}>{formatPnlValue(safeTotalPnl)}</span>
+              {' · '}
+              Open: <span className={safeUnrealizedPnl >= 0 ? "text-success" : "text-destructive"}>{formatPnlValue(safeUnrealizedPnl)}</span>
+            </span>
+          </div>
+        )}
       </div>
     </motion.div>
   );
