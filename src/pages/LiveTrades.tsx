@@ -1496,7 +1496,6 @@ export default function LiveTrades() {
           navigate('/chat', {
             state: {
               autoAnalyze: true,
-              deepResearch: type === 'deep',
               marketContext: {
                 eventTitle: trade.title,
                 outcomeQuestion: trade.title,
@@ -1523,7 +1522,6 @@ export default function LiveTrades() {
           navigate('/chat', {
             state: {
               autoAnalyze: true,
-              deepResearch: type === 'deep',
               marketContext: analysisContext,
             }
           });
