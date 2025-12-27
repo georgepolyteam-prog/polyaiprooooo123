@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown, Star } from 'lucide-react';
+import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown, Star, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 interface TradeFiltersProps {
   filter: 'all' | 'buy' | 'sell';
@@ -112,16 +114,34 @@ export function TradeFilters({
           Sells
         </Button>
 
-        {/* Whale Toggle */}
-        <Button
-          onClick={() => setWhalesOnly(!whalesOnly)}
-          variant={whalesOnly ? 'default' : 'outline'}
-          size="sm"
-          className={`min-h-[44px] sm:min-h-[36px] ${whalesOnly ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : ''}`}
-          title="Filter trades with volume $1,000 or higher"
-        >
-          🐋 Whales ($1k+)
-        </Button>
+        {/* Whale Toggle with Tooltip */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  onClick={() => setWhalesOnly(!whalesOnly)}
+                  variant={whalesOnly ? 'default' : 'outline'}
+                  size="sm"
+                  className={`min-h-[44px] sm:min-h-[36px] ${whalesOnly ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : ''}`}
+                >
+                  🐋 Whales ($1k+)
+                </Button>
+                <HelpCircle className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[280px]">
+              <p className="text-sm">Shows trades $1K+ only. Keeps up to <strong>2,000 whale trades</strong> vs 200 regular trades for deeper history and less lag.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
+        {/* Whale mode badge */}
+        {whalesOnly && (
+          <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/30">
+            Up to 2K trades
+          </Badge>
+        )}
 
         {/* Tracked Wallets Toggle - Only show if user is logged in */}
         {user && setTrackedOnly && (
@@ -151,7 +171,7 @@ export function TradeFilters({
         </Button>
 
         <div className="ml-auto text-xs sm:text-sm text-muted-foreground">
-          Showing {totalTrades} of last 500
+          Showing {totalTrades} of last {whalesOnly ? '2,000' : '200'}
         </div>
       </div>
 
