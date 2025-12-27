@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, useCallback, useMemo, useDeferredValue } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock, Download, Volume2, VolumeX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/TopBar';
@@ -12,8 +12,6 @@ import { MarketHeatmap } from '@/components/trades/MarketHeatmap';
 import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
 import { MarketTradeModal } from '@/components/MarketTradeModal';
 import { LiveTradesTour } from '@/components/trades/LiveTradesTour';
-import { VirtualizedTradeList } from '@/components/trades/VirtualizedTradeList';
-import { Trade as TradeType } from '@/components/trades/TradeRow';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -22,8 +20,26 @@ import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trad
 import { useTrackedWallets } from '@/hooks/useTrackedWallets';
 import domeLogo from '@/assets/dome-logo.png';
 
-// Re-export Trade type for local use
-type Trade = TradeType;
+interface Trade {
+  token_id: string;
+  token_label: string;
+  side: 'BUY' | 'SELL';
+  market_slug: string;
+  condition_id: string;
+  shares: number;
+  shares_normalized: number;
+  price: number;
+  tx_hash: string;
+  title: string;
+  timestamp: number;
+  order_hash: string;
+  user: string;
+  taker: string;
+  image?: string;
+  resolved_url?: string; // Cached resolved URL
+  _batchIndex?: number; // For CSS stagger animation
+  _batchTime?: number; // Batch timestamp
+}
 
 interface MarketContext {
   eventTitle: string;
@@ -53,13 +69,12 @@ const HARD_RECONNECT_INTERVAL_MS = 300000;
 const WHALE_THRESHOLD = 1000; // $1k+
 const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
-// Performance optimization constants - OPTIMIZED
-const BATCH_INTERVAL_MS = 150; // Increased from 50ms - still feels real-time but fewer renders
-const RENDER_THROTTLE_MS = 200; // Throttle display updates  
-const IMAGE_FETCH_DELAY_MS = 500; // Throttle image fetches
-const MAX_IMAGE_BATCH_SIZE = 10; // Max slugs per batch
-const STATS_THROTTLE_MS = 1000; // Recalculate stats every 1s (was 500ms)
-const SIDEBAR_THROTTLE_MS = 2000; // Recalculate topTraders/marketVolumes every 2s (was 1s)
+// Performance optimization constants
+const BATCH_INTERVAL_MS = 50; // Flush trades every 50ms for near-instant realtime feel
+const IMAGE_FETCH_DELAY_MS = 500; // Throttle image fetches (reduced for faster images)
+const MAX_IMAGE_BATCH_SIZE = 10; // Max slugs per batch (increased)
+const STATS_THROTTLE_MS = 500; // Recalculate stats every 500ms (faster updates)
+const SIDEBAR_THROTTLE_MS = 1000; // Recalculate topTraders/marketVolumes every 1 second
 
 export default function LiveTrades() {
   const navigate = useNavigate();
@@ -750,20 +765,22 @@ export default function LiveTrades() {
     });
   }, [trades, whaleTrades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown, trackedOnly, trackedAddresses]);
 
-  // Use deferred value to prevent blocking the main thread during filtering
-  const deferredFilteredTrades = useDeferredValue(filteredTrades);
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleTimeString();
+  };
 
-  // Memoized callback for trade clicks
-  const handleTradeClick = useCallback((trade: Trade) => {
-    setSelectedTrade(trade);
-  }, []);
+  const formatVolume = (price: number, shares: number) => {
+    const volume = (price ?? 0) * (shares ?? 0);
+    if (volume >= 1000) return `$${(volume / 1000).toFixed(1)}k`;
+    return `$${volume.toFixed(2)}`;
+  };
 
-  // Memoized reconnect handler
-  const handleReconnect = useCallback(() => {
-    wsUrlRef.current = null;
-    setError(null);
-    connectWebSocket();
-  }, [connectWebSocket]);
+  const getWhaleLevel = (price: number, shares: number) => {
+    const volume = price * shares;
+    if (volume >= MEGA_WHALE_THRESHOLD) return 'mega';
+    if (volume >= WHALE_THRESHOLD) return 'whale';
+    return null;
+  };
 
   const exportToCSV = useCallback(() => {
     const csv = [
@@ -979,23 +996,175 @@ export default function LiveTrades() {
                 <div className="col-span-1 text-right">Time</div>
               </div>
 
-              {/* Virtualized Trades List */}
-              <VirtualizedTradeList
-                trades={deferredFilteredTrades}
-                onTradeClick={handleTradeClick}
-                loading={loading}
-                error={error}
-                connected={connected}
-                allTradesCount={trades.length}
-                onReconnect={handleReconnect}
-              />
+              {/* Trades List */}
+              <div className="divide-y divide-border/50 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto min-h-[200px]">
+                {filteredTrades.map((trade, index) => {
+                  const tradeId = trade.order_hash || `${trade.tx_hash}-${trade.timestamp}-${trade.token_id}`;
+                  const whaleLevel = getWhaleLevel(trade.price, trade.shares_normalized || trade.shares);
+                  // CSS stagger animation for smooth entry - only for recent trades
+                  const isRecentBatch = trade._batchTime && (Date.now() - trade._batchTime < 500);
+                  const staggerDelay = isRecentBatch ? (trade._batchIndex || 0) * 30 : 0;
+                  
+                  return (
+                    <div
+                      key={tradeId}
+                      onClick={() => setSelectedTrade(trade)}
+                      className={`group grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${
+                        isRecentBatch ? 'animate-fade-in' : ''
+                      } ${
+                        whaleLevel === 'mega' 
+                          ? 'bg-warning/10 shadow-[0_0_20px_rgba(234,179,8,0.2)]' // Static glow instead of animate-pulse
+                          : whaleLevel === 'whale' 
+                            ? 'bg-warning/5' 
+                            : ''
+                      }`}
+                      style={isRecentBatch ? { animationDelay: `${staggerDelay}ms` } : undefined}
+                    >
+                      {/* Market Info */}
+                      <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                        {trade.image ? (
+                          <img 
+                            src={trade.image} 
+                            alt="" 
+                            className="w-10 h-10 rounded-lg object-cover shrink-0"
+                            onError={(e) => {
+                              // Hide broken/wrong images and show fallback
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className={cn(
+                            "w-10 h-10 rounded-lg bg-muted items-center justify-center shrink-0",
+                            trade.image ? "hidden" : "flex"
+                          )}
+                        >
+                          <Activity className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-foreground font-medium text-sm truncate group-hover:text-primary transition-colors">
+                            {trade.title}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono">
+                            {trade.user.slice(0, 6)}...{trade.user.slice(-4)}
+                          </div>
+                        </div>
+                        {whaleLevel && (
+                          <span className={`hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                            whaleLevel === 'mega' 
+                              ? 'bg-destructive/20 text-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)]' // Static glow
+                              : 'bg-warning/20 text-warning'
+                          }`}>
+                            {whaleLevel === 'mega' ? '🔥 MEGA' : '🐋 WHALE'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Side */}
+                      <div className="sm:col-span-2 flex items-center">
+                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${
+                          trade.side === 'BUY' 
+                            ? 'bg-success/20 text-success' 
+                            : 'bg-destructive/20 text-destructive'
+                        }`}>
+                          {trade.side === 'BUY' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {trade.side} {trade.token_label}
+                        </div>
+                      </div>
+
+                      {/* Price */}
+                      <div className="sm:col-span-2 flex items-center sm:justify-end">
+                        <span className="text-foreground font-mono font-semibold">
+                          ${(trade.price ?? 0).toFixed(3)}
+                        </span>
+                      </div>
+
+                      {/* Volume */}
+                      <div className="sm:col-span-2 flex items-center sm:justify-end">
+                        <span className={`font-mono font-bold ${
+                          whaleLevel === 'mega' ? 'text-destructive' : whaleLevel === 'whale' ? 'text-warning' : 'text-primary'
+                        }`}>
+                          {formatVolume(trade.price, trade.shares_normalized || trade.shares)}
+                        </span>
+                      </div>
+
+                      {/* Time */}
+                      <div className="sm:col-span-1 flex items-center sm:justify-end">
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(trade.timestamp)}
+                        </span>
+                      </div>
+
+                      {/* Mobile: Show whale badge */}
+                      <div className="sm:hidden flex items-center justify-between">
+                        {whaleLevel && (
+                          <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                            whaleLevel === 'mega' 
+                              ? 'bg-destructive/20 text-destructive' 
+                              : 'bg-warning/20 text-warning'
+                          }`}>
+                            {whaleLevel === 'mega' ? '🔥 MEGA' : '🐋 WHALE'}
+                          </span>
+                        )}
+                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Empty State */}
+            {filteredTrades.length === 0 && !loading && (
+              <div className="text-center py-20">
+                <Activity className="w-16 h-16 text-muted-foreground mx-auto mb-4 animate-pulse" />
+                <p className="text-muted-foreground text-lg">
+                  {trades.length > 0 ? 'No trades match your filters' : 'Waiting for trades...'}
+                </p>
+                <p className="text-muted-foreground/60 text-sm mt-2">
+                  {connected ? 'Connected to live feed' : 'Reconnecting...'}
+                </p>
+                {!connected && (
+                  <Button onClick={connectWebSocket} variant="outline" className="mt-4 gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Reconnect
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Loading State */}
+            {loading && !error && (
+              <div className="text-center py-20">
+                <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-muted-foreground">Connecting to live feed...</p>
+                <p className="text-muted-foreground/60 text-xs mt-2">This may take a few seconds</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="text-center py-20">
+                <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
+                <p className="text-destructive font-medium">{error}</p>
+                <Button onClick={() => {
+                  wsUrlRef.current = null;
+                  setError(null);
+                  connectWebSocket();
+                }} variant="outline" className="mt-4 gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  Try Again
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Sidebar - Single render, CSS controls visibility for desktop/mobile */}
           <div className="hidden lg:block space-y-4">
             <TopTradersSidebar 
-              traders={topTraders}
+              traders={topTraders} 
               onWalletClick={(wallet) => {
                 const traderTrade = trades.find(t => t.user === wallet);
                 if (traderTrade) {
