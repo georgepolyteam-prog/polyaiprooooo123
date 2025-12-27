@@ -433,6 +433,18 @@ export default function LiveTrades() {
         }
         return trade;
       }));
+      
+      // Also update whale trades with newly cached images
+      setWhaleTrades(prev => prev.map(trade => {
+        if (!trade.image) {
+          const cachedImage = imageCacheRef.current.get(trade.condition_id) || 
+                             imageCacheRef.current.get(trade.market_slug);
+          if (cachedImage) {
+            return { ...trade, image: cachedImage };
+          }
+        }
+        return trade;
+      }));
     } catch (err) {
       console.error('[LiveTrades] 💥 Batch fetch exception:', err);
     }
@@ -635,6 +647,15 @@ export default function LiveTrades() {
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
           if (volume >= WHALE_THRESHOLD) {
             showWhaleAlert(newTrade, volume);
+            
+            // Try to get cached image before adding to whale trades
+            if (!newTrade.image) {
+              const cachedImg = imageCacheRef.current.get(newTrade.condition_id) || 
+                               imageCacheRef.current.get(newTrade.market_slug);
+              if (cachedImg) {
+                newTrade.image = cachedImg;
+              }
+            }
             
             // Accumulate whale trades in dedicated buffer (keep up to 2000)
             setWhaleTrades(prev => {
