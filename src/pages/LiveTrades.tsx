@@ -736,8 +736,10 @@ export default function LiveTrades() {
         }
       }
       
-      // Tracked wallets filter
-      if (trackedOnly && trackedAddresses.size > 0) {
+      // Tracked wallets filter - if enabled, ONLY show tracked wallet trades
+      if (trackedOnly) {
+        // If no tracked wallets, show nothing (user needs to track wallets first)
+        if (trackedAddresses.size === 0) return false;
         if (!trackedAddresses.has(trade.user.toLowerCase())) {
           return false;
         }

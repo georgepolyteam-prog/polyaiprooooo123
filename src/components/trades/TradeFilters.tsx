@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,7 @@ export function TradeFilters({
   const { user } = useAuth();
   const [expanded, setExpanded] = useState(true); // Open by default
   const [minVolumeInput, setMinVolumeInput] = useState(minVolume > 0 ? minVolume.toString() : '');
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync local input with parent state when parent changes externally
   useEffect(() => {
@@ -64,9 +65,18 @@ export function TradeFilters({
     const parts = cleaned.split('.');
     const formatted = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned;
     setMinVolumeInput(formatted);
+    
+    // Debounced realtime update (200ms)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const parsed = parseFloat(formatted) || 0;
+      setMinVolume(parsed);
+    }, 200);
   };
 
   const handleMinVolumeBlur = () => {
+    // Immediate apply on blur (clear any pending debounce)
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     const parsed = parseFloat(minVolumeInput) || 0;
     setMinVolume(parsed);
   };
