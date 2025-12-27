@@ -57,11 +57,11 @@ export function MarketTradeModal({ open, onOpenChange, defaultSide, marketData }
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" elevated className="h-[85vh] rounded-t-3xl">
+        <SheetContent side="bottom" elevated className="h-[85vh] rounded-t-3xl flex flex-col">
           {/* Drag handle indicator */}
           <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1 rounded-full bg-muted-foreground/30" />
           
-          <SheetHeader className="pb-4 flex flex-row items-center justify-between">
+          <SheetHeader className="pb-4 flex flex-row items-center justify-between flex-shrink-0">
             <SheetTitle className="text-left">Trade Market</SheetTitle>
             <SheetClose asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
@@ -70,7 +70,9 @@ export function MarketTradeModal({ open, onOpenChange, defaultSide, marketData }
               </Button>
             </SheetClose>
           </SheetHeader>
-          {content}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            {content}
+          </div>
         </SheetContent>
       </Sheet>
     );

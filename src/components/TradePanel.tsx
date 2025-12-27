@@ -251,8 +251,8 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
   const shares = amount ? (parseFloat(amount) / displayPrice).toFixed(2) : '0';
   const payout = amount ? (parseFloat(amount) / displayPrice).toFixed(2) : '0';
 
-  const yesPrice = (marketData.currentPrice * 100).toFixed(1);
-  const noPrice = ((1 - marketData.currentPrice) * 100).toFixed(1);
+  const yesPrice = marketData.isLoading ? '--' : (marketData.currentPrice * 100).toFixed(1);
+  const noPrice = marketData.isLoading ? '--' : ((1 - marketData.currentPrice) * 100).toFixed(1);
 
   return (
     <>
