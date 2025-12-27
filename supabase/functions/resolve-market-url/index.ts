@@ -58,7 +58,7 @@ serve(async (req) => {
     const response = await fetch(gammaUrl, {
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'VeraAI/1.0'
+        'User-Agent': 'PolyAI/1.0'
       }
     });
 
@@ -80,7 +80,7 @@ serve(async (req) => {
       const eventsResponse = await fetch(eventsUrl, {
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'VeraAI/1.0'
+          'User-Agent': 'PolyAI/1.0'
         }
       });
       
@@ -156,7 +156,7 @@ serve(async (req) => {
       const eventsResponse = await fetch(eventsUrl, {
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'VeraAI/1.0'
+          'User-Agent': 'PolyAI/1.0'
         }
       });
       
@@ -179,7 +179,7 @@ serve(async (req) => {
         const eventCheckResponse = await fetch(eventCheckUrl, {
           headers: {
             'Accept': 'application/json',
-            'User-Agent': 'VeraAI/1.0'
+            'User-Agent': 'PolyAI/1.0'
           }
         });
         if (eventCheckResponse.ok) {

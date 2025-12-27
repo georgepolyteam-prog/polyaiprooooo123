@@ -4,7 +4,7 @@
 
   console.log("🔮 Poly Extension loaded on", window.location.href);
 
-  const POLY_URL = "https://usevera.tech";
+  const POLY_URL = "https://poly.market";
   const MAX_RETRIES = 30;
   const RETRY_DELAY = 300;
   let currentUrl = window.location.href;

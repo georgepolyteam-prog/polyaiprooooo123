@@ -222,7 +222,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   </div>
                 </div>
                 <a
-                  href="https://t.me/veraaiapp"
+                  href="https://x.com/trypolyai"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-muted/50 border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm"
