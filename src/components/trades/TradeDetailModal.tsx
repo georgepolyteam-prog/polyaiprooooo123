@@ -430,7 +430,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
                             ) : (
                               <ArrowDownRight className="w-3 h-3" />
                             )}
-                            {t.token_label || (t.side?.toUpperCase() === 'BUY' ? 'YES' : 'NO')}
+                            {t.side?.toUpperCase()} {t.token_label || ''}
                           </span>
                           <span>•</span>
                           <span>{formatTime(t.timestamp)}</span>

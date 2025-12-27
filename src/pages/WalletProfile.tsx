@@ -42,6 +42,7 @@ interface Trade {
   marketSlug: string;
   marketTitle: string;
   side: string;
+  token_label?: string; // YES or NO - the actual outcome token
   volume: number;
   price: number;
   shares: number;
@@ -648,7 +649,7 @@ export default function WalletProfile() {
                             ) : (
                               <ArrowDownRight className="w-3 h-3" />
                             )}
-                            {trade.side?.toUpperCase() === 'BUY' ? 'YES' : 'NO'}
+                            {trade.side?.toUpperCase()} {trade.token_label || ''}
                           </span>
                           <span>•</span>
                           <span>{formatTime(trade.timestamp)}</span>

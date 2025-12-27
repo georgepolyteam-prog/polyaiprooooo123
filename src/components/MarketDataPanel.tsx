@@ -36,6 +36,7 @@ interface MarketDataPanelProps {
     recentTrades: Array<{
       id: string;
       side: string;
+      outcome?: string; // YES or NO - the actual outcome token
       size: number;
       price: number;
       timeAgo: string;
@@ -311,14 +312,24 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
                           NEW
                         </span>
                       )}
-                      <span className={cn(
-                        "px-1.5 py-0.5 rounded text-[10px] font-bold",
-                        trade.side === 'BUY' 
-                          ? "bg-success/20 text-success" 
-                          : "bg-destructive/20 text-destructive"
-                      )}>
-                        {trade.side === 'BUY' ? 'YES' : 'NO'}
-                      </span>
+                      {(() => {
+                        // Determine effective position: BUY YES = YES, SELL YES = NO, BUY NO = NO, SELL NO = YES
+                        const effectivePosition = 
+                          (trade.side === 'BUY' && trade.outcome === 'YES') || (trade.side === 'SELL' && trade.outcome === 'NO') 
+                            ? 'YES' 
+                            : (trade.side === 'SELL' && trade.outcome === 'YES') || (trade.side === 'BUY' && trade.outcome === 'NO')
+                              ? 'NO'
+                              : trade.outcome || trade.side; // Fallback to outcome or BUY/SELL if unknown
+                        const isYes = effectivePosition === 'YES';
+                        return (
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                            isYes ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                          )}>
+                            {effectivePosition}
+                          </span>
+                        );
+                      })()}
                       <span className="font-mono font-bold text-xs">{formatVolume(trade.size)}</span>
                       <span className="text-muted-foreground text-[10px]">@</span>
                       <span className="font-mono text-xs">{trade.price.toFixed(1)}%</span>

@@ -135,6 +135,7 @@ serve(async (req) => {
           marketSlug: order.market_slug,
           marketTitle: order.title || order.market_slug,
           side: order.side,
+          token_label: order.token_label, // YES or NO - this is the actual outcome, not BUY/SELL
           volume: shares * price,
           price: price,
           shares: shares,
