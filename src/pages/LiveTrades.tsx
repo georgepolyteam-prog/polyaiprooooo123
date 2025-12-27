@@ -71,8 +71,8 @@ const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
 // Performance optimization constants
 const BATCH_INTERVAL_MS = 50; // Flush trades every 50ms for near-instant realtime feel
-const IMAGE_FETCH_DELAY_MS = 500; // Throttle image fetches (reduced for faster images)
-const MAX_IMAGE_BATCH_SIZE = 10; // Max slugs per batch (increased)
+const IMAGE_BATCH_THRESHOLD = 20; // Fetch when this many images queued
+const IMAGE_BATCH_DEBOUNCE_MS = 1000; // Or fetch after 1 second of no new queues
 const STATS_THROTTLE_MS = 500; // Recalculate stats every 500ms (faster updates)
 const SIDEBAR_THROTTLE_MS = 1000; // Recalculate topTraders/marketVolumes every 1 second
 
@@ -298,33 +298,85 @@ export default function LiveTrades() {
     }
   }, []);
 
-  // Queue for on-demand image fetching - fetches specific images by condition_id
-  const pendingFetchesRef = useRef<Set<string>>(new Set());
-  
+  // Batched image fetching - collects condition_ids and fetches in bulk
+  const pendingImageFetches = useRef<Set<string>>(new Set());
+  const imagesFetchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Batch fetch images for multiple condition_ids at once (reduces 100 req/s to 1-2 req/s)
+  const batchFetchImages = useCallback(async (conditionIds: string[]) => {
+    if (conditionIds.length === 0) return;
+
+    try {
+      console.log(`[LiveTrades] Batch fetching images for ${conditionIds.length} markets`);
+      
+      const { data, error } = await supabase.functions.invoke('get-market-previews', {
+        body: { conditionIds }
+      });
+
+      if (error || !data?.markets) {
+        console.warn('[LiveTrades] Batch fetch failed:', error);
+        // Mark as checked so we don't retry
+        conditionIds.forEach(id => imageCacheRef.current.set(id, ''));
+        return;
+      }
+
+      // Cache all returned images
+      let cachedCount = 0;
+      data.markets.forEach((market: any) => {
+        if (market.conditionId && market.image) {
+          imageCacheRef.current.set(market.conditionId, market.image);
+          cachedCount++;
+          if (market.marketSlug) {
+            imageCacheRef.current.set(market.marketSlug, market.image);
+          }
+        }
+      });
+
+      console.log(`[LiveTrades] Cached ${cachedCount} images from batch`);
+      
+      // Trigger re-render to show newly cached images
+      setTrades(prev => prev.map(trade => {
+        const cachedImg = imageCacheRef.current.get(trade.condition_id);
+        if (cachedImg && !trade.image) {
+          return { ...trade, image: cachedImg };
+        }
+        return trade;
+      }));
+    } catch (err) {
+      console.error('[LiveTrades] Batch image fetch error:', err);
+    }
+  }, []);
+
+  // Queue a condition_id for batched fetching
   const queueImageFetch = useCallback((conditionId: string, marketSlug: string) => {
-    // Skip if already cached or already fetching
+    // Skip if already cached or already queued
     if (!conditionId) return;
     if (imageCacheRef.current.has(conditionId)) return;
-    if (pendingFetchesRef.current.has(conditionId)) return;
-    
-    pendingFetchesRef.current.add(conditionId);
-    
-    // Fetch on-demand with slight delay to batch rapid-fire trades
-    setTimeout(async () => {
-      const image = await fetchMarketImage(conditionId, marketSlug);
-      pendingFetchesRef.current.delete(conditionId);
-      
-      if (image) {
-        // Update any trades in state that match this condition_id
-        setTrades(prev => prev.map(trade => {
-          if (trade.condition_id === conditionId && !trade.image) {
-            return { ...trade, image };
-          }
-          return trade;
-        }));
-      }
-    }, 100); // Small delay to allow batching
-  }, [fetchMarketImage]);
+    if (pendingImageFetches.current.has(conditionId)) return;
+
+    pendingImageFetches.current.add(conditionId);
+
+    // Clear existing timer
+    if (imagesFetchTimer.current) {
+      clearTimeout(imagesFetchTimer.current);
+    }
+
+    // Fetch immediately if queue is large enough
+    if (pendingImageFetches.current.size >= IMAGE_BATCH_THRESHOLD) {
+      const idsToFetch = Array.from(pendingImageFetches.current);
+      pendingImageFetches.current.clear();
+      batchFetchImages(idsToFetch);
+    } else {
+      // Otherwise debounce: wait 1 second before batching
+      imagesFetchTimer.current = setTimeout(() => {
+        const idsToFetch = Array.from(pendingImageFetches.current);
+        pendingImageFetches.current.clear();
+        if (idsToFetch.length > 0) {
+          batchFetchImages(idsToFetch);
+        }
+      }, IMAGE_BATCH_DEBOUNCE_MS);
+    }
+  }, [batchFetchImages]);
 
   const forceReconnect = useCallback(() => {
     console.log('Force reconnecting...');
@@ -590,6 +642,10 @@ export default function LiveTrades() {
       }
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
+      }
+      // Cleanup batch image fetch timer
+      if (imagesFetchTimer.current) {
+        clearTimeout(imagesFetchTimer.current);
       }
     };
   }, [connectWebSocket]);
