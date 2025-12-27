@@ -86,6 +86,10 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   const [canonicalMarketUrl, setCanonicalMarketUrl] = useState<string | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [showFullProfile, setShowFullProfile] = useState(false);
+  const [fetchedImage, setFetchedImage] = useState<string | null>(null);
+  
+  // Image cache to avoid refetching for same condition_id
+  const [imageCache] = useState<Map<string, string>>(new Map());
   
   const isTracked = isWalletTracked(trade.user);
   
@@ -125,6 +129,35 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     
     resolveMarketUrl();
   }, [trade.market_slug, trade.condition_id, trade.resolved_url, trade.token_id]);
+
+  // Fetch correct market image using condition_id (same as Markets/Chat pages)
+  useEffect(() => {
+    async function fetchMarketImage() {
+      if (!trade.condition_id) return;
+      
+      // Check cache first
+      if (imageCache.has(trade.condition_id)) {
+        setFetchedImage(imageCache.get(trade.condition_id) || null);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('get-market-previews', {
+          body: { conditionIds: [trade.condition_id] }
+        });
+        
+        if (!error && data?.markets?.[0]?.image) {
+          const image = data.markets[0].image;
+          imageCache.set(trade.condition_id, image);
+          setFetchedImage(image);
+        }
+      } catch (err) {
+        console.error('Error fetching market image:', err);
+      }
+    }
+    
+    fetchMarketImage();
+  }, [trade.condition_id, imageCache]);
 
   const fetchWalletData = useCallback(async () => {
     setLoading(true);
@@ -436,9 +469,9 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
     <div className="flex flex-col h-full max-h-[85vh] sm:max-h-[80vh]">
       {/* Compact Header */}
       <div className="bg-card/95 backdrop-blur-xl border-b border-border p-4 flex items-start gap-3">
-        {trade.image ? (
+        {(fetchedImage || trade.image) ? (
           <img 
-            src={trade.image} 
+            src={fetchedImage || trade.image} 
             alt={trade.title}
             className="w-12 h-12 rounded-xl object-cover shrink-0"
             onError={(e) => {
