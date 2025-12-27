@@ -135,7 +135,7 @@ export function MarketChartView({
     
     try {
       const { data, error } = await supabase.functions.invoke('market-dashboard', {
-        body: { marketUrl } // Fixed: use marketUrl not url
+        body: { marketUrl }
       });
       
       if (!error && data) {
@@ -143,10 +143,9 @@ export function MarketChartView({
         const tradeStats = data.tradeStats || {};
         const market = data.market || {};
         
-        // Calculate spread from orderbook
-        const bestAsk = orderbook.asks?.[0]?.price;
-        const bestBid = orderbook.bids?.[0]?.price;
-        const spread = bestAsk && bestBid ? ((bestAsk - bestBid) * 100) : null;
+        // Use pre-calculated spread from orderbook (already in percentage points)
+        // DO NOT multiply by 100 again - orderbook.spread is already 0.5 for 0.5%
+        const spread = orderbook.spread ?? null;
         
         // Calculate liquidity from orderbook totals if not in market data
         const liquidity = market.liquidity || 
@@ -169,7 +168,7 @@ export function MarketChartView({
     fetchMarketStats();
   }, [fetchCandlesticks, fetchMarketStats]);
 
-  // Create chart
+  // Create chart with improved styling
   useEffect(() => {
     if (!chartContainerRef.current || candlesticks.length === 0) return;
     
@@ -181,41 +180,65 @@ export function MarketChartView({
     
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#09090b' },
-        textColor: '#a1a1aa',
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: 'hsl(240 5% 64.9%)',
         fontFamily: 'inherit',
       },
       grid: {
-        vertLines: { color: '#27272a' },
-        horzLines: { color: '#27272a' },
+        vertLines: { color: 'rgba(63, 63, 70, 0.3)' },
+        horzLines: { color: 'rgba(63, 63, 70, 0.3)' },
       },
       width: chartContainerRef.current.clientWidth,
-      height: 280,
+      height: 300,
       rightPriceScale: {
-        borderColor: '#3f3f46',
-        scaleMargins: { top: 0.1, bottom: 0.1 },
+        borderColor: 'rgba(63, 63, 70, 0.5)',
+        scaleMargins: { top: 0.05, bottom: 0.05 },
       },
       timeScale: {
-        borderColor: '#3f3f46',
+        borderColor: 'rgba(63, 63, 70, 0.5)',
         timeVisible: true,
         secondsVisible: false,
       },
       crosshair: {
-        vertLine: { color: '#71717a', width: 1, style: 2, labelBackgroundColor: '#18181b' },
-        horzLine: { color: '#71717a', width: 1, style: 2, labelBackgroundColor: '#18181b' },
+        vertLine: { 
+          color: 'rgba(139, 92, 246, 0.5)', 
+          width: 1, 
+          style: 2, 
+          labelBackgroundColor: 'hsl(240 10% 12%)' 
+        },
+        horzLine: { 
+          color: 'rgba(139, 92, 246, 0.5)', 
+          width: 1, 
+          style: 2, 
+          labelBackgroundColor: 'hsl(240 10% 12%)' 
+        },
       },
     });
     
     const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#22c55e',
+      upColor: '#10b981',
       downColor: '#ef4444',
-      borderUpColor: '#22c55e',
+      borderUpColor: '#10b981',
       borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
+      wickUpColor: '#10b981',
       wickDownColor: '#ef4444',
     });
     
     candlestickSeries.setData(candlesticks);
+    
+    // Add current price line
+    if (candlesticks.length > 0) {
+      const latestPrice = candlesticks[candlesticks.length - 1].close;
+      candlestickSeries.createPriceLine({
+        price: latestPrice,
+        color: 'rgba(139, 92, 246, 0.7)',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: 'Current',
+      });
+    }
+    
     chart.timeScale().fitContent();
     
     chartRef.current = chart;
@@ -335,26 +358,40 @@ export function MarketChartView({
         </div>
 
         {/* Chart Container */}
-        <div className="rounded-2xl border border-border/50 bg-muted/10 overflow-hidden">
+        <div className="relative rounded-2xl border border-border/50 overflow-hidden bg-gradient-to-b from-background via-background to-muted/20">
+          {/* Subtle gradient overlay for depth */}
+          <div className="absolute inset-0 bg-gradient-to-t from-primary/5 via-transparent to-transparent pointer-events-none" />
+          
           {loading ? (
-            <div className="h-[280px] flex items-center justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
+                  <Loader2 className="w-10 h-10 animate-spin text-primary relative" />
+                </div>
+                <span className="text-sm text-muted-foreground">Loading chart...</span>
+              </div>
             </div>
           ) : error ? (
-            <div className="h-[280px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
-              <BarChart3 className="w-8 h-8" />
+            <div className="h-[300px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <div className="p-3 rounded-full bg-muted/30">
+                <BarChart3 className="w-8 h-8" />
+              </div>
               <span className="text-sm">{error}</span>
-              <Button variant="outline" size="sm" onClick={fetchCandlesticks}>
+              <Button variant="outline" size="sm" onClick={fetchCandlesticks} className="gap-2">
+                <Activity className="w-4 h-4" />
                 Retry
               </Button>
             </div>
           ) : candlesticks.length === 0 ? (
-            <div className="h-[280px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
-              <BarChart3 className="w-8 h-8" />
+            <div className="h-[300px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <div className="p-3 rounded-full bg-muted/30">
+                <BarChart3 className="w-8 h-8" />
+              </div>
               <span className="text-sm">No chart data available</span>
             </div>
           ) : (
-            <div ref={chartContainerRef} className="w-full" />
+            <div ref={chartContainerRef} className="w-full relative z-10" />
           )}
         </div>
 
