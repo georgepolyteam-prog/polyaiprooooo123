@@ -69,11 +69,11 @@ const WHALE_THRESHOLD = 1000; // $1k+
 const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
 // Performance optimization constants
-const BATCH_INTERVAL_MS = 200; // Flush trades every 200ms for smooth realtime feel
-const IMAGE_FETCH_DELAY_MS = 1000; // Throttle image fetches
-const MAX_IMAGE_BATCH_SIZE = 5; // Max slugs per batch
-const STATS_THROTTLE_MS = 1000; // Recalculate stats every 1 second
-const SIDEBAR_THROTTLE_MS = 2000; // Recalculate topTraders/marketVolumes every 2 seconds
+const BATCH_INTERVAL_MS = 50; // Flush trades every 50ms for near-instant realtime feel
+const IMAGE_FETCH_DELAY_MS = 500; // Throttle image fetches (reduced for faster images)
+const MAX_IMAGE_BATCH_SIZE = 10; // Max slugs per batch (increased)
+const STATS_THROTTLE_MS = 500; // Recalculate stats every 500ms (faster updates)
+const SIDEBAR_THROTTLE_MS = 1000; // Recalculate topTraders/marketVolumes every 1 second
 
 export default function LiveTrades() {
   const navigate = useNavigate();
@@ -129,8 +129,9 @@ export default function LiveTrades() {
   const watchdogIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hardReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const tradeCounterRef = useRef<{ count: number; startTime: number }>({ count: 0, startTime: Date.now() });
-  const imageCacheRef = useRef<Map<string, string>>(new Map());
+  const imageCacheRef = useRef<Map<string, string>>(new Map()); // Dual-key: market_slug AND condition_id
   const pendingSlugsRef = useRef<Set<string>>(new Set());
+  const imagePreCachedRef = useRef<boolean>(false);
   const imageFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -216,29 +217,79 @@ export default function LiveTrades() {
     };
   }, []);
 
-  // Fetch images for market slugs
-  const fetchMarketImages = useCallback(async (slugs: string[]) => {
-    if (slugs.length === 0) return;
-    
-    // Limit batch size
-    const limitedSlugs = slugs.slice(0, MAX_IMAGE_BATCH_SIZE);
+  // Pre-cache images from polymarket-live on mount
+  const preCacheImages = useCallback(async () => {
+    if (imagePreCachedRef.current) return;
+    imagePreCachedRef.current = true;
     
     try {
+      console.log('[LiveTrades] Pre-caching market images...');
+      const { data, error } = await supabase.functions.invoke('polymarket-live');
+      
+      if (error || !data) {
+        console.log('[LiveTrades] Failed to pre-cache images:', error);
+        return;
+      }
+      
+      // polymarket-live returns array directly, not { markets: [...] }
+      const markets = Array.isArray(data) ? data : (data.markets || []);
+      
+      let cachedCount = 0;
+      for (const market of markets) {
+        if (market.image) {
+          // Cache by slug
+          if (market.slug) {
+            imageCacheRef.current.set(market.slug, market.image);
+            cachedCount++;
+          }
+          // Also cache by condition_id if available
+          if (market.condition_id) {
+            imageCacheRef.current.set(market.condition_id, market.image);
+          }
+          // Also cache by eventSlug for multi-market events
+          if (market.eventSlug && market.eventSlug !== market.slug) {
+            imageCacheRef.current.set(market.eventSlug, market.image);
+          }
+        }
+      }
+      console.log(`[LiveTrades] Pre-cached ${cachedCount} market images (${imageCacheRef.current.size} total keys)`);
+    } catch (err) {
+      console.log('[LiveTrades] Error pre-caching images:', err);
+    }
+  }, []);
+
+  // Fetch images for market slugs/condition_ids
+  const fetchMarketImages = useCallback(async (identifiers: string[]) => {
+    if (identifiers.length === 0) return;
+    
+    // Limit batch size
+    const limitedIds = identifiers.slice(0, MAX_IMAGE_BATCH_SIZE);
+    
+    try {
+      // Try fetching by condition_ids first (more reliable)
       const { data, error } = await supabase.functions.invoke('get-market-previews', {
-        body: { eventSlugs: limitedSlugs }
+        body: { conditionIds: limitedIds, eventSlugs: limitedIds }
       });
       
       if (error || !data?.markets) return;
       
       for (const market of data.markets) {
-        if (market.image && market.slug) {
-          imageCacheRef.current.set(market.slug, market.image);
+        if (market.image) {
+          // Cache by both slug and condition_id
+          if (market.slug) {
+            imageCacheRef.current.set(market.slug, market.image);
+          }
+          if (market.conditionId) {
+            imageCacheRef.current.set(market.conditionId, market.image);
+          }
         }
       }
       
+      // Update trades with newly cached images
       setTrades(prev => prev.map(trade => {
-        if (!trade.image && trade.market_slug) {
-          const cachedImage = imageCacheRef.current.get(trade.market_slug);
+        if (!trade.image) {
+          const cachedImage = imageCacheRef.current.get(trade.market_slug) || 
+                             imageCacheRef.current.get(trade.condition_id);
           if (cachedImage) {
             return { ...trade, image: cachedImage };
           }
@@ -250,21 +301,31 @@ export default function LiveTrades() {
     }
   }, []);
 
-  // Queue slugs for batch image fetching - throttled to IMAGE_FETCH_DELAY_MS
-  const queueImageFetch = useCallback((slug: string) => {
-    if (!slug || imageCacheRef.current.has(slug) || pendingSlugsRef.current.has(slug)) return;
+  // Queue identifiers for batch image fetching - throttled to IMAGE_FETCH_DELAY_MS
+  // Accepts both market_slug and condition_id (dual-key)
+  const queueImageFetch = useCallback((slug: string, conditionId?: string) => {
+    // Check if already cached by either key
+    if (imageCacheRef.current.has(slug) || (conditionId && imageCacheRef.current.has(conditionId))) {
+      return;
+    }
     
-    pendingSlugsRef.current.add(slug);
+    // Add both to pending set for batch fetch
+    if (slug && !pendingSlugsRef.current.has(slug)) {
+      pendingSlugsRef.current.add(slug);
+    }
+    if (conditionId && !pendingSlugsRef.current.has(conditionId)) {
+      pendingSlugsRef.current.add(conditionId);
+    }
     
     if (imageFetchTimeoutRef.current) {
       clearTimeout(imageFetchTimeoutRef.current);
     }
     
     imageFetchTimeoutRef.current = setTimeout(() => {
-      const slugsToFetch = Array.from(pendingSlugsRef.current).slice(0, MAX_IMAGE_BATCH_SIZE);
+      const idsToFetch = Array.from(pendingSlugsRef.current).slice(0, MAX_IMAGE_BATCH_SIZE);
       pendingSlugsRef.current.clear();
-      if (slugsToFetch.length > 0) {
-        fetchMarketImages(slugsToFetch);
+      if (idsToFetch.length > 0) {
+        fetchMarketImages(idsToFetch);
       }
     }, IMAGE_FETCH_DELAY_MS);
   }, [fetchMarketImages]);
@@ -401,15 +462,20 @@ export default function LiveTrades() {
           
           tradeCounterRef.current.count++;
           
-          const cachedImage = rawTrade.market_slug ? imageCacheRef.current.get(rawTrade.market_slug) : null;
+          // Dual-key image lookup: try market_slug first, then condition_id
+          const cachedImage = 
+            (rawTrade.market_slug && imageCacheRef.current.get(rawTrade.market_slug)) ||
+            (rawTrade.condition_id && imageCacheRef.current.get(rawTrade.condition_id)) ||
+            null;
           
           const newTrade: Trade = {
             ...rawTrade,
             image: rawTrade.image || rawTrade.market_image || rawTrade.icon || cachedImage || null
           };
           
-          if (!newTrade.image && newTrade.market_slug) {
-            queueImageFetch(newTrade.market_slug);
+          // Queue for image fetch using both keys if not cached
+          if (!newTrade.image && (newTrade.market_slug || newTrade.condition_id)) {
+            queueImageFetch(newTrade.market_slug, newTrade.condition_id);
           }
 
           // Check for whale and show alert
@@ -510,6 +576,11 @@ export default function LiveTrades() {
       }
     };
   }, [forceReconnect]);
+
+  // Pre-cache images on mount (before WebSocket connects)
+  useEffect(() => {
+    preCacheImages();
+  }, [preCacheImages]);
 
   useEffect(() => {
     connectWebSocket();

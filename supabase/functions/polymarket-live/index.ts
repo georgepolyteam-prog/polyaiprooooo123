@@ -72,6 +72,7 @@ serve(async (req) => {
             
             return {
               id: m.condition_id || m.id,
+              condition_id: m.condition_id,
               question: m.question,
               slug: m.market_slug,
               eventSlug: eventSlug,
@@ -173,6 +174,7 @@ serve(async (req) => {
         
         formatted.push({
           id: market.id,
+          condition_id: market.conditionId || market.condition_id,
           question: market.question,
           slug: market.slug,
           eventSlug: eventSlug,
