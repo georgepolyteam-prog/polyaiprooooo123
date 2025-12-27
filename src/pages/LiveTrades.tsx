@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock, Download, Volume2, VolumeX } from 'lucide-react';
+import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock, Download, Volume2, VolumeX, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
@@ -12,6 +12,7 @@ import { MarketHeatmap } from '@/components/trades/MarketHeatmap';
 import { AnalysisSelectionModal } from '@/components/AnalysisSelectionModal';
 import { MarketTradeModal } from '@/components/MarketTradeModal';
 import { LiveTradesTour } from '@/components/trades/LiveTradesTour';
+import { LiveTradesHowItWorks } from '@/components/trades/LiveTradesHowItWorks';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -104,6 +105,7 @@ export default function LiveTrades() {
   const [hideUpDown, setHideUpDown] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [trackedOnly, setTrackedOnly] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
   
   // Tracked wallets hook
   const { trackedWallets, getTrackedAddresses } = useTrackedWallets();
@@ -978,23 +980,32 @@ export default function LiveTrades() {
       </div>
 
       <main className="flex-1 relative z-10 container mx-auto px-4 py-8">
-        {/* Powered by DOME Attribution */}
-        <div className="mb-6 flex items-center justify-center">
+        {/* DOME Attribution */}
+        <div className="mb-6 flex items-center justify-center gap-4">
           <a 
             href="https://domeapi.io" 
             target="_blank" 
             rel="noopener noreferrer"
             className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-background/80 to-muted/30 border border-border/50 hover:border-primary/40 transition-all group backdrop-blur-sm"
           >
-            <span className="text-xs text-muted-foreground/70">Powered by</span>
-            <div className="flex items-center gap-1.5">
-              <img src={domeLogo} alt="DOME" className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
-                DOME
-              </span>
-            </div>
+            <img src={domeLogo} alt="DOME" className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
+              Dome
+            </span>
+            <span className="text-xs text-muted-foreground">(domeapi.io)</span>
             <ExternalLink className="w-3 h-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
           </a>
+          
+          {/* How It Works Button */}
+          <Button
+            onClick={() => setShowHowItWorks(true)}
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <HelpCircle className="w-4 h-4" />
+            How It Works
+          </Button>
         </div>
 
         {/* Header */}
@@ -1532,6 +1543,12 @@ export default function LiveTrades() {
 
       {/* Tour for first-time visitors */}
       <LiveTradesTour />
+
+      {/* How It Works Modal */}
+      <LiveTradesHowItWorks 
+        open={showHowItWorks} 
+        onOpenChange={setShowHowItWorks} 
+      />
     </div>
   );
 }
