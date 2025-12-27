@@ -155,7 +155,7 @@ const defaultMarkets: ExampleMarket[] = [
 ];
 
 
-const POLYFACTUAL_HINT_KEY = "poly-polyfactual-intro-seen";
+
 
 const Index = () => {
   const [searchParams] = useSearchParams();
@@ -171,7 +171,7 @@ const Index = () => {
   
   const effectiveWalletAddress = hasValidWallet ? walletAddress : null;
   
-  const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData, deepResearch, toggleDeepResearch } = usePolyChat(session, effectiveWalletAddress);
+  const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData } = usePolyChat(session, effectiveWalletAddress);
   const { toast } = useToast();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -189,29 +189,6 @@ const Index = () => {
   const [loadingMarkets, setLoadingMarkets] = useState(true);
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
 
-  // Polyfactual hint state - show for first-time authenticated users with no messages
-  const [showPolyfactualHint, setShowPolyfactualHint] = useState(false);
-  
-  useEffect(() => {
-    // Show hint only if: authenticated, no messages, and hasn't been shown before
-    const hasSeenHint = localStorage.getItem(POLYFACTUAL_HINT_KEY) === "true";
-    if (isAuthenticated && messages.length === 0 && !hasSeenHint && !authLoading) {
-      setShowPolyfactualHint(true);
-    } else {
-      setShowPolyfactualHint(false);
-    }
-  }, [isAuthenticated, messages.length, authLoading]);
-
-  const dismissPolyfactualHint = useCallback(() => {
-    setShowPolyfactualHint(false);
-    localStorage.setItem(POLYFACTUAL_HINT_KEY, "true");
-  }, []);
-
-  // Wrap toggleDeepResearch to also dismiss hint
-  const handleToggleDeepResearch = useCallback(() => {
-    dismissPolyfactualHint();
-    toggleDeepResearch();
-  }, [toggleDeepResearch, dismissPolyfactualHint]);
 
   // Fetch example markets data via server-side proxy (bypasses CORS)
   useEffect(() => {
@@ -412,7 +389,6 @@ const Index = () => {
     const state = location.state as { 
       initialMessage?: string;
       autoAnalyze?: boolean;
-      deepResearch?: boolean;
       marketContext?: {
         eventTitle: string;
         outcomeQuestion: string;
@@ -429,25 +405,16 @@ const Index = () => {
     if (authLoading) return;
     
     // Use location.key to prevent re-triggering on the same navigation
-    const stateKey = state ? `${state.marketContext?.url}-${state.deepResearch}-${location.key}` : null;
+    const stateKey = state ? `${state.marketContext?.url}-${location.key}` : null;
     
     if (state?.autoAnalyze && state?.marketContext && !hasAskedRef.current) {
       hasAskedRef.current = true;
       const { marketContext } = state;
       
-      // Enable deep research UI toggle if flag is set
-      if (state.deepResearch && !deepResearch) {
-        toggleDeepResearch();
-      }
+      // Build the message for quick analysis
+      const messageText = `Analyze this market: ${marketContext.url}`;
       
-      // Build the message - for deep research, include the market question so backend has it for research query
-      const marketQuestion = marketContext.outcomeQuestion || marketContext.eventTitle;
-      const messageText = state.deepResearch && marketQuestion
-        ? `Analyze this market: "${marketQuestion}" ${marketContext.url}`
-        : `Analyze this market: ${marketContext.url}`;
-      
-      // Pass deepResearch directly to sendMessage to avoid race condition
-      sendMessage(messageText, false, false, state.deepResearch);
+      sendMessage(messageText, false, false, false);
       fetchMarketDataForSidebar(marketContext.url);
       window.history.replaceState({}, document.title);
     } else if (state?.initialMessage && !hasAskedRef.current && messages.length === 0) {
@@ -455,7 +422,7 @@ const Index = () => {
       sendMessage(state.initialMessage);
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch, authLoading]);
+  }, [location.state, location.key, sendMessage, messages.length, authLoading]);
 
   useEffect(() => {
     const marketQuery = searchParams.get("market");
@@ -630,10 +597,6 @@ const Index = () => {
                 <UnifiedInput
                   onSubmit={handleSubmit}
                   disabled={isProcessing}
-                  deepResearch={deepResearch}
-                  onToggleDeepResearch={handleToggleDeepResearch}
-                  showPolyfactualHint={showPolyfactualHint}
-                  onDismissHint={dismissPolyfactualHint}
                 />
               ) : (
                 <AuthGateInline />
