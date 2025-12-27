@@ -34,19 +34,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
         }}
         {...props}
       />
-      {/* Mobile: top-center */}
+      {/* Mobile: top-center - with close button and tap to dismiss */}
       <Sonner
         theme="dark"
         position="top-center"
         className="toaster group md:hidden"
+        closeButton
+        duration={3000}
         toastOptions={{
           classNames: {
             toast:
-              "group toast-cyber group-[.toaster]:!bg-[#0f0f14] group-[.toaster]:backdrop-blur-xl group-[.toaster]:!text-white group-[.toaster]:border group-[.toaster]:border-white/10 group-[.toaster]:shadow-2xl",
+              "group toast-cyber group-[.toaster]:!bg-[#0f0f14] group-[.toaster]:backdrop-blur-xl group-[.toaster]:!text-white group-[.toaster]:border group-[.toaster]:border-white/10 group-[.toaster]:shadow-2xl cursor-pointer",
             title: "group-[.toast]:!text-white group-[.toast]:font-semibold",
             description: "group-[.toast]:!text-gray-300",
             actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
             cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+            closeButton: "group-[.toast]:!bg-white/10 group-[.toast]:!text-white group-[.toast]:!border-white/20 group-[.toast]:hover:!bg-white/20",
             success: "toast-success-cyber",
             error: "toast-error-cyber",
             warning: "toast-warning-cyber",
