@@ -424,6 +424,10 @@ const Index = () => {
       };
     } | null;
     
+    // WAIT for auth to finish loading before triggering autoAnalyze
+    // This prevents the "sign in required" error when navigating from LiveTrades while logged in
+    if (authLoading) return;
+    
     // Use location.key to prevent re-triggering on the same navigation
     const stateKey = state ? `${state.marketContext?.url}-${state.deepResearch}-${location.key}` : null;
     
@@ -451,7 +455,7 @@ const Index = () => {
       sendMessage(state.initialMessage);
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch]);
+  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch, authLoading]);
 
   useEffect(() => {
     const marketQuery = searchParams.get("market");
