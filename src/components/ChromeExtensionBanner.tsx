@@ -20,7 +20,7 @@ export const ChromeExtensionBanner = () => {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">
-                Get V3RA on any Polymarket page
+                Get Poly on any Polymarket page
               </p>
               <p className="text-xs text-muted-foreground">
                 One-click analysis, right where you trade.

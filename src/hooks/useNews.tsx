@@ -42,7 +42,7 @@ export const useNews = () => {
                 : m
             )
           : [],
-        polyAnalysis: item.polyAnalysis || item.veraAnalysis || "Analyzing market impact...",
+        polyAnalysis: item.polyAnalysis || "Analyzing market impact...",
       }));
 
       setNews(formattedNews);
