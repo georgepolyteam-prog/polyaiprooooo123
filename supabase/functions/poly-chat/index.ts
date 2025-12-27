@@ -3796,7 +3796,7 @@ Use these exact numbers and URLs in your response.
 POLY'S PRE-ANALYZED MARKETS (with edge calculations):
 ${filteredMarkets.slice(0, 5).map((m: any, i: number) => 
   `${i + 1}. "${m.title}"
-   Market: ${m.current_odds}% → Poly's estimate: ${m.vera_probability}%
+   Market: ${m.current_odds}% → Poly's estimate: ${m.poly_probability || m.vera_probability}%
    Edge: ${m.edge > 0 ? '+' : ''}${m.edge}% | Confidence: ${m.confidence}
    Recommendation: ${m.recommendation}
    URL: https://polymarket.com/event/${m.slug}`

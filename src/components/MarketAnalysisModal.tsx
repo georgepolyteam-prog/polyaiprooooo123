@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { TrendingUp, TrendingDown, Target, BarChart2, Clock, Zap, AlertTriangle, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import polyLogo from "@/assets/poly-logo-new.png";
 
 interface AnalyzedMarket {
   id: string;
@@ -226,7 +227,7 @@ export const MarketAnalysisModal = ({ market, isOpen, onClose }: MarketAnalysisM
           {/* Poly AI's Analysis */}
           <div className="bg-accent/50 rounded-xl p-5">
             <div className="flex items-start gap-3">
-              <img src={polyAvatar} alt="Poly" className="w-10 h-10 rounded-full" />
+              <img src={polyLogo} alt="Poly" className="w-10 h-10 rounded-full" />
               <div className="flex-1">
                 <div className="text-sm font-semibold text-primary mb-2">Poly's Analysis</div>
                 <p className="text-sm text-foreground leading-relaxed">
