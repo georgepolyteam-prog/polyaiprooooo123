@@ -38,7 +38,10 @@ interface WalletMetrics {
 
 interface PnlSummary {
   total_pnl: number;
+  totalPnl?: number;
   series: Array<{ timestamp: number; pnl_to_date: number }>;
+  winRate?: number;
+  avgTradeSize?: number;
 }
 
 interface RecentTrade {
@@ -193,12 +196,15 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
   };
 
   const shares = trade.shares_normalized || trade.shares || 0;
-  const volume = trade.price * shares;
+  const safePrice = trade.price ?? 0;
+  const volume = safePrice * shares;
 
-  const formatVolume = (vol: number) => {
-    if (vol >= 1000000) return `$${(vol / 1000000).toFixed(2)}M`;
-    if (vol >= 1000) return `$${(vol / 1000).toFixed(1)}K`;
-    return `$${vol.toFixed(2)}`;
+  const formatVolume = (vol: number | undefined | null) => {
+    const safeVol = vol ?? 0;
+    if (isNaN(safeVol)) return '$0.00';
+    if (safeVol >= 1000000) return `$${(safeVol / 1000000).toFixed(2)}M`;
+    if (safeVol >= 1000) return `$${(safeVol / 1000).toFixed(1)}K`;
+    return `$${safeVol.toFixed(2)}`;
   };
 
   const formatPnl = (pnl: number) => {
@@ -317,7 +323,8 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             ) : (
               recentTrades.slice(0, 20).map((t, i) => {
                 const tradeShares = t.shares_normalized || t.shares || 0;
-                const tradeVolume = t.price * tradeShares;
+                const tradePrice = t.price ?? 0;
+                const tradeVolume = tradePrice * tradeShares;
                 return (
                   <div key={i} className="p-3 hover:bg-muted/10 transition-colors">
                     <div className="flex items-start justify-between gap-3">
@@ -342,7 +349,7 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
                       <div className="text-right shrink-0">
                         <p className="font-bold text-sm">{formatVolume(tradeVolume)}</p>
                         <p className="text-xs text-muted-foreground">
-                          @{(t.price * 100).toFixed(1)}%
+                          @{((t.price ?? 0) * 100).toFixed(1)}%
                         </p>
                       </div>
                     </div>
@@ -471,34 +478,73 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
           </div>
         </div>
 
-        {/* Quick Stats Row with PnL */}
+        {/* Quick Stats Row with PnL and Win Rate */}
         {!loading && walletMetrics && (
-          <div className="grid grid-cols-4 gap-2">
-            <div className="rounded-lg p-3 bg-muted/20 text-center">
-              <div className="text-xs text-muted-foreground mb-1">Volume</div>
-              <div className="font-bold text-sm">{formatVolume(walletMetrics.total_volume)}</div>
-            </div>
-            <div className="rounded-lg p-3 bg-muted/20 text-center">
-              <div className="text-xs text-muted-foreground mb-1">Trades</div>
-              <div className="font-bold text-sm">
-                {walletMetrics.orders_capped && walletMetrics.total_trades >= 1000 ? '1000+' : walletMetrics.total_trades}
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 gap-2">
+              <div className="rounded-lg p-3 bg-muted/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">Volume</div>
+                <div className="font-bold text-sm">{formatVolume(walletMetrics.total_volume)}</div>
+              </div>
+              <div className="rounded-lg p-3 bg-muted/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">Trades</div>
+                <div className="font-bold text-sm">
+                  {walletMetrics.orders_capped && walletMetrics.total_trades >= 1000 ? '1000+' : walletMetrics.total_trades}
+                </div>
+              </div>
+              <div className="rounded-lg p-3 bg-muted/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">Markets</div>
+                <div className="font-bold text-sm">
+                  {walletMetrics.orders_capped ? `${walletMetrics.unique_markets}+` : walletMetrics.unique_markets}
+                </div>
+              </div>
+              <div className="rounded-lg p-3 bg-muted/20 text-center">
+                <div className="text-xs text-muted-foreground mb-1">PnL</div>
+                <div className={cn(
+                  "font-bold text-sm",
+                  (pnlSummary?.total_pnl ?? pnlSummary?.totalPnl ?? 0) >= 0 ? "text-success" : "text-destructive"
+                )}>
+                  {(pnlSummary?.total_pnl !== undefined || pnlSummary?.totalPnl !== undefined) 
+                    ? formatPnl(pnlSummary?.total_pnl ?? pnlSummary?.totalPnl ?? 0) 
+                    : '—'}
+                </div>
               </div>
             </div>
-            <div className="rounded-lg p-3 bg-muted/20 text-center">
-              <div className="text-xs text-muted-foreground mb-1">Markets</div>
-              <div className="font-bold text-sm">
-                {walletMetrics.orders_capped ? `${walletMetrics.unique_markets}+` : walletMetrics.unique_markets}
+            
+            {/* Win Rate Row - Professional UI */}
+            {pnlSummary?.winRate !== undefined && (
+              <div className="rounded-lg p-3 bg-gradient-to-r from-primary/10 via-secondary/10 to-primary/10 border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                      <Target className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Win Rate</div>
+                      <div className={cn(
+                        "font-bold text-lg",
+                        pnlSummary.winRate >= 50 ? "text-success" : "text-destructive"
+                      )}>
+                        {pnlSummary.winRate}%
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {pnlSummary.winRate >= 60 && <span className="text-lg">🏆</span>}
+                    {pnlSummary.winRate >= 50 && pnlSummary.winRate < 60 && <span className="text-lg">✓</span>}
+                    <div className={cn(
+                      "px-2 py-0.5 rounded-full text-xs font-medium",
+                      pnlSummary.winRate >= 60 ? "bg-success/20 text-success" :
+                      pnlSummary.winRate >= 50 ? "bg-success/10 text-success/80" :
+                      "bg-destructive/20 text-destructive"
+                    )}>
+                      {pnlSummary.winRate >= 60 ? 'Excellent' : 
+                       pnlSummary.winRate >= 50 ? 'Good' : 'Below Avg'}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="rounded-lg p-3 bg-muted/20 text-center">
-              <div className="text-xs text-muted-foreground mb-1">PnL</div>
-              <div className={cn(
-                "font-bold text-sm",
-                pnlSummary?.total_pnl !== undefined && pnlSummary.total_pnl >= 0 ? "text-success" : "text-destructive"
-              )}>
-                {pnlSummary?.total_pnl !== undefined ? formatPnl(pnlSummary.total_pnl) : '—'}
-              </div>
-            </div>
+            )}
           </div>
         )}
 
