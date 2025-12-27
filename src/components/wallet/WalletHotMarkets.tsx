@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, Flame, ExternalLink } from 'lucide-react';
+import { TrendingUp, Flame, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TopMarket {
@@ -24,124 +24,151 @@ export function WalletHotMarkets({ markets, className }: WalletHotMarketsProps) 
     return `$${volume.toFixed(0)}`;
   };
 
-  // Calculate max volume for intensity scaling
   const maxVolume = Math.max(...markets.map(m => m.volume));
 
-  // Determine heat level (0-2) based on relative volume
   const getHeatLevel = (volume: number): number => {
     const ratio = volume / maxVolume;
-    if (ratio > 0.7) return 2; // Hot
-    if (ratio > 0.3) return 1; // Warm
-    return 0; // Normal
+    if (ratio > 0.7) return 2;
+    if (ratio > 0.3) return 1;
+    return 0;
   };
 
-  const heatColors = [
-    { bg: 'from-muted/30 to-muted/10', border: 'border-border/30', glow: '' },
-    { bg: 'from-amber-500/20 to-orange-500/10', border: 'border-amber-500/30', glow: 'shadow-amber-500/20' },
-    { bg: 'from-red-500/20 to-orange-500/15', border: 'border-red-500/40', glow: 'shadow-red-500/30 shadow-lg' },
-  ];
+  const getHeatColor = (level: number): string => {
+    switch (level) {
+      case 2: return 'from-orange-500 to-red-500';
+      case 1: return 'from-yellow-500 to-orange-500';
+      default: return 'from-cyan-500 to-blue-500';
+    }
+  };
+
+  const getHeatGlow = (level: number): string => {
+    switch (level) {
+      case 2: return 'shadow-orange-500/30';
+      case 1: return 'shadow-yellow-500/20';
+      default: return 'shadow-cyan-500/20';
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={cn("rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm", className)}
+      transition={{ duration: 0.5 }}
+      className={cn("", className)}
     >
       {/* Header */}
-      <div className="p-4 border-b border-border/30 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500/20 to-red-500/20">
-            <Flame className="w-4 h-4 text-orange-500" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm">Hot Markets</h3>
-            <p className="text-xs text-muted-foreground">Most traded by this wallet</p>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-500 blur-lg opacity-50" />
+          <div className="relative p-2 rounded-xl bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30">
+            <Flame className="w-5 h-5 text-orange-400" />
           </div>
         </div>
-        <span className="text-xs text-muted-foreground px-2 py-1 bg-muted/30 rounded-full">
-          {markets.length} markets
-        </span>
+        <div>
+          <h3 className="text-lg font-bold text-foreground">Hot Markets</h3>
+          <p className="text-xs text-muted-foreground">Top {markets.length} traded markets by volume</p>
+        </div>
       </div>
 
-      {/* Markets Grid - Horizontal scroll on mobile */}
-      <div className="p-4">
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-visible md:mx-0 md:px-0">
-          {markets.slice(0, 6).map((market, i) => {
-            const heatLevel = getHeatLevel(market.volume);
-            const colors = heatColors[heatLevel];
-            
-            return (
-              <motion.a
-                key={market.slug}
-                href={`https://polymarket.com/event/${market.slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.05 }}
-                className={cn(
-                  "flex-shrink-0 w-[200px] md:w-auto p-3 rounded-xl border transition-all duration-300",
-                  "bg-gradient-to-br hover:scale-[1.02] group cursor-pointer",
-                  colors.bg,
-                  colors.border,
-                  colors.glow
+      {/* Markets Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {markets.slice(0, 8).map((market, index) => {
+          const heatLevel = getHeatLevel(market.volume);
+          const heatColor = getHeatColor(heatLevel);
+          const heatGlow = getHeatGlow(heatLevel);
+          const volumePercent = (market.volume / maxVolume) * 100;
+
+          return (
+            <motion.div
+              key={market.slug}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: index * 0.05, duration: 0.3 }}
+              className={cn(
+                "relative group p-4 rounded-xl",
+                "bg-card/50 backdrop-blur-sm",
+                "border border-border/50",
+                "hover:border-primary/30",
+                "transition-all duration-300",
+                "shadow-lg",
+                heatGlow
+              )}
+            >
+              {/* Rank Badge */}
+              <div className={cn(
+                "absolute -top-2 -left-2 w-7 h-7 rounded-full",
+                "bg-gradient-to-r flex items-center justify-center",
+                "text-xs font-bold text-white shadow-lg",
+                heatColor
+              )}>
+                {index + 1}
+              </div>
+
+              {/* Heat Indicator */}
+              <div className="absolute top-3 right-3">
+                {heatLevel === 2 && (
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <Flame className="w-4 h-4 text-orange-400" />
+                  </motion.div>
                 )}
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-1.5">
-                    {heatLevel === 2 && (
-                      <Flame className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-                    )}
-                    {heatLevel === 1 && (
-                      <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
-                    )}
+                {heatLevel === 1 && <TrendingUp className="w-4 h-4 text-yellow-400" />}
+                {heatLevel === 0 && <BarChart3 className="w-4 h-4 text-cyan-400" />}
+              </div>
+
+              {/* Content */}
+              <div className="mt-2">
+                <h4 className="text-sm font-medium text-foreground line-clamp-2 pr-6 min-h-[2.5rem]">
+                  {market.title}
+                </h4>
+                
+                <div className="mt-3 space-y-2">
+                  {/* Volume */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Volume</span>
                     <span className={cn(
-                      "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                      heatLevel === 2 && "bg-red-500/20 text-red-400",
-                      heatLevel === 1 && "bg-amber-500/20 text-amber-400",
-                      heatLevel === 0 && "bg-muted text-muted-foreground"
+                      "text-sm font-bold bg-gradient-to-r bg-clip-text text-transparent",
+                      heatColor
                     )}>
-                      #{i + 1}
+                      {formatVolume(market.volume)}
                     </span>
                   </div>
-                  <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-                
-                <p className="text-xs font-medium line-clamp-2 mb-2 min-h-[32px]">
-                  {market.title}
-                </p>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Volume</span>
-                  <span className={cn(
-                    "text-sm font-bold",
-                    heatLevel === 2 && "text-red-400",
-                    heatLevel === 1 && "text-amber-400",
-                    heatLevel === 0 && "text-foreground"
-                  )}>
-                    {formatVolume(market.volume)}
-                  </span>
-                </div>
 
-                {/* Heat bar */}
-                <div className="mt-2 h-1 bg-muted/30 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(market.volume / maxVolume) * 100}%` }}
-                    transition={{ delay: 0.2 + i * 0.05, duration: 0.5 }}
-                    className={cn(
-                      "h-full rounded-full",
-                      heatLevel === 2 && "bg-gradient-to-r from-orange-500 to-red-500",
-                      heatLevel === 1 && "bg-gradient-to-r from-amber-400 to-orange-500",
-                      heatLevel === 0 && "bg-gradient-to-r from-muted-foreground/50 to-muted-foreground/30"
-                    )}
-                  />
+                  {/* Heat Bar */}
+                  <div className="relative h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${volumePercent}%` }}
+                      transition={{ duration: 0.8, delay: index * 0.1 }}
+                      className={cn("absolute inset-y-0 left-0 bg-gradient-to-r rounded-full", heatColor)}
+                    />
+                  </div>
                 </div>
-              </motion.a>
-            );
-          })}
-        </div>
+              </div>
+
+              {/* Subtle Glow Effect on Hover */}
+              <div 
+                className={cn(
+                  "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-10",
+                  "bg-gradient-to-r blur-xl transition-opacity duration-300 -z-10",
+                  heatColor
+                )} 
+              />
+            </motion.div>
+          );
+        })}
       </div>
+
+      {/* Show More Indicator */}
+      {markets.length > 8 && (
+        <div className="mt-3 text-center">
+          <span className="text-xs text-muted-foreground">
+            +{markets.length - 8} more markets traded
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }

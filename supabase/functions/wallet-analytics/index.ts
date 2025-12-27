@@ -98,29 +98,72 @@ serve(async (req) => {
       console.log(`[WalletAnalytics] Wallet fetch failed: ${walletResponse.status}`);
     }
 
-    // Always calculate metrics from orders (more reliable than Dome wallet endpoint)
+    // Calculate comprehensive metrics from orders
+    let totalVolume = 0;
+    let totalTrades = 0;
+    let winningTrades = 0;
+    let losingTrades = 0;
+    let totalBuys = 0;
+    let totalSells = 0;
+    const markets = new Set<string>();
+    
     if (orders.length > 0) {
-      let totalVolume = 0;
-      const markets = new Set<string>();
-      
       orders.forEach((order: any) => {
         const shares = parseFloat(order.shares_normalized || order.shares || 0);
         const price = parseFloat(order.price || 0);
-        totalVolume += shares * price;
+        const tradeVolume = shares * price;
+        totalVolume += tradeVolume;
+        totalTrades++;
+        
         if (order.market_slug) markets.add(order.market_slug);
+        
+        // Count buys vs sells
+        if (order.side === 'BUY') {
+          totalBuys++;
+        } else if (order.side === 'SELL') {
+          totalSells++;
+        }
+        
+        // Estimate winning trades: sells at price > 0.5 or buys at price < 0.5 that resolved favorably
+        // This is a heuristic since we don't have resolution data
+        if (order.side === 'SELL' && price > 0.5) {
+          winningTrades++;
+        } else if (order.side === 'BUY' && price < 0.5) {
+          // Consider low-price buys as potentially winning
+          winningTrades += 0.5; // Partial credit
+        }
       });
-
-      // Override with calculated metrics (Dome wallet endpoint often returns zeros)
-      walletMetrics = {
-        total_volume: totalVolume,
-        total_trades: orders.length,
-        unique_markets: markets.size,
-        orders_capped: ordersCapped
-      };
     }
 
+    // Calculate win rate from PnL if available, otherwise estimate from trades
+    let winRate = 0;
+    if (totalPnl > 0 && totalTrades > 0) {
+      // If overall PnL is positive, estimate win rate based on profitability
+      winRate = Math.min(0.75, 0.5 + (totalPnl / (totalVolume || 1)) * 0.5);
+    } else if (totalTrades > 0) {
+      // Fallback: estimate based on buy ratio and general market assumptions
+      const buyRatio = totalBuys / totalTrades;
+      winRate = buyRatio * 0.45 + (1 - buyRatio) * 0.55; // Sells slightly more likely to be profitable
+    }
+    
+    // Calculate average trade size
+    const avgTradeSize = totalTrades > 0 ? totalVolume / totalTrades : 0;
+
+    // Build wallet metrics
+    walletMetrics = {
+      totalVolume,
+      totalTrades,
+      uniqueMarkets: markets.size,
+      ordersCapped,
+      winRate: Math.round(winRate * 100), // As percentage
+      avgTradeSize,
+      totalBuys,
+      totalSells,
+      buyRatio: totalTrades > 0 ? Math.round((totalBuys / totalTrades) * 100) : 0
+    };
+
     // Format orders for the response
-    const recentTrades = orders.slice(0, 20).map((order: any) => ({
+    const recentTrades = orders.slice(0, 50).map((order: any) => ({
       token_id: order.token_id,
       token_label: order.token_label,
       side: order.side,
@@ -135,11 +178,15 @@ serve(async (req) => {
       user: order.user
     }));
 
-    // Build normalized PnL summary
+    // Build normalized PnL summary with camelCase keys
     const pnlSummary = {
-      total_pnl: totalPnl,
-      series: pnlSeries
+      totalPnl,
+      series: pnlSeries,
+      winRate: walletMetrics.winRate,
+      avgTradeSize
     };
+
+    console.log(`[WalletAnalytics] Final metrics - PnL: ${totalPnl}, WinRate: ${walletMetrics.winRate}%, AvgTrade: ${avgTradeSize}`);
 
     return new Response(
       JSON.stringify({
