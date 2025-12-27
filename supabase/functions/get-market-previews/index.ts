@@ -30,57 +30,100 @@ async function fetchCurrentPrice(tokenId: string): Promise<number | null> {
   }
 }
 
-// Fetch market by condition_id from Gamma API - now also fetches EVENT image (fixes wrong images)
+// Normalize conditionId for comparison (lowercase, trim)
+function normalizeConditionId(id: string | undefined | null): string {
+  if (!id) return '';
+  return id.toLowerCase().trim();
+}
+
+// Fetch market by condition_id from Gamma API - validates match and returns null if not found
 async function fetchByConditionId(conditionId: string): Promise<any | null> {
   try {
-    // Step 1: Fetch market data
-    const response = await fetch(
-      `https://gamma-api.polymarket.com/markets?condition_id=${conditionId}`
-    );
-    if (!response.ok) return null;
-    const markets = await response.json();
-    const market = markets?.[0];
-    if (!market) return null;
-
-    console.log(`[Market Previews] conditionId=${conditionId}, market.slug=${market.slug}, eventSlug candidates:`, {
-      eventSlug: market.eventSlug,
-      event_slug: market.event_slug,
-      groupSlug: market.groupSlug
-    });
-
-    // Step 2: Try to get event slug from the market
-    const eventSlug = market.eventSlug || market.event_slug || market.groupSlug || market.groupItemTitle;
+    const normalizedRequestId = normalizeConditionId(conditionId);
+    console.log(`[Market Previews] Fetching for conditionId=${conditionId}`);
     
+    // Try multiple query parameter formats (Gamma API is inconsistent)
+    const queryVariants = [
+      `condition_id=${conditionId}`,
+      `conditionId=${conditionId}`,
+    ];
+    
+    let market: any = null;
+    
+    for (const queryParam of queryVariants) {
+      try {
+        const response = await fetch(`https://gamma-api.polymarket.com/markets?${queryParam}`);
+        if (!response.ok) continue;
+        
+        const markets = await response.json();
+        
+        // Find a market that ACTUALLY matches our conditionId
+        const matchedMarket = markets?.find((m: any) => {
+          const marketConditionId = normalizeConditionId(m.conditionId || m.condition_id);
+          return marketConditionId === normalizedRequestId;
+        });
+        
+        if (matchedMarket) {
+          market = matchedMarket;
+          console.log(`[Market Previews] Found matching market: ${market.question?.slice(0, 50)}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`[Market Previews] Query variant failed: ${queryParam}`, e);
+      }
+    }
+    
+    // If no market matches, return null (NOT a default/wrong image)
+    if (!market) {
+      console.log(`[Market Previews] No matching market found for conditionId=${conditionId}`);
+      return {
+        slug: null,
+        conditionId: conditionId,
+        title: null,
+        image: null, // Return null, not a wrong image
+      };
+    }
+
+    // Try to get event image (more reliable than market image)
     let eventImage: string | null = null;
     let eventIcon: string | null = null;
     
-    // Step 3: If we have an event slug, fetch event data for the correct image
-    if (eventSlug) {
-      try {
-        const eventResponse = await fetch(
-          `https://gamma-api.polymarket.com/events?slug=${eventSlug}`
-        );
-        if (eventResponse.ok) {
-          const events = await eventResponse.json();
-          const event = events?.[0];
-          if (event) {
-            eventImage = event.image;
-            eventIcon = event.icon;
-            console.log(`[Market Previews] Fetched event for ${conditionId}: image=${event.image}, icon=${event.icon}`);
+    // Check if market has embedded events array
+    if (market.events && Array.isArray(market.events) && market.events.length > 0) {
+      const embeddedEvent = market.events[0];
+      eventImage = embeddedEvent.image || null;
+      eventIcon = embeddedEvent.icon || null;
+      console.log(`[Market Previews] Found embedded event: image=${eventImage}`);
+    }
+    
+    // If no embedded event, try to fetch by event slug
+    if (!eventImage) {
+      const eventSlug = market.eventSlug || market.event_slug || market.groupSlug;
+      if (eventSlug) {
+        try {
+          const eventResponse = await fetch(`https://gamma-api.polymarket.com/events?slug=${eventSlug}`);
+          if (eventResponse.ok) {
+            const events = await eventResponse.json();
+            const event = events?.[0];
+            if (event) {
+              eventImage = event.image || null;
+              eventIcon = event.icon || null;
+              console.log(`[Market Previews] Fetched event ${eventSlug}: image=${eventImage}`);
+            }
           }
+        } catch (e) {
+          console.log(`[Market Previews] Failed to fetch event for ${eventSlug}:`, e);
         }
-      } catch (e) {
-        console.log(`[Market Previews] Failed to fetch event for ${eventSlug}:`, e);
       }
     }
 
-    // Step 4: Find best image - PREFER EVENT IMAGE (same as Markets/Chat pages)
-    let image = null;
+    // Image priority: event.image > event.icon > market.image > market.icon > null
+    let image: string | null = null;
     const possibleImages = [
-      eventImage,      // Event image first (most reliable, what Markets/Chat use)
-      eventIcon,       // Event icon 
-      market.image,    // Market image (can be stale/wrong)
-      market.icon      // Market icon
+      eventImage,
+      eventIcon,
+      market.image,
+      market.icon
     ];
     
     for (const img of possibleImages) {
@@ -90,22 +133,28 @@ async function fetchByConditionId(conditionId: string): Promise<any | null> {
       }
     }
 
-    console.log(`[Market Previews] Final image for ${conditionId}: ${image} (source: ${
+    const imageSource = 
       image === eventImage ? 'event.image' : 
       image === eventIcon ? 'event.icon' : 
       image === market.image ? 'market.image' : 
-      image === market.icon ? 'market.icon' : 'none'
-    })`);
+      image === market.icon ? 'market.icon' : 'none';
+
+    console.log(`[Market Previews] Final for ${conditionId}: image=${image?.slice(0,50)}... (source: ${imageSource})`);
 
     return {
       slug: market.market_slug || market.slug,
       conditionId: conditionId,
       title: market.question || market.title,
-      image,
+      image, // Can be null if no valid image found
     };
   } catch (e) {
     console.error(`[Market Previews] Error fetching conditionId ${conditionId}:`, e);
-    return null;
+    return {
+      slug: null,
+      conditionId: conditionId,
+      title: null,
+      image: null,
+    };
   }
 }
 

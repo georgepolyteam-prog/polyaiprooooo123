@@ -18,15 +18,13 @@ interface MarketChartViewProps {
   conditionId: string;
   marketUrl: string;
   title: string;
-  image?: string;
+  image?: string | null;
   onBack: () => void;
   onClose: () => void;
   onTrade: (side: 'YES' | 'NO') => void;
   onAnalyze: () => void;
   isMobile?: boolean;
 }
-
-const DOME_API_BASE = 'https://api.domeapi.io/v1';
 
 export function MarketChartView({
   conditionId,
@@ -84,49 +82,29 @@ export function MarketChartView({
           interval = 60;
       }
       
-      const url = `${DOME_API_BASE}/polymarket/candlesticks/${conditionId}?start_time=${startTime}&end_time=${now}&interval=${interval}`;
+      // Use backend function to proxy the request (avoids 403)
+      const { data, error: fetchError } = await supabase.functions.invoke('market-candlesticks', {
+        body: { 
+          conditionId, 
+          startTime, 
+          endTime: now, 
+          interval 
+        }
+      });
       
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch candlesticks: ${response.status}`);
+      if (fetchError) {
+        throw new Error(fetchError.message || 'Failed to fetch candlesticks');
       }
       
-      const data = await response.json();
-      
-      // Parse the candlesticks response format
-      // Each item is [candlestickData[], tokenMetadata]
-      const candlestickTuples = data.candlesticks || [];
-      
-      if (candlestickTuples.length === 0) {
-        setCandlesticks([]);
-        setLoading(false);
-        return;
-      }
-      
-      // Get the first token's candlesticks (usually YES token)
-      const [rawCandles] = candlestickTuples[0] || [[]];
-      
-      if (!Array.isArray(rawCandles) || rawCandles.length === 0) {
-        setCandlesticks([]);
-        setLoading(false);
-        return;
-      }
-      
-      // Convert to lightweight-charts format
-      const formattedCandles: CandlestickData[] = rawCandles
-        .map((c: any) => {
-          const price = c.price || c.yes_ask || c.yes_bid || {};
-          return {
-            time: c.end_period_ts as Time,
-            open: parseFloat(price.open_dollars || price.open || 0) * 100,
-            high: parseFloat(price.high_dollars || price.high || 0) * 100,
-            low: parseFloat(price.low_dollars || price.low || 0) * 100,
-            close: parseFloat(price.close_dollars || price.close || 0) * 100,
-          };
-        })
-        .filter((c: CandlestickData) => c.open > 0 || c.close > 0)
-        .sort((a: CandlestickData, b: CandlestickData) => (a.time as number) - (b.time as number));
+      const formattedCandles: CandlestickData[] = (data?.candlesticks || [])
+        .map((c: any) => ({
+          time: c.time as Time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }))
+        .filter((c: CandlestickData) => c.open > 0 || c.close > 0);
       
       setCandlesticks(formattedCandles);
       
@@ -149,7 +127,7 @@ export function MarketChartView({
     
     try {
       const { data, error } = await supabase.functions.invoke('market-dashboard', {
-        body: { url: marketUrl }
+        body: { marketUrl } // Fixed: use marketUrl not url
       });
       
       if (!error && data) {
@@ -286,13 +264,17 @@ export function MarketChartView({
           <ChevronLeft className="w-5 h-5" />
         </Button>
         
-        {image && (
+        {image ? (
           <img 
             src={image} 
             alt={title}
             className="w-10 h-10 rounded-xl object-cover shrink-0"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
+        ) : (
+          <div className="w-10 h-10 rounded-xl bg-muted/30 flex items-center justify-center shrink-0">
+            <BarChart3 className="w-5 h-5 text-muted-foreground" />
+          </div>
         )}
         
         <div className="flex-1 min-w-0">

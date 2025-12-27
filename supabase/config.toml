@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.cancel-order]
 verify_jwt = false
+
+[functions.market-candlesticks]
+verify_jwt = false
