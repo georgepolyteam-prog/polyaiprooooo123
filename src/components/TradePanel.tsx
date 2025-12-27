@@ -162,14 +162,14 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     const amountNum = parseFloat(amount);
     const marketPrice = selectedSide === 'YES' ? marketData.currentPrice : (1 - marketData.currentPrice);
     
-    // For market orders (FOK), use market price + buffer to ensure fill
-    // For BUY: add a small buffer (5%) to ensure fill
-    // For limit orders (GTC), use the user's specified price
+    // For "market" orders, use aggressive GTC limit orders that guarantee fill
+    // This avoids FOK/FAK precision issues while ensuring execution
+    // For BUY: set price 15% above market to sweep the book
+    // For limit orders, use the user's specified price
     let orderPrice: number;
     if (isMarketOrder) {
-      // Market order: use market price with a 5% buffer for BUY
-      // Round to 2 decimals for API compatibility
-      orderPrice = Math.round(Math.min(marketPrice * 1.05, 0.99) * 100) / 100;
+      // Aggressive limit order: 15% above market to ensure fill
+      orderPrice = Math.round(Math.min(marketPrice * 1.15, 0.99) * 100) / 100;
     } else {
       // Limit order: use user's specified price or current market price
       orderPrice = limitPrice ? parseFloat(limitPrice) / 100 : marketPrice;
@@ -178,13 +178,14 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     
     const expectedShares = amountNum / Math.max(isMarketOrder ? marketPrice : orderPrice, 0.01);
 
+    // Always use GTC - for "market" orders the aggressive price ensures instant fill
     const result = await placeOrder({
       tokenId: tokenId!,
       side: 'BUY',
       amount: amountNum,
       price: orderPrice,
       isMarketOrder,
-      orderType: isMarketOrder ? 'FOK' : 'GTC',
+      orderType: 'GTC', // Always GTC - aggressive pricing handles "market" orders
     });
 
     if (result.success) {

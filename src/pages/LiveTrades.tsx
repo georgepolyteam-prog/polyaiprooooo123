@@ -1050,16 +1050,17 @@ export default function LiveTrades() {
             onClose={() => setSelectedTrade(null)}
             onTrade={async (marketUrl, trade, side) => {
               // Open modal immediately with loading state
+              // Use 0.5 as placeholder - we'll get the REAL price from the API
               setTradeMarketData({
                 title: trade.title,
-                currentPrice: trade.price,
+                currentPrice: 0.5, // Placeholder - will be replaced with actual market price
                 url: marketUrl,
                 isLoading: true,
               });
               setTradeDefaultSide(side);
               setTradeModalOpen(true);
               
-              // Fetch full data in background
+              // Fetch full data in background - this has the CORRECT current market price
               const res = await fetchTradeableMarketData(marketUrl);
               if (res.ok === false) {
                 setTradeModalOpen(false);
@@ -1075,6 +1076,7 @@ export default function LiveTrades() {
                 }
                 return;
               }
+              // Use the fetched data which has the correct currentPrice from the market
               setTradeMarketData(res.data);
             }}
             onAnalyze={(trade, resolvedUrl) => {
