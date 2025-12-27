@@ -727,6 +727,18 @@
   animation: marquee 30s linear infinite;
 }
 
+/* Continuous marquee - never pauses, never resets */
+@keyframes marquee-continuous {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-33.333%); }
+}
+
+.animate-marquee-continuous {
+  animation: marquee-continuous var(--marquee-duration, 30s) linear infinite;
+  animation-play-state: running !important;
+  will-change: transform;
+}
+
 /* Animated gradient background */
 .whale-ticker-bg {
   background: linear-gradient(

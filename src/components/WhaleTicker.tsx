@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap } from "lucide-react";
+import { X, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface WhaleTrade {
@@ -12,14 +12,23 @@ interface WhaleTrade {
   timestamp: Date;
 }
 
-const DISMISS_KEY = "whaleTickerDismissed";
+type FilterType = 'ALL' | 'BUYS' | 'SELLS';
+
+const DISMISS_KEY = "liveTickerDismissed";
 const DISMISS_DURATION = 3600000; // 1 hour
-const WHALE_THRESHOLD = 1000; // $1k+
+const WHALE_THRESHOLD = 1000; // $1k+ shows whale emoji
+const FILTER_KEY = "liveTickerFilter";
 
 export function WhaleTicker() {
   const [trades, setTrades] = useState<WhaleTrade[]>([]);
-  const [isPaused, setIsPaused] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [filter, setFilter] = useState<FilterType>(() => {
+    try {
+      return (localStorage.getItem(FILTER_KEY) as FilterType) || 'ALL';
+    } catch {
+      return 'ALL';
+    }
+  });
   const [isDismissed, setIsDismissed] = useState(() => {
     try {
       const saved = localStorage.getItem(DISMISS_KEY);
@@ -32,10 +41,26 @@ export function WhaleTicker() {
     }
     return false;
   });
+  const [, setTick] = useState(0); // For forcing timestamp updates
   const wsRef = useRef<WebSocket | null>(null);
   const wsUrlRef = useRef<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
+
+  // Force re-render every 10 seconds to update timestamps
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Persist filter to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTER_KEY, filter);
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [filter]);
 
   const connectWebSocket = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -78,11 +103,11 @@ export function WhaleTicker() {
           if (msg.type === 'event') {
             const rawTrade = msg.data;
             
-            // Calculate volume same as LiveTrades whale filter
+            // Calculate volume same as LiveTrades
             const volume = rawTrade.price * (rawTrade.shares_normalized || rawTrade.shares);
             
-            // Only show whale trades ($1k+)
-            if (volume >= WHALE_THRESHOLD) {
+            // Only show trades with volume >= $100 for the ticker
+            if (volume >= 100) {
               const newTrade: WhaleTrade = {
                 id: `${Date.now()}-${Math.random()}`,
                 amount: volume,
@@ -91,7 +116,7 @@ export function WhaleTicker() {
                 timestamp: new Date()
               };
 
-              setTrades(prev => [newTrade, ...prev].slice(0, 20));
+              setTrades(prev => [newTrade, ...prev].slice(0, 100));
             }
           }
         } catch {
@@ -143,7 +168,8 @@ export function WhaleTicker() {
 
   const formatAmount = (amount: number) => {
     if (amount >= 10000) return `$${(amount / 1000).toFixed(1)}k`;
-    return `$${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (amount >= 1000) return `$${(amount / 1000).toFixed(1)}k`;
+    return `$${amount.toFixed(0)}`;
   };
 
   const formatTimeAgo = (date: Date) => {
@@ -154,8 +180,17 @@ export function WhaleTicker() {
     return `${Math.floor(minutes / 60)}h`;
   };
 
+  // Filter trades based on selection
+  const filteredTrades = trades.filter(trade => {
+    if (filter === 'BUYS') return trade.side === 'BUY';
+    if (filter === 'SELLS') return trade.side === 'SELL';
+    return true;
+  });
+
   // Triple trades for seamless marquee loop
-  const displayTrades = trades.length > 0 ? [...trades, ...trades, ...trades] : [];
+  const displayTrades = filteredTrades.length > 0 
+    ? [...filteredTrades, ...filteredTrades, ...filteredTrades] 
+    : [];
 
   return (
     <AnimatePresence>
@@ -165,10 +200,7 @@ export function WhaleTicker() {
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="fixed top-16 left-0 right-0 z-40 cursor-pointer group"
-          onClick={() => navigate("/live-trades")}
-          onMouseEnter={() => setIsPaused(true)}
-          onMouseLeave={() => setIsPaused(false)}
+          className="fixed top-16 left-0 right-0 z-40"
         >
           {/* Professional dark background with subtle glow */}
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background border-b border-border/50" />
@@ -177,38 +209,66 @@ export function WhaleTicker() {
           <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
           <div className="relative flex items-center h-9 md:h-8">
-            {/* Live badge - Clean professional style */}
-            <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 h-full bg-primary/5 border-r border-border/30">
+            {/* Live badge with filters */}
+            <div className="flex-shrink-0 flex items-center gap-1.5 md:gap-2 px-2 md:px-3 h-full bg-primary/5 border-r border-border/30">
               {/* Live indicator */}
-              <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2">
-                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-primary animate-ping' : 'bg-muted-foreground'}`} />
-                <span className={`relative inline-flex rounded-full h-full w-full ${isConnected ? 'bg-primary' : 'bg-muted-foreground'}`} />
+              <span className="relative flex h-1.5 w-1.5">
+                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-red-500 animate-ping' : 'bg-muted-foreground'}`} />
+                <span className={`relative inline-flex rounded-full h-full w-full ${isConnected ? 'bg-red-500' : 'bg-muted-foreground'}`} />
               </span>
-              <Zap className="w-3 h-3 text-primary hidden md:block" />
-              <span className="text-[10px] font-semibold tracking-wide text-primary uppercase">
-                Whales
+              <Radio className="w-3 h-3 text-red-500 hidden md:block" />
+              <span className="text-[10px] font-semibold tracking-wide text-foreground uppercase">
+                LIVE
               </span>
+              
+              {/* Quick filter buttons */}
+              <div className="hidden md:flex items-center gap-0.5 ml-1">
+                {(['ALL', 'BUYS', 'SELLS'] as FilterType[]).map((f) => (
+                  <button
+                    key={f}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFilter(f);
+                    }}
+                    className={`px-1.5 py-0.5 text-[9px] font-medium rounded transition-colors ${
+                      filter === f 
+                        ? f === 'BUYS' 
+                          ? 'bg-emerald-500/20 text-emerald-400' 
+                          : f === 'SELLS'
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-primary/20 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Scrolling content area */}
-            <div className="flex-1 overflow-hidden mx-2 md:mx-0">
-              {trades.length > 0 ? (
+            {/* Scrolling content area - clicks navigate to LiveTrades */}
+            <div 
+              className="flex-1 overflow-hidden mx-2 md:mx-0 cursor-pointer"
+              onClick={() => navigate("/live-trades")}
+            >
+              {filteredTrades.length > 0 ? (
                 <div 
-                  className={`flex whitespace-nowrap ${isPaused ? '' : 'animate-marquee'}`}
+                  className="flex whitespace-nowrap animate-marquee-continuous"
                   style={{ 
-                    animationDuration: `${Math.max(25, trades.length * 10)}s`,
-                    animationPlayState: isPaused ? 'paused' : 'running'
-                  }}
+                    '--marquee-duration': `${Math.max(30, filteredTrades.length * 8)}s`
+                  } as React.CSSProperties}
                 >
                   {displayTrades.map((trade, idx) => (
                     <div
                       key={`${trade.id}-${idx}`}
-                      className="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-5 text-xs"
+                      className="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 text-xs"
                     >
-                      {/* Whale emoji */}
-                      <span className="text-sm md:text-base opacity-80">🐋</span>
+                      {/* Whale emoji for $1k+ trades, otherwise trading icon */}
+                      <span className="text-sm opacity-80">
+                        {trade.amount >= WHALE_THRESHOLD ? '🐋' : '📈'}
+                      </span>
                       
-                      {/* Amount with subtle color */}
+                      {/* Amount with color */}
                       <span className={`font-semibold tabular-nums ${
                         trade.side === "BUY" 
                           ? "text-emerald-400" 
@@ -217,7 +277,7 @@ export function WhaleTicker() {
                         {formatAmount(trade.amount)}
                       </span>
                       
-                      {/* Side badge - minimal */}
+                      {/* Side badge */}
                       <span className={`text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded ${
                         trade.side === "BUY" 
                           ? "bg-emerald-500/10 text-emerald-400" 
@@ -231,7 +291,7 @@ export function WhaleTicker() {
                         {trade.market}
                       </span>
                       
-                      {/* Time ago */}
+                      {/* Time ago - updates every 10s */}
                       <span className="text-muted-foreground/50 text-[10px] tabular-nums">
                         {formatTimeAgo(trade.timestamp)}
                       </span>
@@ -250,7 +310,7 @@ export function WhaleTicker() {
                   >
                     <span className="text-sm">🔍</span>
                     <span className="text-muted-foreground">
-                      Scanning for whale trades ($1k+)
+                      Waiting for live trades...
                     </span>
                   </motion.div>
                   <span className="hidden md:inline text-muted-foreground/50 text-[10px]">
@@ -260,16 +320,19 @@ export function WhaleTicker() {
               )}
             </div>
 
-            {/* View all hint - desktop only */}
-            <div className="hidden md:flex flex-shrink-0 items-center px-3 text-[10px] text-muted-foreground/60 group-hover:text-primary transition-colors font-medium">
-              VIEW ALL →
+            {/* Customize hint - desktop only */}
+            <div 
+              className="hidden md:flex flex-shrink-0 items-center px-3 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors font-medium cursor-pointer"
+              onClick={() => navigate("/live-trades")}
+            >
+              Click to customize →
             </div>
 
             {/* Dismiss button */}
             <button
               onClick={handleDismiss}
               className="flex-shrink-0 flex items-center justify-center w-8 h-full md:w-9 hover:bg-muted/50 transition-colors border-l border-border/30"
-              aria-label="Dismiss whale alerts"
+              aria-label="Dismiss live trades ticker"
             >
               <X className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground transition-colors" />
             </button>

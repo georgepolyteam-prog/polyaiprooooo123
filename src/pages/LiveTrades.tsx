@@ -350,7 +350,7 @@ export default function LiveTrades() {
                 (t.tx_hash === newTrade.tx_hash && t.timestamp === newTrade.timestamp && t.token_id === newTrade.token_id)
               );
               if (exists) return prev;
-              return [newTrade, ...prev.slice(0, 499)];
+              return [newTrade, ...prev.slice(0, 1999)];
             });
           }
         }
