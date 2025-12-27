@@ -484,10 +484,10 @@ export default function MyTrades() {
     
     try {
       // For "market" sell orders, use aggressive GTC limit orders
-      // Set price 15% below market to ensure fill (sweep the bids)
-      // This avoids FAK precision issues while ensuring execution
+      // Set price 30% below market to ensure instant fill (sweep deeper into bids)
+      // This avoids FAK precision issues while guaranteeing execution
       const orderPrice = isMarketOrder 
-        ? Math.max(0.01, Math.round(price * 0.85 * 100) / 100) 
+        ? Math.max(0.01, Math.round(price * 0.70 * 100) / 100) 
         : price;
       
       // Always use GTC - aggressive pricing handles "market" orders
@@ -503,12 +503,11 @@ export default function MyTrades() {
       if (result?.success) {
         toast.success(isMarketOrder ? "Market sell executed!" : "Limit sell order placed!");
         setTimeout(() => fetchPositions(), 2000);
-      } else {
-        toast.error(result?.error || "Failed to place sell order");
       }
+      // Don't show error toast here - useDomeRouter already handles error toasts
     } catch (err) {
       console.error("Sell error:", err);
-      toast.error("Failed to place sell order");
+      // Don't show duplicate toast - useDomeRouter already handles it
       throw err;
     }
   };
