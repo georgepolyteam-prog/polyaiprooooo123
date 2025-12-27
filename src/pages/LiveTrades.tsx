@@ -130,10 +130,8 @@ export default function LiveTrades() {
   const watchdogIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hardReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const tradeCounterRef = useRef<{ count: number; startTime: number }>({ count: 0, startTime: Date.now() });
-  const imageCacheRef = useRef<Map<string, string>>(new Map()); // Dual-key: market_slug AND condition_id
-  const pendingSlugsRef = useRef<Set<string>>(new Set());
+  const imageCacheRef = useRef<Map<string, string>>(new Map()); // condition_id -> image URL
   const imagePreCachedRef = useRef<boolean>(false);
-  const imageFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -218,17 +216,61 @@ export default function LiveTrades() {
     };
   }, []);
 
-  // Pre-cache images from polymarket-live on mount
+  // Fetch image for a specific market by condition_id (on-demand, accurate)
+  const fetchMarketImage = useCallback(async (conditionId: string, marketSlug: string): Promise<string | null> => {
+    // Check cache first (by condition_id - most reliable)
+    const cached = imageCacheRef.current.get(conditionId);
+    if (cached) return cached;
+    
+    // Also check by slug as fallback
+    const cachedBySlug = imageCacheRef.current.get(marketSlug);
+    if (cachedBySlug) {
+      // Also cache by condition_id for future lookups
+      imageCacheRef.current.set(conditionId, cachedBySlug);
+      return cachedBySlug;
+    }
+
+    try {
+      // Fetch from get-market-previews with condition_id (most accurate)
+      const { data, error } = await supabase.functions.invoke('get-market-previews', {
+        body: { conditionIds: [conditionId] }
+      });
+
+      if (error || !data?.markets?.[0]?.image) {
+        console.warn(`[LiveTrades] No image for condition_id ${conditionId}`);
+        // Mark as checked so we don't keep retrying
+        imageCacheRef.current.set(conditionId, '');
+        return null;
+      }
+
+      const image = data.markets[0].image;
+      
+      // Cache by both condition_id and slug
+      imageCacheRef.current.set(conditionId, image);
+      if (marketSlug) {
+        imageCacheRef.current.set(marketSlug, image);
+      }
+      
+      return image;
+    } catch (err) {
+      console.error(`[LiveTrades] Failed to fetch image for ${conditionId}:`, err);
+      // Mark as checked to avoid retrying
+      imageCacheRef.current.set(conditionId, '');
+      return null;
+    }
+  }, []);
+
+  // Pre-cache images from polymarket-live on mount (optional optimization for popular markets)
   const preCacheImages = useCallback(async () => {
     if (imagePreCachedRef.current) return;
     imagePreCachedRef.current = true;
     
     try {
-      console.log('[LiveTrades] Pre-caching market images...');
+      console.log('[LiveTrades] Pre-caching top market images...');
       const { data, error } = await supabase.functions.invoke('polymarket-live');
       
       if (error || !data) {
-        console.log('[LiveTrades] Failed to pre-cache images:', error);
+        console.log('[LiveTrades] Pre-cache failed (optional):', error);
         return;
       }
       
@@ -238,98 +280,51 @@ export default function LiveTrades() {
       let cachedCount = 0;
       for (const market of markets) {
         if (market.image) {
-          // Cache by slug
-          if (market.slug) {
-            imageCacheRef.current.set(market.slug, market.image);
-            cachedCount++;
-          }
-          // Also cache by condition_id if available
+          // Cache by condition_id (primary key for accuracy)
           if (market.condition_id) {
             imageCacheRef.current.set(market.condition_id, market.image);
+            cachedCount++;
           }
-          // Also cache by eventSlug for multi-market events
-          if (market.eventSlug && market.eventSlug !== market.slug) {
-            imageCacheRef.current.set(market.eventSlug, market.image);
-          }
-        }
-      }
-      console.log(`[LiveTrades] Pre-cached ${cachedCount} market images (${imageCacheRef.current.size} total keys)`);
-    } catch (err) {
-      console.log('[LiveTrades] Error pre-caching images:', err);
-    }
-  }, []);
-
-  // Fetch images for market slugs/condition_ids
-  const fetchMarketImages = useCallback(async (identifiers: string[]) => {
-    if (identifiers.length === 0) return;
-    
-    // Limit batch size
-    const limitedIds = identifiers.slice(0, MAX_IMAGE_BATCH_SIZE);
-    
-    try {
-      // Try fetching by condition_ids first (more reliable)
-      const { data, error } = await supabase.functions.invoke('get-market-previews', {
-        body: { conditionIds: limitedIds, eventSlugs: limitedIds }
-      });
-      
-      if (error || !data?.markets) return;
-      
-      for (const market of data.markets) {
-        if (market.image) {
-          // Cache by both slug and condition_id
+          // Also cache by slug as secondary lookup
           if (market.slug) {
             imageCacheRef.current.set(market.slug, market.image);
           }
-          if (market.conditionId) {
-            imageCacheRef.current.set(market.conditionId, market.image);
-          }
         }
       }
-      
-      // Update trades with newly cached images
-      setTrades(prev => prev.map(trade => {
-        if (!trade.image) {
-          const cachedImage = imageCacheRef.current.get(trade.market_slug) || 
-                             imageCacheRef.current.get(trade.condition_id);
-          if (cachedImage) {
-            return { ...trade, image: cachedImage };
-          }
-        }
-        return trade;
-      }));
+      console.log(`[LiveTrades] Pre-cached ${cachedCount} market images`);
     } catch (err) {
-      // Silently fail
+      // Optional pre-cache, don't block on failure
+      console.warn('[LiveTrades] Pre-cache error (optional):', err);
     }
   }, []);
 
-  // Queue identifiers for batch image fetching - throttled to IMAGE_FETCH_DELAY_MS
-  // Accepts both market_slug and condition_id (dual-key)
-  const queueImageFetch = useCallback((slug: string, conditionId?: string) => {
-    // Check if already cached by either key
-    if (imageCacheRef.current.has(slug) || (conditionId && imageCacheRef.current.has(conditionId))) {
-      return;
-    }
+  // Queue for on-demand image fetching - fetches specific images by condition_id
+  const pendingFetchesRef = useRef<Set<string>>(new Set());
+  
+  const queueImageFetch = useCallback((conditionId: string, marketSlug: string) => {
+    // Skip if already cached or already fetching
+    if (!conditionId) return;
+    if (imageCacheRef.current.has(conditionId)) return;
+    if (pendingFetchesRef.current.has(conditionId)) return;
     
-    // Add both to pending set for batch fetch
-    if (slug && !pendingSlugsRef.current.has(slug)) {
-      pendingSlugsRef.current.add(slug);
-    }
-    if (conditionId && !pendingSlugsRef.current.has(conditionId)) {
-      pendingSlugsRef.current.add(conditionId);
-    }
+    pendingFetchesRef.current.add(conditionId);
     
-    if (imageFetchTimeoutRef.current) {
-      clearTimeout(imageFetchTimeoutRef.current);
-    }
-    
-    imageFetchTimeoutRef.current = setTimeout(() => {
-      const idsToFetch = Array.from(pendingSlugsRef.current).slice(0, MAX_IMAGE_BATCH_SIZE);
-      pendingSlugsRef.current.clear();
-      if (idsToFetch.length > 0) {
-        fetchMarketImages(idsToFetch);
+    // Fetch on-demand with slight delay to batch rapid-fire trades
+    setTimeout(async () => {
+      const image = await fetchMarketImage(conditionId, marketSlug);
+      pendingFetchesRef.current.delete(conditionId);
+      
+      if (image) {
+        // Update any trades in state that match this condition_id
+        setTrades(prev => prev.map(trade => {
+          if (trade.condition_id === conditionId && !trade.image) {
+            return { ...trade, image };
+          }
+          return trade;
+        }));
       }
-    }, IMAGE_FETCH_DELAY_MS);
-  }, [fetchMarketImages]);
+    }, 100); // Small delay to allow batching
+  }, [fetchMarketImage]);
 
   const forceReconnect = useCallback(() => {
     console.log('Force reconnecting...');
@@ -463,37 +458,20 @@ export default function LiveTrades() {
           
           tradeCounterRef.current.count++;
           
-          // Dual-key image lookup: try market_slug first, then condition_id
+          // Primary lookup by condition_id (most accurate), fallback to slug
           const cachedImage = 
-            (rawTrade.market_slug && imageCacheRef.current.get(rawTrade.market_slug)) ||
             (rawTrade.condition_id && imageCacheRef.current.get(rawTrade.condition_id)) ||
+            (rawTrade.market_slug && imageCacheRef.current.get(rawTrade.market_slug)) ||
             null;
-          
-          // Only trust rawTrade.image if it looks specific to this market
-          // Avoid generic/placeholder images that get reused across markets
-          let tradeImage = cachedImage;
-          if (!tradeImage && rawTrade.image) {
-            // Trust market-specific images but NOT generic placeholders
-            const img = rawTrade.image || rawTrade.market_image || rawTrade.icon;
-            // Skip if image looks like a generic placeholder (contains common avatar patterns)
-            const looksGeneric = img && (
-              img.includes('avatar') || 
-              img.includes('default') || 
-              img.includes('placeholder')
-            );
-            if (img && !looksGeneric) {
-              tradeImage = img;
-            }
-          }
           
           const newTrade: Trade = {
             ...rawTrade,
-            image: tradeImage || null
+            image: cachedImage || null
           };
 
-          // Queue for image fetch using both keys if not cached
-          if (!newTrade.image && (newTrade.market_slug || newTrade.condition_id)) {
-            queueImageFetch(newTrade.market_slug, newTrade.condition_id);
+          // Queue on-demand image fetch by condition_id if not cached
+          if (!newTrade.image && newTrade.condition_id) {
+            queueImageFetch(newTrade.condition_id, newTrade.market_slug);
           }
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
           if (volume >= WHALE_THRESHOLD) {
@@ -609,9 +587,6 @@ export default function LiveTrades() {
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (imageFetchTimeoutRef.current) {
-        clearTimeout(imageFetchTimeoutRef.current);
       }
       if (connectionTimeoutRef.current) {
         clearTimeout(connectionTimeoutRef.current);
