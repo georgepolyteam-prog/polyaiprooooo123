@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trade-data';
+import { useTrackedWallets } from '@/hooks/useTrackedWallets';
 import domeLogo from '@/assets/dome-logo.png';
 
 interface Trade {
@@ -101,6 +102,11 @@ export default function LiveTrades() {
   const [marketFilter, setMarketFilter] = useState('all');
   const [hideUpDown, setHideUpDown] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [trackedOnly, setTrackedOnly] = useState(false);
+  
+  // Tracked wallets hook
+  const { trackedWallets, getTrackedAddresses } = useTrackedWallets();
+  const trackedAddresses = useMemo(() => getTrackedAddresses(), [getTrackedAddresses]);
 
   // Analysis modal state (for heatmap analyze)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false);

@@ -16,6 +16,7 @@ import WalletProfile from "./pages/WalletProfile";
 import MyTrades from "./pages/MyTrades";
 import Markets from "./pages/Markets";
 import LiveTrades from "./pages/LiveTrades";
+import TrackedWallets from "./pages/TrackedWallets";
 import Status from "./pages/Status";
 import NotFound from "./pages/NotFound";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -47,6 +48,7 @@ const AppContent = () => {
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/builders" element={<BuilderStats />} />
           <Route path="/my-trades" element={<MyTrades />} />
+          <Route path="/tracked-wallets" element={<TrackedWallets />} />
           <Route path="/wallet/:address" element={<WalletProfile />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />

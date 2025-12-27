@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown } from 'lucide-react';
+import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TradeFiltersProps {
   filter: 'all' | 'buy' | 'sell';
@@ -21,6 +22,9 @@ interface TradeFiltersProps {
   totalTrades: number;
   hideUpDown: boolean;
   setHideUpDown: (value: boolean) => void;
+  trackedOnly?: boolean;
+  setTrackedOnly?: (value: boolean) => void;
+  hasTrackedWallets?: boolean;
 }
 
 export function TradeFilters({
@@ -39,8 +43,12 @@ export function TradeFilters({
   availableMarkets,
   totalTrades,
   hideUpDown,
-  setHideUpDown
+  setHideUpDown,
+  trackedOnly = false,
+  setTrackedOnly,
+  hasTrackedWallets = false
 }: TradeFiltersProps) {
+  const { user } = useAuth();
   const [expanded, setExpanded] = useState(true); // Open by default
   const [minVolumeInput, setMinVolumeInput] = useState(minVolume > 0 ? minVolume.toString() : '');
 
@@ -104,6 +112,21 @@ export function TradeFilters({
         >
           🐋 Whales ($1k+)
         </Button>
+
+        {/* Tracked Wallets Toggle - Only show if user is logged in */}
+        {user && setTrackedOnly && (
+          <Button
+            onClick={() => setTrackedOnly(!trackedOnly)}
+            variant={trackedOnly ? 'default' : 'outline'}
+            size="sm"
+            className={`min-h-[44px] sm:min-h-[36px] gap-1.5 ${trackedOnly ? 'bg-primary hover:bg-primary/90' : ''}`}
+            title={hasTrackedWallets ? "Filter to show only tracked wallet trades" : "Track wallets first to use this filter"}
+            disabled={!hasTrackedWallets && !trackedOnly}
+          >
+            <Star className={`w-3.5 h-3.5 ${trackedOnly ? 'fill-current' : ''}`} />
+            Tracked
+          </Button>
+        )}
 
         {/* Advanced Filters Toggle */}
         <Button
