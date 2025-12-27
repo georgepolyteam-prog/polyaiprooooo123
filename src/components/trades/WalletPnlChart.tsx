@@ -13,11 +13,12 @@ interface WalletPnlChartProps {
   series: PnlDataPoint[];
   totalPnl: number;
   className?: string;
+  compact?: boolean;
 }
 
 type TimeframeOption = '7D' | '30D' | 'ALL';
 
-export function WalletPnlChart({ series, totalPnl, className }: WalletPnlChartProps) {
+export function WalletPnlChart({ series, totalPnl, className, compact = false }: WalletPnlChartProps) {
   const [timeframe, setTimeframe] = useState<TimeframeOption>('ALL');
 
   const filteredData = useMemo(() => {
@@ -71,27 +72,28 @@ export function WalletPnlChart({ series, totalPnl, className }: WalletPnlChartPr
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={cn("rounded-xl p-4 bg-muted/20 border border-border/30", className)}
+      className={cn("rounded-xl bg-muted/20 border border-border/30", compact ? "p-3" : "p-4", className)}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className={cn("flex items-center justify-between", compact ? "mb-2" : "mb-3")}>
         <div className="flex items-center gap-2">
           {isPositive ? (
-            <TrendingUp className="w-4 h-4 text-success" />
+            <TrendingUp className={cn(compact ? "w-3.5 h-3.5" : "w-4 h-4", "text-success")} />
           ) : (
-            <TrendingDown className="w-4 h-4 text-destructive" />
+            <TrendingDown className={cn(compact ? "w-3.5 h-3.5" : "w-4 h-4", "text-destructive")} />
           )}
-          <span className="text-sm font-medium">PnL History</span>
+          <span className={cn(compact ? "text-xs" : "text-sm", "font-medium")}>PnL History</span>
         </div>
         
         {/* Timeframe Toggle */}
-        <div className="flex gap-1 p-0.5 rounded-lg bg-muted/30">
+        <div className="flex gap-0.5 p-0.5 rounded-lg bg-muted/30">
           {(['7D', '30D', 'ALL'] as TimeframeOption[]).map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
               className={cn(
-                "px-2 py-1 text-xs font-medium rounded-md transition-all",
+                "font-medium rounded-md transition-all",
+                compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-xs",
                 timeframe === tf
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -104,7 +106,7 @@ export function WalletPnlChart({ series, totalPnl, className }: WalletPnlChartPr
       </div>
 
       {/* Chart */}
-      <div className="h-32 -mx-2">
+      <div className={cn(compact ? "h-20" : "h-32", "-mx-2")}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={filteredData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
             <defs>
@@ -165,10 +167,11 @@ export function WalletPnlChart({ series, totalPnl, className }: WalletPnlChartPr
       </div>
 
       {/* Total PnL Display */}
-      <div className="mt-2 pt-2 border-t border-border/20 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Total PnL</span>
+      <div className={cn("border-t border-border/20 flex items-center justify-between", compact ? "mt-1.5 pt-1.5" : "mt-2 pt-2")}>
+        <span className={cn(compact ? "text-[10px]" : "text-xs", "text-muted-foreground")}>Total PnL</span>
         <span className={cn(
           "font-bold",
+          compact ? "text-sm" : "text-base",
           isPositive ? "text-success" : "text-destructive"
         )}>
           {isPositive ? '+' : ''}{totalPnl >= 1000000 ? `$${(totalPnl / 1000000).toFixed(2)}M` : totalPnl >= 1000 ? `$${(totalPnl / 1000).toFixed(1)}K` : `$${totalPnl.toFixed(2)}`}
