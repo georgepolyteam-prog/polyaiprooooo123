@@ -350,7 +350,8 @@ export default function LiveTrades() {
                 (t.tx_hash === newTrade.tx_hash && t.timestamp === newTrade.timestamp && t.token_id === newTrade.token_id)
               );
               if (exists) return prev;
-              return [newTrade, ...prev.slice(0, 1999)];
+              // Keep 500 visible trades (buffer 2000 for whale filtering in memory)
+              return [newTrade, ...prev.slice(0, 499)];
             });
           }
         }
@@ -451,7 +452,7 @@ export default function LiveTrades() {
 
   const togglePause = useCallback(() => {
     if (paused) {
-      setTrades(prev => [...pausedTradesRef.current, ...prev].slice(0, 500));
+      setTrades(prev => [...pausedTradesRef.current, ...prev].slice(0, 499));
       pausedTradesRef.current = [];
       setQueuedCount(0);
     }
