@@ -150,10 +150,88 @@ class DomeClient {
         }
       }
       
+      // === FALLBACK: Keyword search if exact slug match fails ===
+      console.log(`[Dome] Exact slug match failed, trying keyword search...`);
+      const keywords = slug.replace(/-/g, ' ').split(' ').filter(w => w.length > 2).slice(0, 6).join(' ');
+      console.log(`[Dome] Searching with keywords: "${keywords}"`);
+      
+      const searchResponse = await fetch(
+        `${DOME_API_BASE}/polymarket/markets?status=open&limit=20`,
+        { headers: this.headers }
+      );
+      
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const markets = searchData?.markets || [];
+        
+        // Find best match by checking if title contains most of our slug words
+        const slugWords = slug.toLowerCase().split('-').filter(w => w.length > 2);
+        let bestMatch: DomeMarket | null = null;
+        let bestScore = 0;
+        
+        for (const market of markets) {
+          const titleLower = (market.title || '').toLowerCase();
+          const slugLower = (market.market_slug || '').toLowerCase();
+          
+          // Count how many slug words appear in title or market_slug
+          const matchCount = slugWords.filter(word => 
+            titleLower.includes(word) || slugLower.includes(word)
+          ).length;
+          
+          const score = matchCount / slugWords.length;
+          
+          if (score > bestScore && score >= 0.5) {
+            bestScore = score;
+            bestMatch = market as DomeMarket;
+          }
+        }
+        
+        if (bestMatch) {
+          console.log(`[Dome] ✅ Found via keyword match (${(bestScore * 100).toFixed(0)}%): ${bestMatch.title}`);
+          return bestMatch;
+        }
+      }
+      
       console.log(`[Dome] ⚠️ No markets found for slug: ${slug}`);
       return null;
     } catch (error) {
       console.error("[Dome] Error fetching market:", error);
+      return null;
+    }
+  }
+
+  async getMarketByConditionId(conditionId: string): Promise<DomeMarket | null> {
+    if (!DOME_API_KEY) {
+      console.log("[Dome] API key not configured, skipping conditionId lookup");
+      return null;
+    }
+    
+    try {
+      console.log(`[Dome] Fetching market by conditionId: ${conditionId}`);
+      const response = await fetch(
+        `${DOME_API_BASE}/polymarket/markets?condition_id=${encodeURIComponent(conditionId)}&limit=1`,
+        { headers: this.headers }
+      );
+      
+      if (!response.ok) {
+        console.error(`[Dome] Markets API error: ${response.status}`);
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      if (data?.markets && Array.isArray(data.markets) && data.markets.length > 0) {
+        const market = data.markets[0];
+        if (market && market.title) {
+          console.log(`[Dome] ✅ Found market by conditionId: ${market.title}`);
+          return market as DomeMarket;
+        }
+      }
+      
+      console.log(`[Dome] ⚠️ No market found for conditionId: ${conditionId}`);
+      return null;
+    } catch (error) {
+      console.error("[Dome] Error fetching by conditionId:", error);
       return null;
     }
   }
@@ -1848,7 +1926,22 @@ const getCurrentDateInfo = () => {
 
 // System prompt is now a function to ensure fresh date on each request
 const getPolySystemPrompt = (dateInfo: { fullDate: string; year: number; month: string; day: number; isoDate: string }, isVoice: boolean = false) => {
-  return `You're Poly — a smart, friendly AI analyst who helps people understand prediction markets. Current date: ${dateInfo.fullDate}
+  return `You're Poly — a smart, friendly AI analyst who helps people understand prediction markets.
+
+=== 🚨🚨🚨 MANDATORY: CURRENT DATE & RESEARCH REQUIREMENTS 🚨🚨🚨 ===
+TODAY IS: ${dateInfo.fullDate} (${dateInfo.year})
+
+⚠️ FOR EVERY MARKET URL OR TOPIC, YOU MUST RESEARCH BEFORE ANALYZING:
+1. ALWAYS use web_search FIRST to find the LATEST news (include "${dateInfo.year}" or "${dateInfo.month} ${dateInfo.year}" in your searches)
+2. Verify current status of people/things in the market
+3. Check for recent announcements or developments
+4. ONLY THEN provide your analysis based on search results
+
+🚫 NEVER analyze a market without researching first. The user is betting REAL MONEY!
+
+Example: For a market about "Trump Fed chair nomination":
+- FIRST: web_search("Trump Fed chair nomination ${dateInfo.month} ${dateInfo.year} news")
+- THEN: Analyze based on what you found
 
 === PERSONALITY ===
 - Talk like a knowledgeable friend texting about markets
@@ -2454,6 +2547,11 @@ async function fetchPolymarketData(urlPath: string): Promise<any | null> {
       console.log("[Dome] Attempting comprehensive Dome API lookup for:", eventSlug);
       const slugsToTry = [eventSlug, baseSlug, coreSlug].filter((s, i, arr) => arr.indexOf(s) === i);
       
+      // Also try the marketSlug if provided (it's often the correct market_slug for Dome)
+      if (marketSlug && !slugsToTry.includes(marketSlug)) {
+        slugsToTry.unshift(marketSlug); // Try marketSlug first as it's more specific
+      }
+      
       for (const slugAttempt of slugsToTry) {
         const comprehensiveData = await dome.getComprehensiveMarketData(slugAttempt);
         
@@ -2544,7 +2642,112 @@ async function fetchPolymarketData(urlPath: string): Promise<any | null> {
           };
         }
       }
-      console.log("[Dome] Comprehensive market data not found, falling back to Gamma API");
+      
+      // === FALLBACK: Use Gamma API to get the correct market slug, then retry Dome ===
+      console.log("[Dome] Direct slug lookup failed, trying Gamma API to resolve correct slug...");
+      try {
+        const gammaResponse = await fetch(
+          `https://gamma-api.polymarket.com/events?slug=${eventSlug}`,
+          { headers: { "Accept": "application/json" } }
+        );
+        
+        if (gammaResponse.ok) {
+          const gammaEvents = await gammaResponse.json();
+          if (gammaEvents && gammaEvents.length > 0) {
+            const gammaEvent = gammaEvents[0];
+            const gammaMarkets = gammaEvent.markets || [];
+            
+            // Try each market's conditionId with Dome
+            for (const gammaMarket of gammaMarkets.slice(0, 3)) {
+              const conditionId = gammaMarket.conditionId;
+              if (conditionId) {
+                console.log(`[Dome] Trying conditionId from Gamma: ${conditionId}`);
+                const domeMarket = await dome.getMarketByConditionId(conditionId);
+                if (domeMarket) {
+                  // Re-fetch comprehensive data with the correct slug
+                  const comprehensiveData = await dome.getComprehensiveMarketData(domeMarket.market_slug);
+                  if (comprehensiveData && comprehensiveData.market) {
+                    const { market, priceA, priceB, recentTrades, tradeFlow, whales, volatility } = comprehensiveData;
+                    const marketState = getDomeMarketState(market);
+                    const yesPriceValue = priceA?.price || 0.5;
+                    const noPriceValue = priceB?.price || (1 - yesPriceValue);
+                    const marketUrl = `https://polymarket.com/event/${market.market_slug || eventSlug}`;
+                    
+                    const formattedTrades = recentTrades.slice(0, 5).map((t: any) => ({
+                      side: t.side,
+                      price: t.price,
+                      size: t.shares_normalized || t.size || 0,
+                      amount: (t.shares_normalized || t.size || 0) * (t.price || 0)
+                    }));
+                    
+                    console.log(`[Dome] ✅ Found via Gamma conditionId resolution: ${market.title}`);
+                    
+                    return {
+                      platform: 'polymarket',
+                      eventTitle: market.title,
+                      eventSlug: market.market_slug || eventSlug,
+                      category: market.tags?.[0] || "General",
+                      url: marketUrl,
+                      endDate: market.end_time ? new Date(market.end_time * 1000).toISOString() : null,
+                      targetMarket: {
+                        question: market.title,
+                        yesPrice: (yesPriceValue * 100).toFixed(1),
+                        noPrice: (noPriceValue * 100).toFixed(1),
+                        volume: market.volume_total || 0,
+                        liquidity: 0,
+                        url: marketUrl,
+                        conditionId: conditionId
+                      },
+                      allMarkets: [{
+                        question: market.title,
+                        yesPrice: (yesPriceValue * 100).toFixed(1),
+                        noPrice: (noPriceValue * 100).toFixed(1),
+                        volume: market.volume_total || 0,
+                        liquidity: 0,
+                        url: marketUrl
+                      }],
+                      totalMarketCount: 1,
+                      totalVolume: market.volume_total || 0,
+                      volumeWeek: market.volume_1_week || 0,
+                      volumeMonth: market.volume_1_month || 0,
+                      status: marketState.statusText,
+                      isActive: marketState.isActive,
+                      isResolved: marketState.isResolved,
+                      isClosed: marketState.isClosed,
+                      winningSide: marketState.winner,
+                      tradeFlow: {
+                        direction: tradeFlow.direction,
+                        strength: tradeFlow.strength,
+                        buyCount: tradeFlow.buyCount,
+                        sellCount: tradeFlow.sellCount,
+                        recentTrades: formattedTrades
+                      },
+                      whaleActivity: {
+                        isActive: whales.isWhaleActive,
+                        whaleCount: whales.whaleCount,
+                        totalVolume: whales.totalWhaleVolume,
+                        buyVolume: whales.buyVolume,
+                        sellVolume: whales.sellVolume,
+                        largestTrade: whales.largestTrade,
+                        topWhale: whales.topWhale
+                      },
+                      volatility: {
+                        isVolatile: volatility.isVolatile,
+                        weeklySwing: volatility.weeklySwing
+                      },
+                      source: "dome-api-via-gamma-conditionId"
+                    };
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log("[Dome] Gamma conditionId resolution failed:", e);
+      }
+      
+      console.log("[Dome] All Dome lookups failed, falling back to Gamma API");
     }
     
     // ============= FALLBACK TO GAMMA API =============
