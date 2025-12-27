@@ -517,32 +517,40 @@ export function useDomeRouter() {
         },
       });
 
-      if (edgeError) {
-        console.error('[DomeRouter] Edge function error:', edgeError);
-        throw new Error(edgeError.message || 'Failed to submit order');
-      }
-
-      if (!response?.success) {
-        console.error('[DomeRouter] Order rejected:', {
-          error: response?.error,
-          code: response?.code,
-          details: response?.details,
-          rawResponse: response,
-        });
+      // Handle edge function errors - check response data for actual error details
+      // even when edgeError exists (400 responses have error details in data)
+      if (edgeError || !response?.success) {
+        const errorDetails = response?.details?.reason || response?.error;
         
-        // Parse error for user-friendly message
-        let errorMessage = response?.details?.reason || response?.error || 'Order rejected';
-        const errorLower = errorMessage.toLowerCase();
-        
-        for (const [key, userMessage] of Object.entries(ERROR_MESSAGES)) {
-          if (errorLower.includes(key.toLowerCase())) {
-            errorMessage = userMessage;
-            break;
+        if (errorDetails) {
+          // We have actual error details from Dome API - parse for user-friendly message
+          console.error('[DomeRouter] Order rejected:', {
+            error: response?.error,
+            code: response?.code,
+            details: response?.details,
+            edgeError: edgeError?.message,
+          });
+          
+          let errorMessage = errorDetails;
+          const errorLower = errorMessage.toLowerCase();
+          
+          for (const [key, userMessage] of Object.entries(ERROR_MESSAGES)) {
+            if (errorLower.includes(key.toLowerCase())) {
+              errorMessage = userMessage;
+              break;
+            }
           }
+          
+          throw new Error(errorMessage);
         }
         
-        throw new Error(errorMessage);
+        // Fallback for truly unhandled edge function errors
+        if (edgeError) {
+          console.error('[DomeRouter] Edge function error:', edgeError);
+          throw new Error('Order failed. Please try again.');
+        }
       }
+
 
       console.log('[DomeRouter] Order placed successfully:', response);
 

@@ -130,12 +130,22 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
             {/* Market Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
-                  ✅ Resolved: {position.outcome}
-                </Badge>
-                {winningOutcome && readyForRedemption && (
-                  <Badge variant="secondary" className="bg-[#BFFF0A]/20 text-[#BFFF0A] border-[#BFFF0A]/30 text-xs">
-                    Winner: {winningOutcome}
+                {isCheckingSettlement ? (
+                  <Badge variant="secondary" className="bg-zinc-500/20 text-zinc-400 border-zinc-500/30 text-xs">
+                    Checking resolution...
+                  </Badge>
+                ) : winningOutcome && readyForRedemption ? (
+                  <Badge variant="secondary" className={cn(
+                    "text-xs",
+                    userHoldsLosingOutcome
+                      ? "bg-rose-500/20 text-rose-400 border-rose-500/30"
+                      : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                  )}>
+                    {userHoldsLosingOutcome ? '❌' : '✅'} Resolved: {winningOutcome}
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
+                    ⏳ Awaiting Resolution
                   </Badge>
                 )}
               </div>
@@ -154,7 +164,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
           {/* Position Details */}
           <div className="grid grid-cols-2 gap-4 py-3 px-4 rounded-lg bg-muted/30 border border-border/30">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Your Position</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">You Held</p>
               <p className="text-lg font-bold text-foreground">
                 {position.winningShares.toFixed(2)} {position.outcome} shares
               </p>
