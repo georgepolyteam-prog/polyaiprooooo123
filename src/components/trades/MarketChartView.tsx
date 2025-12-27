@@ -43,7 +43,7 @@ export function MarketChartView({
   const [candlesticks, setCandlesticks] = useState<CandlestickData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeframe, setTimeframe] = useState<'1H' | '1D' | '7D' | '30D' | 'ALL'>('1D');
+  const [timeframe, setTimeframe] = useState<'1H' | '1D' | '7D' | '30D' | 'ALL'>('30D');
   const [loadingSide, setLoadingSide] = useState<'YES' | 'NO' | null>(null);
   
   const [stats, setStats] = useState<{
