@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const DOME_API = 'https://api.domeapi.io/v1';
 const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
+const ORDERS_LIMIT = 1000;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,7 +42,7 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         }
       }),
-      fetch(`${DOME_API}/polymarket/orders?user=${address}&limit=1000`, {
+      fetch(`${DOME_API}/polymarket/orders?user=${address}&limit=${ORDERS_LIMIT}`, {
         headers: {
           'Authorization': `Bearer ${DOME_API_KEY}`,
           'Content-Type': 'application/json'
@@ -56,13 +57,26 @@ serve(async (req) => {
     ]);
 
     let pnlData = null;
+    let pnlSeries: Array<{ timestamp: number; pnl_to_date: number }> = [];
+    let totalPnl = 0;
     let orders: any[] = [];
     let walletMetrics = null;
+    let ordersCapped = false;
 
     if (pnlResponse.ok) {
       const pnlJson = await pnlResponse.json();
       pnlData = pnlJson;
       console.log(`[WalletAnalytics] PnL data points: ${pnlJson.pnl_over_time?.length || 0}`);
+      
+      // Extract PnL series and calculate total
+      if (pnlJson.pnl_over_time && pnlJson.pnl_over_time.length > 0) {
+        pnlSeries = pnlJson.pnl_over_time.map((p: any) => ({
+          timestamp: p.timestamp,
+          pnl_to_date: p.pnl_to_date || 0
+        }));
+        // Total PnL is the last value in the series
+        totalPnl = pnlJson.pnl_over_time[pnlJson.pnl_over_time.length - 1]?.pnl_to_date || 0;
+      }
     } else {
       console.log(`[WalletAnalytics] PnL fetch failed: ${pnlResponse.status}`);
     }
@@ -70,7 +84,8 @@ serve(async (req) => {
     if (ordersResponse.ok) {
       const ordersJson = await ordersResponse.json();
       orders = ordersJson.orders || [];
-      console.log(`[WalletAnalytics] Orders found: ${orders.length}`);
+      ordersCapped = orders.length >= ORDERS_LIMIT;
+      console.log(`[WalletAnalytics] Orders found: ${orders.length}, capped: ${ordersCapped}`);
     } else {
       console.log(`[WalletAnalytics] Orders fetch failed: ${ordersResponse.status}`);
     }
@@ -99,7 +114,8 @@ serve(async (req) => {
       walletMetrics = {
         total_volume: totalVolume,
         total_trades: orders.length,
-        unique_markets: markets.size
+        unique_markets: markets.size,
+        orders_capped: ordersCapped
       };
     }
 
@@ -119,9 +135,16 @@ serve(async (req) => {
       user: order.user
     }));
 
+    // Build normalized PnL summary
+    const pnlSummary = {
+      total_pnl: totalPnl,
+      series: pnlSeries
+    };
+
     return new Response(
       JSON.stringify({
         pnlData,
+        pnlSummary,
         recentTrades,
         walletMetrics
       }),

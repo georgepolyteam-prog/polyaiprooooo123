@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { motion } from "framer-motion";
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, Check, Loader2 } from "lucide-react";
@@ -12,38 +12,36 @@ import polyLogo from "@/assets/poly-logo-new.png";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isConnected } = useAccount();
   
-  const [step, setStep] = useState<"choose" | "email">("choose");
+  // Support ?step=email to go directly to email form
+  const initialStep = searchParams.get('step') === 'email' ? 'email' : 'choose';
+  const nextUrl = searchParams.get('next') || '/';
+  
+  const [step, setStep] = useState<"choose" | "email">(initialStep);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Redirect if wallet connected
-  useEffect(() => {
-    if (isConnected) {
-      navigate("/");
-    }
-  }, [isConnected, navigate]);
-
-  // Check for existing session
+  // Check for existing session - only redirect if user has an account session
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        navigate("/");
+        navigate(nextUrl);
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        navigate("/");
+        navigate(nextUrl);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, nextUrl]);
 
   const handleBack = () => {
     if (step === "email") {
@@ -83,7 +81,7 @@ const Auth = () => {
           return;
         }
         toast.success("Welcome back!");
-        navigate("/");
+        navigate(nextUrl);
       } else {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -105,7 +103,7 @@ const Auth = () => {
         }
         if (data.session) {
           toast.success("Account created!");
-          navigate("/");
+          navigate(nextUrl);
           return;
         }
         if (data.user) {
