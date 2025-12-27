@@ -568,6 +568,11 @@ export function useDomeRouter() {
 
       setLastOrderResult(result);
       updateStage('completed');
+
+      // Auto-dismiss success overlay after 8 seconds (user can dismiss earlier with buttons)
+      setTimeout(() => {
+        setTradeStage(prev => prev === 'completed' ? 'idle' : prev);
+      }, 8000);
       
       // Show appropriate success message based on order status
       if (isMatched) {
@@ -681,5 +686,8 @@ export function useDomeRouter() {
     
     // Ready state
     isDomeReady,
+
+    // Dismiss handler for overlay
+    dismissOverlay: () => setTradeStage('idle'),
   };
 }

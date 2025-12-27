@@ -54,6 +54,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     tradeStageMessage,
     clearSession,
     isDomeReady,
+    dismissOverlay,
   } = useDomeRouter();
 
   // Use EOA balance directly (no Safe wallet)
@@ -261,6 +262,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
         tradeStage={tradeStage} 
         tradeStageMessage={tradeStageMessage}
         selectedSide={selectedSide}
+        onDismiss={dismissOverlay}
       />
       
       <div className="relative rounded-2xl overflow-hidden">
