@@ -87,33 +87,14 @@ export function MarketsTour({ onComplete }: MarketsTourProps) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Animated backdrop */}
+      {/* Simple backdrop - no heavy animations for mobile performance */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-background/95 backdrop-blur-xl"
-      >
-        {/* Floating gradient orbs */}
-        <motion.div
-          animate={{
-            x: [0, 100, 50, 0],
-            y: [0, 50, 100, 0],
-            scale: [1, 1.2, 0.9, 1],
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-[150px]"
-        />
-        <motion.div
-          animate={{
-            x: [0, -80, -40, 0],
-            y: [0, 100, 50, 0],
-            scale: [1, 0.8, 1.1, 1],
-          }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-secondary/15 rounded-full blur-[120px]"
-        />
-      </motion.div>
+        transition={{ duration: 0.2 }}
+        className="absolute inset-0 bg-background/95"
+      />
 
       {/* Close button */}
       <button
@@ -125,9 +106,9 @@ export function MarketsTour({ onComplete }: MarketsTourProps) {
 
       {/* Main content */}
       <motion.div
-        initial={{ scale: 0.9, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
         className="relative z-10 w-full max-w-2xl"
       >
         {/* Progress bar */}
@@ -173,10 +154,10 @@ export function MarketsTour({ onComplete }: MarketsTourProps) {
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             className="relative overflow-hidden rounded-3xl bg-card border border-border/50 shadow-2xl"
           >
             {/* Gradient accent */}
@@ -184,46 +165,26 @@ export function MarketsTour({ onComplete }: MarketsTourProps) {
 
             <div className="p-8 md:p-10">
               {/* Icon */}
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", damping: 15, stiffness: 200, delay: 0.1 }}
-                className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-8 text-primary mx-auto"
-              >
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-8 text-primary mx-auto">
                 {step.icon}
-              </motion.div>
+              </div>
 
               {/* Title */}
-              <motion.h2
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="text-3xl md:text-4xl font-bold text-center text-foreground mb-4"
-              >
+              <h2 className="text-3xl md:text-4xl font-bold text-center text-foreground mb-4">
                 {step.title}
-              </motion.h2>
+              </h2>
 
               {/* Description */}
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-lg text-muted-foreground text-center max-w-lg mx-auto mb-6"
-              >
+              <p className="text-lg text-muted-foreground text-center max-w-lg mx-auto mb-6">
                 {step.description}
-              </motion.p>
+              </p>
 
               {/* Tip */}
               {step.tip && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 }}
-                  className="flex items-center justify-center gap-2 text-sm text-primary bg-primary/10 rounded-xl px-4 py-3 max-w-md mx-auto"
-                >
+                <div className="flex items-center justify-center gap-2 text-sm text-primary bg-primary/10 rounded-xl px-4 py-3 max-w-md mx-auto">
                   <Sparkles className="w-4 h-4 flex-shrink-0" />
                   <span>{step.tip}</span>
-                </motion.div>
+                </div>
               )}
             </div>
 

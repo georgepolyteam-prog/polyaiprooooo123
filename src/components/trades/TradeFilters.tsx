@@ -100,8 +100,9 @@ export function TradeFilters({
           variant={whalesOnly ? 'default' : 'outline'}
           size="sm"
           className={`min-h-[44px] sm:min-h-[36px] ${whalesOnly ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : ''}`}
+          title="Filter trades with volume $1,000 or higher"
         >
-          🐋 Whales Only
+          🐋 Whales ($1k+)
         </Button>
 
         {/* Advanced Filters Toggle */}
@@ -174,32 +175,38 @@ export function TradeFilters({
               {/* Token Type */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Token Type</label>
-                <select
-                  value={tokenFilter}
-                  onChange={(e) => setTokenFilter(e.target.value as 'all' | 'yes' | 'no')}
-                  className="w-full min-h-[44px] px-3 rounded-md border border-input bg-background text-sm"
-                >
-                  <option value="all">All Outcomes</option>
-                  <option value="yes">Yes Only</option>
-                  <option value="no">No Only</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={tokenFilter}
+                    onChange={(e) => setTokenFilter(e.target.value as 'all' | 'yes' | 'no')}
+                    className="w-full min-h-[44px] px-3 pr-8 rounded-md border border-input bg-background text-sm appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Tokens</option>
+                    <option value="yes">YES Tokens</option>
+                    <option value="no">NO Tokens</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
               </div>
 
               {/* Market Filter */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Market</label>
-                <select
-                  value={marketFilter}
-                  onChange={(e) => setMarketFilter(e.target.value)}
-                  className="w-full min-h-[44px] px-3 rounded-md border border-input bg-background text-sm truncate"
-                >
-                  <option value="all">All Markets</option>
-                  {availableMarkets.slice(0, 20).map(slug => (
-                    <option key={slug} value={slug}>
-                      {slug.replace(/-/g, ' ').slice(0, 40)}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={marketFilter}
+                    onChange={(e) => setMarketFilter(e.target.value)}
+                    className="w-full min-h-[44px] px-3 pr-8 rounded-md border border-input bg-background text-sm truncate appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Markets</option>
+                    {availableMarkets.slice(0, 20).map(slug => (
+                      <option key={slug} value={slug}>
+                        {slug.replace(/-/g, ' ').slice(0, 40)}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
               </div>
 
               {/* Hide Up/Down Markets Toggle */}

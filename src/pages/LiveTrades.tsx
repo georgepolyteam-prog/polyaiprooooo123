@@ -118,6 +118,7 @@ export default function LiveTrades() {
   const loadingRef = useRef(loading);
   const connectedRef = useRef(connected);
   const isConnectingRef = useRef(false);
+  const soundEnabledRef = useRef(soundEnabled);
 
   // Connection timeout constant (10 seconds)
   const CONNECTION_TIMEOUT_MS = 10000;
@@ -130,6 +131,10 @@ export default function LiveTrades() {
   useEffect(() => {
     connectedRef.current = connected;
   }, [connected]);
+  
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
 
   // Initialize audio
   useEffect(() => {
@@ -196,8 +201,8 @@ export default function LiveTrades() {
 
   // Whale alert - clickable to view trade details
   const showWhaleAlert = useCallback((trade: Trade, volume: number) => {
-    // Only play sound if explicitly enabled
-    if (soundEnabled) {
+    // Only play sound if explicitly enabled - use ref to avoid stale closure
+    if (soundEnabledRef.current) {
       try {
         if (audioRef.current) {
           audioRef.current.currentTime = 0;
@@ -232,7 +237,7 @@ export default function LiveTrades() {
         duration: 5000,
       }
     );
-  }, [soundEnabled]);
+  }, []); // No dependencies - using ref for soundEnabled
 
   const connectWebSocket = useCallback(async () => {
     // Prevent multiple simultaneous connection attempts
@@ -426,6 +431,9 @@ export default function LiveTrades() {
   useEffect(() => {
     connectWebSocket();
     return () => {
+      // Dismiss all whale alert toasts on unmount
+      toast.dismiss();
+      
       if (wsRef.current) {
         wsRef.current.close();
       }
