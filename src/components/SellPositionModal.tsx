@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
-const MIN_ORDER_SIZE = 5; // Polymarket minimum order size
+const MIN_ORDER_SIZE = 1; // Minimum order size
 
 interface Position {
   asset: string;

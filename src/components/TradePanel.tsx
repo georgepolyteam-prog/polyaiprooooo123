@@ -130,7 +130,7 @@ export function TradePanel({ marketData, defaultSide = 'YES' }: TradePanelProps)
     }
 
     const expectedShares = amountNum / Math.max(orderPrice, 0.01);
-    const MIN_SHARES = 5;
+    const MIN_SHARES = 1;
     
     if (expectedShares < MIN_SHARES) {
       const minAmount = Math.ceil(MIN_SHARES * orderPrice * 100) / 100;
