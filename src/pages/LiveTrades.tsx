@@ -35,6 +35,8 @@ interface Trade {
   taker: string;
   image?: string;
   resolved_url?: string; // Cached resolved URL
+  _batchIndex?: number; // For CSS stagger animation
+  _batchTime?: number; // Batch timestamp
 }
 
 interface MarketContext {
@@ -65,6 +67,13 @@ const HARD_RECONNECT_INTERVAL_MS = 300000;
 const WHALE_THRESHOLD = 1000; // $1k+
 const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
+// Performance optimization constants
+const BATCH_INTERVAL_MS = 200; // Flush trades every 200ms for smooth realtime feel
+const IMAGE_FETCH_DELAY_MS = 1000; // Throttle image fetches
+const MAX_IMAGE_BATCH_SIZE = 5; // Max slugs per batch
+const STATS_THROTTLE_MS = 1000; // Recalculate stats every 1 second
+const SIDEBAR_THROTTLE_MS = 2000; // Recalculate topTraders/marketVolumes every 2 seconds
+
 export default function LiveTrades() {
   const navigate = useNavigate();
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -77,6 +86,11 @@ export default function LiveTrades() {
   const [queuedCount, setQueuedCount] = useState(0);
   const [lastUpdateAgo, setLastUpdateAgo] = useState<number>(0);
   const [tradesPerMinute, setTradesPerMinute] = useState(0);
+  
+  // Throttled trades for expensive calculations (stats, topTraders, marketVolumes)
+  const [throttledTrades, setThrottledTrades] = useState<Trade[]>([]);
+  const lastStatsUpdateRef = useRef<number>(0);
+  const lastSidebarUpdateRef = useRef<number>(0);
   
   // Advanced filters
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
@@ -115,11 +129,16 @@ export default function LiveTrades() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Batching refs for performance
+  const tradeQueueRef = useRef<Trade[]>([]);
+  const batchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Refs to track loading/connected state for timeout callbacks (avoid stale closures)
   const loadingRef = useRef(loading);
   const connectedRef = useRef(connected);
   const isConnectingRef = useRef(false);
   const soundEnabledRef = useRef(soundEnabled);
+  const pausedRef = useRef(paused);
 
   // Connection timeout constant (10 seconds)
   const CONNECTION_TIMEOUT_MS = 10000;
@@ -136,19 +155,71 @@ export default function LiveTrades() {
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
+  
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   // Initialize audio
   useEffect(() => {
     audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1pbWlrcHN0dXd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/');
   }, []);
 
+  // Throttle stats updates - update throttledTrades every STATS_THROTTLE_MS
+  useEffect(() => {
+    const now = Date.now();
+    if (now - lastStatsUpdateRef.current >= STATS_THROTTLE_MS) {
+      setThrottledTrades(trades);
+      lastStatsUpdateRef.current = now;
+    }
+  }, [trades]);
+
+  // Batch flush interval - flush queued trades every BATCH_INTERVAL_MS
+  useEffect(() => {
+    batchIntervalRef.current = setInterval(() => {
+      if (tradeQueueRef.current.length > 0 && !pausedRef.current) {
+        const batch = [...tradeQueueRef.current];
+        tradeQueueRef.current = [];
+        
+        // Add batch index for stagger animation
+        const timestampedBatch = batch.map((trade, i) => ({
+          ...trade,
+          _batchIndex: i,
+          _batchTime: Date.now()
+        }));
+        
+        setTrades(prev => {
+          const combined = [...timestampedBatch, ...prev];
+          // Deduplicate
+          const seen = new Set<string>();
+          const deduped = combined.filter(t => {
+            const key = t.order_hash || `${t.tx_hash}-${t.timestamp}-${t.token_id}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          return deduped.slice(0, 500);
+        });
+      }
+    }, BATCH_INTERVAL_MS);
+
+    return () => {
+      if (batchIntervalRef.current) {
+        clearInterval(batchIntervalRef.current);
+      }
+    };
+  }, []);
+
   // Fetch images for market slugs
   const fetchMarketImages = useCallback(async (slugs: string[]) => {
     if (slugs.length === 0) return;
     
+    // Limit batch size
+    const limitedSlugs = slugs.slice(0, MAX_IMAGE_BATCH_SIZE);
+    
     try {
       const { data, error } = await supabase.functions.invoke('get-market-previews', {
-        body: { eventSlugs: slugs }
+        body: { eventSlugs: limitedSlugs }
       });
       
       if (error || !data?.markets) return;
@@ -173,7 +244,7 @@ export default function LiveTrades() {
     }
   }, []);
 
-  // Queue slugs for batch image fetching
+  // Queue slugs for batch image fetching - throttled to IMAGE_FETCH_DELAY_MS
   const queueImageFetch = useCallback((slug: string) => {
     if (!slug || imageCacheRef.current.has(slug) || pendingSlugsRef.current.has(slug)) return;
     
@@ -184,12 +255,12 @@ export default function LiveTrades() {
     }
     
     imageFetchTimeoutRef.current = setTimeout(() => {
-      const slugsToFetch = Array.from(pendingSlugsRef.current);
+      const slugsToFetch = Array.from(pendingSlugsRef.current).slice(0, MAX_IMAGE_BATCH_SIZE);
       pendingSlugsRef.current.clear();
       if (slugsToFetch.length > 0) {
         fetchMarketImages(slugsToFetch);
       }
-    }, 500);
+    }, IMAGE_FETCH_DELAY_MS);
   }, [fetchMarketImages]);
 
   const forceReconnect = useCallback(() => {
@@ -351,19 +422,13 @@ export default function LiveTrades() {
             });
           }
           
-          if (paused) {
+          // Use ref to avoid stale closure - check if paused
+          if (pausedRef.current) {
             pausedTradesRef.current.unshift(newTrade);
             setQueuedCount(pausedTradesRef.current.length);
           } else {
-            setTrades(prev => {
-              const exists = prev.some(t => 
-                (t.order_hash && t.order_hash === newTrade.order_hash) ||
-                (t.tx_hash === newTrade.tx_hash && t.timestamp === newTrade.timestamp && t.token_id === newTrade.token_id)
-              );
-              if (exists) return prev;
-              // Keep 500 visible trades (buffer 2000 for whale filtering in memory)
-              return [newTrade, ...prev.slice(0, 499)];
-            });
+            // Queue trade for batched processing instead of immediate state update
+            tradeQueueRef.current.push(newTrade);
           }
         }
       };
@@ -388,7 +453,7 @@ export default function LiveTrades() {
       };
 
       wsRef.current = ws;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Error connecting to WebSocket:', err);
       setError('Failed to connect to trade feed. Please try again.');
       setLoading(false);
@@ -397,7 +462,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [paused, queueImageFetch, showWhaleAlert]);
+  }, [queueImageFetch, showWhaleAlert]);
 
   // Watchdog - check connection health
   useEffect(() => {
@@ -470,14 +535,14 @@ export default function LiveTrades() {
     setPaused(!paused);
   }, [paused]);
 
-  // Compute stats
+  // Compute stats - use throttledTrades for performance (updates every 1s)
   const stats = useMemo(() => {
     let totalVolume = 0;
     let buyVolume = 0;
     let sellVolume = 0;
     let largestTrade = 0;
 
-    trades.forEach(trade => {
+    throttledTrades.forEach(trade => {
       const volume = trade.price * (trade.shares_normalized || trade.shares);
       totalVolume += volume;
       if (trade.side === 'BUY') buyVolume += volume;
@@ -487,19 +552,19 @@ export default function LiveTrades() {
 
     return {
       totalVolume,
-      totalTrades: trades.length,
-      avgTradeSize: trades.length > 0 ? totalVolume / trades.length : 0,
+      totalTrades: throttledTrades.length,
+      avgTradeSize: throttledTrades.length > 0 ? totalVolume / throttledTrades.length : 0,
       largestTrade,
       buyVolume,
       sellVolume
     };
-  }, [trades]);
+  }, [throttledTrades]);
 
-  // Compute top traders
+  // Compute top traders - use throttledTrades for performance (updates every 1s)
   const topTraders = useMemo(() => {
     const walletStats: Record<string, { volume: number; trades: number; markets: Set<string>; buys: number }> = {};
 
-    trades.forEach(trade => {
+    throttledTrades.forEach(trade => {
       const volume = trade.price * (trade.shares_normalized || trade.shares);
       if (!walletStats[trade.user]) {
         walletStats[trade.user] = { volume: 0, trades: 0, markets: new Set(), buys: 0 };
@@ -520,13 +585,13 @@ export default function LiveTrades() {
       }))
       .sort((a, b) => b.volume - a.volume)
       .slice(0, 10);
-  }, [trades]);
+  }, [throttledTrades]);
 
-  // Compute market heatmap
+  // Compute market heatmap - use throttledTrades for performance (updates every 1s)
   const marketVolumes = useMemo(() => {
     const volumes: Record<string, { volume: number; trades: number; title: string; image?: string }> = {};
 
-    trades.forEach(trade => {
+    throttledTrades.forEach(trade => {
       const volume = trade.price * (trade.shares_normalized || trade.shares);
       const slug = trade.market_slug;
       if (!volumes[slug]) {
@@ -543,7 +608,7 @@ export default function LiveTrades() {
       .map(([slug, data]) => ({ slug, ...data }))
       .sort((a, b) => b.volume - a.volume)
       .slice(0, 10);
-  }, [trades]);
+  }, [throttledTrades]);
 
   // Available markets for filter dropdown
   const availableMarkets = useMemo(() => {
@@ -827,17 +892,27 @@ export default function LiveTrades() {
 
               {/* Trades List */}
               <div className="divide-y divide-border/50 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto min-h-[200px]">
-                {filteredTrades.map((trade) => {
+                {filteredTrades.map((trade, index) => {
                   const tradeId = trade.order_hash || `${trade.tx_hash}-${trade.timestamp}-${trade.token_id}`;
                   const whaleLevel = getWhaleLevel(trade.price, trade.shares_normalized || trade.shares);
+                  // CSS stagger animation for smooth entry - only for recent trades
+                  const isRecentBatch = trade._batchTime && (Date.now() - trade._batchTime < 500);
+                  const staggerDelay = isRecentBatch ? (trade._batchIndex || 0) * 30 : 0;
                   
                   return (
                     <div
                       key={tradeId}
                       onClick={() => setSelectedTrade(trade)}
                       className={`group grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer ${
-                        whaleLevel === 'mega' ? 'bg-warning/10 animate-pulse' : whaleLevel === 'whale' ? 'bg-warning/5' : ''
+                        isRecentBatch ? 'animate-fade-in' : ''
+                      } ${
+                        whaleLevel === 'mega' 
+                          ? 'bg-warning/10 shadow-[0_0_20px_rgba(234,179,8,0.2)]' // Static glow instead of animate-pulse
+                          : whaleLevel === 'whale' 
+                            ? 'bg-warning/5' 
+                            : ''
                       }`}
+                      style={isRecentBatch ? { animationDelay: `${staggerDelay}ms` } : undefined}
                     >
                       {/* Market Info */}
                       <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
@@ -863,7 +938,7 @@ export default function LiveTrades() {
                         {whaleLevel && (
                           <span className={`hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded ${
                             whaleLevel === 'mega' 
-                              ? 'bg-destructive/20 text-destructive animate-pulse' 
+                              ? 'bg-destructive/20 text-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)]' // Static glow
                               : 'bg-warning/20 text-warning'
                           }`}>
                             {whaleLevel === 'mega' ? '🔥 MEGA' : '🐋 WHALE'}
@@ -970,12 +1045,11 @@ export default function LiveTrades() {
             )}
           </div>
 
-          {/* Right Sidebar - Hidden on mobile, shown on lg+ */}
+          {/* Sidebar - Single render, CSS controls visibility for desktop/mobile */}
           <div className="hidden lg:block space-y-4">
             <TopTradersSidebar 
               traders={topTraders} 
               onWalletClick={(wallet) => {
-                // Find a trade from this trader to open the detail modal
                 const traderTrade = trades.find(t => t.user === wallet);
                 if (traderTrade) {
                   setSelectedTrade(traderTrade);
@@ -986,7 +1060,6 @@ export default function LiveTrades() {
               markets={marketVolumes}
               onMarketClick={(slug) => setMarketFilter(slug === marketFilter ? 'all' : slug)}
               onAnalyze={async (market) => {
-                // Resolve the correct URL before setting context
                 let resolvedUrl = `https://polymarket.com/event/${market.slug}`;
                 try {
                   const { data } = await supabase.functions.invoke('resolve-market-url', {
@@ -1016,7 +1089,7 @@ export default function LiveTrades() {
           </div>
         </div>
 
-        {/* Mobile Sidebars - Shown below trade feed on mobile */}
+        {/* Mobile Sidebars - Shown below trade feed on mobile only */}
         <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
           <TopTradersSidebar 
             traders={topTraders} 
@@ -1031,7 +1104,6 @@ export default function LiveTrades() {
             markets={marketVolumes}
             onMarketClick={(slug) => setMarketFilter(slug === marketFilter ? 'all' : slug)}
             onAnalyze={async (market) => {
-              // Resolve the correct URL before setting context
               let resolvedUrl = `https://polymarket.com/event/${market.slug}`;
               try {
                 const { data } = await supabase.functions.invoke('resolve-market-url', {
