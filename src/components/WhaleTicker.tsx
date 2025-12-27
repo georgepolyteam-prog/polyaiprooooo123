@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Radio } from "lucide-react";
+import { X, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface WhaleTrade {
@@ -18,6 +18,8 @@ const DISMISS_KEY = "liveTickerDismissed";
 const DISMISS_DURATION = 3600000; // 1 hour
 const WHALE_THRESHOLD = 1000; // $1k+ shows whale emoji
 const FILTER_KEY = "liveTickerFilter";
+const TRADE_CAP = 50; // Reduced from 100 for better performance
+const FLUSH_INTERVAL = 500; // Batch updates every 500ms
 
 export function WhaleTicker() {
   const [trades, setTrades] = useState<WhaleTrade[]>([]);
@@ -45,11 +47,13 @@ export function WhaleTicker() {
   const wsRef = useRef<WebSocket | null>(null);
   const wsUrlRef = useRef<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const tradeQueueRef = useRef<WhaleTrade[]>([]); // Queue for batching
+  const flushIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
 
-  // Force re-render every 10 seconds to update timestamps
+  // Force re-render every 30 seconds to update timestamps (reduced from 10s)
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 10000);
+    const interval = setInterval(() => setTick(t => t + 1), 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -61,6 +65,32 @@ export function WhaleTicker() {
       // Ignore localStorage errors
     }
   }, [filter]);
+
+  // Batch flush trades from queue into state
+  useEffect(() => {
+    flushIntervalRef.current = setInterval(() => {
+      if (tradeQueueRef.current.length > 0) {
+        setTrades(prev => {
+          const newTrades = [...tradeQueueRef.current, ...prev];
+          tradeQueueRef.current = [];
+          // Deduplicate by id
+          const seen = new Set<string>();
+          const unique = newTrades.filter(t => {
+            if (seen.has(t.id)) return false;
+            seen.add(t.id);
+            return true;
+          });
+          return unique.slice(0, TRADE_CAP);
+        });
+      }
+    }, FLUSH_INTERVAL);
+
+    return () => {
+      if (flushIntervalRef.current) {
+        clearInterval(flushIntervalRef.current);
+      }
+    };
+  }, []);
 
   const connectWebSocket = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -116,7 +146,8 @@ export function WhaleTicker() {
                 timestamp: new Date()
               };
 
-              setTrades(prev => [newTrade, ...prev].slice(0, 100));
+              // Queue trade instead of immediate state update
+              tradeQueueRef.current.push(newTrade);
             }
           }
         } catch {
@@ -192,6 +223,9 @@ export function WhaleTicker() {
     ? [...filteredTrades, ...filteredTrades, ...filteredTrades] 
     : [];
 
+  // Calculate marquee duration based on trade count (consistent speed)
+  const marqueeDuration = Math.max(25, Math.min(60, filteredTrades.length * 3));
+
   return (
     <AnimatePresence>
       {!isDismissed && (
@@ -202,11 +236,11 @@ export function WhaleTicker() {
           transition={{ duration: 0.3, ease: "easeOut" }}
           className="fixed top-16 left-0 right-0 z-40"
         >
-          {/* Professional dark background with subtle glow */}
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background border-b border-border/50" />
+          {/* Background - pointer-events-none so clicks pass through */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-background via-background/95 to-background border-b border-border/50" />
           
-          {/* Subtle animated accent line */}
-          <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          {/* Accent line - pointer-events-none */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
           <div className="relative flex items-center h-9 md:h-8">
             {/* Live badge with filters */}
@@ -216,7 +250,6 @@ export function WhaleTicker() {
                 <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isConnected ? 'bg-red-500 animate-ping' : 'bg-muted-foreground'}`} />
                 <span className={`relative inline-flex rounded-full h-full w-full ${isConnected ? 'bg-red-500' : 'bg-muted-foreground'}`} />
               </span>
-              <Radio className="w-3 h-3 text-red-500 hidden md:block" />
               <span className="text-[10px] font-semibold tracking-wide text-foreground uppercase">
                 LIVE
               </span>
@@ -255,7 +288,7 @@ export function WhaleTicker() {
                 <div 
                   className="flex whitespace-nowrap animate-marquee-continuous"
                   style={{ 
-                    '--marquee-duration': `${Math.max(30, filteredTrades.length * 8)}s`
+                    '--marquee-duration': `${marqueeDuration}s`
                   } as React.CSSProperties}
                 >
                   {displayTrades.map((trade, idx) => (
@@ -263,10 +296,10 @@ export function WhaleTicker() {
                       key={`${trade.id}-${idx}`}
                       className="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 text-xs"
                     >
-                      {/* Whale emoji for $1k+ trades, otherwise trading icon */}
-                      <span className="text-sm opacity-80">
-                        {trade.amount >= WHALE_THRESHOLD ? '🐋' : '📈'}
-                      </span>
+                      {/* Whale emoji for $1k+ trades only */}
+                      {trade.amount >= WHALE_THRESHOLD && (
+                        <span className="text-sm opacity-80">🐋</span>
+                      )}
                       
                       {/* Amount with color */}
                       <span className={`font-semibold tabular-nums ${
@@ -291,7 +324,7 @@ export function WhaleTicker() {
                         {trade.market}
                       </span>
                       
-                      {/* Time ago - updates every 10s */}
+                      {/* Time ago */}
                       <span className="text-muted-foreground/50 text-[10px] tabular-nums">
                         {formatTimeAgo(trade.timestamp)}
                       </span>
@@ -308,7 +341,7 @@ export function WhaleTicker() {
                     animate={{ opacity: [0.5, 1, 0.5] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   >
-                    <span className="text-sm">🔍</span>
+                    <Activity className="w-3.5 h-3.5 text-muted-foreground" />
                     <span className="text-muted-foreground">
                       Waiting for live trades...
                     </span>
@@ -321,12 +354,12 @@ export function WhaleTicker() {
             </div>
 
             {/* Customize hint - desktop only */}
-            <div 
-              className="hidden md:flex flex-shrink-0 items-center px-3 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors font-medium cursor-pointer"
+            <button
+              className="hidden md:flex flex-shrink-0 items-center px-3 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors font-medium cursor-pointer bg-transparent border-none"
               onClick={() => navigate("/live-trades")}
             >
-              Click to customize →
-            </div>
+              Customize filters →
+            </button>
 
             {/* Dismiss button */}
             <button

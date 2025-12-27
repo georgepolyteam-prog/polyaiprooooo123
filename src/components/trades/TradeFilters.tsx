@@ -118,7 +118,7 @@ export function TradeFilters({
         </Button>
 
         <div className="ml-auto text-sm text-muted-foreground">
-          {totalTrades} trades
+          Keeping {totalTrades} trades
         </div>
       </div>
 
