@@ -483,19 +483,21 @@ export default function MyTrades() {
     }
     
     try {
-      // For market sell orders, use a low price to ensure fill
-      // For limit orders, use the user's specified price
-      const orderPrice = isMarketOrder ? Math.max(0.01, price * 0.9) : price;
+      // For "market" sell orders, use aggressive GTC limit orders
+      // Set price 15% below market to ensure fill (sweep the bids)
+      // This avoids FAK precision issues while ensuring execution
+      const orderPrice = isMarketOrder 
+        ? Math.max(0.01, Math.round(price * 0.85 * 100) / 100) 
+        : price;
       
-      // Use FAK for market sells - allows partial fills instead of all-or-nothing
-      // FOK is too strict for sells and often fails due to liquidity
+      // Always use GTC - aggressive pricing handles "market" orders
       const result = await placeOrder({
         tokenId: sellModalPosition.asset,
         side: "SELL",
         amount: amount,
         price: orderPrice,
         isMarketOrder: isMarketOrder,
-        orderType: isMarketOrder ? 'FAK' : 'GTC',
+        orderType: 'GTC', // Always GTC - aggressive pricing handles "market" orders
       });
 
       if (result?.success) {

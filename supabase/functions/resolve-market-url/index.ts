@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // In-memory cache for resolved URLs (persists during function instance lifetime)
-const urlCache = new Map<string, { eventSlug: string; marketSlug: string; fullUrl: string; timestamp: number }>();
+const urlCache = new Map<string, { eventSlug: string; marketSlug: string; fullUrl: string; tokenId?: string; isMultiMarket?: boolean; timestamp: number }>();
 const CACHE_TTL_MS = 3600000; // 1 hour
 
 serve(async (req) => {
@@ -17,7 +17,7 @@ serve(async (req) => {
   }
 
   try {
-    const { marketSlug, conditionId } = await req.json();
+    const { marketSlug, conditionId, tokenId } = await req.json();
 
     if (!marketSlug && !conditionId) {
       return new Response(
@@ -37,6 +37,8 @@ serve(async (req) => {
           eventSlug: cached.eventSlug,
           marketSlug: cached.marketSlug,
           fullUrl: cached.fullUrl,
+          tokenId: cached.tokenId,
+          isMultiMarket: cached.isMultiMarket,
           cached: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -131,16 +133,25 @@ serve(async (req) => {
     // Gamma API returns event info in different fields depending on the endpoint
     let eventSlug = market.event_slug || market.eventSlug;
     const resolvedMarketSlug = market.slug || market.market_slug || marketSlug;
+    const marketConditionId = market.condition_id || conditionId;
+    
+    // Get token IDs for multi-market detection
+    const marketTokens = market.tokens || [];
+    const yesToken = marketTokens.find((t: any) => t.outcome?.toLowerCase() === 'yes');
+    const resolvedTokenId = tokenId || yesToken?.token_id || market.clobTokenIds?.[0];
     
     // If no event slug, try to get it from the events relationship
     if (!eventSlug && market.events && Array.isArray(market.events) && market.events.length > 0) {
       eventSlug = market.events[0].slug;
     }
     
+    // Check if this is a multi-market event by querying the event
+    let isMultiMarket = false;
+    let eventMarketCount = 1;
+    
     // If still no event slug, query the events endpoint with condition_id
-    if (!eventSlug && (market.condition_id || conditionId)) {
+    if (!eventSlug && marketConditionId) {
       console.log('Fetching event slug from events endpoint...');
-      const cid = market.condition_id || conditionId;
       const eventsUrl = `https://gamma-api.polymarket.com/events?active=true&limit=100`;
       const eventsResponse = await fetch(eventsUrl, {
         headers: {
@@ -153,11 +164,33 @@ serve(async (req) => {
         const events = await eventsResponse.json();
         // Find event that contains this market
         for (const event of events) {
-          if (event.markets?.some((m: any) => m.condition_id === cid || m.slug === resolvedMarketSlug)) {
+          if (event.markets?.some((m: any) => m.condition_id === marketConditionId || m.slug === resolvedMarketSlug)) {
             eventSlug = event.slug;
+            eventMarketCount = event.markets?.length || 1;
+            isMultiMarket = eventMarketCount > 1;
             break;
           }
         }
+      }
+    } else if (eventSlug) {
+      // We have eventSlug, check if it's a multi-market event
+      try {
+        const eventCheckUrl = `https://gamma-api.polymarket.com/events?slug=${encodeURIComponent(eventSlug)}`;
+        const eventCheckResponse = await fetch(eventCheckUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'VeraAI/1.0'
+          }
+        });
+        if (eventCheckResponse.ok) {
+          const eventData = await eventCheckResponse.json();
+          if (Array.isArray(eventData) && eventData.length > 0) {
+            eventMarketCount = eventData[0].markets?.length || 1;
+            isMultiMarket = eventMarketCount > 1;
+          }
+        }
+      } catch (err) {
+        console.log('Error checking multi-market status:', err);
       }
     }
     
@@ -167,19 +200,28 @@ serve(async (req) => {
       eventSlug = resolvedMarketSlug;
     }
 
-    // Build the full URL - format: /event/{eventSlug}/{marketSlug}
-    // Only include marketSlug in path if it's different from eventSlug
-    const fullUrl = eventSlug === resolvedMarketSlug 
-      ? `https://polymarket.com/event/${eventSlug}`
-      : `https://polymarket.com/event/${eventSlug}/${resolvedMarketSlug}`;
+    // Build the full URL
+    // For multi-market events, use ?tid= parameter for correct routing
+    // For single-market events, use /event/{eventSlug} or /event/{eventSlug}/{marketSlug}
+    let fullUrl: string;
+    if (isMultiMarket && resolvedTokenId) {
+      // Multi-market: use tid parameter for exact routing
+      fullUrl = `https://polymarket.com/event/${eventSlug}?tid=${resolvedTokenId}`;
+    } else if (eventSlug === resolvedMarketSlug) {
+      fullUrl = `https://polymarket.com/event/${eventSlug}`;
+    } else {
+      fullUrl = `https://polymarket.com/event/${eventSlug}/${resolvedMarketSlug}`;
+    }
 
-    console.log(`Resolved URL: ${fullUrl}`);
+    console.log(`Resolved URL: ${fullUrl} (multiMarket: ${isMultiMarket}, markets: ${eventMarketCount})`);
 
     // Cache the result
     urlCache.set(cacheKey, {
       eventSlug,
       marketSlug: resolvedMarketSlug,
       fullUrl,
+      tokenId: resolvedTokenId,
+      isMultiMarket,
       timestamp: Date.now()
     });
 
@@ -188,6 +230,8 @@ serve(async (req) => {
         eventSlug,
         marketSlug: resolvedMarketSlug,
         fullUrl,
+        tokenId: resolvedTokenId,
+        isMultiMarket,
         cached: false
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
