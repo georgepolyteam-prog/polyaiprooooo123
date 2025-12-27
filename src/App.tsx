@@ -7,7 +7,6 @@ import { WalletProvider } from "@/contexts/WalletContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
-import { WhaleTicker } from "@/components/WhaleTicker";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -37,7 +36,6 @@ const AppContent = () => {
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <WhaleTicker />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/chat" element={<Index />} />
