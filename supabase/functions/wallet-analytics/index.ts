@@ -195,7 +195,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        pnlData,
+        pnlData: pnlSeries,  // Return the array format that frontend expects
         pnlSummary,
         recentTrades,
         walletMetrics

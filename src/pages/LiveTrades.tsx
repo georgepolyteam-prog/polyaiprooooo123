@@ -206,7 +206,7 @@ export default function LiveTrades() {
             seen.add(key);
             return true;
           });
-          return deduped.slice(0, 500);
+          return deduped.slice(0, 200);
         });
       }
     }, BATCH_INTERVAL_MS);
