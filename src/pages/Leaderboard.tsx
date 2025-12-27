@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Copy, ExternalLink, Users, RefreshCw, Trophy, Sparkles, Crown, Medal, Award } from 'lucide-react';
+import { Search, Copy, ExternalLink, Users, RefreshCw, Trophy, Sparkles, Crown, Medal, Award, HelpCircle, TrendingUp, BarChart3, Zap, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,8 +33,8 @@ interface Stats {
 // Animated cyber particles
 function CyberParticles() {
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(40)].map((_, i) => (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none">
+      {[...Array(30)].map((_, i) => (
         <motion.div
           key={i}
           className="absolute w-1 h-1 rounded-full"
@@ -65,55 +64,164 @@ function CyberParticles() {
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) {
     return (
-      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 shadow-[0_0_12px_rgba(250,204,21,0.4)]">
-        <Crown className="w-5 h-5 text-yellow-900" />
-      </div>
+      <motion.div 
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 2, repeat: Infinity }}
+        className="relative"
+      >
+        <div className="absolute inset-0 bg-yellow-500 blur-md opacity-50" />
+        <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 shadow-lg shadow-yellow-500/30">
+          <Crown className="w-5 h-5 text-yellow-900" />
+        </div>
+      </motion.div>
     );
   }
   if (rank === 2) {
     return (
-      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 shadow-[0_0_10px_rgba(148,163,184,0.4)]">
-        <Medal className="w-4 h-4 text-slate-700" />
+      <div className="relative">
+        <div className="absolute inset-0 bg-slate-400 blur-md opacity-30" />
+        <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 shadow-lg">
+          <Medal className="w-4 h-4 text-slate-700" />
+        </div>
       </div>
     );
   }
   if (rank === 3) {
     return (
-      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 shadow-[0_0_10px_rgba(217,119,6,0.4)]">
-        <Award className="w-4 h-4 text-amber-100" />
+      <div className="relative">
+        <div className="absolute inset-0 bg-orange-500 blur-md opacity-30" />
+        <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
+          <Award className="w-4 h-4 text-amber-100" />
+        </div>
       </div>
     );
   }
   return (
-    <div className="flex items-center justify-center w-10 h-10">
-      <span className="text-base font-bold font-mono text-muted-foreground">#{rank}</span>
+    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted/30 border border-border/50">
+      <span className="text-sm font-bold font-mono text-muted-foreground">#{rank}</span>
     </div>
   );
 }
 
-// Loading skeleton
+// Sick loading skeleton with shimmer
 function LoadingSkeleton() {
   return (
-    <div className="glass-card rounded-2xl overflow-hidden border border-border/30">
-      <div className="p-6 border-b border-border/30">
-        <div className="flex gap-4">
-          <Skeleton className="h-5 w-16 bg-muted/30" />
-          <Skeleton className="h-5 w-40 bg-muted/30" />
-          <Skeleton className="h-5 w-24 ml-auto bg-muted/30" />
-        </div>
+    <div className="space-y-6">
+      {/* Stats Cards Skeleton */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[...Array(4)].map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="relative overflow-hidden rounded-xl bg-card/50 border border-border/30 p-4"
+          >
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent"
+              animate={{ x: ['-100%', '100%'] }}
+              transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+            />
+            <div className="h-4 w-16 bg-muted/50 rounded mb-2 animate-pulse" />
+            <div className="h-7 w-24 bg-muted/30 rounded animate-pulse" />
+          </motion.div>
+        ))}
       </div>
-      {[...Array(10)].map((_, i) => (
-        <div key={i} className="p-5 border-b border-border/20 last:border-0">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-12 w-12 rounded-full bg-muted/30" />
-            <Skeleton className="h-5 w-36 bg-muted/30" />
-            <Skeleton className="h-5 w-24 ml-auto bg-muted/30" />
-            <Skeleton className="h-5 w-20 bg-muted/30" />
-            <Skeleton className="h-9 w-24 bg-muted/30" />
+
+      {/* Table Skeleton */}
+      <div className="glass-card rounded-2xl overflow-hidden border border-border/30">
+        {/* Header */}
+        <div className="p-4 border-b border-border/30 bg-muted/5">
+          <div className="flex gap-4">
+            <div className="h-4 w-12 bg-muted/40 rounded animate-pulse" />
+            <div className="h-4 w-32 bg-muted/40 rounded animate-pulse" />
+            <div className="h-4 w-20 ml-auto bg-muted/40 rounded animate-pulse" />
           </div>
         </div>
-      ))}
+
+        {/* Rows */}
+        {[...Array(10)].map((_, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 + i * 0.05 }}
+            className="relative p-4 border-b border-border/20 last:border-0"
+          >
+            {/* Shimmer */}
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent"
+              animate={{ x: ['-100%', '100%'] }}
+              transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.1 }}
+            />
+            
+            <div className="flex items-center gap-4">
+              {/* Rank */}
+              <div className={cn(
+                "w-10 h-10 rounded-full animate-pulse",
+                i < 3 ? "bg-gradient-to-br from-yellow-500/30 to-orange-500/30" : "bg-muted/30"
+              )} />
+              
+              {/* Wallet */}
+              <div className="flex-1">
+                <div className="h-5 w-28 bg-muted/40 rounded mb-1 animate-pulse" />
+                <div className="h-3 w-16 bg-muted/20 rounded animate-pulse md:hidden" />
+              </div>
+              
+              {/* Stats */}
+              <div className="hidden md:flex gap-8">
+                <div className="h-5 w-16 bg-muted/30 rounded animate-pulse" />
+                <div className="h-5 w-12 bg-muted/30 rounded animate-pulse" />
+                <div className="h-5 w-10 bg-muted/30 rounded animate-pulse" />
+              </div>
+              
+              {/* Actions */}
+              <div className="h-8 w-16 bg-muted/30 rounded animate-pulse" />
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Loading Indicator */}
+      <motion.div
+        className="flex items-center justify-center gap-3 py-6"
+        animate={{ opacity: [0.5, 1, 0.5] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <Zap className="w-5 h-5 text-primary" />
+        </motion.div>
+        <span className="text-sm text-muted-foreground">Loading leaderboard...</span>
+      </motion.div>
     </div>
+  );
+}
+
+// Stats Card Component
+function StatsCard({ icon: Icon, label, value, gradient }: { 
+  icon: React.ElementType; 
+  label: string; 
+  value: string;
+  gradient: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden rounded-xl bg-card/50 border border-border/30 p-4 backdrop-blur-sm"
+    >
+      <div className={cn("absolute inset-0 opacity-10 bg-gradient-to-br", gradient)} />
+      <div className="relative">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon className="w-4 h-4 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">{label}</span>
+        </div>
+        <p className="text-xl md:text-2xl font-bold">{value}</p>
+      </div>
+    </motion.div>
   );
 }
 
@@ -130,13 +238,13 @@ export default function Leaderboard() {
   });
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [copiedWallet, setCopiedWallet] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
   const fetchLeaderboard = useCallback(async () => {
     setLoading(true);
     try {
-      // Always use 24h timeframe
       const { data: cached, error: cacheError } = await supabase
         .from('leaderboard_cache')
         .select('*')
@@ -243,7 +351,9 @@ export default function Leaderboard() {
 
   const copyWallet = (wallet: string) => {
     navigator.clipboard.writeText(wallet);
-    toast.success('Wallet address copied');
+    setCopiedWallet(wallet);
+    toast.success('Wallet copied!');
+    setTimeout(() => setCopiedWallet(null), 2000);
   };
 
   const formatVolume = (volume: number) => {
@@ -259,92 +369,130 @@ export default function Leaderboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f0a1f] via-[#1a0f2e] to-[#0f0a1f] relative overflow-hidden">
-      {/* Animated background layers */}
-      <div className="fixed inset-0 cyber-grid-animated opacity-20" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background effects */}
+      <div className="fixed inset-0 cyber-grid-animated opacity-10" />
       <CyberParticles />
       
       {/* Ambient glow orbs */}
-      <div className="fixed top-0 left-1/4 w-96 h-96 bg-poly-purple/20 rounded-full blur-[120px] animate-pulse-soft" />
-      <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-poly-cyan/15 rounded-full blur-[120px] animate-pulse-soft" />
-      <div className="fixed top-1/2 right-0 w-64 h-64 bg-poly-pink/10 rounded-full blur-[100px] animate-pulse-soft" />
+      <div className="fixed top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] animate-pulse" />
+      <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[120px] animate-pulse" />
       
       <TopBar />
       
-      <div className="relative max-w-6xl mx-auto px-4 py-8 pt-20">
-        {/* Premium Header */}
+      <div className="relative max-w-6xl mx-auto px-4 py-8 pt-20 pb-24">
+        {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-10"
+          transition={{ duration: 0.5 }}
+          className="mb-8"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card mb-6 border border-poly-purple/30">
-            <div className="w-2 h-2 rounded-full bg-poly-cyan animate-pulse" />
-            <span className="text-sm text-muted-foreground">Live 24h Activity</span>
-            {lastUpdated && (
-              <>
-                <span className="text-muted-foreground/50">•</span>
-                <span className="text-xs text-muted-foreground/70">Updated {lastUpdated}</span>
-              </>
-            )}
-          </div>
-          
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <motion.div 
-              animate={{ rotate: [0, 5, -5, 0] }}
-              transition={{ duration: 4, repeat: Infinity }}
-              className="p-3 rounded-2xl bg-gradient-to-br from-poly-purple via-poly-cyan to-poly-pink shadow-glow-lg"
-            >
-              <Trophy className="w-10 h-10 text-white" />
-            </motion.div>
-          <h1 className="text-5xl font-bold gradient-text-animated">
-            24H Activity
-          </h1>
-            <Sparkles className="w-8 h-8 text-poly-cyan animate-pulse" />
-          </div>
-          
-          <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-            Most active wallets from 20,000 recent trades
-          </p>
-        </motion.div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <motion.div 
+                animate={{ rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 4, repeat: Infinity }}
+                className="relative"
+              >
+                <div className="absolute inset-0 bg-yellow-500 blur-xl opacity-30" />
+                <div className="relative p-3 rounded-xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30">
+                  <Trophy className="w-6 h-6 text-yellow-500" />
+                </div>
+              </motion.div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold">Leaderboard</h1>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm text-muted-foreground">
+                    Live 24h • {lastUpdated && `Updated ${lastUpdated}`}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* Search & Filters */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="flex flex-col md:flex-row gap-4 mb-8"
-        >
-          <div className="flex flex-1 gap-3">
-            <div className="relative flex-1 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-poly-cyan transition-colors" />
-              <Input
-                placeholder="Search any wallet address (0x...)"
-                value={searchWallet}
-                onChange={(e) => setSearchWallet(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && searchWalletAddress()}
-                className="pl-12 h-12 text-base bg-card/50 border-border/50 focus:border-poly-purple/50 focus:ring-2 focus:ring-poly-purple/20 rounded-xl transition-all"
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/help')}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="gap-2"
+              >
+                <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          {!loading && stats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <StatsCard
+                icon={DollarSign}
+                label="Total Volume"
+                value={formatVolume(stats.totalVolume)}
+                gradient="from-green-500 to-emerald-500"
+              />
+              <StatsCard
+                icon={BarChart3}
+                label="Total Trades"
+                value={formatNumber(stats.totalTrades)}
+                gradient="from-blue-500 to-cyan-500"
+              />
+              <StatsCard
+                icon={Users}
+                label="Active Traders"
+                value={formatNumber(stats.totalTraders)}
+                gradient="from-purple-500 to-pink-500"
+              />
+              <StatsCard
+                icon={TrendingUp}
+                label="Timeframe"
+                value="24h"
+                gradient="from-orange-500 to-red-500"
               />
             </div>
-            <Button 
-              onClick={searchWalletAddress} 
-              className="h-12 px-6 bg-gradient-to-r from-poly-purple to-poly-cyan hover:opacity-90 text-white border-0 rounded-xl shadow-glow"
-            >
-              <Search className="w-5 h-5 mr-2" />
-              Search
-            </Button>
-          </div>
+          )}
 
-          <div className="flex gap-3">
+          {/* Search & Filters */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex flex-1 gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search wallet address..."
+                  value={searchWallet}
+                  onChange={(e) => setSearchWallet(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && searchWalletAddress()}
+                  className="pl-10 bg-card/50 border-border/50"
+                />
+              </div>
+              <Button 
+                onClick={searchWalletAddress} 
+                className="gap-2"
+              >
+                <Search className="w-4 h-4" />
+                <span className="hidden sm:inline">Search</span>
+              </Button>
+            </div>
+
             <Select
               value={minVolume.toString()}
               onValueChange={(value) => setMinVolume(parseInt(value))}
             >
-              <SelectTrigger className="w-[160px] h-12 bg-card/50 border-border/50 rounded-xl">
+              <SelectTrigger className="w-full md:w-40 bg-card/50 border-border/50">
                 <SelectValue placeholder="Min Volume" />
               </SelectTrigger>
-              <SelectContent className="glass-card border-border/50">
+              <SelectContent>
                 <SelectItem value="0">All Volume</SelectItem>
                 <SelectItem value="100">$100+</SelectItem>
                 <SelectItem value="500">$500+</SelectItem>
@@ -353,20 +501,10 @@ export default function Leaderboard() {
                 <SelectItem value="10000">$10K+</SelectItem>
               </SelectContent>
             </Select>
-
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="h-12 w-12 border-border/50 hover:bg-poly-purple/10 hover:border-poly-purple/50 rounded-xl"
-            >
-              <RefreshCw className={cn("w-5 h-5", refreshing && "animate-spin")} />
-            </Button>
           </div>
         </motion.div>
 
-        {/* Leaderboard Table */}
+        {/* Content */}
         <AnimatePresence mode="wait">
           {loading ? (
             <motion.div
@@ -384,106 +522,110 @@ export default function Leaderboard() {
               animate={{ opacity: 1, scale: 1 }}
               className="text-center py-20 glass-card rounded-2xl border border-border/30"
             >
-              <Users className="w-20 h-20 text-muted-foreground/30 mx-auto mb-6" />
-              <h3 className="text-2xl font-semibold mb-3">No traders found</h3>
+              <Users className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No traders found</h3>
               <p className="text-muted-foreground">Try adjusting your volume filter</p>
             </motion.div>
           ) : (
             <motion.div
               key="table"
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
               className="glass-card rounded-2xl overflow-hidden border border-border/30"
             >
-              <div className="overflow-x-auto">
-                <table className="w-full table-fixed">
-                  <thead>
-                    <tr className="border-b border-border/30 bg-muted/10">
-                      <th className="w-16 p-3 text-center text-sm font-semibold text-muted-foreground">Rank</th>
-                      <th className="p-3 text-left text-sm font-semibold text-muted-foreground">Wallet</th>
-                      <th className="w-24 p-3 text-right text-sm font-semibold text-muted-foreground">Volume</th>
-                      <th className="w-16 p-3 text-right text-sm font-semibold text-muted-foreground hidden sm:table-cell">Trades</th>
-                      <th className="w-16 p-3 text-right text-sm font-semibold text-muted-foreground hidden md:table-cell">Markets</th>
-                      <th className="w-24 p-3 text-center text-sm font-semibold text-muted-foreground hidden lg:table-cell">Buy/Sell</th>
-                      <th className="w-20 p-3 text-center text-sm font-semibold text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.map((trader, index) => (
-                      <motion.tr 
-                        key={trader.wallet}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: index * 0.015 }}
-                        className={cn(
-                          "border-b border-border/20 last:border-0 hover:bg-muted/5 transition-colors",
-                          trader.rank <= 3 && "bg-gradient-to-r from-poly-purple/5 to-transparent"
-                        )}
+              {/* Table Header - Desktop */}
+              <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b border-border/30 bg-muted/5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <div className="col-span-1 text-center">Rank</div>
+                <div className="col-span-4">Wallet</div>
+                <div className="col-span-2 text-right">Volume</div>
+                <div className="col-span-2 text-right">Trades</div>
+                <div className="col-span-1 text-right">Markets</div>
+                <div className="col-span-2 text-right">Actions</div>
+              </div>
+
+              {/* Table Body */}
+              <div className="divide-y divide-border/20">
+                {leaderboard.map((trader, index) => (
+                  <motion.div 
+                    key={trader.wallet}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.02 }}
+                    className={cn(
+                      "grid grid-cols-12 gap-4 p-4 items-center cursor-pointer",
+                      "hover:bg-muted/10 transition-colors",
+                      trader.rank <= 3 && "bg-gradient-to-r from-primary/5 to-transparent"
+                    )}
+                    onClick={() => navigate(`/wallet/${trader.wallet}?timeframe=24h`)}
+                  >
+                    {/* Rank */}
+                    <div className="col-span-3 md:col-span-1 flex justify-center">
+                      <RankBadge rank={trader.rank} />
+                    </div>
+
+                    {/* Wallet */}
+                    <div className="col-span-9 md:col-span-4">
+                      <span className="font-mono text-sm hover:text-primary transition-colors">
+                        {trader.wallet.slice(0, 6)}...{trader.wallet.slice(-4)}
+                      </span>
+                      <div className="md:hidden mt-1 text-xs text-muted-foreground">
+                        {formatVolume(trader.volume)} • {trader.trades} trades
+                      </div>
+                    </div>
+
+                    {/* Volume - Desktop */}
+                    <div className="hidden md:block col-span-2 text-right">
+                      <span className={cn(
+                        "font-bold",
+                        trader.rank === 1 && "text-yellow-400",
+                        trader.rank === 2 && "text-slate-300",
+                        trader.rank === 3 && "text-amber-500",
+                        trader.rank > 3 && "text-green-500"
+                      )}>
+                        {formatVolume(trader.volume)}
+                      </span>
+                    </div>
+
+                    {/* Trades - Desktop */}
+                    <div className="hidden md:block col-span-2 text-right text-muted-foreground">
+                      {formatNumber(trader.trades)}
+                    </div>
+
+                    {/* Markets - Desktop */}
+                    <div className="hidden md:block col-span-1 text-right text-muted-foreground">
+                      {trader.markets}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="hidden md:flex col-span-2 justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyWallet(trader.wallet);
+                        }}
                       >
-                        <td className="p-3">
-                          <div className="flex justify-center">
-                            <RankBadge rank={trader.rank} />
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <button
-                            onClick={() => navigate(`/wallet/${trader.wallet}?timeframe=24h`)}
-                            className="font-mono text-sm text-poly-cyan hover:text-poly-purple transition-colors truncate"
-                          >
-                            {trader.wallet.slice(0, 6)}...{trader.wallet.slice(-4)}
-                          </button>
-                        </td>
-                        <td className="p-3 text-right">
-                          <span className={cn(
-                            "font-bold",
-                            trader.rank === 1 && "text-yellow-400",
-                            trader.rank === 2 && "text-slate-300",
-                            trader.rank === 3 && "text-amber-500",
-                            trader.rank > 3 && "text-foreground"
-                          )}>
-                            {formatVolume(trader.volume)}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right hidden sm:table-cell">
-                          <span className="text-muted-foreground text-sm">{formatNumber(trader.trades)}</span>
-                        </td>
-                        <td className="p-3 text-right hidden md:table-cell">
-                          <span className="text-muted-foreground text-sm">{trader.markets}</span>
-                        </td>
-                        <td className="p-3 hidden lg:table-cell">
-                          <div className="flex items-center justify-center gap-1 text-xs">
-                            <span className="text-success font-medium">{trader.buyRatio}%</span>
-                            <span className="text-muted-foreground">/</span>
-                            <span className="text-destructive">{100 - trader.buyRatio}%</span>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 hover:bg-poly-purple/20 hover:text-poly-purple"
-                              onClick={() => copyWallet(trader.wallet)}
-                              title="Copy wallet"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 hover:bg-poly-cyan/20 hover:text-poly-cyan"
-                              onClick={() => navigate(`/wallet/${trader.wallet}?timeframe=24h`)}
-                              title="View profile"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
+                        <Copy className={cn(
+                          "w-3.5 h-3.5",
+                          copiedWallet === trader.wallet && "text-green-500"
+                        )} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/wallet/${trader.wallet}?timeframe=24h`);
+                        }}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </motion.div>
           )}
