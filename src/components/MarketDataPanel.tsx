@@ -16,6 +16,8 @@ interface MarketDataPanelProps {
       tokenId?: string;
       noTokenId?: string;
       conditionId?: string;
+      isMultiOutcome?: boolean;
+      outcomeLabel?: string;
     };
     whales: Array<{
       id: string;
@@ -360,13 +362,29 @@ export function MarketDataPanel({ data, onClose }: MarketDataPanelProps) {
                         </span>
                       )}
                       {(() => {
-                        // Determine effective position: BUY YES = YES, SELL YES = NO, BUY NO = NO, SELL NO = YES
+                        // Check if this is a multi-outcome market (not YES/NO)
+                        const isMultiOutcome = data.market.isMultiOutcome;
+                        
+                        if (isMultiOutcome) {
+                          // For multi-outcome markets, show BUY/SELL with outcome label
+                          const isBuy = trade.side === 'BUY';
+                          return (
+                            <span className={cn(
+                              "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                              isBuy ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                            )}>
+                              {trade.side}
+                            </span>
+                          );
+                        }
+                        
+                        // Binary YES/NO market: Determine effective position
                         const effectivePosition = 
                           (trade.side === 'BUY' && trade.outcome === 'YES') || (trade.side === 'SELL' && trade.outcome === 'NO') 
                             ? 'YES' 
                             : (trade.side === 'SELL' && trade.outcome === 'YES') || (trade.side === 'BUY' && trade.outcome === 'NO')
                               ? 'NO'
-                              : trade.outcome || trade.side; // Fallback to outcome or BUY/SELL if unknown
+                              : trade.outcome || trade.side;
                         const isYes = effectivePosition === 'YES';
                         return (
                           <span className={cn(
