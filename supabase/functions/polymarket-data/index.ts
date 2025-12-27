@@ -63,7 +63,7 @@ const FILLER_WORDS = [
   'give', 'get', 'check', 'some', 'any', 'please', 'i', 'you', 'my', 'your',
   'want', 'need', 'like', 'just', 'think', 'know', 'see', 'decision', 'decisions',
   // Voice-specific filler words
-  'hey', 'vera', 'v3ra', 'hello', 'hi', 'talk', 'talking', 'asking',
+  'hey', 'poly', 'hello', 'hi', 'talk', 'talking', 'asking',
   // REMOVED: 'will', 'market', 'markets' - these are important for queries like "will bitcoin hit X" or "market for X"
 ];
 
@@ -689,7 +689,7 @@ serve(async (req) => {
             liquidity: parseFloat(m.liquidity) || 0,
             endDate: m.endDate,
             url: `https://polymarket.com/event/${m.slug}`,
-            relevanceScore: score, // Include score for debugging and vera-chat filtering
+            relevanceScore: score, // Include score for debugging and poly-chat filtering
             matchedOutcomes: matchedOutcomes.length > 0 ? matchedOutcomes : undefined, // Include matched outcomes if any
           };
         });
@@ -705,7 +705,7 @@ serve(async (req) => {
         cleanedQuery: cleanedQuery,
         sttCorrected: sttCorrected !== query.toLowerCase() ? sttCorrected : undefined, // Only include if changed
         count: scoredMarkets.length,
-        searchFailed: scoredMarkets.length === 0, // Flag for vera-chat to handle gracefully
+        searchFailed: scoredMarkets.length === 0, // Flag for poly-chat to handle gracefully
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
