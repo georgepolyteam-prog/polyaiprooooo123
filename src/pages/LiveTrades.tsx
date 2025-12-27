@@ -68,6 +68,7 @@ const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 export default function LiveTrades() {
   const navigate = useNavigate();
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [whaleTrades, setWhaleTrades] = useState<Trade[]>([]); // Dedicated whale buffer
   const [paused, setPaused] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -338,6 +339,16 @@ export default function LiveTrades() {
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
           if (volume >= WHALE_THRESHOLD) {
             showWhaleAlert(newTrade, volume);
+            
+            // Accumulate whale trades in dedicated buffer (keep up to 2000)
+            setWhaleTrades(prev => {
+              const exists = prev.some(t => 
+                (t.order_hash && t.order_hash === newTrade.order_hash) ||
+                (t.tx_hash === newTrade.tx_hash && t.timestamp === newTrade.timestamp && t.token_id === newTrade.token_id)
+              );
+              if (exists) return prev;
+              return [newTrade, ...prev.slice(0, 1999)];
+            });
           }
           
           if (paused) {
@@ -539,20 +550,20 @@ export default function LiveTrades() {
     return [...new Set(trades.map(t => t.market_slug))];
   }, [trades]);
 
-  // Apply all filters
+  // Apply all filters - use whale buffer when whalesOnly is active
   const filteredTrades = useMemo(() => {
-    return trades.filter(trade => {
+    // Use dedicated whale buffer when whales filter is active
+    const sourceArray = whalesOnly ? whaleTrades : trades;
+    
+    return sourceArray.filter(trade => {
       const volume = trade.price * (trade.shares_normalized || trade.shares);
       
       // Side filter
       if (filter === 'buy' && trade.side !== 'BUY') return false;
       if (filter === 'sell' && trade.side !== 'SELL') return false;
       
-      // Volume filter
+      // Volume filter (skip whale threshold check when using whale buffer)
       if (volume < minVolume) return false;
-      
-      // Whale filter
-      if (whalesOnly && volume < WHALE_THRESHOLD) return false;
       
       // Token filter
       if (tokenFilter === 'yes' && trade.token_label?.toLowerCase() !== 'yes') return false;
@@ -584,7 +595,7 @@ export default function LiveTrades() {
       
       return true;
     });
-  }, [trades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown]);
+  }, [trades, whaleTrades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown]);
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleTimeString();
