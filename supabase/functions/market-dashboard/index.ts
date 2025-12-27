@@ -15,8 +15,8 @@ function getHeaders(): Record<string, string> {
   return { "Content-Type": "application/json" };
 }
 
-// Extract slugs from Polymarket URL
-function extractSlugsFromUrl(url: string): { eventSlug: string | null; marketSlug: string | null } {
+// Extract slugs from Polymarket URL - now also extracts tid (token ID) query param
+function extractSlugsFromUrl(url: string): { eventSlug: string | null; marketSlug: string | null; tokenId: string | null } {
   try {
     // Normalize URL - add https:// if missing
     let normalizedUrl = url.trim();
@@ -27,17 +27,21 @@ function extractSlugsFromUrl(url: string): { eventSlug: string | null; marketSlu
     const urlObj = new URL(normalizedUrl);
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
     
+    // Get tid (token ID) from query params - this identifies the specific market in multi-market events
+    const tokenId = urlObj.searchParams.get('tid') || null;
+    
     // Format: /event/event-slug or /event/event-slug/market-slug
     if (pathParts[0] === 'event' && pathParts[1]) {
       return {
         eventSlug: pathParts[1],
-        marketSlug: pathParts[2] || null
+        marketSlug: pathParts[2] || null,
+        tokenId
       };
     }
     
-    return { eventSlug: null, marketSlug: null };
+    return { eventSlug: null, marketSlug: null, tokenId };
   } catch {
-    return { eventSlug: null, marketSlug: null };
+    return { eventSlug: null, marketSlug: null, tokenId: null };
   }
 }
 
@@ -376,8 +380,8 @@ serve(async (req) => {
       );
     }
 
-    const { eventSlug, marketSlug } = extractSlugsFromUrl(marketUrl);
-    console.log(`[Dashboard] URL parsed - Event: ${eventSlug}, Market: ${marketSlug}`);
+    const { eventSlug, marketSlug, tokenId: urlTokenId } = extractSlugsFromUrl(marketUrl);
+    console.log(`[Dashboard] URL parsed - Event: ${eventSlug}, Market: ${marketSlug}, TokenId: ${urlTokenId?.slice(0, 30) || 'none'}...`);
 
     if (!eventSlug) {
       return new Response(
@@ -388,8 +392,8 @@ serve(async (req) => {
 
     const fetchStartTime = Date.now();
 
-    // CRITICAL: If this is an EVENT-ONLY URL (no specific market), return early
-    // The user needs to select a specific market first via the AI chat
+    // CRITICAL: If this is an EVENT-ONLY URL (no specific market), we need to figure out which market to show
+    // Priority: 1) Use tid (token ID) from URL, 2) Ask user to select if multiple markets, 3) Use first market if single
     if (!marketSlug) {
       console.log(`[Dashboard] Event-only URL detected, checking for multi-market event`);
       
@@ -402,7 +406,38 @@ serve(async (req) => {
         const events = await gammaResponse.json();
         const event = events?.[0];
         
-        if (event && event.markets && event.markets.length > 1) {
+        // If we have a tokenId in the URL, find the matching market
+        if (urlTokenId && event?.markets) {
+          console.log(`[Dashboard] Looking for market with token ID: ${urlTokenId.slice(0, 30)}...`);
+          
+          for (const m of event.markets) {
+            const tokens = m.tokens || [];
+            const matchingToken = tokens.find((t: any) => t.token_id === urlTokenId);
+            
+            if (matchingToken) {
+              console.log(`[Dashboard] Found market for token: ${m.slug}`);
+              
+              // Fetch live price from Dome API for this specific token
+              const livePrice = await fetchCurrentPrice(urlTokenId);
+              console.log(`[Dashboard] Live price for token: ${livePrice}`);
+              
+              // Determine if this is YES or NO token and get correct price
+              const isYesToken = matchingToken.outcome?.toLowerCase() === 'yes' || 
+                matchingToken.token_label?.toLowerCase() === 'yes' ||
+                matchingToken.label?.toLowerCase() === 'yes';
+              
+              // Store the matched market info for later processing
+              // Continue to regular market processing with this specific market
+              const targetMarketSlug = m.slug;
+              
+              // Re-run the function logic with the found market slug
+              // For now, just set effectiveSlug and let the rest of the code handle it
+              // by jumping to the market data fetch section
+            }
+          }
+        }
+        
+        if (event && event.markets && event.markets.length > 1 && !urlTokenId) {
           console.log(`[Dashboard] Multi-market event with ${event.markets.length} markets - returning list for selection`);
           
           // Parse market data for each market
@@ -479,9 +514,28 @@ serve(async (req) => {
         const events = await gammaResponse.json();
         if (events?.[0]) {
           const event = events[0];
-          const targetMarket = marketSlug 
-            ? event.markets?.find((m: any) => m.slug === marketSlug) 
-            : event.markets?.[0];
+          
+          // Priority: 1) Find market by urlTokenId, 2) Find by marketSlug, 3) Use first market
+          let targetMarket = null;
+          
+          // If we have a token ID from URL, find the market containing that token
+          if (urlTokenId && event.markets) {
+            for (const m of event.markets) {
+              const tokens = m.tokens || [];
+              if (tokens.some((t: any) => t.token_id === urlTokenId)) {
+                targetMarket = m;
+                console.log(`[Dashboard] Found market by token ID: ${m.slug}`);
+                break;
+              }
+            }
+          }
+          
+          // Fallback to marketSlug or first market
+          if (!targetMarket) {
+            targetMarket = marketSlug 
+              ? event.markets?.find((m: any) => m.slug === marketSlug) 
+              : event.markets?.[0];
+          }
           
           if (targetMarket) {
             let yesPrice = 0.5;
@@ -511,6 +565,17 @@ serve(async (req) => {
             
             console.log(`[Dashboard] Token fields: ${JSON.stringify(tokens[0])?.slice(0, 200)}`);
             console.log(`[Dashboard] Token detection - YES: ${yesToken?.outcome} (${yesToken?.token_id?.slice(0, 20)}...), NO: ${noToken?.outcome}`);
+
+            // If we have urlTokenId, fetch live price from Dome API for accuracy
+            if (urlTokenId) {
+              const livePrice = await fetchCurrentPrice(urlTokenId);
+              if (livePrice !== null) {
+                // Check if urlTokenId is YES or NO token to interpret price correctly
+                const isYesToken = yesToken?.token_id === urlTokenId;
+                yesPrice = isYesToken ? livePrice : (1 - livePrice);
+                console.log(`[Dashboard] Live price from Dome: ${livePrice}, isYesToken: ${isYesToken}, yesPrice: ${yesPrice}`);
+              }
+            }
 
             // Extract market metadata for MarketInfoCard
             const marketMetadata = {

@@ -490,14 +490,14 @@ export default function MyTrades() {
         ? Math.max(0.01, Math.round(price * 0.70 * 100) / 100) 
         : price;
       
-      // Always use GTC - aggressive pricing handles "market" orders
+      // Let useDomeRouter decide order type (FAK for market sells, GTC for limit)
       const result = await placeOrder({
         tokenId: sellModalPosition.asset,
         side: "SELL",
         amount: amount,
         price: orderPrice,
         isMarketOrder: isMarketOrder,
-        orderType: 'GTC', // Always GTC - aggressive pricing handles "market" orders
+        // Don't pass orderType - useDomeRouter uses FAK for market sells, GTC for limits
       });
 
       if (result?.success) {
