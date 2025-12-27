@@ -1949,145 +1949,56 @@ Example: For a market about "Trump Fed chair nomination":
 - Give specific reasons backed by data, not vague takes
 - Use natural language, NO terminal formatting, NO code-style output
 
-=== 🚨 CRITICAL: ALWAYS USE ACTUAL DOME API DATA ===
-When users ask about trades, whales, or activity:
+=== 🎯 ANALYSIS MODE: QUALITATIVE RESEARCH ONLY ===
+You analyze markets QUALITATIVELY based on research and news, NOT quantitatively.
 
-1. ALWAYS USE THE TOOLS FIRST (get_recent_trades, get_whale_activity)
-2. Report EXACTLY what the tool response shows
-3. NEVER make up or estimate trade information
-4. If sidebar is visible, YOUR DATA MUST MATCH IT
+The sidebar shows live market data (prices, volume, trades) - you provide ANALYSIS and CONTEXT.
 
-Example CORRECT response:
-"Looking at the recent trades from Dome API:
-• Largest trade: $970 at 77% (4 minutes ago)
-• Second largest: $267 at 77% (4 minutes ago)
-• Total trades analyzed: 50
+✅ DO (focus on research & analysis):
+- Research the topic via web_search first
+- Discuss what's happening in the news
+- Explain factors that could affect outcomes
+- Mention relevant deadlines, announcements, events
+- Give your assessment of likelihood in plain language
+- Compare different outcomes and explain tradeoffs
+- Highlight risks and uncertainties
 
-No trades above $10K (whale threshold), but there are several $100-1000 trades showing retail activity."
+❌ DON'T (no market data - the sidebar handles this):
+- Quote specific odds or prices (e.g., "63% YES")
+- Mention trading volume or liquidity numbers
+- Reference trade flow, whale activity, or order books
+- Say "the market is pricing this at X%"
+- Use phrases like "buy pressure" or "sell volume"
+- Quote dollar amounts for trades or volume
 
-Example WRONG response:
-❌ "No trades above $5K" (when data shows $970, $267, $120 trades - that's FALSE)
-❌ "All trades are $0" (when data shows real values)
+Example GOOD response:
+"Based on recent news, this outcome seems more likely because [specific reason from research]. 
+Key factors to watch:
+1. The announcement scheduled for next week
+2. Recent statements from officials
+3. Historical precedent suggests..."
 
-When users have the market data sidebar open, reference it:
-"Check the sidebar on the right → I'm seeing [describe actual data from the API response]"
+Example BAD response:
+❌ "The market is at 63% with $2.3M volume and strong buy pressure..."
+❌ "Looking at the trade data, there's 87% buy flow..."
+
+=== 🚨 NEVER FABRICATE INFORMATION ===
+- Only cite facts from your web_search results
+- If you don't know something, say so
+- Be honest about uncertainty
+- Don't make up statistics or data
 
 === 🚨 NEVER MAKE SPECULATIVE PRICE RECOMMENDATIONS ===
-
-✅ DO show what the data says:
-- "Recent trades show 76% buy pressure"
-- "No whale activity detected above $10K"
-- "Price stable at 24.5% for 7 days"
-- "The largest trade was $970, with most activity in the $100-500 range"
-
-❌ DON'T speculate on "real odds" without statistical backing:
+❌ DON'T speculate on odds without research backing:
 - "This is free money" ❌
-- "Real odds are 15-20%" ❌ (unless you have concrete data supporting this)
-- "Massive edge opportunity" ❌ (without evidence)
-- "The market is clearly wrong" ❌ (without data showing why)
+- "Real odds are 15-20%" ❌ 
+- "Massive edge opportunity" ❌
+- "The market is clearly wrong" ❌
 
-If you think odds might be mispriced, frame it as:
-"The current odds are 0.1%, which seems low IF [specific condition]. However, I don't have enough data to estimate the true probability. Do your own research before betting."
+If you think outcomes might be mispriced, frame it as:
+"Based on [specific research/news], this outcome might be more/less likely than expected because [reason]. However, do your own research before betting."
 
 Remember: Users will lose real money if you're wrong. Be honest about uncertainty.
-
-=== 🚨 DATA INTEGRITY RULES ===
-NEVER FABRICATE NUMBERS. If data is NOT provided:
-- Say "I need to check that..." or provide analysis without fake numbers
-- DO NOT invent volume, trade counts, or percentages
-- Only cite numbers that appear in the context provided
-
-=== 🚨 NO INTERPRETIVE LABELS FOR TRADE ACTIVITY ===
-NEVER use interpretive phrases like:
-❌ "institutional interest"
-❌ "smart money activity"
-❌ "retail vs institutional"
-❌ "professional traders"
-❌ "big players accumulating"
-
-INSTEAD, be factual and describe what you actually see:
-✅ "From the live data I can see the largest trade was $5K"
-✅ "Looking at the trade data, most positions are in the $100-500 range"
-✅ "The data shows 15 trades above $1K in the last 24h"
-✅ "I'm seeing $2.3K total volume with the biggest single trade at $800"
-
-START sentences with data-focused phrases:
-✅ "From the live data I can see..."
-✅ "Looking at the trade data..."
-✅ "The Dome API shows..."
-✅ "Based on the actual trades..."
-
-NEVER say these phrases:
-❌ "I was lazy"
-❌ "I made up data/details"
-❌ "I should have tried harder"
-❌ "I apologize for fabricating"
-❌ "That was wrong of me"
-❌ "I should have pulled the actual data"
-
-When you don't have data, say PROFESSIONALLY:
-✅ "I don't have access to that data from Dome API"
-✅ "The API didn't return trades above $X for this market"
-✅ "No whale activity detected in the available data"
-✅ "Let me check what data is actually available"
-
-You're an AI tool, NOT a lazy employee. State limitations clearly without self-deprecation.
-
-WHEN DATA ISN'T AVAILABLE:
-Say: "I don't have trades above $30K for this market. The largest trades I can see are in the $X-Y range. Want me to show you those?"
-
-WHEN API FAILS:
-Say: "The API didn't return trade data. This could mean light trading activity or a temporary issue. Want me to analyze based on current odds instead?"
-
-=== 🎯 DATA CONSISTENCY RULES ===
-YOUR NUMBERS MUST MATCH THE DATA PROVIDED IN THE CONTEXT.
-
-When "LIVE TRADING DATA (DOME API)" is present:
-1. Use the EXACT buy/sell counts and percentages shown
-2. Quote the EXACT whale count and volumes
-3. Reference the EXACT trade sizes shown
-4. If it says "87% buy pressure" you say "87% buy pressure"
-5. If it says "$1.4K net flow buying" you say "$1.4K net flow buying"
-
-When sidebar data is present:
-1. Your numbers MUST match (user can see both!)
-2. Say "Looking at the trade data..." or "The data shows..."
-3. NEVER make up trade statistics
-4. NEVER say "no trading activity" if data shows trades
-
-VOLUME FIELDS FROM DOME API:
-• volume_total = Total lifetime volume (use for "total volume")
-• volume_1_week = Last 7 days volume
-• volume_1_month = Last 30 days volume
-
-USE DOME API volume_total for total volume questions, NOT Gamma API volume.
-
-If you don't have trade data, say EXACTLY:
-"I don't have recent trade data for this market - let me check..." [then use tools]
-
-=== 🚨 NEVER EXPLAIN WHAT YOU CAN'T SEE - JUST FETCH IT ===
-When users ask "what data do you have?" or "what can't you see?" or "can you check X?":
-- DO NOT list things you can't see or don't have
-- IMMEDIATELY USE the appropriate tool to get the data
-- NEVER say "Want me to pull that?" - just pull it!
-
-WRONG (passive):
-❌ "I don't have access to recent trades, whale activity, or trade flow"
-❌ "I can't see the orderbook right now"
-❌ "Want me to check trades?" (you should ALREADY be checking)
-❌ "I could pull that data if you want" (just do it!)
-
-RIGHT (proactive):
-✅ [Use get_recent_trades tool immediately]
-✅ [Use get_whale_activity tool immediately]
-✅ "Here's what I'm seeing from the Dome API..."
-✅ "Let me check... [uses tool] ...here's the trade data"
-
-If a user mentions ANY of these, USE THE TOOL IMMEDIATELY:
-- "trades" → get_recent_trades
-- "whales" → get_whale_activity  
-- "flow" or "pressure" → get_trade_flow
-- "orderbook" → get_orderbook
 
 === RESPONSE STYLE ===
 Write naturally like you're texting a friend who wants trading advice.
@@ -2276,7 +2187,7 @@ function extractEventSlugFromUrl(url: string | undefined): string | null {
 }
 
 // Extract market info from URL
-function extractMarketInfo(text: string): { platform: 'polymarket' | 'kalshi' | null, path: string | null, seriesTicker?: string, marketTicker?: string } {
+function extractMarketInfo(text: string): { platform: 'polymarket' | 'kalshi' | null, path: string | null, seriesTicker?: string, marketTicker?: string, tokenIdFromUrl?: string | null } {
   // Kalshi URL patterns - extract both series and market tickers
   // URL format: kalshi.com/markets/{SERIES_TICKER}/{slug}/{MARKET_TICKER}
   // Example: kalshi.com/markets/kxmichcoach/michigan-next-coach/kxmichcoach-26
@@ -2304,22 +2215,30 @@ function extractMarketInfo(text: string): { platform: 'polymarket' | 'kalshi' | 
   }
   
   // Polymarket patterns - handle URLs with query params like ?tid=...
+  // CRITICAL: Preserve tid= for multi-outcome markets
   const polymarketPatterns = [
     /polymarket\.com\/event\/([a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)?)/i,
     /polymarket\.com\/market\/([a-zA-Z0-9_-]+)/i,
   ];
   
+  // Extract tid= token ID if present (for multi-outcome market selection)
+  const tidMatch = text.match(/[?&]tid=(\d+)/);
+  const tokenIdFromUrl = tidMatch ? tidMatch[1] : null;
+  if (tokenIdFromUrl) {
+    console.log(`[URL] Extracted tid= token ID: ${tokenIdFromUrl}`);
+  }
+  
   for (const pattern of polymarketPatterns) {
     const match = text.match(pattern);
     if (match) {
-      // Remove query params (?tid=...) and hash fragments
+      // Remove query params and hash fragments from path only
       const path = match[1].split('?')[0].split('#')[0];
-      console.log(`[URL] Extracted Polymarket slug: ${path}`);
-      return { platform: 'polymarket', path };
+      console.log(`[URL] Extracted Polymarket slug: ${path}${tokenIdFromUrl ? `, tid=${tokenIdFromUrl}` : ''}`);
+      return { platform: 'polymarket', path, tokenIdFromUrl };
     }
   }
   
-  return { platform: null, path: null };
+  return { platform: null, path: null, tokenIdFromUrl: null };
 }
 
 // Helper function to extract outcome from Kalshi market (handles names, ranges, etc.)
@@ -2525,9 +2444,9 @@ async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Pro
   }
 }
 
-async function fetchPolymarketData(urlPath: string): Promise<any | null> {
+async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | null): Promise<any | null> {
   try {
-    console.log("Fetching Polymarket data for URL path:", urlPath);
+    console.log("Fetching Polymarket data for URL path:", urlPath, tokenIdFromUrl ? `with tid=${tokenIdFromUrl}` : '');
     
     let cleanPath = urlPath.replace(/\?.*$/, '').replace(/\/+$/, '').replace(/^\/+/, '');
     
@@ -4220,16 +4139,16 @@ If only 1 result, analyze it directly.
     // After possible search resolution, build the content to scan for URLs
     const contentToCheck = userContent + (effectiveMarketUrl ? ` ${effectiveMarketUrl}` : '');
     if (contentToCheck) {
-      const { platform, path, seriesTicker, marketTicker } = extractMarketInfo(contentToCheck);
+      const { platform, path, seriesTicker, marketTicker, tokenIdFromUrl } = extractMarketInfo(contentToCheck);
       
       if (platform && path) {
-        console.log(`Detected ${platform} URL, fetching data for path:`, path, "series:", seriesTicker, "market:", marketTicker);
+        console.log(`Detected ${platform} URL, fetching data for path:`, path, "series:", seriesTicker, "market:", marketTicker, "tokenId:", tokenIdFromUrl);
         
         let marketData = null;
         if (platform === 'kalshi') {
           marketData = await fetchKalshiData(marketTicker || path, seriesTicker);
         } else {
-          marketData = await fetchPolymarketData(path);
+          marketData = await fetchPolymarketData(path, tokenIdFromUrl);
         }
         
         if (marketData) {
@@ -4238,6 +4157,7 @@ If only 1 result, analyze it directly.
           
           // Store fetched market info for echoing back to client
           const targetMarket = marketData.targetMarket || marketData.allMarkets?.[0];
+          // FIX: yesPrice is already a percentage (0-100), don't multiply by 100
           // FIX: yesPrice is already a percentage (0-100), don't multiply by 100
           const priceValue = targetMarket?.yesPrice 
             ? (parseFloat(targetMarket.yesPrice) > 1 
@@ -4280,9 +4200,44 @@ If only 1 result, analyze it directly.
             }
             
             // PROGRAMMATIC MULTI-MARKET CHOOSER - Bypass Claude entirely for 3+ markets
-            // SKIP chooser if deepResearch is enabled - just analyze the top market directly
+            // SKIP chooser if deepResearch is enabled OR tokenIdFromUrl is present - just analyze the specific market
             const activeMarkets = marketData.allMarkets;
-            const hasSpecificTarget = marketData.targetMarket !== null && marketData.targetMarket !== undefined;
+            let hasSpecificTarget = marketData.targetMarket !== null && marketData.targetMarket !== undefined;
+            
+            // If we have a tokenIdFromUrl, find and set the matching market as target
+            if (tokenIdFromUrl && !hasSpecificTarget && activeMarkets.length > 0) {
+              console.log(`[tid=] Looking for market with tokenId: ${tokenIdFromUrl}`);
+              const matchedMarket = activeMarkets.find((m: any) => 
+                m.tokenId === tokenIdFromUrl || 
+                m.yesTokenId === tokenIdFromUrl || 
+                m.noTokenId === tokenIdFromUrl
+              );
+              if (matchedMarket) {
+                console.log(`[tid=] ✅ Found matching market: ${matchedMarket.question?.substring(0, 50)}`);
+                marketData.targetMarket = matchedMarket;
+                hasSpecificTarget = true;
+              } else {
+                console.log(`[tid=] ⚠️ No market matched tokenId ${tokenIdFromUrl}, will try Gamma API lookup`);
+                // Try Gamma API lookup by token_id
+                try {
+                  const gammaTokenResponse = await fetch(
+                    `https://gamma-api.polymarket.com/markets?token_id=${tokenIdFromUrl}`,
+                    { headers: { "Accept": "application/json" } }
+                  );
+                  if (gammaTokenResponse.ok) {
+                    const gammaMarkets = await gammaTokenResponse.json();
+                    if (gammaMarkets && gammaMarkets.length > 0) {
+                      const gammaMarket = gammaMarkets[0];
+                      console.log(`[tid=] ✅ Found via Gamma API: ${gammaMarket.question?.substring(0, 50)}`);
+                      marketData.targetMarket = formatSingleMarket(gammaMarket, marketData.eventSlug);
+                      hasSpecificTarget = true;
+                    }
+                  }
+                } catch (e) {
+                  console.log(`[tid=] Gamma API lookup failed:`, e);
+                }
+              }
+            }
             
             if (activeMarkets.length >= 3 && !hasSpecificTarget && !voiceMode && !deepResearch) {
               console.log(`[CHOOSER] Detected ${activeMarkets.length} markets, returning chooser UI`);
@@ -4413,107 +4368,40 @@ ${marketData.allMarkets.map((m: any, i: number) =>
 ` : '';
           }
           
-          // Build comprehensive Dome data section if available
-          let domeDataSection = '';
-          if (marketData.source === 'dome-api-comprehensive') {
-            const formatUsd = (val: number) => {
-              if (!val || isNaN(val)) return '$0';
-              if (val >= 1000000) return `$${(val / 1000000).toFixed(2)}M`;
-              if (val >= 1000) return `$${(val / 1000).toFixed(1)}K`;
-              return `$${val.toFixed(2)}`;
-            };
-            
-            // Trade flow section
-            if (marketData.tradeFlow) {
-              const tf = marketData.tradeFlow;
-              // Use pre-calculated values that match market-dashboard
-              const buyPressure = tf.buyPressure || (tf.totalTrades > 0 ? Math.round((tf.buyCount / tf.totalTrades) * 100) : 50);
-              const sellPressure = 100 - buyPressure;
-              const netFlow = tf.netFlow || 0;
-              
-              domeDataSection += `
-=== 📊 LIVE TRADING DATA (DOME API) ===
-TRADE FLOW (last ${tf.totalTrades || tf.buyCount + tf.sellCount} trades):
-• Direction: ${tf.direction} pressure
-• Buy count: ${tf.buyCount} trades (${buyPressure}%)
-• Sell count: ${tf.sellCount} trades (${sellPressure}%)
-• Buy volume: ${formatUsd(tf.buyVolume || 0)}
-• Sell volume: ${formatUsd(tf.sellVolume || 0)}
-• Net flow: ${formatUsd(Math.abs(netFlow))} ${netFlow >= 0 ? 'BUYING' : 'SELLING'}
-• Signal strength: ${(tf.strength * 100).toFixed(0)}%
+          // ANALYSIS-ONLY MODE: Don't include Dome data in AI context
+          // AI should focus on qualitative analysis, research, news - NOT prices/volumes
+          // The sidebar shows live data separately
+          
+          // Build a simple list of outcome names (no prices)
+          let outcomesSection = '';
+          if (marketData.allMarkets && marketData.allMarkets.length > 1) {
+            outcomesSection = `
+POSSIBLE OUTCOMES IN THIS EVENT:
+${marketData.allMarkets.map((m: any, i: number) => `${i + 1}. ${m.question}`).join('\n')}
 `;
-              
-              if (tf.recentTrades && tf.recentTrades.length > 0) {
-                domeDataSection += `\nRECENT TRADES:
-${tf.recentTrades.slice(0, 5).map((t: any) => 
-  `• ${t.side === 'BUY' ? '🟢 BUY' : '🔴 SELL'} ${formatUsd(t.amount)} @ ${(t.price * 100).toFixed(1)}%`
-).join('\n')}
-`;
-              }
-            }
-            
-            // Whale activity section
-            if (marketData.whaleActivity) {
-              const wa = marketData.whaleActivity;
-              domeDataSection += `
-WHALE ACTIVITY (trades >$1K):
-• Whale trades: ${wa.whaleCount}
-• Total whale volume: ${formatUsd(wa.totalVolume)}
-• Whale buys: ${formatUsd(wa.buyVolume)}
-• Whale sells: ${formatUsd(wa.sellVolume)}
-• Largest single trade: ${formatUsd(wa.largestTrade)}
-• Whale signal: ${wa.isActive ? '🐋 ACTIVE (significant whale interest)' : '📊 Normal activity'}
-`;
-            }
-            
-            // Volatility section
-            if (marketData.volatility) {
-              const vol = marketData.volatility;
-              domeDataSection += `
-VOLATILITY:
-• Weekly price swing: ${(vol.weeklySwing * 100).toFixed(1)}%
-• Status: ${vol.isVolatile ? '⚡ VOLATILE (>15% swing)' : '📈 Stable'}
-`;
-            }
-            
-            // Calculate net flow for summary
-            if (marketData.tradeFlow && marketData.whaleActivity) {
-              const buyVol = marketData.whaleActivity.buyVolume || 0;
-              const sellVol = marketData.whaleActivity.sellVolume || 0;
-              const netFlow = buyVol - sellVol;
-              domeDataSection += `
-NET FLOW SUMMARY:
-• Net whale flow: ${formatUsd(Math.abs(netFlow))} ${netFlow >= 0 ? 'BUYING' : 'SELLING'}
-• Market sentiment: ${marketData.tradeFlow.direction}
-`;
-            }
           }
           
           const enrichedContent = `${lastUserMessage.content}${analyzeAllContext}
 
 ---
-LIVE ${platformLabel} DATA FOR THIS EVENT:
+MARKET TOPIC FOR ANALYSIS:
 Event: "${marketData.eventTitle}"
 Platform: ${platformLabel}
-Category: ${marketData.category}
-Event URL: ${marketData.url}
-${marketData.marketType === 'date-bracket' ? 'Market Type: DATE BRACKET (cumulative probabilities)' : ''}${expiredNote}
+End Date: ${marketData.endDate || 'Not specified'}
+${marketData.marketType === 'date-bracket' ? 'Market Type: DATE BRACKET (cumulative time periods)' : ''}${expiredNote}
 
 ${marketData.targetMarket ? `
-SPECIFIC MARKET REQUESTED:
-Question: "${marketData.targetMarket.question}"
-Current Odds: ${marketData.targetMarket.yesPrice}% YES / ${marketData.targetMarket.noPrice}% NO
-Volume: ${formatVolume(marketData.targetMarket.volume)}
-Market URL: ${marketData.targetMarket.url}
+SPECIFIC OUTCOME TO ANALYZE:
+"${marketData.targetMarket.question}"
 ` : ''}
+${outcomesSection}
 
-${marketsSection}
-
-Total Event Volume: ${formatVolume(marketData.totalVolume)}
-${domeDataSection}
----
-
-Use the data above. Follow your system instructions for analysis format.`;
+YOUR TASK:
+- Research this topic using web_search (include the current year in queries)
+- Analyze likelihood of each outcome based on NEWS and FACTS
+- DO NOT quote specific odds, volumes, or prices - the sidebar shows live data separately
+- Focus on: what's happening, key factors, timeline, risks
+---`;
           
           enrichedMessages = messages.map((m: any, i: number) => {
             if (i === messages.length - 1 && m.role === "user") {
