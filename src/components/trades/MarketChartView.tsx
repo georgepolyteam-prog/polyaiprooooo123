@@ -168,38 +168,38 @@ export function MarketChartView({
     
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'hsl(var(--muted-foreground))',
+        background: { type: ColorType.Solid, color: '#09090b' },
+        textColor: '#a1a1aa',
         fontFamily: 'inherit',
       },
       grid: {
-        vertLines: { color: 'hsl(var(--border) / 0.3)' },
-        horzLines: { color: 'hsl(var(--border) / 0.3)' },
+        vertLines: { color: '#27272a' },
+        horzLines: { color: '#27272a' },
       },
       width: chartContainerRef.current.clientWidth,
       height: 280,
       rightPriceScale: {
-        borderColor: 'hsl(var(--border) / 0.5)',
+        borderColor: '#3f3f46',
         scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
-        borderColor: 'hsl(var(--border) / 0.5)',
+        borderColor: '#3f3f46',
         timeVisible: true,
         secondsVisible: false,
       },
       crosshair: {
-        vertLine: { color: 'hsl(var(--primary) / 0.5)', width: 1 },
-        horzLine: { color: 'hsl(var(--primary) / 0.5)', width: 1 },
+        vertLine: { color: '#71717a', width: 1, style: 2, labelBackgroundColor: '#18181b' },
+        horzLine: { color: '#71717a', width: 1, style: 2, labelBackgroundColor: '#18181b' },
       },
     });
     
     const candlestickSeries = chart.addCandlestickSeries({
-      upColor: 'hsl(142.1, 76.2%, 36.3%)',
-      downColor: 'hsl(0, 84.2%, 60.2%)',
-      borderUpColor: 'hsl(142.1, 76.2%, 36.3%)',
-      borderDownColor: 'hsl(0, 84.2%, 60.2%)',
-      wickUpColor: 'hsl(142.1, 76.2%, 36.3%)',
-      wickDownColor: 'hsl(0, 84.2%, 60.2%)',
+      upColor: '#22c55e',
+      downColor: '#ef4444',
+      borderUpColor: '#22c55e',
+      borderDownColor: '#ef4444',
+      wickUpColor: '#22c55e',
+      wickDownColor: '#ef4444',
     });
     
     candlestickSeries.setData(candlesticks);
