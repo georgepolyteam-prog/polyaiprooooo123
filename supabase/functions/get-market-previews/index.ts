@@ -30,9 +30,10 @@ async function fetchCurrentPrice(tokenId: string): Promise<number | null> {
   }
 }
 
-// Fetch market by condition_id from Gamma API
+// Fetch market by condition_id from Gamma API - now also fetches EVENT image (fixes wrong images)
 async function fetchByConditionId(conditionId: string): Promise<any | null> {
   try {
+    // Step 1: Fetch market data
     const response = await fetch(
       `https://gamma-api.polymarket.com/markets?condition_id=${conditionId}`
     );
@@ -41,9 +42,47 @@ async function fetchByConditionId(conditionId: string): Promise<any | null> {
     const market = markets?.[0];
     if (!market) return null;
 
-    // Find best image
+    console.log(`[Market Previews] conditionId=${conditionId}, market.slug=${market.slug}, eventSlug candidates:`, {
+      eventSlug: market.eventSlug,
+      event_slug: market.event_slug,
+      groupSlug: market.groupSlug
+    });
+
+    // Step 2: Try to get event slug from the market
+    const eventSlug = market.eventSlug || market.event_slug || market.groupSlug || market.groupItemTitle;
+    
+    let eventImage: string | null = null;
+    let eventIcon: string | null = null;
+    
+    // Step 3: If we have an event slug, fetch event data for the correct image
+    if (eventSlug) {
+      try {
+        const eventResponse = await fetch(
+          `https://gamma-api.polymarket.com/events?slug=${eventSlug}`
+        );
+        if (eventResponse.ok) {
+          const events = await eventResponse.json();
+          const event = events?.[0];
+          if (event) {
+            eventImage = event.image;
+            eventIcon = event.icon;
+            console.log(`[Market Previews] Fetched event for ${conditionId}: image=${event.image}, icon=${event.icon}`);
+          }
+        }
+      } catch (e) {
+        console.log(`[Market Previews] Failed to fetch event for ${eventSlug}:`, e);
+      }
+    }
+
+    // Step 4: Find best image - PREFER EVENT IMAGE (same as Markets/Chat pages)
     let image = null;
-    const possibleImages = [market.image, market.icon];
+    const possibleImages = [
+      eventImage,      // Event image first (most reliable, what Markets/Chat use)
+      eventIcon,       // Event icon 
+      market.image,    // Market image (can be stale/wrong)
+      market.icon      // Market icon
+    ];
+    
     for (const img of possibleImages) {
       if (img && typeof img === 'string' && img.startsWith('http')) {
         image = img;
@@ -51,13 +90,21 @@ async function fetchByConditionId(conditionId: string): Promise<any | null> {
       }
     }
 
+    console.log(`[Market Previews] Final image for ${conditionId}: ${image} (source: ${
+      image === eventImage ? 'event.image' : 
+      image === eventIcon ? 'event.icon' : 
+      image === market.image ? 'market.image' : 
+      image === market.icon ? 'market.icon' : 'none'
+    })`);
+
     return {
       slug: market.market_slug || market.slug,
       conditionId: conditionId,
       title: market.question || market.title,
       image,
     };
-  } catch {
+  } catch (e) {
+    console.error(`[Market Previews] Error fetching conditionId ${conditionId}:`, e);
     return null;
   }
 }
