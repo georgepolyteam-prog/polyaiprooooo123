@@ -372,7 +372,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
             }
           });
           updateAssistant(
-            "You're out of credits. 💳 Click on the **credits button** in the top bar to deposit POLY tokens and continue chatting.",
+            "You're out of credits. Visit the **[Credits page](/credits)** to deposit POLY tokens and continue chatting.",
             false
           );
         } else {
