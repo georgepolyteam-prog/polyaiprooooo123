@@ -43,6 +43,43 @@ export const useCredits = () => {
     fetchCredits();
   }, [fetchCredits]);
 
+  // Subscribe to realtime updates for credits
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('user-credits-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_credits',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('[Credits] Realtime update received:', payload);
+          if (payload.new && typeof payload.new === 'object') {
+            const newData = payload.new as {
+              credits_balance?: number;
+              total_deposited?: number;
+              total_spent?: number;
+            };
+            setCredits({
+              credits_balance: newData.credits_balance || 0,
+              total_deposited: newData.total_deposited || 0,
+              total_spent: newData.total_spent || 0
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const useCredit = useCallback(async (amount: number = 1) => {
     if (!user?.id || !credits || credits.credits_balance < amount) {
       return false;

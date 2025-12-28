@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.market-candlesticks]
 verify_jwt = false
+
+[functions.helius-webhook]
+verify_jwt = false
