@@ -4,17 +4,19 @@ import { defaultWagmiConfig } from '@web3modal/wagmi';
 import { WagmiProvider } from 'wagmi';
 import { polygon } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { sonic } from '@/config/sonic';
 
 const projectId = '464ba42d23229961a826ee14993721ec';
 
 const metadata = {
   name: 'PolyAI',
-  description: 'AI Analyst for Polymarket',
+  description: 'AI Analyst for Polymarket & Pandora',
   url: 'https://polyai.pro',
   icons: ['https://polyai.pro/extension/icon128.png']
 };
 
-const chains = [polygon] as const;
+// Support both Polygon (for Polymarket) and Sonic (for Pandora)
+const chains = [polygon, sonic] as const;
 
 const wagmiConfig = defaultWagmiConfig({
   chains,

@@ -1,20 +1,32 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAccount, useChainId } from 'wagmi';
+import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { TopBar } from '@/components/TopBar';
 import { PandoraHero } from '@/components/pandora/PandoraHero';
 import { FeaturedMarket } from '@/components/pandora/FeaturedMarket';
 import { TrendingMarkets } from '@/components/pandora/TrendingMarkets';
 import { MarketsGrid } from '@/components/pandora/MarketsGrid';
 import { PandoraLoading, PandoraError } from '@/components/pandora/PandoraStates';
+import { NetworkBanner } from '@/components/pandora/NetworkBanner';
+import { TradeModal } from '@/components/pandora/TradeModal';
 import { usePandoraMarkets } from '@/hooks/usePandoraMarkets';
 import { formatVolume, PandoraMarket } from '@/lib/pandora-api';
+import { sonic } from '@/config/sonic';
 import { toast } from 'sonner';
 
 export default function Pandora() {
   const navigate = useNavigate();
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const { open: openWalletModal } = useWeb3Modal();
   const { markets, loading, error, refetch } = usePandoraMarkets();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedMarket, setSelectedMarket] = useState<PandoraMarket | null>(null);
+
+  // Check if on wrong network (should be on Sonic for Pandora)
+  const isWrongNetwork = isConnected && chainId !== sonic.id;
 
   // Calculate total volume
   const totalVolume = useMemo(() => {
@@ -39,8 +51,12 @@ export default function Pandora() {
   const allMarkets = filteredMarkets.slice(6);
 
   const handleMarketClick = (market: PandoraMarket) => {
-    toast.info(`Opening ${market.question.slice(0, 50)}...`);
-    // Could navigate to detail page or open modal
+    if (!isConnected) {
+      openWalletModal();
+      toast.info('Connect your wallet to trade');
+      return;
+    }
+    setSelectedMarket(market);
   };
 
   const handleAnalyze = (market: PandoraMarket) => {
@@ -83,6 +99,9 @@ export default function Pandora() {
       <TopBar />
       
       <main>
+        {/* Network check banner */}
+        <NetworkBanner isWrongNetwork={isWrongNetwork} />
+        
         {/* Hero with search and filters */}
         <PandoraHero
           searchQuery={searchQuery}
@@ -115,6 +134,14 @@ export default function Pandora() {
           onMarketClick={handleMarketClick}
         />
       </main>
+      
+      {/* Trade Modal */}
+      {selectedMarket && (
+        <TradeModal
+          market={selectedMarket}
+          onClose={() => setSelectedMarket(null)}
+        />
+      )}
     </div>
   );
 }
