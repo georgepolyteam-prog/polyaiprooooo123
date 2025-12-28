@@ -55,6 +55,17 @@ serve(async (req) => {
       console.log(`[HeliusWebhook] Transaction ${signature?.substring(0, 20)}... has ${tokenTransfers.length} token transfers`);
       
       for (const transfer of tokenTransfers) {
+        // Debug logging for each transfer
+        console.log(`[HeliusWebhook] Transfer details:`, {
+          receivedMint: transfer.mint,
+          expectedMint: POLY_TOKEN_MINT,
+          mintMatch: transfer.mint === POLY_TOKEN_MINT,
+          receivedTo: transfer.toUserAccount,
+          expectedTo: DEPOSIT_WALLET_ADDRESS,
+          toMatch: transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS,
+          amount: transfer.tokenAmount
+        });
+        
         // Check if it's POLY token to our deposit wallet
         if (
           transfer.mint === POLY_TOKEN_MINT &&
