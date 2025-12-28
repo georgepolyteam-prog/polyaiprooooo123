@@ -32,6 +32,8 @@ const systemStatuses: SystemStatus[] = [
 ];
 
 const recentUpdates: Update[] = [
+  { date: "Dec 28, 2025", title: "POLY Token Credit System - Implementation & Testing", type: "feature" },
+  { date: "Dec 28, 2025", title: "Helius Webhook Integration for Deposits", type: "feature" },
   { date: "Dec 27, 2025", title: "Wallet Analytics - PnL & Win Rate fixes", type: "fix" },
   { date: "Dec 27, 2025", title: "Leaderboard UI remake with animated loading", type: "improvement" },
   { date: "Dec 27, 2025", title: "Tracked Wallets page redesign", type: "improvement" },
@@ -39,12 +41,15 @@ const recentUpdates: Update[] = [
   { date: "Dec 26, 2025", title: "Wallet Profile page complete remake", type: "feature" },
   { date: "Dec 25, 2025", title: "Live Trades Tour for new users", type: "feature" },
   { date: "Dec 24, 2025", title: "Status Page Launch", type: "feature" },
-  { date: "Dec 24, 2025", title: "Sound mute fix for whale alerts", type: "fix" },
   { date: "Dec 23, 2025", title: "Polyfactual Deep Research", type: "feature" },
-  { date: "Dec 22, 2025", title: "Mobile Live Trades improvements", type: "improvement" },
 ];
 
 const announcements = [
+  {
+    title: "POLY Token Credits",
+    description: "We're actively testing the new credit system. Deposit POLY tokens to get chat credits!",
+    type: "info" as const,
+  },
   {
     title: "Beta Features",
     description: "Deep Research mode is in beta. Some queries may take longer.",
