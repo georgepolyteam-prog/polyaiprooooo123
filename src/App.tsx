@@ -28,6 +28,7 @@ import AdminPanel from "./pages/AdminPanel";
 import About from "./pages/About";
 import Capabilities from "./pages/Capabilities";
 import Documentation from "./pages/Documentation";
+import Credits from "./pages/Credits";
 
 const AppContent = () => {
   const { isHighTraffic } = useUserPresence();
@@ -59,6 +60,7 @@ const AppContent = () => {
           <Route path="/about" element={<About />} />
           <Route path="/capabilities" element={<Capabilities />} />
           <Route path="/docs" element={<Documentation />} />
+          <Route path="/credits" element={<Credits />} />
           <Route path="/adminpanel" element={<AdminPanel />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
