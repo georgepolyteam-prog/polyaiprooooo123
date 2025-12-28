@@ -367,22 +367,25 @@ const About = () => {
               </p>
               
               {/* Status link button */}
-              <Link to="/status">
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
+              <motion.div
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                className="inline-flex"
+              >
+                <Link
+                  to="/status"
                   className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all"
                 >
                   <Activity className="w-5 h-5" />
                   Check Development Status
-                  <motion.span 
+                  <motion.span
                     animate={{ x: [0, 4, 0] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
                   >
                     →
                   </motion.span>
-                </motion.button>
-              </Link>
+                </Link>
+              </motion.div>
             </div>
           </motion.div>
 
