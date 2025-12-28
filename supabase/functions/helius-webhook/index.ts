@@ -63,11 +63,9 @@ serve(async (req) => {
           const senderWallet = transfer.fromUserAccount;
           const txSignature = signature;
           
-          // Calculate amount - Helius provides tokenAmount already adjusted for decimals
-          // For most SPL tokens, we need to handle decimals (usually 6 or 9)
-          const rawAmount = transfer.tokenAmount || 0;
-          // Assuming 9 decimals for POLY token (adjust if different)
-          const amount = rawAmount / 1e9;
+          // Helius tokenAmount is already in human-readable format (not raw)
+          // Just use it directly
+          const amount = transfer.tokenAmount || 0;
           
           console.log(`[HeliusWebhook] 💰 Deposit detected: ${amount} POLY from ${senderWallet}`);
           

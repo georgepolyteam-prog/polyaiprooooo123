@@ -8,12 +8,10 @@ const corsHeaders = {
 
 const POLY_TOKEN_MINT = Deno.env.get('POLY_TOKEN_MINT')!;
 const DEPOSIT_WALLET_ADDRESS = Deno.env.get('DEPOSIT_WALLET_ADDRESS')!;
-const WEBHOOK_SECRET = Deno.env.get('WEBHOOK_SECRET')!;
 const HELIUS_API_KEY = Deno.env.get('HELIUS_API_KEY')!;
 
 // Credits per POLY token (1 POLY = 10 credits)
 const CREDITS_PER_POLY = 10;
-const MIN_DEPOSIT = 100;
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -38,8 +36,7 @@ serve(async (req) => {
           JSON.stringify({ 
             depositAddress: DEPOSIT_WALLET_ADDRESS,
             tokenMint: POLY_TOKEN_MINT,
-            creditsPerToken: CREDITS_PER_POLY,
-            minDeposit: MIN_DEPOSIT
+            creditsPerToken: CREDITS_PER_POLY
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -122,15 +119,8 @@ serve(async (req) => {
             );
           }
 
-          // Verify amount matches (with some tolerance for decimals)
+          // Use the verified transfer amount from Helius
           const transferAmount = validTransfer.tokenAmount || amount;
-          
-          if (transferAmount < MIN_DEPOSIT) {
-            return new Response(
-              JSON.stringify({ error: `Minimum deposit is ${MIN_DEPOSIT} POLY` }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
 
           // Calculate credits
           const creditsToAdd = Math.floor(transferAmount * CREDITS_PER_POLY);
@@ -207,96 +197,8 @@ serve(async (req) => {
         }
       }
 
-      // Webhook handler for Helius (automatic deposit detection)
-      if (action === 'webhook') {
-        const authHeader = req.headers.get('x-webhook-secret');
-        
-        if (authHeader !== WEBHOOK_SECRET) {
-          console.error('Invalid webhook secret');
-          return new Response(
-            JSON.stringify({ error: 'Unauthorized' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        const transactions = Array.isArray(body.data) ? body.data : [body.data];
-        
-        for (const txData of transactions) {
-          const tokenTransfers = txData.tokenTransfers || [];
-          
-          for (const transfer of tokenTransfers) {
-            if (
-              transfer.mint === POLY_TOKEN_MINT &&
-              transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS
-            ) {
-              const transferAmount = Math.floor(transfer.tokenAmount);
-              const senderWallet = transfer.fromUserAccount;
-              const txSignature = txData.signature;
-              
-              console.log(`Webhook: Deposit detected - ${transferAmount} POLY from ${senderWallet}`);
-              
-              if (transferAmount < MIN_DEPOSIT) {
-                console.log('Deposit below minimum:', transferAmount);
-                continue;
-              }
-              
-              // Find user by wallet address
-              const { data: userCredit } = await supabase
-                .from('user_credits')
-                .select('user_id, credits_balance, total_deposited')
-                .eq('wallet_address', senderWallet)
-                .single();
-              
-              if (!userCredit) {
-                console.log('No user found for wallet:', senderWallet);
-                continue;
-              }
-              
-              // Check if transaction already processed
-              const { data: existing } = await supabase
-                .from('credit_deposits')
-                .select('id')
-                .eq('tx_signature', txSignature)
-                .maybeSingle();
-                
-              if (existing) {
-                console.log('Transaction already processed:', txSignature);
-                continue;
-              }
-              
-              const creditsToAdd = transferAmount * CREDITS_PER_POLY;
-              const newBalance = (userCredit.credits_balance || 0) + creditsToAdd;
-              
-              // Update user credits
-              await supabase
-                .from('user_credits')
-                .update({
-                  credits_balance: newBalance,
-                  total_deposited: (userCredit.total_deposited || 0) + transferAmount
-                })
-                .eq('user_id', userCredit.user_id);
-              
-              // Record deposit
-              await supabase
-                .from('credit_deposits')
-                .insert({
-                  user_id: userCredit.user_id,
-                  wallet_address: senderWallet,
-                  amount: transferAmount,
-                  tx_signature: txSignature,
-                  status: 'confirmed'
-                });
-              
-              console.log(`Webhook: Added ${creditsToAdd} credits to user ${userCredit.user_id}`);
-            }
-          }
-        }
-        
-        return new Response(
-          JSON.stringify({ success: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      // NOTE: Webhook handling is now done by the dedicated helius-webhook edge function
+      // This function only handles get-deposit-address and verify-deposit actions
 
       return new Response(
         JSON.stringify({ error: 'Invalid action' }),
