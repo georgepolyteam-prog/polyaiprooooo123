@@ -7,8 +7,11 @@ import { WalletProvider } from "@/contexts/WalletContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { SecurityBanner } from "@/components/SecurityBanner";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import CheckEmail from "./pages/CheckEmail";
+import EmailConfirmation from "./pages/EmailConfirmation";
 import Dashboard from "./pages/Dashboard";
 import Leaderboard from "./pages/Leaderboard";
 import BuilderStats from "./pages/BuilderStats";
@@ -33,6 +36,7 @@ const AppContent = () => {
 
   return (
     <>
+      <SecurityBanner />
       <HighTrafficBanner isVisible={isHighTraffic} />
       <Toaster />
       <Sonner />
@@ -44,6 +48,8 @@ const AppContent = () => {
           <Route path="/trades" element={<LiveTrades />} />
           <Route path="/live-trades" element={<LiveTrades />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/check-email" element={<CheckEmail />} />
+          <Route path="/email-confirmation" element={<EmailConfirmation />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/builders" element={<BuilderStats />} />
