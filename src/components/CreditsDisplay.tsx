@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Zap, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,6 +20,16 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
 
   const isLow = credits <= 10;
   const isEmpty = credits === 0;
+
+  // Listen for open-credits-dialog event (triggered when user runs out of credits)
+  useEffect(() => {
+    const handleOpenDialog = () => {
+      setIsDepositOpen(true);
+    };
+
+    window.addEventListener("open-credits-dialog", handleOpenDialog);
+    return () => window.removeEventListener("open-credits-dialog", handleOpenDialog);
+  }, []);
 
   if (!user) {
     return null;
