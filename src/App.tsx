@@ -7,7 +7,7 @@ import { WalletProvider } from "@/contexts/WalletContext";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
-import { SecurityBanner } from "@/components/SecurityBanner";
+
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import CheckEmail from "./pages/CheckEmail";
@@ -36,7 +36,7 @@ const AppContent = () => {
 
   return (
     <>
-      <SecurityBanner />
+      
       <HighTrafficBanner isVisible={isHighTraffic} />
       <Toaster />
       <Sonner />
