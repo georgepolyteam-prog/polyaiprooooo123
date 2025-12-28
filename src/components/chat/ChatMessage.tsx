@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, ExternalLink, ChevronDown, AlertTriangle, SkipForward, Newspaper } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, ExternalLink, ChevronDown, AlertTriangle, SkipForward, Newspaper, Coins } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { MarketSelector } from "./MarketSelector";
@@ -597,7 +598,9 @@ const formatText = (text: string) => {
 };
 
 export const ChatMessage = ({ role, content, type, event, onSendMessage, isLatest = false, onContentChange, isStreaming = false }: ChatMessageProps) => {
+  const navigate = useNavigate();
   const isUser = role === "user";
+  const isOutOfCredits = content.toLowerCase().includes("out of credits") || content.toLowerCase().includes("you're out of credits");
   const [displayedContent, setDisplayedContent] = useState(isUser ? content : '');
   const [isTyping, setIsTyping] = useState(false);
   const [skipped, setSkipped] = useState(false);
@@ -825,6 +828,17 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
                 <div className="text-sm leading-relaxed break-words" style={{ overflowWrap: 'anywhere' }}>
                   {formatText(introText)}
                 </div>
+                
+                {/* Get Credits button when out of credits */}
+                {isOutOfCredits && (
+                  <button
+                    onClick={() => navigate('/credits')}
+                    className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground font-medium hover:opacity-90 transition-all shadow-lg"
+                  >
+                    <Coins className="w-5 h-5" />
+                    Get Credits
+                  </button>
+                )}
               </div>
             )}
 
