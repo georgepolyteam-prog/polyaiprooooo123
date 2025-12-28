@@ -2,34 +2,31 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, Check, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import polyLogo from "@/assets/poly-logo-new.png";
-import { validateEmail, validatePassword, checkHoneypot, getPasswordStrength } from "@/lib/bot-protection";
-import { cn } from "@/lib/utils";
 
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { isConnected } = useAccount();
   
+  // Support ?step=email to go directly to email form
   const initialStep = searchParams.get('step') === 'email' ? 'email' : 'choose';
   const nextUrl = searchParams.get('next') || '/';
   
   const [step, setStep] = useState<"choose" | "email">(initialStep);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [honeypot, setHoneypot] = useState(""); // Hidden honeypot field
   const [isLoading, setIsLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  // Check for existing session - only redirect if user has an account session
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
@@ -56,48 +53,8 @@ const Auth = () => {
     }
   };
 
-  const validateFields = (): boolean => {
-    let valid = true;
-
-    // Check honeypot - bots fill hidden fields
-    if (checkHoneypot(honeypot)) {
-      // Silently reject bots
-      toast.error("Please try again later");
-      return false;
-    }
-
-    // Validate email
-    const emailResult = validateEmail(email);
-    if (!emailResult.valid) {
-      setEmailError(emailResult.error || 'Invalid email');
-      valid = false;
-    } else {
-      setEmailError(null);
-    }
-
-    // Validate password for signup
-    if (!isLogin) {
-      const passwordResult = validatePassword(password);
-      if (!passwordResult.valid) {
-        setPasswordError(passwordResult.error || 'Invalid password');
-        valid = false;
-      } else {
-        setPasswordError(null);
-      }
-    } else {
-      setPasswordError(null);
-    }
-
-    return valid;
-  };
-
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateFields()) {
-      return;
-    }
-
     setIsLoading(true);
 
     const timeout = setTimeout(() => {
@@ -116,7 +73,7 @@ const Auth = () => {
           if (error.message.includes("Invalid login credentials")) {
             toast.error("Invalid email or password");
           } else if (error.message.includes("Email not confirmed")) {
-            toast.error("Please verify your email first. Check your inbox.");
+            toast.error("Please verify your email first");
           } else {
             throw error;
           }
@@ -126,28 +83,11 @@ const Auth = () => {
         toast.success("Welcome back!");
         navigate(nextUrl);
       } else {
-        // Check rate limiting before signup
-        try {
-          const response = await supabase.functions.invoke('validate-signup', {
-            body: { email }
-          });
-          
-          if (response.error || !response.data?.allowed) {
-            toast.error(response.data?.error || 'Too many signup attempts. Please try again later.');
-            setIsLoading(false);
-            clearTimeout(timeout);
-            return;
-          }
-        } catch (rateLimitError) {
-          // If rate limit check fails, proceed with signup
-          console.warn('Rate limit check failed, proceeding:', rateLimitError);
-        }
-
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/email-confirmation`,
+            emailRedirectTo: `${window.location.origin}/`,
           },
         });
         clearTimeout(timeout);
@@ -161,9 +101,14 @@ const Auth = () => {
           setIsLoading(false);
           return;
         }
-        
-        // Since email confirmation is required, redirect to check email page
-        navigate(`/check-email?email=${encodeURIComponent(email)}`);
+        if (data.session) {
+          toast.success("Account created!");
+          navigate(nextUrl);
+          return;
+        }
+        if (data.user) {
+          toast.success("Check your email to confirm your account");
+        }
       }
     } catch (error: any) {
       clearTimeout(timeout);
@@ -172,8 +117,6 @@ const Auth = () => {
       setIsLoading(false);
     }
   };
-
-  const passwordStrength = !isLogin && password ? getPasswordStrength(password) : null;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
@@ -264,18 +207,6 @@ const Auth = () => {
                 </div>
               ) : (
                 <form onSubmit={handleEmailSubmit} className="space-y-4">
-                  {/* Honeypot - Hidden from humans, visible to bots */}
-                  <input
-                    type="text"
-                    name="website"
-                    value={honeypot}
-                    onChange={(e) => setHoneypot(e.target.value)}
-                    style={{ display: 'none' }}
-                    tabIndex={-1}
-                    autoComplete="off"
-                    aria-hidden="true"
-                  />
-
                   {/* Email Input */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -286,24 +217,12 @@ const Auth = () => {
                       <Input
                         type="email"
                         value={email}
-                        onChange={(e) => {
-                          setEmail(e.target.value);
-                          setEmailError(null);
-                        }}
+                        onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@example.com"
-                        className={cn(
-                          "pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white",
-                          emailError && "border-red-500 dark:border-red-500"
-                        )}
+                        className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
                         required
                       />
                     </div>
-                    {emailError && (
-                      <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
-                        {emailError}
-                      </p>
-                    )}
                   </div>
 
                   {/* Password Input */}
@@ -316,17 +235,11 @@ const Auth = () => {
                       <Input
                         type={showPassword ? "text" : "password"}
                         value={password}
-                        onChange={(e) => {
-                          setPassword(e.target.value);
-                          setPasswordError(null);
-                        }}
+                        onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className={cn(
-                          "pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white",
-                          passwordError && "border-red-500 dark:border-red-500"
-                        )}
+                        className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
                         required
-                        minLength={8}
+                        minLength={6}
                       />
                       <button
                         type="button"
@@ -336,47 +249,6 @@ const Auth = () => {
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
-                    {passwordError && (
-                      <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
-                        {passwordError}
-                      </p>
-                    )}
-                    {/* Password strength indicator for signup */}
-                    {!isLogin && password && (
-                      <div className="mt-2">
-                        <div className="flex gap-1">
-                          <div className={cn(
-                            "h-1 flex-1 rounded-full transition-colors",
-                            passwordStrength === 'weak' ? 'bg-red-500' : 
-                            passwordStrength === 'medium' ? 'bg-amber-500' : 'bg-green-500'
-                          )} />
-                          <div className={cn(
-                            "h-1 flex-1 rounded-full transition-colors",
-                            passwordStrength === 'medium' ? 'bg-amber-500' : 
-                            passwordStrength === 'strong' ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'
-                          )} />
-                          <div className={cn(
-                            "h-1 flex-1 rounded-full transition-colors",
-                            passwordStrength === 'strong' ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'
-                          )} />
-                        </div>
-                        <p className={cn(
-                          "text-xs mt-1",
-                          passwordStrength === 'weak' ? 'text-red-500' : 
-                          passwordStrength === 'medium' ? 'text-amber-500' : 'text-green-500'
-                        )}>
-                          {passwordStrength === 'weak' && 'Weak password'}
-                          {passwordStrength === 'medium' && 'Medium strength'}
-                          {passwordStrength === 'strong' && 'Strong password'}
-                        </p>
-                      </div>
-                    )}
-                    {!isLogin && (
-                      <p className="mt-2 text-xs text-gray-500">
-                        Min 8 characters with a number and special character
-                      </p>
-                    )}
                   </div>
 
                   {/* Submit Button */}
@@ -399,11 +271,7 @@ const Auth = () => {
                     {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsLogin(!isLogin);
-                        setEmailError(null);
-                        setPasswordError(null);
-                      }}
+                      onClick={() => setIsLogin(!isLogin)}
                       className="text-blue-600 hover:text-blue-700 font-medium"
                     >
                       {isLogin ? "Sign up" : "Sign in"}

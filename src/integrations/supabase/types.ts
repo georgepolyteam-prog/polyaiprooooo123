@@ -344,36 +344,6 @@ export type Database = {
         }
         Relationships: []
       }
-      signup_logs: {
-        Row: {
-          created_at: string
-          email: string
-          id: string
-          ip_address: string | null
-          is_suspicious: boolean | null
-          rejection_reason: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          id?: string
-          ip_address?: string | null
-          is_suspicious?: boolean | null
-          rejection_reason?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          id?: string
-          ip_address?: string | null
-          is_suspicious?: boolean | null
-          rejection_reason?: string | null
-          user_agent?: string | null
-        }
-        Relationships: []
-      }
       system_stats: {
         Row: {
           id: string
