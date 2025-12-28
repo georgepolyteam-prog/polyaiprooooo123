@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CreditsDisplay } from "@/components/CreditsDisplay";
 
 const navItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
@@ -20,6 +21,7 @@ const menuItems = [
 ];
 
 const additionalMenuItems = [
+  { id: "credits", label: "Get Credits", icon: Zap, path: "/credits" },
   { id: "tracked-wallets", label: "Tracked Wallets", icon: Star, path: "/tracked-wallets" },
   { id: "about", label: "About", icon: Info, path: "/about" },
   { id: "help", label: "Help & Support", icon: HelpCircle, path: "/help" },
@@ -156,6 +158,10 @@ export function MobileBottomNav() {
 
           {/* Menu Content */}
           <div className="flex flex-col items-center justify-center h-full max-w-md mx-auto px-8 py-20">
+            {/* Credits Display at top */}
+            <div className="w-full mb-6">
+              <CreditsDisplay className="w-full justify-center" />
+            </div>
             {/* Main Navigation */}
             <div className="w-full space-y-3">
               {menuItems.map((item) => {

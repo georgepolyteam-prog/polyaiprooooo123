@@ -19,6 +19,7 @@ import {
   Radio,
   BookOpen,
   Star,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
@@ -34,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CreditsDisplay } from "@/components/CreditsDisplay";
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -257,6 +259,9 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
 
           {/* Right Actions - Desktop */}
           <div className="hidden md:flex items-center gap-2">
+            {/* Credits Display */}
+            <CreditsDisplay />
+            
             {/* Wallet Dropdown or Connect */}
             {isConnected && address ? (
               <DropdownMenu>

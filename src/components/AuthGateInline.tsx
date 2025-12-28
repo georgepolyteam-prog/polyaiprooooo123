@@ -39,7 +39,7 @@ export const AuthGateInline = () => {
 
         {/* Subtle footer */}
         <p className="text-gray-400 text-xs mt-4 text-center">
-          Free to use • No credit card required
+          Powered by POLY tokens
         </p>
       </div>
     </div>
