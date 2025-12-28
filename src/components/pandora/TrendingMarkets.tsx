@@ -1,6 +1,7 @@
 import { useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, TrendingUp } from 'lucide-react';
+import { ChevronRight, TrendingUp, Sparkles } from 'lucide-react';
 import { PandoraMarket, formatVolume } from '@/lib/pandora-api';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,7 @@ interface TrendingMarketsProps {
 
 export function TrendingMarkets({ markets, onMarketClick }: TrendingMarketsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -20,6 +22,24 @@ export function TrendingMarkets({ markets, onMarketClick }: TrendingMarketsProps
         behavior: 'smooth'
       });
     }
+  };
+
+  const handleAnalyze = (e: React.MouseEvent, market: PandoraMarket) => {
+    e.stopPropagation();
+    navigate('/chat', {
+      state: {
+        autoAnalyze: true,
+        marketContext: {
+          eventTitle: market.question,
+          outcomeQuestion: market.question,
+          currentOdds: market.currentOddsYes / 100,
+          volume: parseFloat(market.totalVolume),
+          url: `https://pandora.sonic.game/market/${market.marketAddress}`,
+          slug: market.id,
+          eventSlug: market.id,
+        }
+      }
+    });
   };
 
   if (!markets.length) return null;
@@ -91,15 +111,26 @@ export function TrendingMarkets({ markets, onMarketClick }: TrendingMarketsProps
             </div>
             
             {/* Stats */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground tabular-nums">
-                {formatVolume(market.totalVolume)}
-              </span>
-              <span>vol</span>
-              <span className="text-border">•</span>
-              <span className="tabular-nums">{market.totalTrades}</span>
-              <span>traders</span>
+            <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatVolume(market.totalVolume)}
+                </span>
+                <span>vol</span>
+                <span className="text-border">•</span>
+                <span className="tabular-nums">{market.totalTrades}</span>
+                <span>traders</span>
+              </div>
             </div>
+
+            {/* Analyze Button */}
+            <button
+              onClick={(e) => handleAnalyze(e, market)}
+              className="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Analyze with AI
+            </button>
           </motion.div>
         ))}
       </div>

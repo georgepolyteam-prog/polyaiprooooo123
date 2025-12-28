@@ -4305,7 +4305,7 @@ If only 1 result, analyze it directly.
               }
             }
             
-            if (activeMarkets.length >= 3 && !hasSpecificTarget && !voiceMode && !deepResearch) {
+            if (activeMarkets.length >= 3 && !hasSpecificTarget && !voiceMode) {
               console.log(`[CHOOSER] Detected ${activeMarkets.length} markets, returning chooser UI`);
               
               // Build chooser response directly - no Claude call needed
@@ -4337,16 +4337,11 @@ Reply with a number (e.g. "1") or a name (e.g. "Kevin Hassett").`;
                     yesPrice: m.yesPrice,
                     volume: m.volume,
                     url: m.url
-                  }))
+                  })),
+                  eventSlug: marketData.eventSlug
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
-            }
-            
-            // When deepResearch is enabled and no specific target, auto-select top market
-            if (deepResearch && !hasSpecificTarget && activeMarkets.length > 0) {
-              console.log(`[DeepResearch] Auto-selecting top market for deep analysis`);
-              marketData.targetMarket = activeMarkets[0];
             }
           }
           
