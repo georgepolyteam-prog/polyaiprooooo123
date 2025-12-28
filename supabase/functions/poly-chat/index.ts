@@ -3189,6 +3189,73 @@ serve(async (req) => {
       }
     }
 
+    // ============= CREDIT SYSTEM CHECK =============
+    // Check if user has sufficient credits for this request
+    const adminSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    // Only check credits for Supabase authenticated users with valid UUID
+    const isValidUUID = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    
+    if (authMethod === 'supabase' && isValidUUID) {
+      const { data: userCredits, error: creditsError } = await adminSupabase
+        .from('user_credits')
+        .select('credits_balance')
+        .eq('user_id', userId)
+        .single();
+
+      // If no credits record exists, create one with initial credits
+      if (creditsError && creditsError.code === 'PGRST116') {
+        // No record found - create initial credits
+        console.log(`[CREDITS] Creating initial credits for user ${userId!.substring(0, 8)}...`);
+        await adminSupabase
+          .from('user_credits')
+          .insert({
+            user_id: userId,
+            credits_balance: 100, // Initial free credits
+            total_deposited: 0,
+            total_spent: 0
+          });
+      } else if (userCredits) {
+        // Check if user has credits
+        if (userCredits.credits_balance < 1) {
+          console.log(`[CREDITS] ❌ User ${userId!.substring(0, 8)}... has insufficient credits: ${userCredits.credits_balance}`);
+          return corsResponse(
+            { 
+              error: "Insufficient credits. Please deposit POLY tokens to continue.",
+              needsCredits: true,
+              creditsBalance: userCredits.credits_balance
+            },
+            402 // Payment Required
+          );
+        }
+        
+        console.log(`[CREDITS] ✅ User ${userId!.substring(0, 8)}... has ${userCredits.credits_balance} credits`);
+        
+        // Deduct 1 credit for this request (upfront)
+        const newBalance = userCredits.credits_balance - 1;
+        await adminSupabase
+          .from('user_credits')
+          .update({
+            credits_balance: newBalance,
+            total_spent: (userCredits.credits_balance || 0) + 1
+          })
+          .eq('user_id', userId);
+        
+        // Log credit usage
+        await adminSupabase
+          .from('credit_usage')
+          .insert({
+            user_id: userId,
+            credits_used: 1
+          });
+        
+        console.log(`[CREDITS] 💳 Deducted 1 credit, new balance: ${newBalance}`);
+      }
+    }
+
     // Per-conversation rate limiting (if conversationId provided)
     if (conversationId) {
       const convRateLimit = checkRateLimit(conversationId, conversationRateLimitMap, RATE_LIMIT.CONV_MAX_REQUESTS, RATE_LIMIT.CONV_WINDOW_MS);

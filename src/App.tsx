@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { WalletProvider } from "@/contexts/WalletContext";
+import { SolanaWalletProvider } from "@/providers/SolanaWalletProvider";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
@@ -68,13 +69,15 @@ const AppContent = () => {
 };
 
 const App = () => (
-  <WalletProvider>
-    <ThemeProvider>
-      <TooltipProvider>
-        <AppContent />
-      </TooltipProvider>
-    </ThemeProvider>
-  </WalletProvider>
+  <SolanaWalletProvider>
+    <WalletProvider>
+      <ThemeProvider>
+        <TooltipProvider>
+          <AppContent />
+        </TooltipProvider>
+      </ThemeProvider>
+    </WalletProvider>
+  </SolanaWalletProvider>
 );
 
 export default App;

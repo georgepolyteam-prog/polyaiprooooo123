@@ -362,7 +362,19 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
             clearRetryState();
           }
         } else if (response.status === 402) {
-          toast.error("AI credits depleted. Please add more credits to continue.");
+          const needsCreditsMsg = errorData.needsCredits 
+            ? `Out of credits (${errorData.creditsBalance || 0} remaining). Deposit POLY tokens to continue.`
+            : "AI credits depleted. Please add more credits to continue.";
+          toast.error(needsCreditsMsg, {
+            action: {
+              label: "Get Credits",
+              onClick: () => window.dispatchEvent(new CustomEvent("open-credits-dialog"))
+            }
+          });
+          updateAssistant(
+            "You're out of credits. 💳 Click on the **credits button** in the top bar to deposit POLY tokens and continue chatting.",
+            false
+          );
         } else {
           toast.error(errorData.error || "Failed to get response from Poly");
         }
