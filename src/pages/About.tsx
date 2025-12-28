@@ -344,7 +344,7 @@ const About = () => {
             
             <div className="relative bg-gradient-to-br from-[#121212] to-[#0a0a1a] p-8 md:p-10 rounded-2xl border border-blue-500/30 overflow-hidden">
               {/* Animated background pattern */}
-              <div className="absolute inset-0 opacity-10">
+              <div className="absolute inset-0 opacity-10 pointer-events-none">
                 <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.3),transparent_50%)] animate-pulse" />
               </div>
               
