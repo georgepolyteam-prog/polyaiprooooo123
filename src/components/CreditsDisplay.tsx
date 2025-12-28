@@ -1,52 +1,29 @@
-import { useState, useEffect } from "react";
-import { Zap, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { Zap, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { useCredits } from "@/hooks/useCredits";
+import { DepositCreditsDialog } from "@/components/credits/DepositCreditsDialog";
+import { useAuth } from "@/hooks/useAuth";
 
 interface CreditsDisplayProps {
   className?: string;
 }
 
 export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
-  const [credits, setCredits] = useState(() => {
-    const stored = localStorage.getItem("echo-credits");
-    return stored ? parseInt(stored, 10) : 100;
-  });
-  const [usedToday, setUsedToday] = useState(() => {
-    const stored = localStorage.getItem("echo-credits-used-today");
-    const date = localStorage.getItem("echo-credits-date");
-    const today = new Date().toDateString();
-    if (date !== today) {
-      localStorage.setItem("echo-credits-date", today);
-      localStorage.setItem("echo-credits-used-today", "0");
-      return 0;
-    }
-    return stored ? parseInt(stored, 10) : 0;
-  });
+  const { user } = useAuth();
+  const { credits, totalSpent, isLoading, refetch } = useCredits();
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    const handleCreditUse = () => {
-      setCredits((prev) => {
-        const newCredits = Math.max(0, prev - 1);
-        localStorage.setItem("echo-credits", String(newCredits));
-        return newCredits;
-      });
-      setUsedToday((prev) => {
-        const newUsed = prev + 1;
-        localStorage.setItem("echo-credits-used-today", String(newUsed));
-        return newUsed;
-      });
-    };
-
-    window.addEventListener("echo-credit-used", handleCreditUse);
-    return () => window.removeEventListener("echo-credit-used", handleCreditUse);
-  }, []);
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
 
   const isLow = credits <= 10;
   const isEmpty = credits === 0;
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <>
@@ -62,8 +39,14 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
           className,
         )}
       >
-        <Zap className="w-4 h-4" />
-        <span>{credits} credits</span>
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <>
+            <Zap className="w-4 h-4" />
+            <span>{credits} credits</span>
+          </>
+        )}
       </button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -78,11 +61,13 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
           <div className="py-4 space-y-6">
             {/* Credit Balance */}
             <div className="text-center py-6 bg-muted/50 rounded-lg">
-              <div className="text-5xl font-semibold text-foreground tabular-nums">{credits}</div>
+              <div className="text-5xl font-semibold text-foreground tabular-nums">
+                {isLoading ? <Loader2 className="w-8 h-8 animate-spin mx-auto" /> : credits}
+              </div>
               <div className="text-sm text-muted-foreground mt-1">credits remaining</div>
 
               <Progress
-                value={(credits / 100) * 100}
+                value={Math.min((credits / 1000) * 100, 100)}
                 className={cn(
                   "h-2 mt-4 mx-auto max-w-[200px]",
                   isEmpty && "[&>div]:bg-destructive",
@@ -94,8 +79,8 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
             {/* Usage Stats */}
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-muted/30 rounded-lg text-center">
-                <div className="text-2xl font-semibold text-foreground">{usedToday}</div>
-                <div className="text-xs text-muted-foreground mt-1">Used today</div>
+                <div className="text-2xl font-semibold text-foreground">{totalSpent}</div>
+                <div className="text-xs text-muted-foreground mt-1">Total used</div>
               </div>
               <div className="p-4 bg-muted/30 rounded-lg text-center">
                 <div className="text-2xl font-semibold text-foreground">1</div>
@@ -105,33 +90,33 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
 
             {/* Info */}
             <div className="text-sm text-muted-foreground bg-secondary/30 rounded-lg p-4">
-              <p>Each AI analysis costs 1 credit. You started with 100 free credits.</p>
+              <p>Each AI analysis costs 1 credit. Deposit POLY tokens to get more credits.</p>
             </div>
 
             {/* Get More Credits */}
-            <Button className="w-full gap-2" variant={isEmpty ? "default" : "outline"} disabled>
+            <Button 
+              className="w-full gap-2" 
+              variant={isEmpty ? "default" : "outline"}
+              onClick={() => {
+                setIsOpen(false);
+                setIsDepositOpen(true);
+              }}
+            >
               <span>Get More Credits</span>
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <p className="text-center text-xs text-muted-foreground">Coming Soon</p>
           </div>
         </DialogContent>
       </Dialog>
+
+      <DepositCreditsDialog 
+        open={isDepositOpen} 
+        onOpenChange={setIsDepositOpen}
+        onSuccess={refetch}
+      />
     </>
   );
 };
 
-export const useCredits = () => {
-  const useCredit = () => {
-    window.dispatchEvent(new CustomEvent("echo-credit-used"));
-  };
-
-  const getCredits = () => {
-    const stored = localStorage.getItem("echo-credits");
-    return stored ? parseInt(stored, 10) : 100;
-  };
-
-  const hasCredits = () => getCredits() > 0;
-
-  return { useCredit, getCredits, hasCredits };
-};
+// Legacy export for backwards compatibility
+export { useCredits } from "@/hooks/useCredits";

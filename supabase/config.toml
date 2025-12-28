@@ -1,5 +1,8 @@
 project_id = "rgmzmtsgpxxzxvdcwsdx"
 
+[functions.process-deposit]
+verify_jwt = false
+
 [functions.get-market-previews]
 verify_jwt = false
 
