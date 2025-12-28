@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
 import { PandoraMarket, formatVolume, formatTimeRemaining } from '@/lib/pandora-api';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +29,25 @@ export function MarketsGrid({ markets, onMarketClick }: MarketsGridProps) {
   const [displayCount, setDisplayCount] = useState(12);
   const visibleMarkets = markets.slice(0, displayCount);
   const hasMore = displayCount < markets.length;
+  const navigate = useNavigate();
+
+  const handleAnalyze = (e: React.MouseEvent, market: PandoraMarket) => {
+    e.stopPropagation();
+    navigate('/chat', {
+      state: {
+        autoAnalyze: true,
+        marketContext: {
+          eventTitle: market.question,
+          outcomeQuestion: market.question,
+          currentOdds: market.currentOddsYes / 100,
+          volume: parseFloat(market.totalVolume),
+          url: `https://pandora.sonic.game/market/${market.marketAddress}`,
+          slug: market.id,
+          eventSlug: market.id,
+        }
+      }
+    });
+  };
 
   if (!markets.length) {
     return (
@@ -111,7 +132,7 @@ export function MarketsGrid({ markets, onMarketClick }: MarketsGridProps) {
             </div>
             
             {/* Footer stats */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
               <span className="font-medium text-foreground tabular-nums">
                 {formatVolume(market.totalVolume)}
               </span>
@@ -120,6 +141,15 @@ export function MarketsGrid({ markets, onMarketClick }: MarketsGridProps) {
               <span className="text-border">•</span>
               <span className="tabular-nums">{formatTimeRemaining(market.endDate)}</span>
             </div>
+
+            {/* Analyze Button */}
+            <button
+              onClick={(e) => handleAnalyze(e, market)}
+              className="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Analyze with AI
+            </button>
           </motion.div>
         ))}
       </motion.div>
