@@ -45,7 +45,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: "When does the $POLY payment system launch?",
-    answer: "The $POLY payment integration launches January 6, 2026 at 00:00 UTC. The platform itself is already live and operational. After launch, users will need $POLY tokens to access features. Currently, all features are free during the testing phase."
+    answer: "The $POLY payment integration is currently being implemented and tested. Check our Status page for the latest updates on development progress."
   },
   {
     question: "How do I acquire $POLY tokens?",
@@ -57,7 +57,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: "Can I use the platform before $POLY integration?",
-    answer: "Yes. All platform features are currently live and available for free during the testing phase. You can access AI chat, view markets, analyze orderbooks, execute trades, set limit orders, and monitor positions without needing $POLY until January 6, 2026."
+    answer: "Yes. All platform features are currently live and available for free during the testing phase. You can access AI chat, view markets, analyze orderbooks, execute trades, set limit orders, and monitor positions."
   },
   {
     question: "How does the 70/30 tokenomics work?",
@@ -65,7 +65,6 @@ const faqItems: FAQItem[] = [
   }
 ];
 
-const LAUNCH_DATE = new Date('2026-01-06T00:00:00Z');
 const CONTRACT_ADDRESS = "982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump";
 
 // Animation variants
@@ -89,7 +88,6 @@ const scaleIn = {
 
 const About = () => {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [launchModalOpen, setLaunchModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const { data: priceData, isLoading: priceLoading } = usePolyPrice(30000);
@@ -114,25 +112,6 @@ const About = () => {
     toast.success('Contract address copied!');
     setTimeout(() => setCopied(false), 2000);
   };
-
-  useEffect(() => {
-    const updateCountdown = () => {
-      const now = new Date();
-      const diff = LAUNCH_DATE.getTime() - now.getTime();
-      
-      if (diff > 0) {
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        setCountdown({ days, hours, minutes, seconds });
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const formatPrice = (price: number) => {
     if (price < 0.0001) return price.toFixed(10);
@@ -329,7 +308,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* Launch Notice Section */}
+      {/* Development Status Section */}
       <section className="py-16 px-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#1a0a2e]/50 via-[#0f0f1a] to-[#0a0a0a]" />
         <div className="absolute inset-0 cyber-grid opacity-20" />
@@ -349,45 +328,62 @@ const About = () => {
             <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
               $POLY Payment Integration
             </h2>
-            <p className="text-lg text-gray-400 mb-2">Token Payment System Goes Live</p>
-            <p className="text-xl md:text-2xl text-blue-400 font-bold mb-10">January 6, 2026 - 00:00 UTC</p>
+            <p className="text-lg text-gray-400 mb-8">Token Payment System</p>
           </motion.div>
 
-          {/* Countdown */}
+          {/* In Progress Card */}
           <motion.div
-            initial="hidden"
-            whileInView="visible"
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            variants={staggerContainer}
-            className="flex flex-wrap gap-4 md:gap-6 justify-center mb-12"
+            transition={{ duration: 0.6 }}
+            className="relative max-w-xl mx-auto mb-8"
           >
-            {[
-              { value: countdown.days, label: 'Days' },
-              { value: countdown.hours, label: 'Hours' },
-              { value: countdown.minutes, label: 'Minutes' },
-              { value: countdown.seconds, label: 'Seconds' },
-            ].map((unit, i) => (
+            {/* Animated glow background */}
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-cyan-500/20 rounded-2xl blur-xl animate-pulse" />
+            
+            <div className="relative bg-gradient-to-br from-[#121212] to-[#0a0a1a] p-8 md:p-10 rounded-2xl border border-blue-500/30 overflow-hidden">
+              {/* Animated background pattern */}
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.3),transparent_50%)] animate-pulse" />
+              </div>
+              
+              {/* Spinning loader icon */}
               <motion.div 
-                key={i}
-                variants={scaleIn}
-                className="relative group"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-cyan-500 p-[3px]"
               >
-                <div className="absolute inset-0 bg-blue-500/20 rounded-xl blur-lg group-hover:bg-blue-500/30 transition-colors" />
-                <div className="relative bg-[#121212] px-5 py-4 md:px-8 md:py-6 rounded-xl border-2 border-blue-500/50 min-w-[85px] md:min-w-[110px] hover:border-blue-400 transition-colors">
-                  <motion.span 
-                    key={unit.value}
-                    initial={{ y: -10, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="text-3xl md:text-5xl font-black text-blue-400 block font-mono"
-                  >
-                    {String(unit.value).padStart(2, '0')}
-                  </motion.span>
-                  <span className="text-gray-400 text-xs uppercase tracking-wider mt-2 block">
-                    {unit.label}
-                  </span>
+                <div className="w-full h-full rounded-full bg-[#121212] flex items-center justify-center">
+                  <Wrench className="w-7 h-7 text-blue-400" />
                 </div>
               </motion.div>
-            ))}
+              
+              <h3 className="text-2xl md:text-3xl font-bold text-white mb-3">
+                Implementation in Progress
+              </h3>
+              <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                We're actively building and testing the $POLY token credit system. Stay tuned for updates!
+              </p>
+              
+              {/* Status link button */}
+              <Link to="/status">
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all"
+                >
+                  <Activity className="w-5 h-5" />
+                  Check Development Status
+                  <motion.span 
+                    animate={{ x: [0, 4, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    →
+                  </motion.span>
+                </motion.button>
+              </Link>
+            </div>
           </motion.div>
 
           {/* Explanation Box */}
@@ -395,19 +391,19 @@ const About = () => {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
             className="bg-gradient-to-br from-[#121212] to-[#0f0f1a] p-6 md:p-8 rounded-2xl border border-white/10 text-left max-w-2xl mx-auto backdrop-blur-sm"
           >
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <Zap className="w-5 h-5 text-yellow-400" />
-              What's Launching?
+              What's Coming?
             </h3>
             <div className="space-y-4 text-gray-400 leading-relaxed text-sm">
               <p>
                 <strong className="text-white">The Platform is Already Live:</strong> All features (AI chat, trading, markets, orderbooks, limit orders) are currently operational and available for free.
               </p>
               <p>
-                <strong className="text-white">Launching January 6:</strong> The $POLY payment system integration. After this date, users will need $POLY tokens to access platform features.
+                <strong className="text-white">Coming Soon:</strong> The $POLY payment system integration. After launch, users will need $POLY tokens to access platform features.
               </p>
               <p>
                 <strong className="text-white">70/30 Tokenomics:</strong> When you spend $POLY, 70% is permanently burned (deflationary) and 30% funds ongoing development.
