@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { ArrowLeft, Copy, Check, Zap, ExternalLink, Loader2, Wallet, History } from "lucide-react";
+import { ArrowLeft, Copy, Check, Zap, ExternalLink, Loader2, Wallet, History, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import { useCredits } from "@/hooks/useCredits";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +40,12 @@ const Credits = () => {
   const [usage, setUsage] = useState<UsageRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [linking, setLinking] = useState(false);
+  
+  // Manual verification state
+  const [showVerify, setShowVerify] = useState(false);
+  const [txSignature, setTxSignature] = useState("");
+  const [verifyAmount, setVerifyAmount] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   // Link Solana wallet to user account
   useEffect(() => {
@@ -138,6 +145,60 @@ const Credits = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Manual deposit verification
+  const handleVerifyDeposit = async () => {
+    if (!user?.id || !publicKey || !txSignature || !verifyAmount) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setVerifying(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-deposit', {
+        body: {
+          action: 'verify-deposit',
+          txSignature: txSignature.trim(),
+          userId: user.id,
+          walletAddress: publicKey.toString(),
+          amount: parseFloat(verifyAmount)
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.status === 'pending') {
+        toast.info(data.message || "Transaction is still pending. Please wait and try again.");
+        return;
+      }
+
+      if (data.success) {
+        toast.success(`Added ${data.creditsAdded} credits!`);
+        setTxSignature("");
+        setVerifyAmount("");
+        setShowVerify(false);
+        refetch();
+        
+        // Refresh deposit history
+        const { data: newDeposits } = await supabase
+          .from('credit_deposits')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (newDeposits) setDeposits(newDeposits);
+      } else if (data.error) {
+        toast.error(data.error);
+      }
+    } catch (err: any) {
+      console.error("Verification error:", err);
+      toast.error(err.message || "Failed to verify deposit");
+    } finally {
+      setVerifying(false);
+    }
   };
 
   if (!user) {
@@ -266,6 +327,64 @@ const Credits = () => {
                   ✅ Wallet connected: {publicKey?.toString().substring(0, 4)}...{publicKey?.toString().slice(-4)}
                 </div>
               )}
+
+              <Separator />
+
+              {/* Manual Verification Fallback */}
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowVerify(!showVerify)}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  {showVerify ? "Hide Manual Verification" : "Deposit not showing? Verify manually"}
+                </Button>
+
+                {showVerify && connected && (
+                  <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">
+                      If your deposit didn't appear automatically, enter the transaction details below:
+                    </p>
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="Transaction signature"
+                        value={txSignature}
+                        onChange={(e) => setTxSignature(e.target.value)}
+                        className="text-xs font-mono"
+                      />
+                      <Input
+                        placeholder="Amount of POLY sent"
+                        type="number"
+                        value={verifyAmount}
+                        onChange={(e) => setVerifyAmount(e.target.value)}
+                      />
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={handleVerifyDeposit}
+                        disabled={verifying || !txSignature || !verifyAmount}
+                      >
+                        {verifying ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Verifying...
+                          </>
+                        ) : (
+                          "Verify Deposit"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {showVerify && !connected && (
+                  <p className="text-xs text-amber-500 text-center">
+                    Connect your wallet first to verify a deposit
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
