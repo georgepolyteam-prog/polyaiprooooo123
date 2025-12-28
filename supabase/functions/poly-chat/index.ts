@@ -3206,18 +3206,17 @@ serve(async (req) => {
         .eq('user_id', userId)
         .single();
 
-      // If no credits record exists, create one with initial credits
+      // If no credits record exists, user needs to deposit first (NO FREE CREDITS)
       if (creditsError && creditsError.code === 'PGRST116') {
-        // No record found - create initial credits
-        console.log(`[CREDITS] Creating initial credits for user ${userId!.substring(0, 8)}...`);
-        await adminSupabase
-          .from('user_credits')
-          .insert({
-            user_id: userId,
-            credits_balance: 100, // Initial free credits
-            total_deposited: 0,
-            total_spent: 0
-          });
+        console.log(`[CREDITS] ❌ No credits record for user ${userId!.substring(0, 8)}... - needs to deposit`);
+        return corsResponse(
+          { 
+            error: "No credits available. Please deposit POLY tokens to start chatting.",
+            needsCredits: true,
+            creditsBalance: 0
+          },
+          402 // Payment Required
+        );
       } else if (userCredits) {
         // Check if user has credits
         if (userCredits.credits_balance < 1) {
