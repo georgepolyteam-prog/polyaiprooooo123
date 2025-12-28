@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
-  { id: "traders", label: "Traders", icon: Users, path: "/leaderboard" },
+  { id: "live-trades", label: "Live", icon: Activity, path: "/live-trades" },
   { id: "chat", label: "Chat", icon: MessageSquare, path: "/", isCenter: true },
   { id: "my-trades", label: "Trades", icon: Wallet, path: "/my-trades" },
   { id: "menu", label: "Menu", icon: Menu, path: null },
@@ -13,14 +13,15 @@ const navItems = [
 
 const menuItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
-  { id: "traders", label: "Traders", icon: Users, path: "/leaderboard" },
+  { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
+  { id: "traders", label: "Leaderboard", icon: Users, path: "/leaderboard" },
   { id: "chat", label: "Chat (Home)", icon: MessageSquare, path: "/" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
 ];
 
 const additionalMenuItems = [
-  { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
   { id: "tracked-wallets", label: "Tracked Wallets", icon: Star, path: "/tracked-wallets" },
+  { id: "about", label: "About", icon: Info, path: "/about" },
   { id: "help", label: "Help & Support", icon: HelpCircle, path: "/help" },
   { id: "docs", label: "Documentation", icon: FileText, path: "/docs" },
 ];
