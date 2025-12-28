@@ -77,6 +77,60 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_deposits: {
+        Row: {
+          amount: number
+          created_at: string | null
+          id: string
+          status: string | null
+          tx_signature: string
+          user_id: string
+          wallet_address: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          tx_signature: string
+          user_id: string
+          wallet_address: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          tx_signature?: string
+          user_id?: string
+          wallet_address?: string
+        }
+        Relationships: []
+      }
+      credit_usage: {
+        Row: {
+          created_at: string | null
+          credits_used: number | null
+          id: string
+          message_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          credits_used?: number | null
+          id?: string
+          message_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          credits_used?: number | null
+          id?: string
+          message_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       help_tickets: {
         Row: {
           created_at: string
@@ -461,6 +515,39 @@ export type Database = {
           id?: number
           last_mention_id?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_credits: {
+        Row: {
+          created_at: string | null
+          credits_balance: number | null
+          id: string
+          total_deposited: number | null
+          total_spent: number | null
+          updated_at: string | null
+          user_id: string
+          wallet_address: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          credits_balance?: number | null
+          id?: string
+          total_deposited?: number | null
+          total_spent?: number | null
+          updated_at?: string | null
+          user_id: string
+          wallet_address?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          credits_balance?: number | null
+          id?: string
+          total_deposited?: number | null
+          total_spent?: number | null
+          updated_at?: string | null
+          user_id?: string
+          wallet_address?: string | null
         }
         Relationships: []
       }
