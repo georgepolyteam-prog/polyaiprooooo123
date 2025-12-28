@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAccount } from "wagmi";
 import { motion } from "framer-motion";
@@ -9,6 +9,31 @@ import { ConnectWallet } from "@/components/ConnectWallet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import polyLogo from "@/assets/poly-logo-new.png";
+
+// Bot detection: suspicious email patterns
+const SUSPICIOUS_EMAIL_PATTERNS = [
+  /^test\d+@/i,
+  /^user\d+@/i,
+  /^temp/i,
+  /\+.*\+/,  // Multiple plus signs
+  /^[a-z]{20,}@/i,  // Very long random strings
+  /@(tempmail|guerrilla|mailinator|throwaway|fakeinbox|trashmail|10minutemail)/i,
+];
+
+const DISPOSABLE_DOMAINS = [
+  'tempmail.com', 'guerrillamail.com', 'mailinator.com', 'throwaway.email',
+  'fakeinbox.com', 'trashmail.com', '10minutemail.com', 'temp-mail.org',
+  'getnada.com', 'mohmal.com', 'emailondeck.com', 'dispostable.com'
+];
+
+const isDisposableEmail = (email: string): boolean => {
+  const domain = email.split('@')[1]?.toLowerCase();
+  return DISPOSABLE_DOMAINS.includes(domain);
+};
+
+const isSuspiciousEmail = (email: string): boolean => {
+  return SUSPICIOUS_EMAIL_PATTERNS.some(pattern => pattern.test(email));
+};
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -25,6 +50,11 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Bot protection: rate limiting
+  const signupAttempts = useRef<number[]>([]);
+  const MAX_ATTEMPTS = 3;
+  const RATE_LIMIT_WINDOW = 60000; // 1 minute
 
   // Check for existing session - only redirect if user has an account session
   useEffect(() => {
@@ -53,8 +83,42 @@ const Auth = () => {
     }
   };
 
+  const isRateLimited = (): boolean => {
+    const now = Date.now();
+    // Clean old attempts
+    signupAttempts.current = signupAttempts.current.filter(
+      time => now - time < RATE_LIMIT_WINDOW
+    );
+    return signupAttempts.current.length >= MAX_ATTEMPTS;
+  };
+
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Bot protection checks for signup
+    if (!isLogin) {
+      // Check rate limiting
+      if (isRateLimited()) {
+        toast.error("Too many signup attempts. Please wait a minute.");
+        return;
+      }
+      
+      // Check for disposable emails
+      if (isDisposableEmail(email)) {
+        toast.error("Please use a valid email address, not a temporary one.");
+        return;
+      }
+      
+      // Check for suspicious patterns
+      if (isSuspiciousEmail(email)) {
+        toast.error("This email address appears invalid. Please use your real email.");
+        return;
+      }
+      
+      // Track signup attempt
+      signupAttempts.current.push(Date.now());
+    }
+    
     setIsLoading(true);
 
     const timeout = setTimeout(() => {
@@ -86,9 +150,6 @@ const Auth = () => {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-          },
         });
         clearTimeout(timeout);
         if (error) {
@@ -101,13 +162,16 @@ const Auth = () => {
           setIsLoading(false);
           return;
         }
+        // With auto-confirm enabled, user should have a session immediately
         if (data.session) {
           toast.success("Account created!");
           navigate(nextUrl);
           return;
         }
+        // Fallback: if somehow no session but user exists, still redirect
         if (data.user) {
-          toast.success("Check your email to confirm your account");
+          toast.success("Account created!");
+          navigate(nextUrl);
         }
       }
     } catch (error: any) {
