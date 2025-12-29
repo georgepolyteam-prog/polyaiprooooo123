@@ -10,8 +10,8 @@ const POLY_TOKEN_MINT = Deno.env.get('POLY_TOKEN_MINT')!;
 const DEPOSIT_WALLET_ADDRESS = Deno.env.get('DEPOSIT_WALLET_ADDRESS')!;
 const HELIUS_API_KEY = Deno.env.get('HELIUS_API_KEY')!;
 
-// Credits per POLY token (1 POLY = 10 credits)
-const CREDITS_PER_POLY = 10;
+// Credits per POLY token (1 POLY = 1 credit)
+const CREDITS_PER_POLY = 1;
 
 serve(async (req) => {
   // Handle CORS preflight

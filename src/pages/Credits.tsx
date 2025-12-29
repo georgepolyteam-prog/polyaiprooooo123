@@ -2,19 +2,17 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { ArrowLeft, Copy, Check, Zap, ExternalLink, Loader2, Wallet, History, RefreshCw } from "lucide-react";
+import { ArrowLeft, Zap, ExternalLink, Loader2, Wallet, History, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 import { useCredits } from "@/hooks/useCredits";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { DepositCreditsDialog } from "@/components/credits/DepositCreditsDialog";
 
-const DEPOSIT_WALLET_ADDRESS = "BLhwrWVNLAQxr3ZAW3TWiMhNry2RAGGwbdx45jKEGSP7";
-const CREDITS_PER_POLY = 10;
+const CREDITS_PER_POLY = 1;
 
 interface Deposit {
   id: string;
@@ -35,17 +33,11 @@ const Credits = () => {
   const { user } = useAuth();
   const { publicKey, connected } = useWallet();
   const { credits, totalDeposited, totalSpent, isLoading, refetch } = useCredits();
-  const [copied, setCopied] = useState(false);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [usage, setUsage] = useState<UsageRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [linking, setLinking] = useState(false);
-  
-  // Manual verification state
-  const [showVerify, setShowVerify] = useState(false);
-  const [txSignature, setTxSignature] = useState("");
-  const [verifyAmount, setVerifyAmount] = useState("");
-  const [verifying, setVerifying] = useState(false);
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
 
   // Link Solana wallet to user account
   useEffect(() => {
@@ -131,13 +123,6 @@ const Credits = () => {
     fetchHistory();
   }, [user?.id]);
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(DEPOSIT_WALLET_ADDRESS);
-    setCopied(true);
-    toast.success("Address copied!");
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -145,60 +130,6 @@ const Credits = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
-
-  // Manual deposit verification
-  const handleVerifyDeposit = async () => {
-    if (!user?.id || !publicKey || !txSignature || !verifyAmount) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-
-    setVerifying(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('process-deposit', {
-        body: {
-          action: 'verify-deposit',
-          txSignature: txSignature.trim(),
-          userId: user.id,
-          walletAddress: publicKey.toString(),
-          amount: parseFloat(verifyAmount)
-        }
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.status === 'pending') {
-        toast.info(data.message || "Transaction is still pending. Please wait and try again.");
-        return;
-      }
-
-      if (data.success) {
-        toast.success(`Added ${data.creditsAdded} credits!`);
-        setTxSignature("");
-        setVerifyAmount("");
-        setShowVerify(false);
-        refetch();
-        
-        // Refresh deposit history
-        const { data: newDeposits } = await supabase
-          .from('credit_deposits')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(10);
-        if (newDeposits) setDeposits(newDeposits);
-      } else if (data.error) {
-        toast.error(data.error);
-      }
-    } catch (err: any) {
-      console.error("Verification error:", err);
-      toast.error(err.message || "Failed to verify deposit");
-    } finally {
-      setVerifying(false);
-    }
   };
 
   if (!user) {
@@ -267,7 +198,7 @@ const Credits = () => {
                   </div>
 
                   <div className="text-sm text-muted-foreground bg-secondary/30 p-3 rounded-lg">
-                    <strong>1 POLY = {CREDITS_PER_POLY} credits</strong>
+                    <strong>1 POLY = {CREDITS_PER_POLY} Credit</strong>
                     <br />
                     Each AI analysis costs 1 credit
                   </div>
@@ -297,93 +228,26 @@ const Credits = () => {
                 </p>
               </div>
 
-              <Separator />
-
-              {/* Deposit Address */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">2. Send POLY to this address</label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-3 bg-muted rounded-md text-xs font-mono break-all">
-                    {DEPOSIT_WALLET_ADDRESS}
-                  </code>
-                  <Button variant="outline" size="icon" onClick={copyAddress}>
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Instructions */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">3. Credits appear automatically</label>
-                <p className="text-sm text-muted-foreground">
-                  After sending POLY tokens, your credits will be added within 30-60 seconds automatically.
-                </p>
-              </div>
-
               {connected && (
                 <div className="text-xs text-muted-foreground bg-green-500/10 border border-green-500/20 p-3 rounded-lg">
                   ✅ Wallet connected: {publicKey?.toString().substring(0, 4)}...{publicKey?.toString().slice(-4)}
                 </div>
               )}
 
-              <Separator />
-
-              {/* Manual Verification Fallback */}
-              <div className="space-y-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setShowVerify(!showVerify)}
+              {/* Deposit Button */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">2. Deposit POLY Tokens</label>
+                <Button 
+                  onClick={() => setIsDepositOpen(true)}
+                  className="w-full gap-2"
+                  size="lg"
                 >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  {showVerify ? "Hide Manual Verification" : "Deposit not showing? Verify manually"}
+                  <Plus className="w-4 h-4" />
+                  Deposit POLY
                 </Button>
-
-                {showVerify && connected && (
-                  <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">
-                      If your deposit didn't appear automatically, enter the transaction details below:
-                    </p>
-                    <div className="space-y-2">
-                      <Input
-                        placeholder="Transaction signature"
-                        value={txSignature}
-                        onChange={(e) => setTxSignature(e.target.value)}
-                        className="text-xs font-mono"
-                      />
-                      <Input
-                        placeholder="Amount of POLY sent"
-                        type="number"
-                        value={verifyAmount}
-                        onChange={(e) => setVerifyAmount(e.target.value)}
-                      />
-                      <Button
-                        size="sm"
-                        className="w-full"
-                        onClick={handleVerifyDeposit}
-                        disabled={verifying || !txSignature || !verifyAmount}
-                      >
-                        {verifying ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Verifying...
-                          </>
-                        ) : (
-                          "Verify Deposit"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {showVerify && !connected && (
-                  <p className="text-xs text-amber-500 text-center">
-                    Connect your wallet first to verify a deposit
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground text-center">
+                  Quick 1-click deposit or manual transfer options available
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -413,7 +277,7 @@ const Credits = () => {
                       <div>
                         <div className="font-medium">{deposit.amount} POLY</div>
                         <div className="text-xs text-muted-foreground">
-                          +{Math.floor(deposit.amount * CREDITS_PER_POLY)} credits
+                          +{Math.floor(deposit.amount * CREDITS_PER_POLY)} credit{Math.floor(deposit.amount * CREDITS_PER_POLY) !== 1 ? 's' : ''}
                         </div>
                       </div>
                       <div className="text-right">
@@ -475,6 +339,27 @@ const Credits = () => {
           </Card>
         </div>
       </div>
+
+      {/* Deposit Dialog with 1-click option */}
+      <DepositCreditsDialog
+        open={isDepositOpen}
+        onOpenChange={setIsDepositOpen}
+        onSuccess={() => {
+          refetch();
+          // Refresh deposit history
+          if (user?.id) {
+            supabase
+              .from('credit_deposits')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(10)
+              .then(({ data }) => {
+                if (data) setDeposits(data);
+              });
+          }
+        }}
+      />
     </div>
   );
 };

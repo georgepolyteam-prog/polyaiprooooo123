@@ -170,7 +170,7 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
             >
               <Zap className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium text-foreground">
-                1 POLY = <span className="text-primary">10</span> Credits
+                1 POLY = <span className="text-primary">1</span> Credit
               </span>
             </motion.div>
 
