@@ -80,44 +80,68 @@ serve(async (req) => {
             const txTime = (tx.timestamp || 0) * 1000;
             if (txTime < cutoffTime) continue;
 
-            // Check token transfers
+            // Try tokenTransfers first
+            let foundAmount = 0;
             const tokenTransfers = tx.tokenTransfers || [];
+            
             for (const transfer of tokenTransfers) {
               if (
                 transfer.mint === POLY_TOKEN_MINT &&
                 transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS &&
                 transfer.fromUserAccount?.toLowerCase() === walletAddress.toLowerCase()
               ) {
-                const amount = transfer.tokenAmount || 0;
-                
-                // Check if it meets minimum amount (with small tolerance)
-                if (minAmount && amount < minAmount * 0.99) continue;
-
-                // Check if already processed
-                const { data: existingDeposit } = await supabase
-                  .from('credit_deposits')
-                  .select('id')
-                  .eq('tx_signature', tx.signature)
-                  .single();
-
-                if (existingDeposit) {
-                  console.log(`[find-deposit] Transaction ${tx.signature} already processed`);
-                  continue;
-                }
-
-                console.log(`[find-deposit] Found matching deposit: ${tx.signature}, amount: ${amount}`);
-                
-                return new Response(
-                  JSON.stringify({ 
-                    found: true, 
-                    signature: tx.signature,
-                    amount: amount,
-                    timestamp: txTime
-                  }),
-                  { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                );
+                foundAmount = transfer.tokenAmount || 0;
+                break;
               }
             }
+            
+            // If no tokenTransfers match, try accountData.tokenBalanceChanges (Token-2022)
+            if (!foundAmount) {
+              const accountData = tx.accountData || [];
+              for (const account of accountData) {
+                const balanceChanges = account.tokenBalanceChanges || [];
+                for (const change of balanceChanges) {
+                  if (change.mint === POLY_TOKEN_MINT && change.userAccount === DEPOSIT_WALLET_ADDRESS) {
+                    const rawAmount = change.rawTokenAmount?.tokenAmount;
+                    const decimals = change.rawTokenAmount?.decimals || 6;
+                    if (rawAmount) {
+                      foundAmount = parseFloat(rawAmount) / Math.pow(10, decimals);
+                      break;
+                    }
+                  }
+                }
+                if (foundAmount) break;
+              }
+            }
+            
+            if (foundAmount <= 0) continue;
+            
+            // Check if it meets minimum amount
+            if (minAmount && foundAmount < minAmount * 0.99) continue;
+
+            // Check if already processed
+            const { data: existingDeposit } = await supabase
+              .from('credit_deposits')
+              .select('id')
+              .eq('tx_signature', tx.signature)
+              .single();
+
+            if (existingDeposit) {
+              console.log(`[find-deposit] Transaction ${tx.signature} already processed`);
+              continue;
+            }
+
+            console.log(`[find-deposit] Found matching deposit: ${tx.signature}, amount: ${foundAmount}`);
+            
+            return new Response(
+              JSON.stringify({ 
+                found: true, 
+                signature: tx.signature,
+                amount: foundAmount,
+                timestamp: txTime
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
           }
 
           console.log('[find-deposit] No matching deposit found');
@@ -189,49 +213,79 @@ serve(async (req) => {
 
           const tx = txData[0];
           
-          // Check for token transfers - log full structure for debugging
+          // Verify feePayer matches walletAddress (anti-theft check)
+          const feePayer = tx.feePayer;
+          if (feePayer && feePayer !== walletAddress) {
+            console.log(`[verify-deposit] ❌ feePayer ${feePayer} does not match walletAddress ${walletAddress}`);
+            return new Response(
+              JSON.stringify({ error: 'Transaction fee payer does not match your wallet' }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          // Try tokenTransfers first (standard SPL tokens)
           const tokenTransfers = tx.tokenTransfers || [];
-          console.log(`[verify-deposit] Found ${tokenTransfers.length} token transfers in tx`);
-          console.log(`[verify-deposit] Looking for: mint=${POLY_TOKEN_MINT}, to=${DEPOSIT_WALLET_ADDRESS}, from=${walletAddress}`);
+          console.log(`[verify-deposit] Found ${tokenTransfers.length} token transfers`);
           
           let validTransfer = null;
+          let transferAmount = 0;
 
           for (const transfer of tokenTransfers) {
-            console.log(`[verify-deposit] Transfer: mint=${transfer.mint}, from=${transfer.fromUserAccount}, to=${transfer.toUserAccount}, amount=${transfer.tokenAmount}`);
-            
-            // Case-insensitive comparison for addresses (Solana addresses are base58, case sensitive technically but Helius might format differently)
             const mintMatch = transfer.mint === POLY_TOKEN_MINT;
-            const toMatch = transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS || 
-                           transfer.toTokenAccount === DEPOSIT_WALLET_ADDRESS;
-            const fromMatch = transfer.fromUserAccount === walletAddress ||
-                             transfer.fromUserAccount?.toLowerCase() === walletAddress?.toLowerCase();
+            const toMatch = transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS;
             
-            console.log(`[verify-deposit] Match check: mint=${mintMatch}, to=${toMatch}, from=${fromMatch}`);
-            
-            if (mintMatch && toMatch && fromMatch) {
-              validTransfer = transfer;
-              break;
-            }
-            
-            // Fallback: if mint matches and destination is our wallet, accept it
             if (mintMatch && toMatch) {
-              console.log(`[verify-deposit] Fallback match: mint and destination match, accepting`);
+              console.log(`[verify-deposit] ✓ Found matching tokenTransfer, amount: ${transfer.tokenAmount}`);
               validTransfer = transfer;
+              transferAmount = transfer.tokenAmount || 0;
               break;
             }
           }
 
+          // If no tokenTransfers match, try accountData.tokenBalanceChanges (Token-2022)
           if (!validTransfer) {
-            console.log('[verify-deposit] No valid POLY transfer found in transaction');
-            console.log('[verify-deposit] Full tx data:', JSON.stringify(tx).slice(0, 1000));
+            console.log('[verify-deposit] No tokenTransfers match, checking accountData.tokenBalanceChanges...');
+            const accountData = tx.accountData || [];
+            
+            for (const account of accountData) {
+              const balanceChanges = account.tokenBalanceChanges || [];
+              
+              for (const change of balanceChanges) {
+                const mintMatch = change.mint === POLY_TOKEN_MINT;
+                const toMatch = change.userAccount === DEPOSIT_WALLET_ADDRESS;
+                
+                if (mintMatch && toMatch) {
+                  // Parse amount from rawTokenAmount
+                  const rawAmount = change.rawTokenAmount?.tokenAmount;
+                  const decimals = change.rawTokenAmount?.decimals || 6;
+                  
+                  if (rawAmount) {
+                    transferAmount = parseFloat(rawAmount) / Math.pow(10, decimals);
+                    console.log(`[verify-deposit] ✓ Found Token-2022 balance change: ${transferAmount} POLY`);
+                    validTransfer = { mint: change.mint, amount: transferAmount };
+                    break;
+                  }
+                }
+              }
+              if (validTransfer) break;
+            }
+          }
+
+          if (!validTransfer || transferAmount <= 0) {
+            console.log('[verify-deposit] ❌ No valid POLY transfer found');
+            console.log('[verify-deposit] TX structure:', JSON.stringify({
+              feePayer: tx.feePayer,
+              tokenTransfersCount: tokenTransfers.length,
+              accountDataCount: (tx.accountData || []).length
+            }));
             return new Response(
               JSON.stringify({ error: 'No valid POLY token transfer found in this transaction' }),
               { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
 
-          // Use the verified transfer amount from Helius
-          const transferAmount = validTransfer.tokenAmount || amount;
+          // transferAmount is already set above from either tokenTransfers or tokenBalanceChanges
+          console.log(`[verify-deposit] Final transfer amount: ${transferAmount} POLY`);
 
           // Calculate credits
           const creditsToAdd = Math.floor(transferAmount * CREDITS_PER_POLY);
