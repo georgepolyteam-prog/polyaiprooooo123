@@ -2,12 +2,13 @@ import { useState, useCallback } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import {
-  getAssociatedTokenAddress,
   getAssociatedTokenAddressSync,
   createTransferInstruction,
+  createAssociatedTokenAccountInstruction,
   getAccount,
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
 
 export type TransferStage = 
@@ -84,76 +85,115 @@ export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
       // Stage 2: Check balance
       setStage('checking-balance');
       
-      console.log('[POLY transfer] Checking mint:', tokenMint);
+      console.log('[POLY transfer] ===== Starting Balance Check =====');
+      console.log('[POLY transfer] Token mint:', tokenMint);
       console.log('[POLY transfer] Wallet:', publicKey.toBase58());
+      console.log('[POLY transfer] Destination:', destinationAddress);
 
-      // Try Token-2022 first (PumpFun tokens like POLY)
+      // Try to find token account - Token-2022 first (PumpFun tokens), then standard SPL
       let sourceAta: PublicKey | null = null;
-      let sourceAccount: any = null;
       let tokenProgramId = TOKEN_2022_PROGRAM_ID;
+      let accountInfo: any = null;
+      let tokenDecimals = 6; // Default, will be updated from on-chain data
 
-      let accountInfo = null as any;
-
+      // Try Token-2022 first (PumpFun tokens like POLY use this)
       try {
         sourceAta = getAssociatedTokenAddressSync(
           mintPubkey,
           publicKey,
           false,
-          TOKEN_2022_PROGRAM_ID
+          TOKEN_2022_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
         );
+        console.log('[POLY transfer] Token-2022 ATA:', sourceAta.toBase58());
+        
         accountInfo = await connection.getAccountInfo(sourceAta, 'confirmed');
-
+        
         if (accountInfo) {
-          console.log('[POLY transfer] Found Token-2022 account:', sourceAta.toBase58());
+          console.log('[POLY transfer] ✓ Found Token-2022 account, size:', accountInfo.data.length);
+          tokenProgramId = TOKEN_2022_PROGRAM_ID;
         } else {
-          console.log('[POLY transfer] Not Token-2022, trying standard SPL...');
+          console.log('[POLY transfer] Token-2022 account not found, trying standard SPL...');
         }
-      } catch (err) {
-        console.warn('[POLY transfer] Token-2022 ATA lookup failed:', err);
+      } catch (err: any) {
+        console.warn('[POLY transfer] Token-2022 ATA lookup error:', err.message);
+        // Check if it's an RPC error vs just "account not found"
+        if (err.message?.includes('401') || err.message?.includes('403') || err.message?.includes('fetch')) {
+          setError('Unable to connect to Solana network. Please try again.');
+          setStage('error');
+          return null;
+        }
       }
 
-      // If Token-2022 didn't work, try standard token program
+      // If Token-2022 didn't work, try standard SPL token program
       if (!accountInfo) {
-        tokenProgramId = TOKEN_PROGRAM_ID;
-
         try {
           sourceAta = getAssociatedTokenAddressSync(
             mintPubkey,
             publicKey,
             false,
-            TOKEN_PROGRAM_ID
+            TOKEN_PROGRAM_ID,
+            ASSOCIATED_TOKEN_PROGRAM_ID
           );
+          console.log('[POLY transfer] Standard SPL ATA:', sourceAta.toBase58());
+          
           accountInfo = await connection.getAccountInfo(sourceAta, 'confirmed');
-
+          
           if (accountInfo) {
-            console.log('[POLY transfer] Found standard SPL account:', sourceAta.toBase58());
+            console.log('[POLY transfer] ✓ Found standard SPL account, size:', accountInfo.data.length);
+            tokenProgramId = TOKEN_PROGRAM_ID;
+          } else {
+            console.log('[POLY transfer] Standard SPL account also not found');
           }
-        } catch (err) {
-          console.warn('[POLY transfer] Standard SPL ATA lookup failed:', err);
+        } catch (err: any) {
+          console.warn('[POLY transfer] Standard SPL ATA lookup error:', err.message);
+          if (err.message?.includes('401') || err.message?.includes('403') || err.message?.includes('fetch')) {
+            setError('Unable to connect to Solana network. Please try again.');
+            setStage('error');
+            return null;
+          }
         }
       }
 
+      // If still no account found, the user doesn't have this token
       if (!accountInfo || !sourceAta) {
-        console.error('[POLY transfer] Token account not found for mint in either program');
-        setError('No POLY tokens found in your wallet. Make sure you have POLY tokens.');
+        console.error('[POLY transfer] ✗ No token account found in either program');
+        setError('No POLY tokens found in your wallet. Make sure you have POLY tokens before depositing.');
         setStage('error');
         return null;
       }
 
+      // Parse the account to get balance
+      let sourceAccount: any;
       try {
         sourceAccount = await getAccount(connection, sourceAta, 'confirmed', tokenProgramId);
-      } catch (err) {
+        console.log('[POLY transfer] Token program:', tokenProgramId.toBase58());
+        console.log('[POLY transfer] Raw amount:', sourceAccount.amount.toString());
+      } catch (err: any) {
         console.error('[POLY transfer] Failed to parse token account:', err);
-        setError('Found token account but could not read balance. Please try again.');
+        if (err.message?.includes('401') || err.message?.includes('403')) {
+          setError('Unable to connect to Solana network. Please try again.');
+        } else {
+          setError('Found token account but could not read balance. Please try again.');
+        }
         setStage('error');
         return null;
       }
 
-      console.log('[POLY transfer] Using token program:', tokenProgramId.toBase58());
-      
-      const balance = Number(sourceAccount.amount) / 1e6; // POLY has 6 decimals
-      console.log('[POLY transfer] Raw amount:', sourceAccount.amount?.toString?.() ?? sourceAccount.amount);
-      console.log('[POLY transfer] Detected balance:', balance, 'POLY');
+      // Try to get token decimals from mint account
+      try {
+        const mintInfo = await connection.getParsedAccountInfo(mintPubkey, 'confirmed');
+        if (mintInfo.value?.data && 'parsed' in mintInfo.value.data) {
+          tokenDecimals = mintInfo.value.data.parsed?.info?.decimals ?? 6;
+          console.log('[POLY transfer] Token decimals from chain:', tokenDecimals);
+        }
+      } catch (err) {
+        console.warn('[POLY transfer] Could not fetch decimals, using default 6:', err);
+      }
+
+      const divisor = Math.pow(10, tokenDecimals);
+      const balance = Number(sourceAccount.amount) / divisor;
+      console.log('[POLY transfer] Balance:', balance, 'POLY (decimals:', tokenDecimals, ')');
 
       if (balance < amount) {
         setError(`Insufficient balance. You have ${balance.toFixed(2)} POLY but need ${amount} POLY.`);
@@ -161,38 +201,69 @@ export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
         return null;
       }
       
-      // Get destination token account using the same token program
-      const destinationAta = await getAssociatedTokenAddress(
+      // Get or create destination token account
+      const destinationAta = getAssociatedTokenAddressSync(
         mintPubkey,
         destinationPubkey,
-        false,
-        tokenProgramId
+        true, // allowOwnerOffCurve for PDAs
+        tokenProgramId,
+        ASSOCIATED_TOKEN_PROGRAM_ID
       );
+      console.log('[POLY transfer] Destination ATA:', destinationAta.toBase58());
       
       // Stage 3: Awaiting signature
       setStage('awaiting-signature');
       
-      // Create transfer instruction (amount in smallest units - 6 decimals for POLY)
+      // Create transaction
+      const transaction = new Transaction();
+      
+      // Check if destination ATA exists, if not, add creation instruction
+      try {
+        const destAccountInfo = await connection.getAccountInfo(destinationAta, 'confirmed');
+        if (!destAccountInfo) {
+          console.log('[POLY transfer] Destination ATA does not exist, adding creation instruction');
+          transaction.add(
+            createAssociatedTokenAccountInstruction(
+              publicKey, // payer
+              destinationAta, // associatedToken
+              destinationPubkey, // owner
+              mintPubkey, // mint
+              tokenProgramId,
+              ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+          );
+        } else {
+          console.log('[POLY transfer] Destination ATA already exists');
+        }
+      } catch (err) {
+        console.warn('[POLY transfer] Could not check destination ATA, proceeding without creation:', err);
+      }
+      
+      // Create transfer instruction using correct decimals
+      const transferAmount = BigInt(Math.floor(amount * divisor));
+      console.log('[POLY transfer] Transfer amount (smallest unit):', transferAmount.toString());
+      
       const transferInstruction = createTransferInstruction(
         sourceAta,
         destinationAta,
         publicKey,
-        amount * 1e6, // Convert to smallest unit
+        transferAmount,
         [],
         tokenProgramId
       );
-      
-      // Create transaction
-      const transaction = new Transaction().add(transferInstruction);
+      transaction.add(transferInstruction);
       
       // Get recent blockhash
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
       
+      console.log('[POLY transfer] Sending transaction for signature...');
+      
       // Send transaction (this will prompt wallet signature)
       const txSignature = await sendTransaction(transaction, connection);
       setSignature(txSignature);
+      console.log('[POLY transfer] Transaction sent:', txSignature);
       
       // Stage 4: Confirming
       setStage('confirming');
@@ -204,19 +275,25 @@ export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
         lastValidBlockHeight
       }, 'confirmed');
       
+      console.log('[POLY transfer] ✓ Transaction confirmed!');
+      
       // Stage 5: Verifying credits (handled by caller)
       setStage('verifying-credits');
       
       return txSignature;
       
     } catch (err: any) {
-      console.error('Transfer error:', err);
+      console.error('[POLY transfer] Transfer error:', err);
       
-      // Handle user rejection
+      // Handle specific error cases
       if (err.message?.includes('User rejected') || err.name === 'WalletSignTransactionError') {
         setError('Transaction cancelled. You can try again when ready.');
-      } else if (err.message?.includes('insufficient')) {
-        setError('Insufficient SOL for transaction fees.');
+      } else if (err.message?.includes('insufficient') || err.message?.includes('Insufficient')) {
+        setError('Insufficient SOL for transaction fees. You need a small amount of SOL to pay for the transaction.');
+      } else if (err.message?.includes('401') || err.message?.includes('403')) {
+        setError('Unable to connect to Solana network. Please try again in a moment.');
+      } else if (err.message?.includes('blockhash')) {
+        setError('Transaction expired. Please try again.');
       } else {
         setError(err.message || 'Transfer failed. Please try again.');
       }

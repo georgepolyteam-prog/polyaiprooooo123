@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.helius-webhook]
 verify_jwt = false
+
+[functions.solana-rpc]
+verify_jwt = false

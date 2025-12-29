@@ -6,15 +6,16 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adap
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-// Use Helius RPC for better reliability
-const HELIUS_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=d0f6e13a-6ef9-4d9d-b06e-80ab8e54b60a';
+// Use our RPC proxy to securely route calls through Helius
+const SUPABASE_PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'rgmzmtsgpxxzxvdcwsdx';
+const RPC_PROXY_URL = `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/solana-rpc`;
 
 interface SolanaWalletProviderProps {
   children: ReactNode;
 }
 
 export const SolanaWalletProvider = ({ children }: SolanaWalletProviderProps) => {
-  const endpoint = useMemo(() => HELIUS_RPC_URL, []);
+  const endpoint = useMemo(() => RPC_PROXY_URL, []);
   
   // Explicitly register wallets for reliable click handling in the modal
   // The "registered as Standard Wallet" warning is informational and harmless
