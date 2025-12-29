@@ -4,6 +4,7 @@ import { ExternalLink, Zap, TrendingUp, Wallet } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { JupiterTerminal } from "./JupiterTerminal";
 import { cn } from "@/lib/utils";
+import okxLogo from "@/assets/okx-logo.png";
 
 const POLY_TOKEN = "982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump";
 
@@ -25,8 +26,8 @@ const buyOptions = [
     description: "Trade on Pump",
     subtitle: "Community favorite",
     icon: TrendingUp,
-    color: "from-purple-500 to-pink-600",
-    hoverGlow: "group-hover:shadow-purple-500/40",
+    color: "from-slate-700 to-slate-900",
+    hoverGlow: "group-hover:shadow-slate-500/40",
     action: "link" as const,
     url: `https://pump.fun/coin/${POLY_TOKEN}`,
     logo: "https://pump.fun/icon.png"
@@ -37,11 +38,11 @@ const buyOptions = [
     description: "Buy via wallet",
     subtitle: "50M+ users",
     icon: Wallet,
-    color: "from-blue-500 to-indigo-600",
-    hoverGlow: "group-hover:shadow-blue-500/40",
+    color: "from-zinc-800 to-black",
+    hoverGlow: "group-hover:shadow-zinc-500/40",
     action: "link" as const,
     url: `https://www.okx.com/web3/dex-swap#inputChain=501&inputCurrency=So11111111111111111111111111111111111111112&outputChain=501&outputCurrency=${POLY_TOKEN}`,
-    logo: null
+    logo: okxLogo
   }
 ];
 
@@ -102,7 +103,10 @@ export function BuyPolyOptions() {
                       <img
                         src={option.logo}
                         alt={option.name}
-                        className="w-8 h-8 object-contain"
+                        className={cn(
+                          "object-contain",
+                          option.id === "okx" ? "w-10 h-10 rounded-lg" : "w-8 h-8"
+                        )}
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                           const sibling = e.currentTarget.nextElementSibling;
