@@ -55,14 +55,18 @@ export function DepositMethodSelector({
         <div className="grid gap-3">
           {/* Quick Deposit Option - Show connect button if not connected */}
           {isWalletConnected ? (
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              onClick={onSelectQuick}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onSelectQuick();
+              }}
               className={cn(
-                "relative p-4 rounded-xl border text-left transition-all group",
+                "relative p-4 rounded-xl border text-left transition-all group pointer-events-auto",
                 "bg-gradient-to-br from-primary/10 to-primary/5",
-                "border-primary/30 hover:border-primary/50 cursor-pointer"
+                "border-primary/30 hover:border-primary/50 cursor-pointer",
+                "hover:scale-[1.01] active:scale-[0.99]"
               )}
             >
               {/* Recommended badge */}
@@ -84,7 +88,7 @@ export function DepositMethodSelector({
                   </p>
                 </div>
               </div>
-            </motion.button>
+            </button>
           ) : (
             <div className={cn(
               "relative p-4 rounded-xl border text-left transition-all opacity-60",
@@ -101,7 +105,7 @@ export function DepositMethodSelector({
                     <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Connect your Phantom wallet in the top-right corner to unlock this option
+                    Connect wallet in top-right to enable
                   </p>
                 </div>
               </div>
@@ -109,13 +113,17 @@ export function DepositMethodSelector({
           )}
 
           {/* Manual Transfer Option */}
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={onSelectManual}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelectManual();
+            }}
             className={cn(
-              "p-4 rounded-xl border text-left transition-all",
-              "bg-muted/30 border-border/50 hover:border-border cursor-pointer"
+              "p-4 rounded-xl border text-left transition-all pointer-events-auto",
+              "bg-muted/30 border-border/50 hover:border-border cursor-pointer",
+              "hover:scale-[1.01] active:scale-[0.99]"
             )}
           >
             <div className="flex items-start gap-3">
@@ -129,14 +137,19 @@ export function DepositMethodSelector({
                 </p>
               </div>
             </div>
-          </motion.button>
+          </button>
         </div>
       </div>
 
       <Button
+        type="button"
         variant="outline"
-        onClick={onBack}
-        className="w-full h-11 rounded-xl"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onBack();
+        }}
+        className="w-full h-11 rounded-xl pointer-events-auto"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Amount

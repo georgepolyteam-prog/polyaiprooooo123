@@ -765,8 +765,8 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent 
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent elevated
           className="sm:max-w-[420px] p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden"
           aria-describedby={undefined}
         >

@@ -1020,3 +1020,16 @@
     inset 0 1px 1px rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
 }
+
+/* ===== SOLANA WALLET ADAPTER Z-INDEX FIX ===== */
+.wallet-adapter-modal-wrapper {
+  z-index: 9999 !important;
+}
+
+.wallet-adapter-modal-overlay {
+  z-index: 9998 !important;
+}
+
+.wallet-adapter-modal {
+  z-index: 9999 !important;
+}

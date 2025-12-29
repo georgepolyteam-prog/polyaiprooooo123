@@ -2,7 +2,8 @@ import React, { forwardRef } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
 import { useWeb3Modal } from '@web3modal/wagmi/react';
 import { Button } from '@/components/ui/button';
-import { Wallet, LogOut } from 'lucide-react';
+import { Wallet, LogOut, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   function ConnectWallet(props, ref) {
@@ -13,9 +14,12 @@ export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
     if (isConnected && address) {
       return (
         <div ref={ref} className="flex items-center gap-2" {...props}>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 backdrop-blur-sm">
+            <div className="relative">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
+            </div>
+            <span className="text-sm font-semibold text-emerald-400">
               {address.slice(0, 6)}...{address.slice(-4)}
             </span>
           </div>
@@ -23,7 +27,7 @@ export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
             variant="ghost"
             size="sm"
             onClick={() => disconnect()}
-            className="text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg p-2 h-auto"
+            className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-xl p-2 h-auto transition-all"
           >
             <LogOut className="w-4 h-4" />
           </Button>
@@ -33,14 +37,34 @@ export const ConnectWallet = forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
 
     return (
       <div ref={ref} {...props}>
-        <Button
+        <button
+          type="button"
           onClick={() => open()}
-          size="sm"
-          className="gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white border-0 font-medium px-4"
+          className={cn(
+            "relative group flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm",
+            "bg-gradient-to-r from-primary via-emerald-500 to-primary bg-[length:200%_100%]",
+            "text-primary-foreground shadow-lg shadow-primary/25",
+            "hover:shadow-primary/40 hover:shadow-xl",
+            "transition-all duration-300 ease-out",
+            "animate-gradient-x"
+          )}
         >
-          <Wallet className="w-4 h-4" />
-          <span>Connect Wallet</span>
-        </Button>
+          {/* Glow effect */}
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary via-emerald-500 to-primary opacity-0 group-hover:opacity-50 blur-xl transition-opacity duration-300" />
+          
+          {/* Animated border */}
+          <div className="absolute inset-0 rounded-xl p-[1px] bg-gradient-to-r from-primary via-white/50 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="w-full h-full rounded-xl bg-gradient-to-r from-primary via-emerald-500 to-primary" />
+          </div>
+          
+          <div className="relative flex items-center gap-2">
+            <div className="relative">
+              <Wallet className="w-4 h-4" />
+              <Zap className="absolute -top-1 -right-1 w-2.5 h-2.5 text-yellow-300 animate-pulse" />
+            </div>
+            <span>Connect Wallet</span>
+          </div>
+        </button>
       </div>
     );
   }
