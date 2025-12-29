@@ -1,8 +1,6 @@
 import { useMemo, ReactNode } from 'react';
-import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -17,13 +15,8 @@ interface SolanaWalletProviderProps {
 export const SolanaWalletProvider = ({ children }: SolanaWalletProviderProps) => {
   const endpoint = useMemo(() => HELIUS_RPC_URL, []);
   
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-    ],
-    []
-  );
+  // Empty array - wallets like Phantom auto-register as Standard Wallets
+  const wallets = useMemo(() => [], []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>

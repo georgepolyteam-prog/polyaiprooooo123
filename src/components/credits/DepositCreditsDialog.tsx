@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -550,7 +551,13 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[420px] p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden">
+        <DialogContent 
+          className="sm:max-w-[420px] p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden"
+          aria-describedby={undefined}
+        >
+          <VisuallyHidden>
+            <DialogTitle>Deposit POLY Tokens</DialogTitle>
+          </VisuallyHidden>
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4">
             <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />

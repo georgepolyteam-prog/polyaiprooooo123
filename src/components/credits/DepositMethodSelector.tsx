@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Zap, ClipboardList, ArrowLeft, Wallet, Sparkles } from 'lucide-react';
+import { Zap, ClipboardList, ArrowLeft, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -47,52 +47,65 @@ export function DepositMethodSelector({
         </label>
         
         <div className="grid gap-3">
-          {/* Quick Deposit Option */}
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            onClick={onSelectQuick}
-            disabled={!isWalletConnected}
-            className={cn(
-              "relative p-4 rounded-xl border text-left transition-all group",
-              "bg-gradient-to-br from-primary/10 to-primary/5",
-              isWalletConnected 
-                ? "border-primary/30 hover:border-primary/50 cursor-pointer"
-                : "border-border/30 opacity-60 cursor-not-allowed"
-            )}
-          >
-            {/* Recommended badge */}
-            {isWalletConnected && (
+          {/* Quick Deposit Option - Show connect button if not connected */}
+          {isWalletConnected ? (
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              onClick={onSelectQuick}
+              className={cn(
+                "relative p-4 rounded-xl border text-left transition-all group",
+                "bg-gradient-to-br from-primary/10 to-primary/5",
+                "border-primary/30 hover:border-primary/50 cursor-pointer"
+              )}
+            >
+              {/* Recommended badge */}
               <div className="absolute -top-2 right-4 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold uppercase tracking-wide">
                 Recommended
               </div>
-            )}
-            
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/20 border border-primary/30">
-                <Zap className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground">Quick Deposit</span>
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+              
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-primary/20 border border-primary/30">
+                  <Zap className="w-5 h-5 text-primary" />
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {isWalletConnected 
-                    ? "One-click with wallet signature. Instant credits."
-                    : "Connect your Solana wallet to use this option"
-                  }
-                </p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">Quick Deposit</span>
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    One-click with wallet signature. Instant credits.
+                  </p>
+                </div>
+              </div>
+            </motion.button>
+          ) : (
+            <div className={cn(
+              "relative p-4 rounded-xl border text-left transition-all",
+              "bg-gradient-to-br from-primary/10 to-primary/5",
+              "border-primary/30"
+            )}>
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-primary/20 border border-primary/30">
+                  <Zap className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">Quick Deposit</span>
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Connect your Solana wallet to use this option
+                  </p>
+                </div>
+              </div>
+              
+              {/* Connect wallet button - not nested in disabled element */}
+              <div className="mt-3 pt-3 border-t border-border/30">
+                <WalletMultiButton className="!bg-primary/20 !text-primary !text-xs !h-9 !rounded-lg !w-full !justify-center hover:!bg-primary/30 !border-0" />
               </div>
             </div>
-            
-            {/* Not connected - show connect button */}
-            {!isWalletConnected && (
-              <div className="mt-3 pt-3 border-t border-border/30">
-                <WalletMultiButton className="!bg-primary/20 !text-primary !text-xs !h-9 !rounded-lg !w-full !justify-center hover:!bg-primary/30" />
-              </div>
-            )}
-          </motion.button>
+          )}
 
           {/* Manual Transfer Option */}
           <motion.button
