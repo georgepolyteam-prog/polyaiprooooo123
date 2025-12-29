@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion";
 import { 
   ArrowLeft, Zap, ExternalLink, Loader2, History, Plus, 
-  TrendingUp, RefreshCw, ArrowUpRight, Wallet, LogOut, ChevronDown
+  TrendingUp, RefreshCw, ArrowUpRight, Wallet, LogOut, ChevronDown,
+  HelpCircle, Flame, CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCredits } from "@/hooks/useCredits";
@@ -22,6 +23,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const CREDITS_PER_POLY = 1;
 
@@ -58,6 +65,7 @@ const Credits = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [linking, setLinking] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   // Animated counter for balance
   const springValue = useSpring(0, { stiffness: 50, damping: 30 });
@@ -633,15 +641,98 @@ const Credits = () => {
           transition={{ delay: 0.4 }}
           className="mt-8 text-center space-y-2"
         >
-          <p className="text-sm text-muted-foreground/70">
-            Each AI analysis costs 1 credit • 1 POLY = 1 credit
-          </p>
+          <div className="flex items-center justify-center gap-4">
+            <p className="text-sm text-muted-foreground/70">
+              Each AI analysis costs 1 credit • 1 POLY = 1 credit
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowHowItWorks(true)}
+              className="text-muted-foreground hover:text-foreground gap-1.5"
+            >
+              <HelpCircle className="w-4 h-4" />
+              How it works
+            </Button>
+          </div>
           {connected && publicKey && (
             <p className="text-xs text-muted-foreground/50">
               Connected: {publicKey.toString().slice(0, 8)}...{publicKey.toString().slice(-6)}
             </p>
           )}
+          <Button
+            variant="link"
+            asChild
+            className="text-muted-foreground/70 hover:text-foreground text-sm"
+          >
+            <Link to="/about">Learn more about POLY →</Link>
+          </Button>
         </motion.div>
+
+        {/* How it Works Modal */}
+        <Dialog open={showHowItWorks} onOpenChange={setShowHowItWorks}>
+          <DialogContent className="max-w-lg bg-card/95 backdrop-blur-2xl border-border/50">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-xl">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-primary" />
+                </div>
+                How Credits Work
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-6 mt-4">
+              {/* Step by step */}
+              <div className="space-y-4">
+                {[
+                  { step: "1", title: "Get POLY Tokens", desc: "Buy POLY on Jupiter, Pump.fun, or OKX. It's a Solana token.", icon: Wallet },
+                  { step: "2", title: "Deposit to Your Account", desc: "Connect your Solana wallet and deposit POLY tokens.", icon: Plus },
+                  { step: "3", title: "Use AI Analysis", desc: "Each AI message costs 1 credit (1 POLY = 1 credit).", icon: Zap },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-4 items-start">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary font-semibold text-sm">{item.step}</span>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground">{item.title}</h4>
+                      <p className="text-sm text-muted-foreground">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tokenomics */}
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <Flame className="w-5 h-5 text-orange-400" />
+                  <h4 className="font-semibold text-foreground">70/30 Tokenomics</h4>
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  When you spend credits:
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-destructive/10 text-center">
+                    <div className="text-2xl font-bold text-destructive">70%</div>
+                    <p className="text-xs text-muted-foreground">Burned Forever</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-primary/10 text-center">
+                    <div className="text-2xl font-bold text-primary">30%</div>
+                    <p className="text-xs text-muted-foreground">Development</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button onClick={() => setShowHowItWorks(false)} className="flex-1 rounded-xl">
+                  Got it
+                </Button>
+                <Button variant="outline" asChild className="flex-1 rounded-xl">
+                  <Link to="/about">Learn More</Link>
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Deposit Dialog */}

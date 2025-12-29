@@ -42,24 +42,24 @@ const faqItems: FAQItem[] = [
     answer: "$POLY is the payment token for accessing Poly platform features. Users deposit $POLY to their account and spend it to use AI chat, trading tools, and market data. 70% of spent tokens are permanently burned, creating deflationary pressure."
   },
   {
-    question: "When does the $POLY payment system launch?",
-    answer: "The $POLY payment integration is currently being implemented and tested. Check our Status page for the latest updates on development progress."
+    question: "How do I get credits?",
+    answer: "1) Buy POLY tokens on Jupiter, Pump.fun, or OKX Wallet. 2) Visit the Credits page and connect your Solana wallet. 3) Deposit POLY to your account. 1 POLY = 1 credit. Each AI analysis costs 1 credit."
   },
   {
     question: "How do I acquire $POLY tokens?",
-    answer: "$POLY is a Solana token available on decentralized exchanges. Contract address: 982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump. After acquiring tokens, you can deposit them directly to your Poly account when the payment system launches."
+    answer: "You can buy POLY on Jupiter (best rates), Pump.fun, or OKX Wallet. Visit the Credits page for direct links to all purchase options. Contract address: 982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump"
   },
   {
     question: "What does Polymarket Builders Program membership provide?",
     answer: "As an official Polymarket Builders Program member, Poly receives direct technical support from Polymarket's team, marketing collaboration and promotion, access to exclusive builder resources and APIs, and official recognition as a trusted project building on Polymarket infrastructure."
   },
   {
-    question: "Can I use the platform before $POLY integration?",
-    answer: "Yes. All platform features are currently live and available for free during the testing phase. You can access AI chat, view markets, analyze orderbooks, execute trades, set limit orders, and monitor positions."
-  },
-  {
     question: "How does the 70/30 tokenomics work?",
     answer: "When users spend $POLY on the platform, 70% of those tokens are permanently burned (removed from circulation), creating deflationary pressure. The remaining 30% is allocated to the development fund for ongoing platform improvements, infrastructure costs, and operational expenses."
+  },
+  {
+    question: "What features are available?",
+    answer: "AI chat for market analysis, live trading dashboard, orderbook view, limit orders, position tracking, whale trade monitoring, and wallet analytics. All features require credits to use."
   }
 ];
 
@@ -245,7 +245,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* Development Status */}
+      {/* Credits System - Live */}
       <section className="py-20 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <motion.div
@@ -254,16 +254,16 @@ const About = () => {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm font-medium text-foreground">Free During Beta</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-sm font-medium text-foreground">Credits System Live</span>
             </div>
             
             <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              $POLY Payment Integration
+              How Credits Work
             </h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Token payment system currently in development
+              Pay with POLY tokens, use AI features
             </p>
           </motion.div>
 
@@ -274,21 +274,27 @@ const About = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="p-8 rounded-2xl bg-card border border-border mb-8"
           >
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-              <Wrench className="w-7 h-7 text-primary" />
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              {[
+                { step: "1", title: "Buy POLY", desc: "Get tokens on Jupiter, Pump.fun, or OKX", icon: Store },
+                { step: "2", title: "Deposit", desc: "Connect wallet & deposit to your account", icon: Zap },
+                { step: "3", title: "Use AI", desc: "1 credit per AI message (1 POLY = 1 credit)", icon: Brain },
+              ].map((item, i) => (
+                <div key={i} className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-primary font-bold">{item.step}</span>
+                  </div>
+                  <h4 className="font-semibold text-foreground mb-1">{item.title}</h4>
+                  <p className="text-sm text-muted-foreground">{item.desc}</p>
+                </div>
+              ))}
             </div>
             
-            <h3 className="text-xl font-semibold text-foreground mb-3">
-              Implementation in Progress
-            </h3>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              We're actively building and testing the $POLY token credit system.
-            </p>
-            
-            <Button asChild variant="outline" className="rounded-full">
-              <Link to="/status" className="inline-flex items-center gap-2">
-                <Activity className="w-4 h-4" />
-                Check Development Status
+            <Button asChild size="lg" className="rounded-full px-8">
+              <Link to="/credits" className="inline-flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                Get Credits Now
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </Button>
           </motion.div>
@@ -301,13 +307,13 @@ const About = () => {
             className="p-6 rounded-2xl bg-muted/50 text-left"
           >
             <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary" />
-              What's Coming
+              <Flame className="w-5 h-5 text-orange-500" />
+              70/30 Tokenomics
             </h4>
             <div className="space-y-3 text-sm text-muted-foreground">
-              <p><span className="font-medium text-foreground">Platform is Live:</span> All features are currently operational and free.</p>
-              <p><span className="font-medium text-foreground">Coming Soon:</span> $POLY payment system for platform access.</p>
-              <p><span className="font-medium text-foreground">70/30 Tokenomics:</span> 70% burned, 30% funds development.</p>
+              <p><span className="font-medium text-foreground">70% Burned:</span> Permanently removed from circulation when spent.</p>
+              <p><span className="font-medium text-foreground">30% Development:</span> Funds ongoing platform improvements.</p>
+              <p><span className="font-medium text-foreground">Exchange Rate:</span> 1 POLY = 1 credit, always.</p>
             </div>
           </motion.div>
         </div>
@@ -500,66 +506,40 @@ const About = () => {
             className="text-center mb-12"
           >
             <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              Pricing
+              Simple Pricing
             </h2>
             <p className="text-muted-foreground">
-              Payment system launches January 6, 2026
+              Pay only for what you use
             </p>
           </motion.div>
           
-          <div className="grid md:grid-cols-2 gap-6">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={pricingInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="p-8 rounded-2xl bg-card border border-border"
-            >
-              <h3 className="text-xl font-semibold text-foreground mb-2">Pay Per Use</h3>
-              <div className="text-4xl font-bold text-foreground mb-6">100 $POLY</div>
-              <ul className="space-y-3 mb-8">
-                {["Per AI message", "Pay only for what you use", "No commitment required", "Full platform access"].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-muted-foreground">
-                    <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Button 
-                onClick={() => setLaunchModalOpen(true)}
-                variant="outline" 
-                className="w-full rounded-full h-12"
-              >
-                Get Started
-              </Button>
-            </motion.div>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={pricingInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="relative p-8 rounded-2xl bg-card border-2 border-primary"
-            >
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-primary-foreground rounded-full text-xs font-semibold">
-                Recommended
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Monthly Unlimited</h3>
-              <div className="text-4xl font-bold text-foreground mb-6">25,000 $POLY</div>
-              <ul className="space-y-3 mb-8">
-                {["Unlimited AI conversations", "All platform features", "Best value for traders", "Priority support"].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-muted-foreground">
-                    <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Button 
-                onClick={() => setLaunchModalOpen(true)}
-                className="w-full rounded-full h-12"
-              >
-                Get Started
-              </Button>
-            </motion.div>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={pricingInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="p-8 rounded-2xl bg-card border-2 border-primary text-center max-w-md mx-auto"
+          >
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+              <Zap className="w-7 h-7 text-primary" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground mb-2">Pay Per Use</h3>
+            <div className="text-4xl font-bold text-foreground mb-2">1 POLY = 1 Credit</div>
+            <p className="text-muted-foreground mb-6">Each AI analysis costs 1 credit</p>
+            <ul className="space-y-3 mb-8 text-left">
+              {["No subscription required", "Pay only for what you use", "70% of spent tokens burned", "Full platform access"].map((item, i) => (
+                <li key={i} className="flex items-center gap-3 text-muted-foreground">
+                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <Button asChild className="w-full rounded-full h-12">
+              <Link to="/credits">
+                Get Credits
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
+          </motion.div>
         </div>
       </section>
 
@@ -660,16 +640,29 @@ const About = () => {
               Ready to trade smarter?
             </h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Join thousands of traders using AI-powered market analysis.
+              Get POLY tokens and start using AI-powered market analysis.
             </p>
-            <Button 
-              onClick={() => setLaunchModalOpen(true)}
-              size="lg"
-              className="px-10 h-12 text-base font-medium rounded-full"
-            >
-              Get Started Free
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <Button 
+                asChild
+                size="lg"
+                className="px-10 h-12 text-base font-medium rounded-full"
+              >
+                <Link to="/credits">
+                  <Zap className="w-4 h-4 mr-2" />
+                  Get Credits
+                </Link>
+              </Button>
+              <Button 
+                onClick={() => setLaunchModalOpen(true)}
+                variant="outline"
+                size="lg"
+                className="px-10 h-12 text-base font-medium rounded-full"
+              >
+                Explore Platform
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
           </motion.div>
         </div>
       </section>
