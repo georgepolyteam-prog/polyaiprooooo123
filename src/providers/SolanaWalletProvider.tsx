@@ -1,6 +1,7 @@
 import { useMemo, ReactNode } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -15,8 +16,12 @@ interface SolanaWalletProviderProps {
 export const SolanaWalletProvider = ({ children }: SolanaWalletProviderProps) => {
   const endpoint = useMemo(() => HELIUS_RPC_URL, []);
   
-  // Empty array - wallets like Phantom auto-register as Standard Wallets
-  const wallets = useMemo(() => [], []);
+  // Explicitly register wallets for reliable click handling in the modal
+  // The "registered as Standard Wallet" warning is informational and harmless
+  const wallets = useMemo(() => [
+    new PhantomWalletAdapter(),
+    new SolflareWalletAdapter(),
+  ], []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>
