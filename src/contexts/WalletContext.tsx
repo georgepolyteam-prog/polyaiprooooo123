@@ -2,7 +2,7 @@ import { createContext, useContext, ReactNode } from 'react';
 import { createWeb3Modal } from '@web3modal/wagmi/react';
 import { defaultWagmiConfig } from '@web3modal/wagmi';
 import { WagmiProvider } from 'wagmi';
-import { polygon } from 'wagmi/chains';
+import { polygon, mainnet, arbitrum, base, optimism } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { sonic } from '@/config/sonic';
 
@@ -15,8 +15,9 @@ const metadata = {
   icons: ['https://polyai.pro/extension/icon128.png']
 };
 
-// Support both Polygon (for Polymarket) and Sonic (for Pandora)
-const chains = [polygon, sonic] as const;
+// Support common networks to avoid "unsupported network" error
+// Trading features will prompt to switch to Polygon or Sonic as needed
+const chains = [polygon, mainnet, arbitrum, base, optimism, sonic] as const;
 
 const wagmiConfig = defaultWagmiConfig({
   chains,
