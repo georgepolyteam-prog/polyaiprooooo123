@@ -42,24 +42,43 @@ const STAGE_MESSAGES: Record<TransferStage, string> = {
   'error': 'Something went wrong'
 };
 
-// Direct Helius RPC for WebSocket support
-const HELIUS_API_KEY = 'e02bc68e-cce0-493c-a4d7-1aba997ceef6';
-const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
-const HELIUS_WS_URL = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+// Use public Solana RPC - no API key needed, HTTP-only polling
+const PUBLIC_RPC_URL = 'https://api.mainnet-beta.solana.com';
 
 export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
   const { publicKey, sendTransaction, connected, signTransaction } = useWallet();
   
-  // Create a direct Helius connection with WebSocket support
-  const connection = useMemo(() => new Connection(HELIUS_RPC_URL, {
+  // Create connection with HTTP polling (no WebSocket to avoid edge function issues)
+  const connection = useMemo(() => new Connection(PUBLIC_RPC_URL, {
     commitment: 'confirmed',
-    wsEndpoint: HELIUS_WS_URL,
-    confirmTransactionInitialTimeout: 60000,
+    confirmTransactionInitialTimeout: 90000, // Longer timeout for public RPC
+    // No wsEndpoint - will use HTTP polling instead of WebSocket
   }), []);
   
   const [stage, setStage] = useState<TransferStage>('idle');
   const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Helper to verify transaction with retries (HTTP polling)
+  const verifyTransaction = useCallback(async (sig: string, maxRetries = 10): Promise<boolean> => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const status = await connection.getSignatureStatus(sig);
+        if (status?.value?.confirmationStatus === 'confirmed' || 
+            status?.value?.confirmationStatus === 'finalized') {
+          return true;
+        }
+        if (status?.value?.err) {
+          console.log('[POLY transfer] Transaction failed on-chain:', status.value.err);
+          return false;
+        }
+      } catch (err) {
+        console.log(`[POLY transfer] Verification attempt ${i + 1}/${maxRetries} failed, retrying...`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000)); // 3s between retries
+    }
+    return false;
+  }, [connection]);
 
   const setCompleted = useCallback(() => {
     setStage('completed');
@@ -276,15 +295,15 @@ export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
       setSignature(txSignature);
       console.log('[POLY transfer] Transaction sent:', txSignature);
       
-      // Stage 4: Confirming
+      // Stage 4: Confirming (use HTTP polling instead of WebSocket)
       setStage('confirming');
       
-      // Wait for confirmation
-      await connection.confirmTransaction({
-        signature: txSignature,
-        blockhash,
-        lastValidBlockHeight
-      }, 'confirmed');
+      // Use polling-based verification instead of confirmTransaction
+      const verified = await verifyTransaction(txSignature);
+      
+      if (!verified) {
+        throw new Error('Transaction verification timed out. Check your wallet - the transfer may have succeeded.');
+      }
       
       console.log('[POLY transfer] ✓ Transaction confirmed!');
       
@@ -312,7 +331,7 @@ export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
       setStage('error');
       return null;
     }
-  }, [publicKey, connected, connection, sendTransaction]);
+  }, [publicKey, connected, connection, sendTransaction, verifyTransaction]);
 
   return {
     stage,
