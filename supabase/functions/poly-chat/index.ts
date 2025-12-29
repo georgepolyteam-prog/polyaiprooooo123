@@ -3128,11 +3128,13 @@ serve(async (req) => {
     }
 
     // Determine user identifier for rate limiting
+    // REQUIREMENT: Email sign-in (Supabase auth) is REQUIRED to chat
+    // Wallet-only authentication is no longer sufficient
     let userId: string | null = null;
     let authMethod: string = 'unknown';
 
     if (authToken) {
-      // Verify Supabase JWT token
+      // Verify Supabase JWT token - this is the ONLY valid auth method for chat
       try {
         const authSupabase = createClient(
           Deno.env.get("SUPABASE_URL")!,
@@ -3157,19 +3159,14 @@ serve(async (req) => {
           401
         );
       }
-    } else if (walletAddress) {
-      // Use wallet address as user identifier
-      // Basic validation - should be a valid Ethereum address format
-      if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-        console.log(`[AUTH] ❌ Invalid wallet address: ${walletAddress.substring(0, 10)}...`);
-        return corsResponse(
-          { error: "Invalid wallet address." },
-          401
-        );
-      }
-      userId = walletAddress.toLowerCase();
-      authMethod = 'wallet';
-      console.log(`[AUTH] ✅ Wallet user: ${walletAddress.substring(0, 10)}...`);
+    } else {
+      // No Supabase auth token - reject the request
+      // Wallet-only users must sign in with email to chat
+      console.log(`[AUTH] ❌ No email auth - wallet-only access denied from IP: ${clientIP}`);
+      return corsResponse(
+        { error: "Email sign-in required. Please sign in with your email to chat." },
+        401
+      );
     }
 
     // ============= USER-BASED RATE LIMITING (PRIMARY) =============
