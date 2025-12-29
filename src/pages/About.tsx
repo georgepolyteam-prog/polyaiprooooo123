@@ -110,89 +110,95 @@ const About = () => {
       <TopBar />
       <LaunchModal open={launchModalOpen} onOpenChange={setLaunchModalOpen} />
 
-      {/* Hero Section */}
-      <section ref={heroRef} className="relative pt-32 pb-24 md:pt-40 md:pb-32">
-        <div className="max-w-4xl mx-auto px-6 text-center">
+      {/* Hero Section - Apple Style */}
+      <section ref={heroRef} className="relative pt-24 pb-20 md:pt-32 md:pb-28 overflow-hidden">
+        {/* Subtle gradient orb */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-primary/5 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="max-w-5xl mx-auto px-6 text-center relative">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
-            {/* Builders Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8">
-              <BadgeCheck className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">Polymarket Builders Program</span>
+            {/* Minimal Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50 mb-10">
+              <BadgeCheck className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-medium text-muted-foreground">Polymarket Builders Program</span>
             </div>
           </motion.div>
           
           <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.1, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="text-5xl md:text-7xl font-semibold tracking-tight text-foreground mb-6"
+            transition={{ delay: 0.1, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="text-6xl md:text-8xl lg:text-[7rem] font-semibold tracking-tight text-foreground mb-8 leading-[0.95]"
           >
-            AI-Powered Prediction
-            <br />
-            <span className="text-muted-foreground">Market Terminal.</span>
+            Poly.
           </motion.h1>
           
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.2, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto"
+            transition={{ delay: 0.2, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="text-2xl md:text-3xl text-muted-foreground mb-12 max-w-3xl mx-auto font-light leading-relaxed"
           >
-            Trade smarter with real-time AI analysis, professional-grade tools, and direct market execution.
+            The intelligent prediction market terminal.
+            <br className="hidden md:block" />
+            <span className="text-foreground">AI analysis. Real-time trading. One platform.</span>
           </motion.p>
           
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.3, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ delay: 0.3, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="flex flex-wrap gap-4 justify-center"
           >
             <Button 
               onClick={() => setLaunchModalOpen(true)}
               size="lg"
-              className="px-8 h-12 text-base font-medium rounded-full"
+              className="px-10 h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
             >
               Get Started
-              <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button 
-              variant="outline"
+              variant="ghost"
               size="lg"
               asChild
-              className="px-8 h-12 text-base font-medium rounded-full"
+              className="px-10 h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
             >
-              <Link to="/markets">View Markets</Link>
+              <Link to="/markets">
+                Explore Markets
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
             </Button>
           </motion.div>
         </div>
       </section>
 
       {/* Token Metrics Section */}
-      <section className="py-20 px-6 bg-muted/30">
+      <section className="py-24 px-6">
         <div className="max-w-5xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            className="text-center mb-16"
           >
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              $POLY Token
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Token</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-6">
+              $POLY
             </h2>
             <button 
               onClick={copyContract}
-              className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm font-mono transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted/50 text-muted-foreground hover:text-foreground text-xs font-mono transition-colors border border-border/50"
             >
-              <span className="truncate max-w-[200px] md:max-w-none">{CONTRACT_ADDRESS}</span>
+              <span className="truncate max-w-[160px] md:max-w-none">{CONTRACT_ADDRESS}</span>
               {copied ? (
-                <Check className="w-4 h-4 text-primary" />
+                <Check className="w-3.5 h-3.5 text-primary" />
               ) : (
-                <Copy className="w-4 h-4" />
+                <Copy className="w-3.5 h-3.5" />
               )}
             </button>
           </motion.div>
@@ -202,7 +208,7 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10"
+            className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12"
           >
             {[
               { label: "Price", value: priceLoading ? '...' : `$${formatPrice(priceData?.price || 0)}`, change: priceData?.priceChange24h },
@@ -212,14 +218,14 @@ const About = () => {
             ].map((metric, i) => (
               <div 
                 key={i}
-                className="p-6 rounded-2xl bg-card border border-border text-center"
+                className="p-8 rounded-3xl bg-muted/30 text-center"
               >
-                <p className="text-sm text-muted-foreground mb-2">{metric.label}</p>
-                <p className="text-2xl font-semibold text-foreground font-mono">
+                <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wide">{metric.label}</p>
+                <p className="text-3xl font-semibold text-foreground font-mono">
                   {metric.value}
                 </p>
                 {metric.change !== undefined && (
-                  <p className={`text-sm font-medium mt-1 ${metric.change >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                  <p className={`text-sm font-medium mt-2 ${metric.change >= 0 ? 'text-primary' : 'text-destructive'}`}>
                     {metric.change >= 0 ? '+' : ''}{metric.change.toFixed(2)}%
                   </p>
                 )}
@@ -232,9 +238,9 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="rounded-2xl bg-card border border-border overflow-hidden"
+            className="rounded-3xl bg-muted/30 overflow-hidden"
           >
-            <div id="dexscreener-embed" className="relative w-full" style={{ paddingBottom: '65%' }}>
+            <div id="dexscreener-embed" className="relative w-full" style={{ paddingBottom: '60%' }}>
               <iframe 
                 src="https://dexscreener.com/solana/982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump?embed=1&theme=dark&info=0"
                 className="absolute top-0 left-0 w-full h-full border-0"
@@ -246,24 +252,21 @@ const About = () => {
       </section>
 
       {/* Credits System - Live */}
-      <section className="py-20 px-6">
-        <div className="max-w-3xl mx-auto text-center">
+      <section className="py-24 px-6 bg-muted/20">
+        <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-sm font-medium text-foreground">Credits System Live</span>
-            </div>
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Credits</p>
             
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              How Credits Work
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-6">
+              Simple, transparent pricing.
             </h2>
-            <p className="text-lg text-muted-foreground mb-8">
-              Pay with POLY tokens, use AI features
+            <p className="text-xl text-muted-foreground mb-16 max-w-2xl mx-auto">
+              1 POLY = 1 Credit. Use credits for AI analysis and premium features.
             </p>
           </motion.div>
 
@@ -272,82 +275,70 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="p-8 rounded-2xl bg-card border border-border mb-8"
+            className="grid md:grid-cols-3 gap-8 mb-12"
           >
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-              {[
-                { step: "1", title: "Buy POLY", desc: "Get tokens on Jupiter, Pump.fun, or OKX", icon: Store },
-                { step: "2", title: "Deposit", desc: "Connect wallet & deposit to your account", icon: Zap },
-                { step: "3", title: "Use AI", desc: "1 credit per AI message (1 POLY = 1 credit)", icon: Brain },
-              ].map((item, i) => (
-                <div key={i} className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-primary font-bold">{item.step}</span>
-                  </div>
-                  <h4 className="font-semibold text-foreground mb-1">{item.title}</h4>
-                  <p className="text-sm text-muted-foreground">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-            
-            <Button asChild size="lg" className="rounded-full px-8">
-              <Link to="/credits" className="inline-flex items-center gap-2">
-                <Zap className="w-4 h-4" />
-                Get Credits Now
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </Button>
+            {[
+              { step: "01", title: "Acquire", desc: "Buy POLY on Jupiter, Pump.fun, or OKX Wallet", icon: Store },
+              { step: "02", title: "Deposit", desc: "Connect your Solana wallet and deposit tokens", icon: Zap },
+              { step: "03", title: "Analyze", desc: "Use credits for AI-powered market insights", icon: Brain },
+            ].map((item, i) => (
+              <div key={i} className="text-left p-8 rounded-3xl bg-card border border-border/50">
+                <span className="text-xs font-mono text-muted-foreground">{item.step}</span>
+                <h4 className="text-xl font-semibold text-foreground mt-2 mb-3">{item.title}</h4>
+                <p className="text-muted-foreground">{item.desc}</p>
+              </div>
+            ))}
           </motion.div>
-
+          
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="p-6 rounded-2xl bg-muted/50 text-left"
           >
-            <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Flame className="w-5 h-5 text-orange-500" />
-              70/30 Tokenomics
-            </h4>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p><span className="font-medium text-foreground">70% Burned:</span> Permanently removed from circulation when spent.</p>
-              <p><span className="font-medium text-foreground">30% Development:</span> Funds ongoing platform improvements.</p>
-              <p><span className="font-medium text-foreground">Exchange Rate:</span> 1 POLY = 1 credit, always.</p>
-            </div>
+            <Button asChild size="lg" className="rounded-full px-10 h-14 text-base font-medium bg-foreground text-background hover:bg-foreground/90">
+              <Link to="/credits">
+                Get Credits
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
           </motion.div>
+
         </div>
       </section>
 
       {/* What is Poly */}
-      <section className="py-20 px-6 bg-muted/30">
+      <section className="py-24 px-6">
         <div className="max-w-5xl mx-auto">
-          <motion.h2 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-3xl md:text-4xl font-semibold tracking-tight text-center text-foreground mb-12"
+            className="text-center mb-16"
           >
-            What is Poly?
-          </motion.h2>
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Overview</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground">
+              Everything you need to trade smarter.
+            </h2>
+          </motion.div>
           
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-8">
             {[
               { 
                 icon: Brain, 
-                title: "AI Market Analysis", 
-                desc: "Instant market insights and data-driven predictions powered by real-time intelligence." 
+                title: "AI Analysis", 
+                desc: "Instant market insights powered by real-time intelligence and data-driven predictions." 
               },
               { 
                 icon: BarChart3, 
-                title: "Trading Terminal", 
-                desc: "Professional-grade interface with orderbooks, limit orders, and direct execution." 
+                title: "Pro Trading", 
+                desc: "Professional-grade terminal with orderbooks, limit orders, and direct execution." 
               },
               { 
                 icon: Database, 
-                title: "Market Intelligence", 
-                desc: "Comprehensive analytics, historical data, and real-time price feeds." 
+                title: "Deep Data", 
+                desc: "Comprehensive analytics, historical trends, and real-time price feeds." 
               }
             ].map((item, i) => (
               <motion.div 
@@ -356,13 +347,13 @@ const About = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="p-8 rounded-2xl bg-card border border-border"
+                className="text-center"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-6">
-                  <item.icon className="w-6 h-6 text-primary" />
+                <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
+                  <item.icon className="w-7 h-7 text-foreground" />
                 </div>
                 <h3 className="text-xl font-semibold text-foreground mb-3">{item.title}</h3>
-                <p className="text-muted-foreground">{item.desc}</p>
+                <p className="text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -370,46 +361,37 @@ const About = () => {
       </section>
 
       {/* Platform Features */}
-      <section ref={featuresRef} className="py-20 px-6">
+      <section ref={featuresRef} className="py-24 px-6 bg-muted/20">
         <div className="max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={featuresInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            className="text-center mb-16"
           >
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              Platform Features
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Features</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-4">
+              Fully operational. Ready now.
             </h2>
-            <p className="text-muted-foreground">
-              All features fully operational and available now
-            </p>
           </motion.div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: Store, title: "Markets Dashboard", desc: "Browse all markets with advanced filtering" },
-              { icon: MessageSquare, title: "AI Chat Assistant", desc: "Conversational AI for market analysis" },
-              { icon: TrendingUp, title: "Direct Trading", desc: "Execute orders with real-time prices" },
-              { icon: BookOpen, title: "Orderbook & Trades", desc: "Real-time depth and trade history" },
-              { icon: ClipboardList, title: "Limit Orders", desc: "Set custom price points" },
-              { icon: Activity, title: "Position Tracking", desc: "Monitor all positions and history" }
+              { icon: Store, title: "Markets", desc: "Browse and filter all prediction markets" },
+              { icon: MessageSquare, title: "AI Chat", desc: "Conversational analysis for any market" },
+              { icon: TrendingUp, title: "Trading", desc: "Execute trades with real-time pricing" },
+              { icon: BookOpen, title: "Orderbook", desc: "Full depth and trade history view" },
+              { icon: ClipboardList, title: "Limit Orders", desc: "Set your own price targets" },
+              { icon: Activity, title: "Portfolio", desc: "Track positions and performance" }
             ].map((feature, i) => (
               <motion.div 
                 key={i}
                 initial={{ opacity: 0, y: 20 }}
                 animate={featuresInView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.6, delay: i * 0.05 }}
-                className="p-6 rounded-2xl bg-card border border-border group hover:border-primary/50 transition-colors"
+                className="p-8 rounded-3xl bg-card border border-border/50 group hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <feature.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                    Live
-                  </span>
-                </div>
+                <feature.icon className="w-6 h-6 text-foreground mb-5" />
                 <h4 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h4>
                 <p className="text-sm text-muted-foreground">{feature.desc}</p>
               </motion.div>
@@ -419,77 +401,48 @@ const About = () => {
       </section>
 
       {/* Tokenomics */}
-      <section ref={tokenomicsRef} className="py-20 px-6 bg-muted/30">
+      <section ref={tokenomicsRef} className="py-24 px-6">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            className="text-center mb-16"
           >
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              Tokenomics
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Tokenomics</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-4">
+              Deflationary by design.
             </h2>
             <p className="text-xl text-muted-foreground">
               Total Supply: 1,000,000,000 $POLY
             </p>
           </motion.div>
           
-          {/* Token Flow */}
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 mb-12">
-            {[
-              { step: "1", title: "Deposit", desc: "User deposits $POLY" },
-              { step: "2", title: "Spend", desc: "Use for platform features" },
-              { step: "3", title: "Split", desc: "70% burn / 30% dev" }
-            ].map((item, i) => (
-              <motion.div 
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="flex items-center gap-4"
-              >
-                <div className="p-6 bg-card rounded-2xl border border-border text-center min-w-[160px]">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-primary font-semibold">{item.step}</span>
-                  </div>
-                  <h4 className="font-semibold text-foreground mb-1">{item.title}</h4>
-                  <p className="text-sm text-muted-foreground">{item.desc}</p>
-                </div>
-                {i < 2 && (
-                  <ArrowRight className="w-5 h-5 text-muted-foreground hidden md:block" />
-                )}
-              </motion.div>
-            ))}
-          </div>
-          
           {/* Split Cards */}
           <div className="grid md:grid-cols-2 gap-6">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="p-8 rounded-2xl bg-destructive text-destructive-foreground text-center"
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="p-10 rounded-3xl bg-gradient-to-b from-muted/50 to-muted/20 border border-border/50 text-center"
             >
-              <Flame className="w-12 h-12 mx-auto mb-4 opacity-90" />
-              <div className="text-5xl font-bold mb-2">70%</div>
-              <p className="text-lg font-medium mb-2">Permanently Burned</p>
-              <p className="text-sm opacity-80">
-                Tokens removed from circulation forever
+              <div className="text-6xl md:text-7xl font-bold text-foreground mb-4">70%</div>
+              <p className="text-lg font-medium text-foreground mb-2">Burned</p>
+              <p className="text-muted-foreground">
+                Permanently removed from circulation when spent
               </p>
             </motion.div>
             
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              className="p-8 rounded-2xl bg-primary text-primary-foreground text-center"
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="p-10 rounded-3xl bg-gradient-to-b from-muted/50 to-muted/20 border border-border/50 text-center"
             >
-              <Wrench className="w-12 h-12 mx-auto mb-4 opacity-90" />
-              <div className="text-5xl font-bold mb-2">30%</div>
-              <p className="text-lg font-medium mb-2">Development Fund</p>
-              <p className="text-sm opacity-80">
-                Funds ongoing improvements and maintenance
+              <div className="text-6xl md:text-7xl font-bold text-foreground mb-4">30%</div>
+              <p className="text-lg font-medium text-foreground mb-2">Development</p>
+              <p className="text-muted-foreground">
+                Funds platform improvements and maintenance
               </p>
             </motion.div>
           </div>
@@ -497,19 +450,20 @@ const About = () => {
       </section>
 
       {/* Pricing */}
-      <section ref={pricingRef} className="py-20 px-6">
-        <div className="max-w-3xl mx-auto">
+      <section ref={pricingRef} className="py-24 px-6 bg-muted/20">
+        <div className="max-w-3xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={pricingInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            className="mb-16"
           >
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              Simple Pricing
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Pricing</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-4">
+              Pay for what you use.
             </h2>
-            <p className="text-muted-foreground">
-              Pay only for what you use
+            <p className="text-xl text-muted-foreground">
+              No subscriptions. No hidden fees.
             </p>
           </motion.div>
           
@@ -517,26 +471,21 @@ const About = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={pricingInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="p-8 rounded-2xl bg-card border-2 border-primary text-center max-w-md mx-auto"
+            className="p-10 rounded-3xl bg-card border border-border/50 max-w-sm mx-auto"
           >
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-              <Zap className="w-7 h-7 text-primary" />
-            </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">Pay Per Use</h3>
-            <div className="text-4xl font-bold text-foreground mb-2">1 POLY = 1 Credit</div>
-            <p className="text-muted-foreground mb-6">Each AI analysis costs 1 credit</p>
-            <ul className="space-y-3 mb-8 text-left">
-              {["No subscription required", "Pay only for what you use", "70% of spent tokens burned", "Full platform access"].map((item, i) => (
+            <div className="text-5xl font-bold text-foreground mb-2">1:1</div>
+            <p className="text-lg text-muted-foreground mb-8">1 POLY = 1 Credit</p>
+            <ul className="space-y-4 mb-10 text-left">
+              {["Full platform access", "AI-powered analysis", "Real-time trading", "No expiration"].map((item, i) => (
                 <li key={i} className="flex items-center gap-3 text-muted-foreground">
                   <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
                   {item}
                 </li>
               ))}
             </ul>
-            <Button asChild className="w-full rounded-full h-12">
+            <Button asChild className="w-full rounded-full h-12 bg-foreground text-background hover:bg-foreground/90">
               <Link to="/credits">
-                Get Credits
-                <ArrowRight className="w-4 h-4 ml-2" />
+                Get Started
               </Link>
             </Button>
           </motion.div>
@@ -544,19 +493,22 @@ const About = () => {
       </section>
 
       {/* Tech Stack */}
-      <section className="py-20 px-6 bg-muted/30">
+      <section className="py-24 px-6">
         <div className="max-w-4xl mx-auto">
-          <motion.h2 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-3xl md:text-4xl font-semibold tracking-tight text-center text-foreground mb-12"
+            className="text-center mb-16"
           >
-            Under the Hood
-          </motion.h2>
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Technology</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground">
+              Built on the best.
+            </h2>
+          </motion.div>
           
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-8">
             {[
               { name: "Brave Search", desc: "Real-time web data and news", icon: Search },
               { name: "Polymarket", desc: "Direct CLOB API integration", icon: LineChart },
@@ -568,10 +520,10 @@ const About = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="p-6 rounded-2xl bg-card border border-border text-center"
+                className="text-center"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <tech.icon className="w-6 h-6 text-primary" />
+                <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-5">
+                  <tech.icon className="w-6 h-6 text-foreground" />
                 </div>
                 <h4 className="font-semibold text-foreground mb-2">{tech.name}</h4>
                 <p className="text-sm text-muted-foreground">{tech.desc}</p>
@@ -582,19 +534,22 @@ const About = () => {
       </section>
 
       {/* FAQ */}
-      <section className="py-20 px-6">
+      <section className="py-24 px-6 bg-muted/20">
         <div className="max-w-3xl mx-auto">
-          <motion.h2 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-3xl md:text-4xl font-semibold tracking-tight text-center text-foreground mb-12"
+            className="text-center mb-16"
           >
-            Frequently Asked Questions
-          </motion.h2>
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">FAQ</p>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground">
+              Questions? Answers.
+            </h2>
+          </motion.div>
           
-          <div className="space-y-3">
+          <div className="space-y-4">
             {faqItems.map((item, index) => (
               <motion.div
                 key={index}
@@ -605,7 +560,7 @@ const About = () => {
               >
                 <button
                   onClick={() => toggleFAQ(index)}
-                  className="w-full p-5 rounded-2xl bg-card border border-border text-left hover:border-primary/50 transition-colors"
+                  className="w-full p-6 rounded-2xl bg-card border border-border/50 text-left hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-foreground pr-4">{item.question}</span>
@@ -616,7 +571,7 @@ const About = () => {
                     />
                   </div>
                   {openFAQ === index && (
-                    <p className="mt-4 text-muted-foreground text-sm leading-relaxed">
+                    <p className="mt-4 text-muted-foreground leading-relaxed">
                       {item.answer}
                     </p>
                   )}
@@ -628,36 +583,35 @@ const About = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-6 bg-muted/30">
-        <div className="max-w-2xl mx-auto text-center">
+      <section className="py-32 px-6">
+        <div className="max-w-3xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground mb-4">
-              Ready to trade smarter?
+            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-6">
+              Start trading smarter.
             </h2>
-            <p className="text-lg text-muted-foreground mb-8">
-              Get POLY tokens and start using AI-powered market analysis.
+            <p className="text-xl text-muted-foreground mb-10">
+              AI-powered insights. Professional tools. One platform.
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               <Button 
                 asChild
                 size="lg"
-                className="px-10 h-12 text-base font-medium rounded-full"
+                className="px-10 h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
               >
                 <Link to="/credits">
-                  <Zap className="w-4 h-4 mr-2" />
                   Get Credits
                 </Link>
               </Button>
               <Button 
                 onClick={() => setLaunchModalOpen(true)}
-                variant="outline"
+                variant="ghost"
                 size="lg"
-                className="px-10 h-12 text-base font-medium rounded-full"
+                className="px-10 h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
               >
                 Explore Platform
                 <ArrowRight className="w-4 h-4 ml-2" />

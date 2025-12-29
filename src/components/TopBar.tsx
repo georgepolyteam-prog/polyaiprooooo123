@@ -234,15 +234,19 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
           {/* Right Actions - Desktop */}
           <div className="hidden md:flex items-center gap-2 lg:gap-3">
             {/* Official X Page - Follow Button */}
-            <a href="https://x.com/trypolyai" target="_blank" rel="noopener noreferrer">
-              <Button
-                size="sm"
-                className="gap-1.5 rounded-lg bg-white text-black hover:bg-gray-200 font-semibold transition-all shadow-lg shadow-white/20 px-3"
-              >
-                <XLogo className="w-4 h-4" />
-                <span className="hidden lg:inline">Follow</span>
-              </Button>
-            </a>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a href="https://x.com/trypolyai" target="_blank" rel="noopener noreferrer">
+                  <Button
+                    size="icon"
+                    className="w-8 h-8 rounded-lg bg-white text-black hover:bg-gray-200 transition-all shadow-lg shadow-white/20"
+                  >
+                    <XLogo className="w-4 h-4" />
+                  </Button>
+                </a>
+              </TooltipTrigger>
+              <TooltipContent>Follow on X</TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Right Actions - Desktop */}
@@ -393,7 +397,7 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden absolute top-16 left-0 right-0 bg-[#0f0a1f]/95 backdrop-blur-xl border-b border-white/10 p-4 animate-fade-in">
+          <div className="md:hidden absolute top-16 left-0 right-0 bg-[#0f0a1f]/95 backdrop-blur-xl border-b border-white/10 p-4 animate-fade-in max-h-[calc(100vh-4rem)] overflow-y-auto">
             <nav className="flex flex-col gap-2">
               <Link to="/" onClick={() => setMobileMenuOpen(false)}>
                 <Button
