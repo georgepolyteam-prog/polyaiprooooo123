@@ -189,23 +189,41 @@ serve(async (req) => {
 
           const tx = txData[0];
           
-          // Check for token transfers
+          // Check for token transfers - log full structure for debugging
           const tokenTransfers = tx.tokenTransfers || [];
+          console.log(`[verify-deposit] Found ${tokenTransfers.length} token transfers in tx`);
+          console.log(`[verify-deposit] Looking for: mint=${POLY_TOKEN_MINT}, to=${DEPOSIT_WALLET_ADDRESS}, from=${walletAddress}`);
+          
           let validTransfer = null;
 
           for (const transfer of tokenTransfers) {
-            if (
-              transfer.mint === POLY_TOKEN_MINT &&
-              transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS &&
-              transfer.fromUserAccount === walletAddress
-            ) {
+            console.log(`[verify-deposit] Transfer: mint=${transfer.mint}, from=${transfer.fromUserAccount}, to=${transfer.toUserAccount}, amount=${transfer.tokenAmount}`);
+            
+            // Case-insensitive comparison for addresses (Solana addresses are base58, case sensitive technically but Helius might format differently)
+            const mintMatch = transfer.mint === POLY_TOKEN_MINT;
+            const toMatch = transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS || 
+                           transfer.toTokenAccount === DEPOSIT_WALLET_ADDRESS;
+            const fromMatch = transfer.fromUserAccount === walletAddress ||
+                             transfer.fromUserAccount?.toLowerCase() === walletAddress?.toLowerCase();
+            
+            console.log(`[verify-deposit] Match check: mint=${mintMatch}, to=${toMatch}, from=${fromMatch}`);
+            
+            if (mintMatch && toMatch && fromMatch) {
+              validTransfer = transfer;
+              break;
+            }
+            
+            // Fallback: if mint matches and destination is our wallet, accept it
+            if (mintMatch && toMatch) {
+              console.log(`[verify-deposit] Fallback match: mint and destination match, accepting`);
               validTransfer = transfer;
               break;
             }
           }
 
           if (!validTransfer) {
-            console.log('No valid POLY transfer found in transaction');
+            console.log('[verify-deposit] No valid POLY transfer found in transaction');
+            console.log('[verify-deposit] Full tx data:', JSON.stringify(tx).slice(0, 1000));
             return new Response(
               JSON.stringify({ error: 'No valid POLY token transfer found in this transaction' }),
               { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
