@@ -2,13 +2,12 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion";
 import { 
-  ArrowLeft, Zap, ExternalLink, Loader2, Wallet, History, Plus, 
-  Sparkles, TrendingUp, Clock, CheckCircle2, AlertCircle
+  ArrowLeft, Zap, ExternalLink, Loader2, History, Plus, 
+  Sparkles, TrendingUp, RefreshCw, ArrowUpRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useCredits } from "@/hooks/useCredits";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +51,16 @@ const Credits = () => {
   const [linking, setLinking] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
 
+  // Animated counter for balance
+  const springValue = useSpring(0, { stiffness: 50, damping: 30 });
+  const displayValue = useTransform(springValue, (latest) => 
+    Math.round(latest).toLocaleString()
+  );
+
+  useEffect(() => {
+    springValue.set(credits);
+  }, [credits, springValue]);
+
   // Combine and sort activity
   const activity = useMemo<ActivityItem[]>(() => {
     const depositItems: ActivityItem[] = deposits.map(d => ({
@@ -81,18 +90,11 @@ const Credits = () => {
     return 'empty';
   }, [credits]);
 
-  const glowColor = {
-    high: 'from-emerald-500/30 to-emerald-500/5',
-    medium: 'from-primary/30 to-primary/5',
-    low: 'from-amber-500/30 to-amber-500/5',
-    empty: 'from-red-500/30 to-red-500/5'
-  }[creditStatus];
-
-  const statusColor = {
-    high: 'text-emerald-400',
-    medium: 'text-primary',
-    low: 'text-amber-400',
-    empty: 'text-red-400'
+  const statusColors = {
+    high: { text: 'text-emerald-400', glow: 'shadow-emerald-500/30', bg: 'from-emerald-500/20 to-emerald-500/5' },
+    medium: { text: 'text-primary', glow: 'shadow-primary/30', bg: 'from-primary/20 to-primary/5' },
+    low: { text: 'text-amber-400', glow: 'shadow-amber-500/30', bg: 'from-amber-500/20 to-amber-500/5' },
+    empty: { text: 'text-red-400', glow: 'shadow-red-500/30', bg: 'from-red-500/20 to-red-500/5' }
   }[creditStatus];
 
   // Link Solana wallet to user account
@@ -176,14 +178,30 @@ const Credits = () => {
     fetchHistory();
   }, [user?.id]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  // Realtime subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel("credit-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "user_credits",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, refetch]);
 
   const formatRelativeTime = (dateString: string) => {
     const now = new Date();
@@ -197,7 +215,12 @@ const Credits = () => {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return formatDate(dateString);
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (!user) {
@@ -206,18 +229,18 @@ const Credits = () => {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full p-8 rounded-2xl bg-card border border-border/50 text-center"
+          className="max-w-md w-full p-8 rounded-3xl bg-card/80 backdrop-blur-2xl border border-border/50 text-center shadow-2xl"
         >
-          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-            <Zap className="w-8 h-8 text-primary" />
+          <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+            <Sparkles className="w-10 h-10 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Sign In Required</h2>
-          <p className="text-muted-foreground mb-6">
+          <h2 className="text-3xl font-bold tracking-tight mb-3">Sign In Required</h2>
+          <p className="text-muted-foreground mb-8 text-lg">
             Please sign in with email to view and manage your credits.
           </p>
-          <Button onClick={() => navigate('/auth')} size="lg" className="gap-2">
+          <Button onClick={() => navigate('/auth')} size="lg" className="gap-2 h-14 px-8 text-lg rounded-2xl">
             Sign In
-            <ArrowLeft className="w-4 h-4 rotate-180" />
+            <ArrowLeft className="w-5 h-5 rotate-180" />
           </Button>
         </motion.div>
       </div>
@@ -226,249 +249,297 @@ const Credits = () => {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Background gradient orbs */}
+      {/* Animated background gradient */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className={cn(
-          "absolute -top-40 -right-40 w-96 h-96 rounded-full blur-3xl opacity-30",
-          `bg-gradient-radial ${glowColor}`
-        )} />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full blur-3xl opacity-20 bg-gradient-radial from-primary/20 to-transparent" />
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.2, 1],
+            opacity: [0.3, 0.5, 0.3]
+          }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className={cn(
+            "absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full blur-3xl",
+            `bg-gradient-radial ${statusColors.bg}`
+          )} 
+        />
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.1, 1],
+            opacity: [0.2, 0.3, 0.2]
+          }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full blur-3xl bg-gradient-radial from-primary/20 to-transparent" 
+        />
       </div>
 
-      <div className="relative max-w-5xl mx-auto px-4 py-8">
+      <div className="relative max-w-2xl mx-auto px-4 py-6 sm:py-10">
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between mb-8"
         >
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => navigate(-1)}
-              className="rounded-xl hover:bg-muted/50"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Sparkles className="w-6 h-6 text-primary" />
-                Credits
-              </h1>
-              <p className="text-sm text-muted-foreground">Power your AI analysis</p>
-            </div>
-          </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)}
+            className="rounded-2xl w-12 h-12 hover:bg-muted/50 backdrop-blur-xl"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
           
-          <WalletMultiButton className="!bg-card !border !border-border/50 !text-foreground !rounded-xl !h-10 !px-4 hover:!bg-muted/50 !font-medium !text-sm" />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-muted/30 backdrop-blur-xl border border-border/30"
+          >
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">Credits</span>
+          </motion.div>
+          
+          <WalletMultiButton className="!bg-card/80 !backdrop-blur-xl !border !border-border/50 !text-foreground !rounded-2xl !h-12 !px-4 hover:!bg-muted/50 !font-medium !text-sm !shadow-lg" />
         </motion.div>
 
         {/* Main Balance Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="mb-8"
         >
           <div className={cn(
-            "relative p-8 rounded-3xl border border-border/50 overflow-hidden",
-            "bg-gradient-to-br from-card via-card to-muted/20"
+            "relative p-8 sm:p-10 rounded-[2rem] overflow-hidden",
+            "bg-card/60 backdrop-blur-2xl border border-border/30",
+            "shadow-2xl",
+            statusColors.glow
           )}>
-            {/* Glow effect */}
+            {/* Subtle inner glow */}
             <div className={cn(
-              "absolute inset-0 bg-gradient-radial opacity-50",
-              glowColor
+              "absolute inset-0 bg-gradient-radial opacity-40 pointer-events-none",
+              statusColors.bg
             )} />
             
-            <div className="relative">
+            <div className="relative text-center">
               {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-10 h-10 animate-spin text-primary" />
                 </div>
               ) : (
                 <>
-                  {/* Credits display */}
-                  <div className="text-center mb-8">
-                    <motion.div
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: "spring", delay: 0.2 }}
-                      className="relative inline-block"
-                    >
-                      <Zap className={cn(
-                        "w-8 h-8 absolute -top-2 -right-6",
-                        statusColor
-                      )} />
-                      <span className={cn(
-                        "text-7xl font-bold tabular-nums tracking-tight",
-                        statusColor
-                      )}>
-                        {credits.toLocaleString()}
-                      </span>
-                    </motion.div>
-                    <p className="text-muted-foreground mt-2">credits available</p>
-                  </div>
-
-                  {/* Stats grid */}
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="p-4 rounded-2xl bg-muted/30 border border-border/30 text-center">
-                      <TrendingUp className="w-5 h-5 mx-auto mb-2 text-emerald-400" />
-                      <div className="text-2xl font-bold">{totalDeposited}</div>
-                      <div className="text-xs text-muted-foreground">POLY deposited</div>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-muted/30 border border-border/30 text-center">
-                      <Zap className="w-5 h-5 mx-auto mb-2 text-primary" />
-                      <div className="text-2xl font-bold">{totalSpent}</div>
-                      <div className="text-xs text-muted-foreground">credits used</div>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-muted/30 border border-border/30 text-center">
-                      <Sparkles className="w-5 h-5 mx-auto mb-2 text-amber-400" />
-                      <div className="text-2xl font-bold">1:1</div>
-                      <div className="text-xs text-muted-foreground">POLY to credit</div>
-                    </div>
-                  </div>
-
-                  {/* Deposit CTA */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
+                  {/* Label */}
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-sm font-medium text-muted-foreground uppercase tracking-[0.2em] mb-4"
                   >
-                    <Button 
-                      onClick={() => setIsDepositOpen(true)}
-                      size="lg"
-                      className="w-full h-14 text-lg font-semibold rounded-2xl gap-3 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Deposit POLY
-                      <Sparkles className="w-4 h-4 opacity-70" />
-                    </Button>
-                  </motion.div>
+                    Available Balance
+                  </motion.p>
 
-                  {/* Wallet status */}
-                  {connected ? (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-sm text-emerald-400">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Wallet linked: {publicKey?.toString().substring(0, 6)}...{publicKey?.toString().slice(-4)}</span>
-                      {linking && <Loader2 className="w-3 h-3 animate-spin" />}
-                    </div>
-                  ) : (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Connect Phantom wallet to deposit</span>
-                    </div>
-                  )}
+                  {/* Animated Balance */}
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", delay: 0.2, stiffness: 100 }}
+                    className="relative mb-2"
+                  >
+                    <motion.span 
+                      className={cn(
+                        "text-7xl sm:text-8xl font-bold tabular-nums tracking-tight",
+                        statusColors.text
+                      )}
+                    >
+                      {displayValue}
+                    </motion.span>
+                    {/* Subtle glow behind number */}
+                    <div className={cn(
+                      "absolute inset-0 blur-3xl opacity-30 pointer-events-none",
+                      statusColors.bg
+                    )} />
+                  </motion.div>
+                  
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-muted-foreground text-lg"
+                  >
+                    Power your AI analysis
+                  </motion.p>
                 </>
               )}
             </div>
           </div>
         </motion.div>
 
-        {/* Activity Feed */}
+        {/* Stats Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
+          className="grid grid-cols-3 gap-3 mb-8"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <History className="w-5 h-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Recent Activity</h2>
+          {[
+            { icon: TrendingUp, value: totalDeposited.toLocaleString(), label: "POLY Deposited", color: "text-emerald-400", bg: "bg-emerald-500/10" },
+            { icon: Zap, value: totalSpent.toLocaleString(), label: "Credits Used", color: "text-amber-400", bg: "bg-amber-500/10" },
+            { icon: RefreshCw, value: "1:1", label: "Exchange Rate", color: "text-blue-400", bg: "bg-blue-500/10" },
+          ].map((stat, i) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + i * 0.05 }}
+              whileHover={{ scale: 1.02, y: -2 }}
+              className={cn(
+                "p-4 rounded-2xl text-center transition-all",
+                "bg-card/60 backdrop-blur-xl border border-border/30",
+                "hover:shadow-lg hover:border-border/50"
+              )}
+            >
+              <div className={cn("w-10 h-10 mx-auto mb-3 rounded-xl flex items-center justify-center", stat.bg)}>
+                <stat.icon className={cn("w-5 h-5", stat.color)} />
+              </div>
+              <div className="text-xl sm:text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
+            </motion.div>
+          ))}
+        </motion.div>
+
+        {/* Deposit Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mb-8"
+        >
+          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+            <Button 
+              onClick={() => setIsDepositOpen(true)}
+              className={cn(
+                "w-full h-16 text-lg font-semibold rounded-2xl gap-3",
+                "bg-gradient-to-r from-emerald-500 to-emerald-600",
+                "hover:from-emerald-600 hover:to-emerald-700",
+                "text-white shadow-2xl shadow-emerald-500/20",
+                "transition-all duration-300 hover:shadow-emerald-500/40"
+              )}
+            >
+              <Plus className="w-5 h-5" />
+              Deposit POLY
+            </Button>
+          </motion.div>
+        </motion.div>
+
+        {/* Activity Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="bg-card/40 backdrop-blur-xl rounded-2xl border border-border/30 overflow-hidden"
+        >
+          <div className="flex items-center justify-between p-5 border-b border-border/30">
+            <div className="flex items-center gap-2">
+              <History className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold tracking-tight">Recent Activity</h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => refetch()}
+              className="text-muted-foreground hover:text-foreground rounded-xl"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
           </div>
 
-          <div className="rounded-2xl border border-border/50 bg-card/50 overflow-hidden">
+          <div className="divide-y divide-border/20">
             {loadingHistory ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-16">
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : activity.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Clock className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                <p>No activity yet</p>
-                <p className="text-sm">Deposit POLY to get started</p>
+              <div className="text-center py-16 px-4">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/30 flex items-center justify-center">
+                  <Sparkles className="w-8 h-8 text-muted-foreground/50" />
+                </div>
+                <p className="text-lg font-medium text-muted-foreground mb-1">No activity yet</p>
+                <p className="text-sm text-muted-foreground/70">Deposit POLY to get started</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/30">
-                <AnimatePresence>
-                  {activity.map((item, index) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center",
-                          item.type === 'deposit' 
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : "bg-primary/10 text-primary"
-                        )}>
+              <AnimatePresence>
+                {activity.map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="flex items-center justify-between p-4 hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center",
+                        item.type === 'deposit' 
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : "bg-primary/10 text-primary"
+                      )}>
+                        <span className="text-lg font-bold">
+                          {item.type === 'deposit' ? '+' : '⚡'}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium flex items-center gap-2">
                           {item.type === 'deposit' ? (
-                            <Plus className="w-5 h-5" />
+                            <>
+                              <span className="text-emerald-400">+{item.amount}</span>
+                              <span className="text-muted-foreground">POLY deposited</span>
+                            </>
                           ) : (
-                            <Zap className="w-5 h-5" />
+                            <>
+                              <span className="text-primary">-{item.amount}</span>
+                              <span className="text-muted-foreground">credit used</span>
+                            </>
                           )}
                         </div>
-                        <div>
-                          <div className="font-medium flex items-center gap-2">
-                            {item.type === 'deposit' ? (
-                              <>
-                                <span className="text-emerald-400">+{item.amount}</span>
-                                <span className="text-muted-foreground">POLY deposited</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-primary">-{item.amount}</span>
-                                <span className="text-muted-foreground">credit used</span>
-                              </>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <span>{formatRelativeTime(item.created_at)}</span>
-                            {item.status && (
-                              <Badge 
-                                variant="outline" 
-                                className={cn(
-                                  "text-[10px] px-1.5 py-0",
-                                  item.status === 'confirmed' 
-                                    ? "border-emerald-500/30 text-emerald-400"
-                                    : "border-amber-500/30 text-amber-400"
-                                )}
-                              >
-                                {item.status}
-                              </Badge>
-                            )}
-                          </div>
+                        <div className="text-xs text-muted-foreground/70 flex items-center gap-2 mt-0.5">
+                          <span>{formatRelativeTime(item.created_at)}</span>
+                          {item.type === 'deposit' && item.status === 'confirmed' && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-medium">
+                              Confirmed
+                            </span>
+                          )}
                         </div>
                       </div>
+                    </div>
 
-                      {item.tx_signature && (
-                        <a
-                          href={`https://solscan.io/tx/${item.tx_signature}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <span className="hidden sm:inline">View</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
+                    {item.tx_signature && (
+                      <button
+                        onClick={() => window.open(`https://solscan.io/tx/${item.tx_signature}`, '_blank')}
+                        className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+                      >
+                        <ArrowUpRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             )}
           </div>
         </motion.div>
 
-        {/* Info footer */}
+        {/* Footer Info */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="mt-8 text-center text-sm text-muted-foreground"
+          transition={{ delay: 0.4 }}
+          className="mt-8 text-center space-y-2"
         >
-          <p>Each AI analysis costs 1 credit • 1 POLY = 1 credit</p>
+          <p className="text-sm text-muted-foreground/70">
+            Each AI analysis costs 1 credit • 1 POLY = 1 credit
+          </p>
+          {connected && publicKey && (
+            <p className="text-xs text-muted-foreground/50">
+              Connected: {publicKey.toString().slice(0, 8)}...{publicKey.toString().slice(-6)}
+            </p>
+          )}
         </motion.div>
       </div>
 

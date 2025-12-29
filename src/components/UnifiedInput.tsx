@@ -104,12 +104,17 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
         autoFocus
       />
       
-      {/* Send Button */}
+      {/* Send Button - use onTouchEnd for mobile to prevent double-tap issues */}
       <button
+        type="button"
         onClick={handleTextSubmit}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          handleTextSubmit();
+        }}
         disabled={disabled || !textInput.trim()}
         className={cn(
-          "relative p-2.5 sm:p-3.5 rounded-xl transition-all duration-300 shrink-0",
+          "relative p-2.5 sm:p-3.5 rounded-xl transition-all duration-300 shrink-0 touch-manipulation",
           textInput.trim() && !disabled
             ? "bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-105 active:scale-95"
             : "bg-muted text-muted-foreground cursor-not-allowed"

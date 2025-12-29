@@ -87,34 +87,23 @@ export function DepositMethodSelector({
             </motion.button>
           ) : (
             <div className={cn(
-              "relative p-4 rounded-xl border text-left transition-all",
-              "bg-gradient-to-br from-primary/10 to-primary/5",
-              "border-primary/30"
+              "relative p-4 rounded-xl border text-left transition-all opacity-60",
+              "bg-gradient-to-br from-muted/30 to-muted/10",
+              "border-border/30"
             )}>
               <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-primary/20 border border-primary/30">
-                  <Zap className="w-5 h-5 text-primary" />
+                <div className="p-2.5 rounded-xl bg-muted/50 border border-border/30">
+                  <Zap className="w-5 h-5 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">Quick Deposit</span>
-                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    <span className="font-semibold text-muted-foreground">Quick Deposit</span>
+                    <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Connect your Solana wallet to use this option
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Connect your Phantom wallet in the top-right corner to unlock this option
                   </p>
                 </div>
-              </div>
-              
-              {/* Connect wallet button */}
-              <div className="mt-3 pt-3 border-t border-border/30">
-                <Button
-                  onClick={handleConnectWallet}
-                  className="w-full h-9 text-xs bg-primary/20 text-primary hover:bg-primary/30 border-0"
-                >
-                  <Wallet className="w-3.5 h-3.5 mr-2" />
-                  Connect Wallet
-                </Button>
               </div>
             </div>
           )}
