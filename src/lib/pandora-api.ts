@@ -423,7 +423,7 @@ const MOCK_MARKETS: PandoraMarket[] = [
 ];
 
 // Set to true to always use mock data (for testing)
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 export async function fetchPandoraMarkets(): Promise<PandoraMarket[]> {
   // Use mock data for testing
