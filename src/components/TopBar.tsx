@@ -246,7 +246,7 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
           </div>
 
           {/* Right Actions - Desktop */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-3">
             {/* Credits Display */}
             <CreditsDisplay />
             

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion";
 import { 
   ArrowLeft, Zap, ExternalLink, Loader2, History, Plus, 
-  Sparkles, TrendingUp, RefreshCw, ArrowUpRight
+  TrendingUp, RefreshCw, ArrowUpRight, Wallet, LogOut, ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCredits } from "@/hooks/useCredits";
@@ -14,6 +14,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DepositCreditsDialog } from "@/components/credits/DepositCreditsDialog";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const CREDITS_PER_POLY = 1;
 
@@ -223,6 +230,8 @@ const Credits = () => {
     });
   };
 
+  const { setVisible: openWalletModal } = useWalletModal();
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -232,7 +241,7 @@ const Credits = () => {
           className="max-w-md w-full p-8 rounded-3xl bg-card/80 backdrop-blur-2xl border border-border/50 text-center shadow-2xl"
         >
           <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-            <Sparkles className="w-10 h-10 text-primary" />
+            <Zap className="w-10 h-10 text-primary" />
           </div>
           <h2 className="text-3xl font-bold tracking-tight mb-3">Sign In Required</h2>
           <p className="text-muted-foreground mb-8 text-lg">
@@ -293,11 +302,76 @@ const Credits = () => {
             animate={{ opacity: 1, scale: 1 }}
             className="flex items-center gap-2 px-4 py-2 rounded-full bg-muted/30 backdrop-blur-xl border border-border/30"
           >
-            <Sparkles className="w-4 h-4 text-primary" />
+            <Zap className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">Credits</span>
           </motion.div>
           
-          <WalletMultiButton className="!bg-card/80 !backdrop-blur-xl !border !border-border/50 !text-foreground !rounded-2xl !h-12 !px-4 hover:!bg-muted/50 !font-medium !text-sm !shadow-lg" />
+          {/* Wallet Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              {connected && publicKey ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 rounded-2xl h-12 px-4 bg-card/80 backdrop-blur-xl border border-border/50 hover:bg-muted/50 font-medium text-sm shadow-lg"
+                >
+                  <Wallet className="w-4 h-4 text-emerald-400" />
+                  <span className="text-foreground">
+                    {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
+                  </span>
+                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 rounded-2xl h-12 px-4 bg-card/80 backdrop-blur-xl border border-border/50 hover:bg-muted/50 font-medium text-sm shadow-lg"
+                >
+                  <Wallet className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-foreground">Connect Wallet</span>
+                  <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                </Button>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-card/95 backdrop-blur-xl border-border/50 min-w-[200px]">
+              {connected && publicKey ? (
+                <>
+                  <div className="px-3 py-2 border-b border-border/30">
+                    <p className="text-xs text-muted-foreground">Connected</p>
+                    <p className="text-sm font-mono text-foreground truncate">
+                      {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
+                    </p>
+                  </div>
+                  <DropdownMenuItem
+                    onClick={() => openWalletModal(true)}
+                    className="gap-2 cursor-pointer text-muted-foreground hover:text-foreground"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Change Wallet
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border/30" />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      // Disconnect is handled by opening the modal and selecting disconnect
+                      openWalletModal(true);
+                    }}
+                    className="gap-2 cursor-pointer text-red-400 hover:text-red-300 focus:text-red-300"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Disconnect
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <DropdownMenuItem
+                  onClick={() => openWalletModal(true)}
+                  className="gap-2 cursor-pointer text-muted-foreground hover:text-foreground"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Connect Wallet
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </motion.div>
 
         {/* Main Balance Card */}
@@ -459,7 +533,7 @@ const Credits = () => {
             ) : activity.length === 0 ? (
               <div className="text-center py-16 px-4">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted/30 flex items-center justify-center">
-                  <Sparkles className="w-8 h-8 text-muted-foreground/50" />
+                  <History className="w-8 h-8 text-muted-foreground/50" />
                 </div>
                 <p className="text-lg font-medium text-muted-foreground mb-1">No activity yet</p>
                 <p className="text-sm text-muted-foreground/70">Deposit POLY to get started</p>
@@ -481,9 +555,11 @@ const Credits = () => {
                           ? "bg-emerald-500/10 text-emerald-400"
                           : "bg-primary/10 text-primary"
                       )}>
-                        <span className="text-lg font-bold">
-                          {item.type === 'deposit' ? '+' : '⚡'}
-                        </span>
+                        {item.type === 'deposit' ? (
+                          <TrendingUp className="w-5 h-5" />
+                        ) : (
+                          <Zap className="w-5 h-5" />
+                        )}
                       </div>
                       <div>
                         <div className="font-medium flex items-center gap-2">
