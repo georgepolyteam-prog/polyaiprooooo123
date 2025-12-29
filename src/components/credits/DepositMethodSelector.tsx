@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Zap, ClipboardList, ArrowLeft, Wallet, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 interface DepositMethodSelectorProps {
   depositAmount: number;
@@ -85,11 +86,10 @@ export function DepositMethodSelector({
               </div>
             </div>
             
-            {/* Not connected hint */}
+            {/* Not connected - show connect button */}
             {!isWalletConnected && (
-              <div className="mt-3 flex items-center gap-2 text-xs text-amber-500">
-                <Wallet className="w-3.5 h-3.5" />
-                <span>Wallet not connected</span>
+              <div className="mt-3 pt-3 border-t border-border/30">
+                <WalletMultiButton className="!bg-primary/20 !text-primary !text-xs !h-9 !rounded-lg !w-full !justify-center hover:!bg-primary/30" />
               </div>
             )}
           </motion.button>
