@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DepositCreditsDialog } from "@/components/credits/DepositCreditsDialog";
+import { BuyPolyOptions } from "@/components/credits/BuyPolyOptions";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -479,6 +480,30 @@ const Credits = () => {
           ))}
         </motion.div>
 
+        {/* Buy POLY Options */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="mb-6"
+        >
+          <div className="p-6 rounded-2xl bg-card/40 backdrop-blur-xl border border-border/30">
+            <BuyPolyOptions />
+          </div>
+        </motion.div>
+
+        {/* Separator */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.28 }}
+          className="flex items-center gap-4 mb-6"
+        >
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+          <span className="text-xs text-muted-foreground uppercase tracking-wider">Or deposit existing POLY</span>
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+        </motion.div>
+
         {/* Deposit Button */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -491,10 +516,10 @@ const Credits = () => {
               onClick={() => setIsDepositOpen(true)}
               className={cn(
                 "w-full h-16 text-lg font-semibold rounded-2xl gap-3",
-                "bg-gradient-to-r from-emerald-500 to-emerald-600",
-                "hover:from-emerald-600 hover:to-emerald-700",
-                "text-white shadow-2xl shadow-emerald-500/20",
-                "transition-all duration-300 hover:shadow-emerald-500/40"
+                "bg-gradient-to-r from-primary to-primary/80",
+                "hover:from-primary/90 hover:to-primary/70",
+                "text-primary-foreground shadow-2xl shadow-primary/20",
+                "transition-all duration-300 hover:shadow-primary/40"
               )}
             >
               <Plus className="w-5 h-5" />
