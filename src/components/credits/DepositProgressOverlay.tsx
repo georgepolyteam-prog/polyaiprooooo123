@@ -92,7 +92,7 @@ export function DepositProgressOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 pointer-events-auto"
         >
           {/* Backdrop */}
           <motion.div
@@ -247,8 +247,13 @@ export function DepositProgressOverlay({
                     transition={{ delay: 0.8 }}
                   >
                     <Button
-                      onClick={onDismiss}
-                      className="w-full h-12 rounded-xl mt-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold shadow-lg shadow-emerald-500/25"
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onDismiss?.();
+                      }}
+                      className="w-full h-12 rounded-xl mt-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold shadow-lg shadow-emerald-500/25 pointer-events-auto"
                     >
                       Done
                     </Button>
@@ -349,24 +354,39 @@ export function DepositProgressOverlay({
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden pt-2"
                   >
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 pointer-events-auto">
                       <Button
-                        onClick={onRetry}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onRetry?.();
+                        }}
                         className="w-full gap-2"
                       >
                         <RefreshCw className="w-4 h-4" />
                         Try Again
                       </Button>
                       <Button
+                        type="button"
                         variant="outline"
-                        onClick={onManualFallback}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onManualFallback?.();
+                        }}
                         className="w-full gap-2 text-muted-foreground"
                       >
                         Use Manual Transfer Instead
                       </Button>
                       <Button
+                        type="button"
                         variant="ghost"
-                        onClick={onDismiss}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onDismiss?.();
+                        }}
                         className="w-full gap-2 text-muted-foreground hover:text-foreground"
                       >
                         <X className="w-4 h-4" />
