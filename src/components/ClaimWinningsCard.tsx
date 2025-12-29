@@ -13,6 +13,10 @@ import {
   XCircle,
   AlertTriangle,
   HelpCircle,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +26,8 @@ import { useClaimWinnings, ClaimablePosition, usePayoutStatus, verifyUsdcTransfe
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface ClaimWinningsCardProps {
   position: ClaimablePosition;
@@ -33,6 +39,9 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
   const claimState = getClaimState(position.conditionId);
   const [verifiedAmount, setVerifiedAmount] = useState<number | null>(null);
   const [usdcVerified, setUsdcVerified] = useState<boolean | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showForceClaimSection, setShowForceClaimSection] = useState(false);
+  const [forceClaimConfirmed, setForceClaimConfirmed] = useState(false);
 
   // Check if payouts are settled before allowing redemption (comprehensive check)
   const {
@@ -42,6 +51,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
     denominator,
     numerators,
     isLoading: isCheckingSettlement,
+    refetch: refetchPayoutStatus,
   } = usePayoutStatus(position.conditionId);
 
   // Watch for transaction confirmation
@@ -87,13 +97,30 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
     }
   }, [isSuccess, receipt, claimState.status, position.conditionId, updateClaimState, onClaimSuccess]);
 
-  const handleClaim = async () => {
-    if (!readyForRedemption) {
+  const handleClaim = async (force: boolean = false) => {
+    if (!readyForRedemption && !force) {
       toast.error("Payouts not settled yet. Please try again later.");
       return;
     }
     await claimWinnings(position);
   };
+
+  const handleRefreshStatus = async () => {
+    setIsRefreshing(true);
+    await refetchPayoutStatus();
+    setTimeout(() => {
+      setIsRefreshing(false);
+      toast.success("Payout status refreshed");
+    }, 500);
+  };
+
+  const handleCopyConditionId = () => {
+    navigator.clipboard.writeText(position.conditionId);
+    toast.success("Condition ID copied to clipboard");
+  };
+
+  const CTF_CONTRACT = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045";
+  const polygonscanUrl = `https://polygonscan.com/address/${CTF_CONTRACT}#readContract`;
 
   const isPending = claimState.status === "pending" || isWritePending;
   const isConfirmingTx = claimState.status === "confirming" || isConfirming;
@@ -282,11 +309,11 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                 key="not-settled"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="space-y-2"
+                className="space-y-3"
               >
                 <div className="flex items-start gap-3 py-3 px-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
                   <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
-                  <div className="text-amber-400">
+                  <div className="text-amber-400 flex-1">
                     <p className="font-semibold text-sm">⚠️ Payouts Not Settled Yet</p>
                     <p className="text-xs opacity-80 mt-1">
                       This market has resolved but payouts haven't been reported on-chain yet. Your{" "}
@@ -300,6 +327,128 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                     </p>
                   </div>
                 </div>
+
+                {/* Refresh & Verify Section */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshStatus}
+                    disabled={isRefreshing}
+                    className="text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                  >
+                    {isRefreshing ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                    )}
+                    Refresh Status
+                  </Button>
+                  <a
+                    href={polygonscanUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Verify on Polygonscan
+                  </a>
+                </div>
+
+                {/* Condition ID for manual verification */}
+                <div className="py-2 px-3 rounded-lg bg-muted/30 border border-border/30">
+                  <p className="text-xs text-muted-foreground mb-1">Condition ID (for manual verification):</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs font-mono text-foreground break-all flex-1">
+                      {position.conditionId}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyConditionId}
+                      className="shrink-0 h-6 w-6 p-0"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Force Claim Section */}
+                <Collapsible open={showForceClaimSection} onOpenChange={setShowForceClaimSection}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      {showForceClaimSection ? (
+                        <ChevronUp className="w-3 h-3 mr-1" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 mr-1" />
+                      )}
+                      Advanced: Attempt claim anyway
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 mt-2">
+                    <div className="py-3 px-4 rounded-lg bg-rose-500/10 border border-rose-500/30">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                        <div className="text-rose-400 text-xs">
+                          <p className="font-semibold">⚠️ HIGH RISK WARNING</p>
+                          <p className="mt-1 opacity-90">
+                            If payouts are truly not settled on-chain, your tokens will be <strong>permanently burned</strong> and you will receive <strong>$0 USDC</strong>.
+                          </p>
+                          <p className="mt-2 opacity-80">
+                            Only proceed if you have verified on Polygonscan that payouts ARE settled and our check is incorrect.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 py-2 px-3 rounded-lg bg-muted/30 border border-border/30">
+                      <Checkbox
+                        id={`force-claim-${position.conditionId}`}
+                        checked={forceClaimConfirmed}
+                        onCheckedChange={(checked) => setForceClaimConfirmed(checked === true)}
+                        className="mt-0.5"
+                      />
+                      <label
+                        htmlFor={`force-claim-${position.conditionId}`}
+                        className="text-xs text-muted-foreground cursor-pointer"
+                      >
+                        I have verified on Polygonscan that payouts are settled and understand the risk of losing my tokens if I'm wrong.
+                      </label>
+                    </div>
+
+                    <Button
+                      onClick={() => handleClaim(true)}
+                      disabled={!forceClaimConfirmed || isPending || isConfirmingTx}
+                      className={cn(
+                        "w-full font-semibold py-2 rounded-lg transition-all duration-200 text-sm",
+                        !forceClaimConfirmed
+                          ? "bg-zinc-700 text-zinc-500 cursor-not-allowed"
+                          : "bg-rose-600 hover:bg-rose-700 text-white"
+                      )}
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Confirming in wallet...
+                        </>
+                      ) : isConfirmingTx ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="w-4 h-4 mr-2" />
+                          I understand the risk - Claim Anyway
+                        </>
+                      )}
+                    </Button>
+                  </CollapsibleContent>
+                </Collapsible>
               </motion.div>
             ) : isError ? (
               <motion.div
@@ -313,7 +462,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   <span className="font-semibold">{claimState.error || "Claim failed"}</span>
                 </div>
                 <Button
-                  onClick={handleClaim}
+                  onClick={() => handleClaim()}
                   disabled={!readyForRedemption}
                   className="w-full bg-[#BFFF0A] hover:bg-[#BFFF0A]/90 text-black font-semibold py-3 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                 >
@@ -349,7 +498,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
                   <span>✓ Ready to claim - You hold the winning {winningOutcome} outcome</span>
                 </div>
                 <Button
-                  onClick={handleClaim}
+                  onClick={() => handleClaim()}
                   disabled={isPending || isConfirmingTx}
                   className={cn(
                     "w-full font-semibold py-3 rounded-lg transition-all duration-200",
@@ -379,7 +528,7 @@ export function ClaimWinningsCard({ position, onClaimSuccess }: ClaimWinningsCar
             ) : (
               <motion.div key="button" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <Button
-                  onClick={handleClaim}
+                  onClick={() => handleClaim()}
                   disabled={isPending || isConfirmingTx || !readyForRedemption}
                   className={cn(
                     "w-full font-semibold py-3 rounded-lg transition-all duration-200",
