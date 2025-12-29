@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info, Zap } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info, Zap, Trophy, Hammer, LogIn, LogOut, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditsDisplay } from "@/components/CreditsDisplay";
+import { useAuth } from "@/hooks/useAuth";
+import { ConnectWallet } from "@/components/ConnectWallet";
 
 const navItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
@@ -13,11 +15,12 @@ const navItems = [
 ];
 
 const menuItems = [
-  { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
+  { id: "markets", label: "Browse Markets", icon: BarChart3, path: "/markets" },
   { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
-  { id: "traders", label: "Leaderboard", icon: Users, path: "/leaderboard" },
   { id: "chat", label: "Chat (Home)", icon: MessageSquare, path: "/" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
+  { id: "leaderboard", label: "Top Traders", icon: Trophy, path: "/leaderboard" },
+  { id: "builders", label: "Top Builders", icon: Hammer, path: "/builders" },
 ];
 
 const additionalMenuItems = [
@@ -33,6 +36,7 @@ export function MobileBottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
+  const { user, signOut } = useAuth();
 
   // Prevent body scroll when menu is open
   useEffect(() => {
@@ -142,7 +146,7 @@ export function MobileBottomNav() {
       {/* Menu Overlay */}
       {isMenuOpen && (
         <div 
-          className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300 md:hidden"
+          className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300 md:hidden flex flex-col"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsMenuOpen(false);
           }}
@@ -150,87 +154,135 @@ export function MobileBottomNav() {
           {/* Close Button */}
           <button
             onClick={() => setIsMenuOpen(false)}
-            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors z-10"
             aria-label="Close navigation menu"
           >
             <X className="w-5 h-5" />
           </button>
 
-          {/* Menu Content */}
-          <div className="flex flex-col items-center justify-center h-full max-w-md mx-auto px-8 py-20">
-            {/* Credits Display at top */}
-            <div className="w-full mb-6">
-              <CreditsDisplay className="w-full justify-center" />
-            </div>
-            {/* Main Navigation */}
-            <div className="w-full space-y-3">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-                
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleMenuItemClick(item.path)}
-                    className={cn(
-                      "w-full h-14 flex items-center gap-4 px-6 rounded-xl",
-                      "transition-all duration-200",
-                      active 
-                        ? "bg-primary/10 border border-primary/30" 
-                        : "bg-muted/30 hover:bg-muted/60 border border-transparent"
-                    )}
-                    aria-current={active ? "page" : undefined}
-                  >
-                    <Icon className={cn(
-                      "w-5 h-5",
-                      active ? "text-primary" : "text-muted-foreground"
-                    )} />
-                    <span className={cn(
-                      "text-base",
-                      active ? "text-primary font-medium" : "text-foreground"
-                    )}>
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Scrollable Menu Content */}
+          <div className="flex-1 overflow-y-auto pt-20 pb-8 px-6">
+            <div className="max-w-md mx-auto space-y-6">
+              {/* Credits Display at top */}
+              <div className="w-full">
+                <CreditsDisplay className="w-full justify-center" />
+              </div>
 
-            {/* Divider */}
-            <div className="w-full border-t border-border my-6" />
-
-            {/* Additional Links */}
-            <div className="w-full space-y-3">
-              {additionalMenuItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-                
-                return (
+              {/* Account Section */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border/30">
+                {user ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <User className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+                        <p className="text-xs text-muted-foreground">Signed in</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        signOut();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span className="text-sm font-medium">Sign Out</span>
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    key={item.id}
-                    onClick={() => handleMenuItemClick(item.path)}
-                    className={cn(
-                      "w-full h-14 flex items-center gap-4 px-6 rounded-xl",
-                      "transition-all duration-200",
-                      active 
-                        ? "bg-primary/10 border border-primary/30" 
-                        : "bg-muted/30 hover:bg-muted/60 border border-transparent"
-                    )}
-                    aria-current={active ? "page" : undefined}
+                    onClick={() => handleMenuItemClick('/auth')}
+                    className="w-full h-12 flex items-center justify-center gap-2 rounded-xl bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-colors"
                   >
-                    <Icon className={cn(
-                      "w-5 h-5",
-                      active ? "text-primary" : "text-muted-foreground"
-                    )} />
-                    <span className={cn(
-                      "text-base",
-                      active ? "text-primary font-medium" : "text-foreground"
-                    )}>
-                      {item.label}
-                    </span>
+                    <LogIn className="w-4 h-4" />
+                    <span className="text-sm font-medium">Sign In / Sign Up</span>
                   </button>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Wallet Connection */}
+              <div className="flex justify-center">
+                <ConnectWallet />
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-border/30" />
+
+              {/* Main Navigation */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-3">Navigation</p>
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path);
+                  
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleMenuItemClick(item.path)}
+                      className={cn(
+                        "w-full h-12 flex items-center gap-4 px-4 rounded-xl",
+                        "transition-all duration-200",
+                        active 
+                          ? "bg-primary/10 border border-primary/30" 
+                          : "bg-muted/30 hover:bg-muted/60 border border-transparent"
+                      )}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <Icon className={cn(
+                        "w-5 h-5",
+                        active ? "text-primary" : "text-muted-foreground"
+                      )} />
+                      <span className={cn(
+                        "text-sm",
+                        active ? "text-primary font-medium" : "text-foreground"
+                      )}>
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-border/30" />
+
+              {/* Additional Links */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-3">More</p>
+                {additionalMenuItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path);
+                  
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleMenuItemClick(item.path)}
+                      className={cn(
+                        "w-full h-12 flex items-center gap-4 px-4 rounded-xl",
+                        "transition-all duration-200",
+                        active 
+                          ? "bg-primary/10 border border-primary/30" 
+                          : "bg-muted/30 hover:bg-muted/60 border border-transparent"
+                      )}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <Icon className={cn(
+                        "w-5 h-5",
+                        active ? "text-primary" : "text-muted-foreground"
+                      )} />
+                      <span className={cn(
+                        "text-sm",
+                        active ? "text-primary font-medium" : "text-foreground"
+                      )}>
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
