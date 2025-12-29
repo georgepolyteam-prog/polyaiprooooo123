@@ -110,7 +110,7 @@ serve(async (req) => {
             continue;
           }
           
-          // Calculate credits (1 POLY = 10 credits)
+          // Calculate credits (1 POLY = 1 credit)
           const creditsToAdd = Math.floor(amount * CREDITS_PER_POLY);
           const newBalance = (userCredit.credits_balance || 0) + creditsToAdd;
           
