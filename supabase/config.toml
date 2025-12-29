@@ -104,3 +104,9 @@ verify_jwt = false
 
 [functions.solana-rpc]
 verify_jwt = false
+
+[functions.query-irys]
+verify_jwt = false
+
+[functions.upload-to-irys]
+verify_jwt = false
