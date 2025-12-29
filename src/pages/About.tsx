@@ -155,11 +155,13 @@ const About = () => {
             className="flex flex-wrap gap-4 justify-center"
           >
             <Button 
-              onClick={() => setLaunchModalOpen(true)}
+              asChild
               size="lg"
               className="px-10 h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
             >
-              Get Started
+              <Link to="/chat">
+                Get Started
+              </Link>
             </Button>
             <Button 
               variant="ghost"
@@ -608,13 +610,15 @@ const About = () => {
                 </Link>
               </Button>
               <Button 
-                onClick={() => setLaunchModalOpen(true)}
+                asChild
                 variant="ghost"
                 size="lg"
                 className="px-10 h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
               >
-                Explore Platform
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <Link to="/">
+                  Explore Platform
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Link>
               </Button>
             </div>
           </motion.div>
