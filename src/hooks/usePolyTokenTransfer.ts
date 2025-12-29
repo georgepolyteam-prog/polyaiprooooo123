@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { PublicKey, Transaction } from '@solana/web3.js';
+import { useState, useCallback, useMemo } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import {
   getAssociatedTokenAddressSync,
   createTransferInstruction,
@@ -42,9 +42,20 @@ const STAGE_MESSAGES: Record<TransferStage, string> = {
   'error': 'Something went wrong'
 };
 
+// Direct Helius RPC for WebSocket support
+const HELIUS_API_KEY = 'e02bc68e-cce0-493c-a4d7-1aba997ceef6';
+const HELIUS_RPC_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+const HELIUS_WS_URL = `wss://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+
 export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
-  const { connection } = useConnection();
-  const { publicKey, sendTransaction, connected } = useWallet();
+  const { publicKey, sendTransaction, connected, signTransaction } = useWallet();
+  
+  // Create a direct Helius connection with WebSocket support
+  const connection = useMemo(() => new Connection(HELIUS_RPC_URL, {
+    commitment: 'confirmed',
+    wsEndpoint: HELIUS_WS_URL,
+    confirmTransactionInitialTimeout: 60000,
+  }), []);
   
   const [stage, setStage] = useState<TransferStage>('idle');
   const [signature, setSignature] = useState<string | null>(null);

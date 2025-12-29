@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Loader2, XCircle, Wallet, ArrowRight, X, ExternalLink, Sparkles, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, XCircle, Wallet, X, ExternalLink, RefreshCw, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { TransferStage } from '@/hooks/usePolyTokenTransfer';
@@ -41,6 +41,37 @@ function getStepStatus(step: typeof DEPOSIT_STEPS[0], currentStage: TransferStag
   return 'pending';
 }
 
+// Animated particles for success state
+function SuccessParticles() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {[...Array(12)].map((_, i) => (
+        <motion.div
+          key={i}
+          initial={{ 
+            opacity: 0, 
+            scale: 0,
+            x: '50%',
+            y: '50%'
+          }}
+          animate={{ 
+            opacity: [0, 1, 0],
+            scale: [0, 1, 0.5],
+            x: `${50 + (Math.random() - 0.5) * 100}%`,
+            y: `${50 + (Math.random() - 0.5) * 100}%`,
+          }}
+          transition={{ 
+            duration: 1.5,
+            delay: i * 0.05,
+            ease: 'easeOut'
+          }}
+          className="absolute w-2 h-2 rounded-full bg-gradient-to-r from-emerald-400 to-green-300"
+        />
+      ))}
+    </div>
+  );
+}
+
 export function DepositProgressOverlay({ 
   stage, 
   stageMessage, 
@@ -78,73 +109,128 @@ export function DepositProgressOverlay({
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={cn(
-              "relative w-full max-w-sm rounded-2xl border bg-card/95 backdrop-blur-xl p-6 shadow-2xl",
+              "relative w-full max-w-sm rounded-2xl border bg-card/95 backdrop-blur-xl p-6 shadow-2xl overflow-hidden",
               isCompleted && "border-emerald-500/50",
               isError && "border-red-500/50",
               !isCompleted && !isError && "border-primary/30"
             )}
           >
+            {/* Success particles */}
+            {isCompleted && <SuccessParticles />}
+            
             {/* Animated glow effect */}
-            <div className={cn(
-              "absolute inset-0 rounded-2xl opacity-20 blur-xl transition-colors duration-500",
-              isCompleted && "bg-emerald-500",
-              isError && "bg-red-500",
-              !isCompleted && !isError && "bg-primary"
-            )} />
+            <motion.div 
+              className={cn(
+                "absolute inset-0 rounded-2xl blur-xl transition-colors duration-500",
+                isCompleted && "bg-emerald-500",
+                isError && "bg-red-500",
+                !isCompleted && !isError && "bg-primary"
+              )}
+              initial={{ opacity: 0.1 }}
+              animate={{ 
+                opacity: isCompleted ? [0.2, 0.4, 0.2] : 0.2,
+              }}
+              transition={{ 
+                duration: 2, 
+                repeat: isCompleted ? Infinity : 0,
+                ease: 'easeInOut'
+              }}
+            />
             
             <div className="relative space-y-6">
               {/* Header */}
               <div className="text-center space-y-2">
                 {isCompleted ? (
                   <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', damping: 15, stiffness: 200 }}
-                    className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30"
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', damping: 12, stiffness: 200 }}
+                    className="relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/40"
                   >
                     <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.2 }}
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: 0.3, type: 'spring' }}
                     >
-                      <CheckCircle2 className="w-9 h-9 text-white" />
+                      <CheckCircle2 className="w-10 h-10 text-white" strokeWidth={2.5} />
                     </motion.div>
+                    
+                    {/* Pulse ring */}
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-emerald-400"
+                      initial={{ scale: 1, opacity: 0.5 }}
+                      animate={{ scale: 1.5, opacity: 0 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'easeOut' }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 rounded-full border-2 border-emerald-400"
+                      initial={{ scale: 1, opacity: 0.5 }}
+                      animate={{ scale: 1.5, opacity: 0 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'easeOut', delay: 0.5 }}
+                    />
                   </motion.div>
                 ) : isError ? (
-                  <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto">
-                    <XCircle className="w-9 h-9 text-red-400" />
-                  </div>
+                  <motion.div 
+                    className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto"
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <XCircle className="w-10 h-10 text-red-400" />
+                  </motion.div>
                 ) : (
                   <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                    className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto"
+                    className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mx-auto relative"
                   >
-                    <Loader2 className="w-9 h-9 text-primary animate-spin" />
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    >
+                      <Loader2 className="w-10 h-10 text-primary" />
+                    </motion.div>
                   </motion.div>
                 )}
                 
-                <h3 className="font-semibold text-lg text-foreground mt-4">
-                  {isCompleted ? 'Deposit Successful!' : isError ? 'Deposit Failed' : 'Processing Deposit'}
-                </h3>
+                <motion.h3 
+                  className="font-semibold text-lg text-foreground mt-4"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: isCompleted ? 0.4 : 0 }}
+                >
+                  {isCompleted ? 'Deposit Successful' : isError ? 'Deposit Failed' : 'Processing Deposit'}
+                </motion.h3>
               </div>
               
               {/* Success content */}
               {isCompleted && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
+                  transition={{ delay: 0.5, type: 'spring' }}
                   className="text-center space-y-4"
                 >
-                  <div className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-5 h-5 text-primary" />
-                    <span className="text-4xl font-bold text-foreground">+{creditsAdded.toLocaleString()}</span>
-                  </div>
+                  <motion.div 
+                    className="flex items-center justify-center gap-3"
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.6, type: 'spring', damping: 10 }}
+                  >
+                    <motion.div
+                      animate={{ rotate: [0, 15, -15, 0] }}
+                      transition={{ duration: 0.5, delay: 0.8 }}
+                    >
+                      <Zap className="w-8 h-8 text-emerald-400" />
+                    </motion.div>
+                    <span className="text-5xl font-bold bg-gradient-to-r from-emerald-400 to-green-300 bg-clip-text text-transparent">
+                      +{creditsAdded.toLocaleString()}
+                    </span>
+                  </motion.div>
                   <p className="text-muted-foreground">credits added to your account</p>
                   
                   {signature && (
-                    <a
+                    <motion.a
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.7 }}
                       href={`https://solscan.io/tx/${signature}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -152,15 +238,21 @@ export function DepositProgressOverlay({
                     >
                       View on Solscan
                       <ExternalLink className="w-3 h-3" />
-                    </a>
+                    </motion.a>
                   )}
                   
-                  <Button
-                    onClick={onDismiss}
-                    className="w-full h-12 rounded-xl mt-4"
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.8 }}
                   >
-                    Done
-                  </Button>
+                    <Button
+                      onClick={onDismiss}
+                      className="w-full h-12 rounded-xl mt-4 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold shadow-lg shadow-emerald-500/25"
+                    >
+                      Done
+                    </Button>
+                  </motion.div>
                 </motion.div>
               )}
               
