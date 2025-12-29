@@ -33,7 +33,7 @@ export const CreditsDisplay = ({ className }: CreditsDisplayProps) => {
 
   return (
     <>
-      <CreditsPill onClick={() => setIsOpen(true)} className={className} />
+      <CreditsPill className={className} />
 
       {/* Premium Credits Modal */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
