@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   Loader2, Copy, Check, ExternalLink, Zap, ArrowRight, 
-  ArrowLeft, Wallet, Hash, Coins, Sparkles, X, AlertCircle
+  ArrowLeft, Wallet, Hash, Coins, Sparkles, X, AlertCircle, Search
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +23,7 @@ interface DepositCreditsDialogProps {
   onSuccess?: () => void;
 }
 
-type Step = 'amount' | 'method' | 'send' | 'verify' | 'success';
+type Step = 'amount' | 'method' | 'send' | 'detecting' | 'verify' | 'success';
 
 const QUICK_AMOUNTS = [10, 50, 100, 500];
 
@@ -44,9 +44,20 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [creditsAdded, setCreditsAdded] = useState(0);
   const [showProgressOverlay, setShowProgressOverlay] = useState(false);
+  const [detectAttempts, setDetectAttempts] = useState(0);
+  const detectIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const depositAmount = selectedAmount || parseFloat(customAmount) || 0;
   const expectedCredits = Math.floor(depositAmount * creditsPerToken);
+
+  // Cleanup detection polling on unmount
+  useEffect(() => {
+    return () => {
+      if (detectIntervalRef.current) {
+        clearInterval(detectIntervalRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -56,8 +67,12 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
       setTxSignature('');
       setWalletAddress('');
       setShowProgressOverlay(false);
+      setDetectAttempts(0);
       resetTransfer();
       fetchDepositInfo();
+      if (detectIntervalRef.current) {
+        clearInterval(detectIntervalRef.current);
+      }
     }
   }, [open]);
 
@@ -135,6 +150,103 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
       toast.error(err.message || 'Verification failed');
     }
   };
+
+  // Auto-detect deposit using Helius
+  const startDepositDetection = useCallback(() => {
+    if (!walletAddress || !user?.id) {
+      toast.error('Please enter your wallet address');
+      return;
+    }
+
+    setStep('detecting');
+    setDetectAttempts(0);
+
+    // Clear any existing interval
+    if (detectIntervalRef.current) {
+      clearInterval(detectIntervalRef.current);
+    }
+
+    const checkForDeposit = async () => {
+      try {
+        console.log('[Deposit Detection] Checking for deposit...');
+        const { data, error } = await supabase.functions.invoke('process-deposit', {
+          body: {
+            action: 'find-deposit',
+            walletAddress: walletAddress,
+            minAmount: depositAmount,
+            lookbackMinutes: 30
+          }
+        });
+
+        if (error) throw error;
+
+        if (data.found && data.signature) {
+          console.log('[Deposit Detection] Found deposit:', data.signature);
+          
+          // Stop polling
+          if (detectIntervalRef.current) {
+            clearInterval(detectIntervalRef.current);
+          }
+
+          setTxSignature(data.signature);
+
+          // Now verify and credit
+          const { data: verifyData, error: verifyError } = await supabase.functions.invoke('process-deposit', {
+            body: {
+              action: 'verify-deposit',
+              txSignature: data.signature,
+              userId: user.id,
+              walletAddress: walletAddress,
+              amount: data.amount || depositAmount
+            }
+          });
+
+          if (verifyError) throw verifyError;
+
+          if (verifyData.success) {
+            setCreditsAdded(verifyData.creditsAdded);
+            setStep('success');
+            onSuccess?.();
+          } else {
+            toast.error(verifyData.error || 'Failed to credit deposit');
+            setStep('verify'); // Fall back to manual verify
+          }
+        } else {
+          setDetectAttempts(prev => prev + 1);
+        }
+      } catch (err) {
+        console.error('[Deposit Detection] Error:', err);
+        setDetectAttempts(prev => prev + 1);
+      }
+    };
+
+    // Initial check
+    checkForDeposit();
+
+    // Poll every 5 seconds for up to 2 minutes (24 attempts)
+    detectIntervalRef.current = setInterval(() => {
+      setDetectAttempts(prev => {
+        if (prev >= 24) {
+          // Max attempts reached, stop and show manual verify
+          if (detectIntervalRef.current) {
+            clearInterval(detectIntervalRef.current);
+          }
+          setStep('verify');
+          toast.info('Auto-detection timed out. Please verify manually.');
+          return prev;
+        }
+        checkForDeposit();
+        return prev;
+      });
+    }, 5000);
+  }, [walletAddress, depositAmount, user?.id, onSuccess]);
+
+  const stopDetection = useCallback(() => {
+    if (detectIntervalRef.current) {
+      clearInterval(detectIntervalRef.current);
+    }
+    setStep('verify');
+  }, []);
 
   const handleVerifyDeposit = async () => {
     if (!txSignature || !walletAddress || !depositAmount || !user?.id) {
@@ -364,6 +476,20 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
               </div>
             </div>
 
+            {/* Your wallet address input for auto-detection */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                <Wallet className="w-3 h-3" />
+                Your Wallet Address (for auto-detect)
+              </label>
+              <Input
+                placeholder="Enter your Solana wallet address"
+                value={walletAddress}
+                onChange={(e) => setWalletAddress(e.target.value)}
+                className="h-11 font-mono text-sm bg-muted/30 border-border/50 focus:border-primary/50"
+              />
+            </div>
+
             {/* Warning */}
             <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
@@ -383,13 +509,100 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
                 Back
               </Button>
               <Button
-                onClick={() => setStep('verify')}
+                onClick={startDepositDetection}
+                disabled={!walletAddress}
                 className="flex-1 h-12 rounded-xl"
               >
+                <Search className="w-4 h-4 mr-2" />
                 I've Sent It
-                <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
+
+            {/* Manual verify link */}
+            <button
+              onClick={() => setStep('verify')}
+              className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Have a transaction signature? Verify manually
+            </button>
+          </motion.div>
+        );
+
+      case 'detecting':
+        return (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6 py-4"
+          >
+            {/* Scanning animation */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative w-20 h-20">
+                {/* Outer ring */}
+                <motion.div
+                  className="absolute inset-0 rounded-full border-2 border-primary/30"
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.2, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                />
+                {/* Middle ring */}
+                <motion.div
+                  className="absolute inset-2 rounded-full border-2 border-primary/50"
+                  animate={{ scale: [1, 1.15, 1], opacity: [0.6, 0.3, 0.6] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+                />
+                {/* Center icon */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                  >
+                    <Search className="w-8 h-8 text-primary" />
+                  </motion.div>
+                </div>
+              </div>
+
+              <div className="text-center">
+                <h3 className="font-semibold text-foreground">Detecting Deposit</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Looking for your POLY transfer...
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Attempt {detectAttempts + 1} of 24
+                </p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full bg-muted/30 rounded-full h-1.5 overflow-hidden">
+              <motion.div
+                className="h-full bg-primary"
+                initial={{ width: "0%" }}
+                animate={{ width: `${((detectAttempts + 1) / 24) * 100}%` }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
+
+            {/* Info */}
+            <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Wallet className="w-4 h-4 shrink-0" />
+                <span className="truncate font-mono text-xs">{walletAddress}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                <Coins className="w-4 h-4 shrink-0" />
+                <span>Expecting {depositAmount} POLY</span>
+              </div>
+            </div>
+
+            {/* Cancel button */}
+            <Button
+              variant="outline"
+              onClick={stopDetection}
+              className="w-full h-11 rounded-xl"
+            >
+              Verify Manually Instead
+            </Button>
           </motion.div>
         );
 
@@ -518,18 +731,20 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
             </div>
 
             {/* View on Solscan */}
-            <motion.a
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
-              href={`https://solscan.io/tx/${txSignature}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-            >
-              View on Solscan
-              <ExternalLink className="w-3 h-3" />
-            </motion.a>
+            {txSignature && (
+              <motion.a
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                href={`https://solscan.io/tx/${txSignature}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+              >
+                View on Solscan
+                <ExternalLink className="w-3 h-3" />
+              </motion.a>
+            )}
 
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -572,6 +787,7 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
                     {step === 'amount' && 'Choose amount'}
                     {step === 'method' && 'Select method'}
                     {step === 'send' && 'Send tokens'}
+                    {step === 'detecting' && 'Detecting...'}
                     {step === 'verify' && 'Verify transaction'}
                     {step === 'success' && 'Complete'}
                   </span>
@@ -588,13 +804,13 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
             {/* Step indicator */}
             {step !== 'success' && (
               <div className="flex gap-2 mt-4">
-                {['amount', 'method', 'send', 'verify'].map((s, i) => (
+                {['amount', 'method', 'send', 'detecting', 'verify'].map((s, i) => (
                   <div
                     key={s}
                     className={cn(
                       "h-1 flex-1 rounded-full transition-colors",
                       step === s ? "bg-primary" : 
-                      ['amount', 'method', 'send', 'verify'].indexOf(step) > i ? "bg-primary/50" : "bg-muted"
+                      ['amount', 'method', 'send', 'detecting', 'verify'].indexOf(step) > i ? "bg-primary/50" : "bg-muted"
                     )}
                   />
                 ))}
