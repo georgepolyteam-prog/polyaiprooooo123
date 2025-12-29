@@ -20,22 +20,27 @@ import {
   BookOpen,
   Star,
   Zap,
+  LogIn,
+  LogOut,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { HowItWorksModal } from "./HowItWorksModal";
 import { ConnectWallet } from "./ConnectWallet";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import polyLogo from "@/assets/poly-logo-new.png";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CreditsDisplay } from "@/components/CreditsDisplay";
+import { useAuth } from "@/hooks/useAuth";
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -52,7 +57,9 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { isConnected, address } = useAccount();
+  const { user, signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -114,24 +121,24 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 </Button>
               </Link>
 
-              {/* Markets Dropdown - includes Dashboard and Live Trades */}
+              {/* Explore Dropdown - Markets, Trades, Leaderboards */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
                       className={`text-sm gap-2 rounded-lg transition-all ${
-                        isActive("/markets") || isActive("/my-trades") || isActive("/dashboard") || isActive("/live-trades")
+                        isActive("/markets") || isActive("/my-trades") || isActive("/dashboard") || isActive("/live-trades") || isActive("/leaderboard") || isActive("/builders")
                           ? "text-black bg-white"
                           : "text-gray-400 hover:text-white hover:bg-white/10"
                       }`}
                     >
                     <Store className="w-4 h-4" />
-                    Markets
+                    Explore
                     <ChevronDown className="w-3 h-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="bg-[#1a1525] border-white/10 min-w-[160px]">
+                <DropdownMenuContent align="start" className="bg-[#1a1525] border-white/10 min-w-[180px]">
                   <Link to="/markets">
                     <DropdownMenuItem
                       className={`gap-2 cursor-pointer ${isActive("/markets") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
@@ -162,6 +169,23 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                     >
                       <Receipt className="w-4 h-4" />
                       My Trades
+                    </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator className="bg-white/10" />
+                  <Link to="/leaderboard">
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/leaderboard") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
+                      <Trophy className="w-4 h-4" />
+                      Top Traders
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link to="/builders">
+                    <DropdownMenuItem
+                      className={`gap-2 cursor-pointer ${isActive("/builders") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
+                    >
+                      <Hammer className="w-4 h-4" />
+                      Top Builders
                     </DropdownMenuItem>
                   </Link>
                 </DropdownMenuContent>
@@ -204,42 +228,6 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Leaderboard Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`text-sm gap-2 rounded-lg transition-all ${
-                      isActive("/leaderboard") || isActive("/builders")
-                        ? "text-black bg-white"
-                        : "text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <Trophy className="w-4 h-4" />
-                    Leaderboard
-                    <ChevronDown className="w-3 h-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="bg-[#1a1525] border-white/10 min-w-[160px]">
-                  <Link to="/leaderboard">
-                    <DropdownMenuItem
-                      className={`gap-2 cursor-pointer ${isActive("/leaderboard") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
-                    >
-                      <Users className="w-4 h-4" />
-                      Traders
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link to="/builders">
-                    <DropdownMenuItem
-                      className={`gap-2 cursor-pointer ${isActive("/builders") ? "text-white bg-white/10" : "text-gray-300 hover:text-white focus:text-white focus:bg-white/10"}`}
-                    >
-                      <Hammer className="w-4 h-4" />
-                      Builders
-                    </DropdownMenuItem>
-                  </Link>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </nav>
           </div>
 
@@ -262,46 +250,74 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
             {/* Credits Display */}
             <CreditsDisplay />
             
-            {/* Wallet Dropdown or Connect */}
-            {isConnected && address ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+            {/* User/Account Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                {user ? (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="gap-1.5 text-xs rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 px-2"
+                    className="gap-1.5 text-xs rounded-lg bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 px-2"
                   >
-                    <Wallet className="w-3.5 h-3.5" />
-                    {truncateAddress(address)}
+                    <User className="w-3.5 h-3.5" />
+                    {user.email?.split('@')[0] || 'Account'}
                     <ChevronDown className="w-3 h-3" />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-[#1a1525] border-white/10">
-                  <Link to="/my-trades">
-                    <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
-                      <Receipt className="w-4 h-4" />
-                      My Trades
-                    </DropdownMenuItem>
-                  </Link>
-                  <Link to="/tracked-wallets">
-                    <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
-                      <Star className="w-4 h-4" />
-                      Tracked Wallets
-                    </DropdownMenuItem>
-                  </Link>
-                  <DropdownMenuItem
-                    className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10"
-                    asChild
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-xs rounded-lg bg-muted/50 border border-border/50 text-muted-foreground hover:bg-muted hover:text-foreground px-2"
                   >
-                    <div>
-                      <ConnectWallet />
+                    <User className="w-3.5 h-3.5" />
+                    Account
+                    <ChevronDown className="w-3 h-3" />
+                  </Button>
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-[#1a1525] border-white/10 min-w-[180px]">
+                {user ? (
+                  <>
+                    <div className="px-3 py-2 border-b border-white/10">
+                      <p className="text-xs text-muted-foreground">Signed in as</p>
+                      <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
                     </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <ConnectWallet />
-            )}
+                    <Link to="/my-trades">
+                      <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                        <Receipt className="w-4 h-4" />
+                        My Trades
+                      </DropdownMenuItem>
+                    </Link>
+                    <Link to="/tracked-wallets">
+                      <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                        <Star className="w-4 h-4" />
+                        Tracked Wallets
+                      </DropdownMenuItem>
+                    </Link>
+                    <DropdownMenuSeparator className="bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={() => signOut()}
+                      className="gap-2 cursor-pointer text-red-400 hover:text-red-300 focus:text-red-300 focus:bg-red-500/10"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <Link to="/auth">
+                      <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                        <LogIn className="w-4 h-4" />
+                        Sign In / Sign Up
+                      </DropdownMenuItem>
+                    </Link>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            {/* Wallet Connection */}
+            <ConnectWallet />
             <button
               onClick={copyCA}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600/20 transition-all cursor-pointer group"
@@ -392,11 +408,11 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                   Chat
                 </Button>
               </Link>
-              {/* Markets Section - Mobile */}
+              {/* Explore Section - Mobile (Markets + Leaderboards) */}
               <div className="space-y-1">
                 <div className="flex items-center gap-2 px-4 py-2 text-xs text-gray-500 uppercase tracking-wider">
                   <Store className="w-4 h-4" />
-                  Markets
+                  Explore
                 </div>
                 <Link to="/markets" onClick={() => setMobileMenuOpen(false)}>
                   <Button
@@ -446,6 +462,30 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                     My Trades
                   </Button>
                 </Link>
+                <Link to="/leaderboard" onClick={() => setMobileMenuOpen(false)}>
+                  <Button
+                    variant="ghost"
+                    className={`w-full justify-start gap-3 pl-8 ${
+                      isActive("/leaderboard")
+                        ? "text-black bg-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <Trophy className="w-5 h-5" />
+                    Top Traders
+                  </Button>
+                </Link>
+                <Link to="/builders" onClick={() => setMobileMenuOpen(false)}>
+                  <Button
+                    variant="ghost"
+                    className={`w-full justify-start gap-3 pl-8 ${
+                      isActive("/builders") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <Hammer className="w-5 h-5" />
+                    Top Builders
+                  </Button>
+                </Link>
               </div>
 
               <Link to="/about" onClick={() => setMobileMenuOpen(false)}>
@@ -460,36 +500,50 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
                 </Button>
               </Link>
 
-              {/* Leaderboard Section - Mobile */}
+              {/* Account Section - Mobile */}
               <div className="space-y-1">
                 <div className="flex items-center gap-2 px-4 py-2 text-xs text-gray-500 uppercase tracking-wider">
-                  <Trophy className="w-4 h-4" />
-                  Leaderboard
+                  <User className="w-4 h-4" />
+                  Account
                 </div>
-                <Link to="/leaderboard" onClick={() => setMobileMenuOpen(false)}>
-                  <Button
-                    variant="ghost"
-                    className={`w-full justify-start gap-3 pl-8 ${
-                      isActive("/leaderboard")
-                        ? "text-black bg-white"
-                        : "text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <Users className="w-5 h-5" />
-                    Traders
-                  </Button>
-                </Link>
-                <Link to="/builders" onClick={() => setMobileMenuOpen(false)}>
-                  <Button
-                    variant="ghost"
-                    className={`w-full justify-start gap-3 pl-8 ${
-                      isActive("/builders") ? "text-black bg-white" : "text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <Hammer className="w-5 h-5" />
-                    Builders
-                  </Button>
-                </Link>
+                {user ? (
+                  <>
+                    <div className="px-4 py-2">
+                      <p className="text-xs text-muted-foreground">Signed in as</p>
+                      <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+                    </div>
+                    <Link to="/tracked-wallets" onClick={() => setMobileMenuOpen(false)}>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start gap-3 pl-8 text-gray-400 hover:text-white hover:bg-white/10"
+                      >
+                        <Star className="w-5 h-5" />
+                        Tracked Wallets
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        signOut();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full justify-start gap-3 pl-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-3 pl-8 text-primary hover:text-primary hover:bg-primary/10"
+                    >
+                      <LogIn className="w-5 h-5" />
+                      Sign In / Sign Up
+                    </Button>
+                  </Link>
+                )}
               </div>
               <a
                 href="https://x.com/trypolyai"
