@@ -93,16 +93,16 @@ const About = () => {
   };
 
   const formatPrice = (price: number) => {
-    if (price < 0.0001) return price.toFixed(10);
-    if (price < 0.01) return price.toFixed(8);
-    if (price < 1) return price.toFixed(6);
-    return price.toFixed(4);
+    if (price < 0.0001) return price.toFixed(6);
+    if (price < 0.01) return price.toFixed(5);
+    if (price < 1) return price.toFixed(4);
+    return price.toFixed(2);
   };
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
-    if (num >= 1000) return `$${(num / 1000).toFixed(2)}K`;
-    return `$${num.toFixed(2)}`;
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `$${(num / 1000).toFixed(1)}K`;
+    return `$${num.toFixed(0)}`;
   };
 
   return (
@@ -220,14 +220,14 @@ const About = () => {
             ].map((metric, i) => (
               <div 
                 key={i}
-                className="p-8 rounded-3xl bg-muted/30 text-center"
+                className="p-4 md:p-6 rounded-2xl md:rounded-3xl bg-muted/30 text-center min-w-0"
               >
-                <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wide">{metric.label}</p>
-                <p className="text-3xl font-semibold text-foreground font-mono">
+                <p className="text-[10px] md:text-xs text-muted-foreground mb-2 md:mb-3 uppercase tracking-wide">{metric.label}</p>
+                <p className="text-lg md:text-2xl font-semibold text-foreground font-mono truncate">
                   {metric.value}
                 </p>
                 {metric.change !== undefined && (
-                  <p className={`text-sm font-medium mt-2 ${metric.change >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                  <p className={`text-xs md:text-sm font-medium mt-1 md:mt-2 ${metric.change >= 0 ? 'text-primary' : 'text-destructive'}`}>
                     {metric.change >= 0 ? '+' : ''}{metric.change.toFixed(2)}%
                   </p>
                 )}
