@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction } from '@solana/web3.js';
-import { 
-  getAssociatedTokenAddress, 
+import {
+  getAssociatedTokenAddress,
+  getAssociatedTokenAddressSync,
   createTransferInstruction,
   getAccount,
   TOKEN_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID
+  TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token';
 
 export type TransferStage = 
@@ -83,43 +84,77 @@ export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
       // Stage 2: Check balance
       setStage('checking-balance');
       
-      // Try both TOKEN_PROGRAM_ID and TOKEN_2022_PROGRAM_ID (PumpFun uses Token-2022)
+      console.log('[POLY transfer] Checking mint:', tokenMint);
+      console.log('[POLY transfer] Wallet:', publicKey.toBase58());
+
+      // Try Token-2022 first (PumpFun tokens like POLY)
       let sourceAta: PublicKey | null = null;
       let sourceAccount: any = null;
-      let tokenProgramId = TOKEN_PROGRAM_ID;
-      
-      // First try standard SPL Token
+      let tokenProgramId = TOKEN_2022_PROGRAM_ID;
+
+      let accountInfo = null as any;
+
       try {
-        const standardAta = await getAssociatedTokenAddress(
+        sourceAta = getAssociatedTokenAddressSync(
           mintPubkey,
           publicKey,
           false,
-          TOKEN_PROGRAM_ID
+          TOKEN_2022_PROGRAM_ID
         );
-        sourceAccount = await getAccount(connection, standardAta, 'confirmed', TOKEN_PROGRAM_ID);
-        sourceAta = standardAta;
+        accountInfo = await connection.getAccountInfo(sourceAta, 'confirmed');
+
+        if (accountInfo) {
+          console.log('[POLY transfer] Found Token-2022 account:', sourceAta.toBase58());
+        } else {
+          console.log('[POLY transfer] Not Token-2022, trying standard SPL...');
+        }
+      } catch (err) {
+        console.warn('[POLY transfer] Token-2022 ATA lookup failed:', err);
+      }
+
+      // If Token-2022 didn't work, try standard token program
+      if (!accountInfo) {
         tokenProgramId = TOKEN_PROGRAM_ID;
-      } catch (e) {
-        // Try Token-2022 (used by PumpFun)
+
         try {
-          const token2022Ata = await getAssociatedTokenAddress(
+          sourceAta = getAssociatedTokenAddressSync(
             mintPubkey,
             publicKey,
             false,
-            TOKEN_2022_PROGRAM_ID
+            TOKEN_PROGRAM_ID
           );
-          sourceAccount = await getAccount(connection, token2022Ata, 'confirmed', TOKEN_2022_PROGRAM_ID);
-          sourceAta = token2022Ata;
-          tokenProgramId = TOKEN_2022_PROGRAM_ID;
-        } catch (e2) {
-          setError('No POLY tokens found in your wallet. Make sure you have POLY tokens.');
-          setStage('error');
-          return null;
+          accountInfo = await connection.getAccountInfo(sourceAta, 'confirmed');
+
+          if (accountInfo) {
+            console.log('[POLY transfer] Found standard SPL account:', sourceAta.toBase58());
+          }
+        } catch (err) {
+          console.warn('[POLY transfer] Standard SPL ATA lookup failed:', err);
         }
       }
+
+      if (!accountInfo || !sourceAta) {
+        console.error('[POLY transfer] Token account not found for mint in either program');
+        setError('No POLY tokens found in your wallet. Make sure you have POLY tokens.');
+        setStage('error');
+        return null;
+      }
+
+      try {
+        sourceAccount = await getAccount(connection, sourceAta, 'confirmed', tokenProgramId);
+      } catch (err) {
+        console.error('[POLY transfer] Failed to parse token account:', err);
+        setError('Found token account but could not read balance. Please try again.');
+        setStage('error');
+        return null;
+      }
+
+      console.log('[POLY transfer] Using token program:', tokenProgramId.toBase58());
       
       const balance = Number(sourceAccount.amount) / 1e6; // POLY has 6 decimals
-      
+      console.log('[POLY transfer] Raw amount:', sourceAccount.amount?.toString?.() ?? sourceAccount.amount);
+      console.log('[POLY transfer] Detected balance:', balance, 'POLY');
+
       if (balance < amount) {
         setError(`Insufficient balance. You have ${balance.toFixed(2)} POLY but need ${amount} POLY.`);
         setStage('error');
