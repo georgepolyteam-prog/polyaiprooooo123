@@ -42,17 +42,17 @@ const STAGE_MESSAGES: Record<TransferStage, string> = {
   'error': 'Something went wrong'
 };
 
-// Use public Solana RPC - no API key needed, HTTP-only polling
-const PUBLIC_RPC_URL = 'https://api.mainnet-beta.solana.com';
+// Use Helius RPC via our edge function proxy to avoid rate limits
+const HELIUS_RPC_PROXY = `https://rgmzmtsgpxxzxvdcwsdx.supabase.co/functions/v1/solana-rpc`;
 
 export function usePolyTokenTransfer(): UsePolyTokenTransferReturn {
-  const { publicKey, sendTransaction, connected, signTransaction } = useWallet();
+  const { publicKey, sendTransaction, connected } = useWallet();
   
-  // Create connection with HTTP polling (no WebSocket to avoid edge function issues)
-  const connection = useMemo(() => new Connection(PUBLIC_RPC_URL, {
+  // Create connection with HTTP polling (no WebSocket - edge function is HTTP only)
+  const connection = useMemo(() => new Connection(HELIUS_RPC_PROXY, {
     commitment: 'confirmed',
-    confirmTransactionInitialTimeout: 90000, // Longer timeout for public RPC
-    // No wsEndpoint - will use HTTP polling instead of WebSocket
+    confirmTransactionInitialTimeout: 60000,
+    // No wsEndpoint - use HTTP polling only (avoids WebSocket issues with edge function)
   }), []);
   
   const [stage, setStage] = useState<TransferStage>('idle');
