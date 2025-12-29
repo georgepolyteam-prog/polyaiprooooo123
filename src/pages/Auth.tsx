@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAccount } from "wagmi";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ConnectWallet } from "@/components/ConnectWallet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import polyLogo from "@/assets/poly-logo-new.png";
@@ -38,13 +36,9 @@ const isSuspiciousEmail = (email: string): boolean => {
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isConnected } = useAccount();
   
-  // Support ?step=email to go directly to email form
-  const initialStep = searchParams.get('step') === 'email' ? 'email' : 'choose';
   const nextUrl = searchParams.get('next') || '/';
   
-  const [step, setStep] = useState<"choose" | "email">(initialStep);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -74,9 +68,7 @@ const Auth = () => {
   }, [navigate, nextUrl]);
 
   const handleBack = () => {
-    if (step === "email") {
-      setStep("choose");
-    } else if (window.history.length > 1) {
+    if (window.history.length > 1) {
       navigate(-1);
     } else {
       navigate("/");
@@ -215,134 +207,130 @@ const Auth = () => {
                 <img src={polyLogo} alt="Poly" className="w-10 h-10" />
               </div>
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-                {step === "choose" ? "Welcome to Poly AI" : isLogin ? "Welcome back" : "Create account"}
+                {isLogin ? "Welcome back" : "Create account"}
               </h1>
               <p className="text-gray-500 dark:text-gray-400 text-sm">
-                {step === "choose" 
-                  ? "AI-powered prediction market analysis"
-                  : isLogin 
-                    ? "Sign in to continue" 
-                    : "Sign up to get started"
+                {isLogin 
+                  ? "Sign in with your email to continue" 
+                  : "Sign up with email to get started"
                 }
               </p>
             </div>
 
             {/* Card Body */}
             <div className="p-8">
-              {step === "choose" ? (
-                <div className="space-y-4">
-                  {/* Wallet Option */}
-                  <div className="[&>div]:w-full [&>div>button]:w-full [&>div>button]:h-14 [&>div>button]:rounded-xl [&>div>button]:text-base [&>div>button]:font-medium">
-                    <ConnectWallet />
-                  </div>
-
-                  <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200 dark:border-gray-700" />
-                    </div>
-                    <div className="relative flex justify-center text-xs">
-                      <span className="bg-white dark:bg-gray-800 px-3 text-gray-500">or</span>
-                    </div>
-                  </div>
-
-                  {/* Email Option */}
-                  <Button
-                    onClick={() => setStep("email")}
-                    variant="outline"
-                    className="w-full h-14 rounded-xl text-base font-medium border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <Mail className="w-5 h-5 mr-2" />
-                    Continue with Email
-                  </Button>
-
-                  {/* Features */}
-                  <div className="pt-6 space-y-3">
-                    {[
-                      "Real-time market analysis",
-                      "AI-powered predictions",
-                      "Deep research with sources"
-                    ].map((feature, i) => (
-                      <div key={i} className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-                        <Check className="w-4 h-4 text-green-500" />
-                        {feature}
-                      </div>
-                    ))}
+              <form onSubmit={handleEmailSubmit} className="space-y-4">
+                {/* Email Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
+                      required
+                    />
                   </div>
                 </div>
-              ) : (
-                <form onSubmit={handleEmailSubmit} className="space-y-4">
-                  {/* Email Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Email
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="pl-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
-                        required
-                      />
-                    </div>
-                  </div>
 
-                  {/* Password Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
-                        required
-                        minLength={6}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Submit Button */}
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium mt-2"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : isLogin ? (
-                      "Sign In"
-                    ) : (
-                      "Create Account"
-                    )}
-                  </Button>
-
-                  {/* Toggle Login/Signup */}
-                  <p className="text-center text-sm text-gray-500 dark:text-gray-400 pt-2">
-                    {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+                {/* Password Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="pl-10 pr-10 h-12 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
+                      required
+                      minLength={6}
+                    />
                     <button
                       type="button"
-                      onClick={() => setIsLogin(!isLogin)}
-                      className="text-blue-600 hover:text-blue-700 font-medium"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
-                      {isLogin ? "Sign up" : "Sign in"}
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
-                  </p>
-                </form>
-              )}
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium mt-2"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : isLogin ? (
+                    "Sign In"
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
+
+                {/* Toggle Login/Signup */}
+                <p className="text-center text-sm text-gray-500 dark:text-gray-400 pt-2">
+                  {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+                  <button
+                    type="button"
+                    onClick={() => setIsLogin(!isLogin)}
+                    className="text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {isLogin ? "Sign up" : "Sign in"}
+                  </button>
+                </p>
+              </form>
+
+              {/* How It Works Section */}
+              <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wide text-center">
+                  How Poly AI works
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                      <Mail className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">Email to Chat</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Required for AI analysis & credit tracking</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800">
+                    <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">Phantom for Deposits</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Send POLY tokens on Solana to add credits</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
+                    <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">Polygon Wallet to Trade</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Connect any wallet on Polygon to trade markets</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
