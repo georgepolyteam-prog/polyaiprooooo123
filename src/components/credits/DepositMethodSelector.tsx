@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { Zap, ClipboardList, ArrowLeft, Sparkles } from 'lucide-react';
+import { Zap, ClipboardList, ArrowLeft, Sparkles, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 interface DepositMethodSelectorProps {
   depositAmount: number;
@@ -21,6 +21,17 @@ export function DepositMethodSelector({
   onSelectManual,
   onBack
 }: DepositMethodSelectorProps) {
+  const { select, wallets } = useWallet();
+
+  const handleConnectWallet = () => {
+    // Find Phantom wallet or use first available
+    const phantomWallet = wallets.find(w => w.adapter.name === 'Phantom');
+    if (phantomWallet) {
+      select(phantomWallet.adapter.name);
+    } else if (wallets.length > 0) {
+      select(wallets[0].adapter.name);
+    }
+  };
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -100,9 +111,15 @@ export function DepositMethodSelector({
                 </div>
               </div>
               
-              {/* Connect wallet button - not nested in disabled element */}
+              {/* Connect wallet button */}
               <div className="mt-3 pt-3 border-t border-border/30">
-                <WalletMultiButton className="!bg-primary/20 !text-primary !text-xs !h-9 !rounded-lg !w-full !justify-center hover:!bg-primary/30 !border-0" />
+                <Button
+                  onClick={handleConnectWallet}
+                  className="w-full h-9 text-xs bg-primary/20 text-primary hover:bg-primary/30 border-0"
+                >
+                  <Wallet className="w-3.5 h-3.5 mr-2" />
+                  Connect Wallet
+                </Button>
               </div>
             </div>
           )}

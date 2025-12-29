@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -6,11 +7,11 @@ import { useCredits } from "@/hooks/useCredits";
 import { useAuth } from "@/hooks/useAuth";
 
 interface CreditsPillProps {
-  onClick: () => void;
   className?: string;
 }
 
-export const CreditsPill = ({ onClick, className }: CreditsPillProps) => {
+export const CreditsPill = ({ className }: CreditsPillProps) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { credits, isLoading } = useCredits();
   const [displayCredits, setDisplayCredits] = useState(credits);
@@ -36,7 +37,7 @@ export const CreditsPill = ({ onClick, className }: CreditsPillProps) => {
 
   return (
     <motion.button
-      onClick={onClick}
+      onClick={() => navigate('/credits')}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       className={cn(
