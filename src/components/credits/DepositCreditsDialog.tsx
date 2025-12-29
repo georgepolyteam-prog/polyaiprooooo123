@@ -10,7 +10,11 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { cn } from "@/lib/utils";
+import { usePolyTokenTransfer } from "@/hooks/usePolyTokenTransfer";
+import { DepositProgressOverlay } from "./DepositProgressOverlay";
+import { DepositMethodSelector } from "./DepositMethodSelector";
 
 interface DepositCreditsDialogProps {
   open: boolean;
@@ -18,12 +22,15 @@ interface DepositCreditsDialogProps {
   onSuccess?: () => void;
 }
 
-type Step = 'amount' | 'send' | 'verify' | 'success';
+type Step = 'amount' | 'method' | 'send' | 'verify' | 'success';
 
 const QUICK_AMOUNTS = [10, 50, 100, 500];
 
 export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositCreditsDialogProps) => {
   const { user } = useAuth();
+  const { publicKey, connected } = useWallet();
+  const { stage, stageMessage, signature, transfer, reset: resetTransfer, setCompleted } = usePolyTokenTransfer();
+  
   const [step, setStep] = useState<Step>('amount');
   const [depositAddress, setDepositAddress] = useState('');
   const [tokenMint, setTokenMint] = useState('');
@@ -35,6 +42,7 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
   const [isLoading, setIsLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [creditsAdded, setCreditsAdded] = useState(0);
+  const [showProgressOverlay, setShowProgressOverlay] = useState(false);
 
   const depositAmount = selectedAmount || parseFloat(customAmount) || 0;
   const expectedCredits = Math.floor(depositAmount * creditsPerToken);
@@ -46,9 +54,18 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
       setCustomAmount('');
       setTxSignature('');
       setWalletAddress('');
+      setShowProgressOverlay(false);
+      resetTransfer();
       fetchDepositInfo();
     }
   }, [open]);
+
+  // Handle quick deposit completion
+  useEffect(() => {
+    if (stage === 'verifying-credits' && signature) {
+      verifyQuickDeposit(signature);
+    }
+  }, [stage, signature]);
 
   const fetchDepositInfo = async () => {
     try {
@@ -69,6 +86,53 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
     setCopiedField(field);
     toast.success('Copied!');
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleQuickDeposit = async () => {
+    if (!depositAddress || !tokenMint || !publicKey || !user?.id) {
+      toast.error('Missing required information');
+      return;
+    }
+
+    setShowProgressOverlay(true);
+    const txSig = await transfer(depositAmount, depositAddress, tokenMint);
+    
+    if (!txSig) {
+      // Error handled by the hook
+      return;
+    }
+    
+    setTxSignature(txSig);
+    setWalletAddress(publicKey.toBase58());
+  };
+
+  const verifyQuickDeposit = async (txSig: string) => {
+    if (!user?.id || !publicKey) return;
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('process-deposit', {
+        body: {
+          action: 'verify-deposit',
+          txSignature: txSig,
+          userId: user.id,
+          walletAddress: publicKey.toBase58(),
+          amount: depositAmount
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setCreditsAdded(data.creditsAdded);
+        setCompleted();
+        onSuccess?.();
+      } else {
+        toast.error(data.error || 'Verification failed');
+      }
+    } catch (err: any) {
+      console.error('Quick deposit verification error:', err);
+      toast.error(err.message || 'Verification failed');
+    }
   };
 
   const handleVerifyDeposit = async () => {
@@ -106,6 +170,25 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleProgressDismiss = () => {
+    setShowProgressOverlay(false);
+    resetTransfer();
+    if (stage === 'completed' || creditsAdded > 0) {
+      onOpenChange(false);
+    }
+  };
+
+  const handleRetryQuickDeposit = () => {
+    resetTransfer();
+    handleQuickDeposit();
+  };
+
+  const handleManualFallback = () => {
+    setShowProgressOverlay(false);
+    resetTransfer();
+    setStep('send');
   };
 
   const renderStep = () => {
@@ -188,7 +271,7 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
             )}
 
             <Button
-              onClick={() => setStep('send')}
+              onClick={() => setStep('method')}
               disabled={!depositAmount}
               className="w-full h-12 text-base font-semibold gap-2 rounded-xl"
             >
@@ -196,6 +279,18 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
               <ArrowRight className="w-4 h-4" />
             </Button>
           </motion.div>
+        );
+
+      case 'method':
+        return (
+          <DepositMethodSelector
+            depositAmount={depositAmount}
+            expectedCredits={expectedCredits}
+            isWalletConnected={connected}
+            onSelectQuick={handleQuickDeposit}
+            onSelectManual={() => setStep('send')}
+            onBack={() => setStep('amount')}
+          />
         );
 
       case 'send':
@@ -280,7 +375,7 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => setStep('amount')}
+                onClick={() => setStep('method')}
                 className="flex-1 h-12 rounded-xl"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
@@ -453,58 +548,72 @@ export const DepositCreditsDialog = ({ open, onOpenChange, onSuccess }: DepositC
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px] p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden">
-        {/* Header */}
-        <div className="relative px-6 pt-6 pb-4">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-                <Zap className="w-4 h-4 text-primary" />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 bg-background/95 backdrop-blur-xl border-border/50 overflow-hidden">
+          {/* Header */}
+          <div className="relative px-6 pt-6 pb-4">
+            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+                  <Zap className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <span className="font-semibold text-foreground block">Deposit POLY</span>
+                  <span className="text-xs text-muted-foreground">
+                    {step === 'amount' && 'Choose amount'}
+                    {step === 'method' && 'Select method'}
+                    {step === 'send' && 'Send tokens'}
+                    {step === 'verify' && 'Verify transaction'}
+                    {step === 'success' && 'Complete'}
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="font-semibold text-foreground block">Deposit POLY</span>
-                <span className="text-xs text-muted-foreground">
-                  {step === 'amount' && 'Choose amount'}
-                  {step === 'send' && 'Send tokens'}
-                  {step === 'verify' && 'Verify transaction'}
-                  {step === 'success' && 'Complete'}
-                </span>
-              </div>
+              <button
+                onClick={() => onOpenChange(false)}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
             </div>
-            <button
-              onClick={() => onOpenChange(false)}
-              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-            >
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
+
+            {/* Step indicator */}
+            {step !== 'success' && (
+              <div className="flex gap-2 mt-4">
+                {['amount', 'method', 'send', 'verify'].map((s, i) => (
+                  <div
+                    key={s}
+                    className={cn(
+                      "h-1 flex-1 rounded-full transition-colors",
+                      step === s ? "bg-primary" : 
+                      ['amount', 'method', 'send', 'verify'].indexOf(step) > i ? "bg-primary/50" : "bg-muted"
+                    )}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Step indicator */}
-          {step !== 'success' && (
-            <div className="flex gap-2 mt-4">
-              {['amount', 'send', 'verify'].map((s, i) => (
-                <div
-                  key={s}
-                  className={cn(
-                    "h-1 flex-1 rounded-full transition-colors",
-                    step === s ? "bg-primary" : 
-                    ['amount', 'send', 'verify'].indexOf(step) > i ? "bg-primary/50" : "bg-muted"
-                  )}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+          {/* Content */}
+          <div className="px-6 pb-6">
+            <AnimatePresence mode="wait">
+              {renderStep()}
+            </AnimatePresence>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        {/* Content */}
-        <div className="px-6 pb-6">
-          <AnimatePresence mode="wait">
-            {renderStep()}
-          </AnimatePresence>
-        </div>
-      </DialogContent>
-    </Dialog>
+      {/* Progress Overlay for Quick Deposit */}
+      <DepositProgressOverlay
+        stage={showProgressOverlay ? stage : 'idle'}
+        stageMessage={stageMessage}
+        signature={signature}
+        creditsAdded={creditsAdded}
+        onDismiss={handleProgressDismiss}
+        onRetry={handleRetryQuickDeposit}
+        onManualFallback={handleManualFallback}
+      />
+    </>
   );
 };
