@@ -42,6 +42,99 @@ serve(async (req) => {
         );
       }
 
+      // Find deposit using Helius Enhanced Transactions API (auto-detect)
+      if (action === 'find-deposit') {
+        const { walletAddress, minAmount, lookbackMinutes = 30 } = body;
+
+        if (!walletAddress) {
+          return new Response(
+            JSON.stringify({ error: 'Missing wallet address' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[find-deposit] Searching for deposits from ${walletAddress}, min amount: ${minAmount}`);
+
+        try {
+          // Use Helius to get recent transactions for the deposit wallet
+          const heliusUrl = `https://api.helius.xyz/v0/addresses/${DEPOSIT_WALLET_ADDRESS}/transactions?api-key=${HELIUS_API_KEY}&limit=20`;
+          
+          const response = await fetch(heliusUrl);
+          const transactions = await response.json();
+
+          if (!Array.isArray(transactions)) {
+            console.log('[find-deposit] Invalid response from Helius:', transactions);
+            return new Response(
+              JSON.stringify({ found: false, message: 'Unable to fetch transactions' }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          console.log(`[find-deposit] Found ${transactions.length} recent transactions`);
+
+          // Look for a matching transfer
+          const cutoffTime = Date.now() - (lookbackMinutes * 60 * 1000);
+
+          for (const tx of transactions) {
+            // Skip if too old
+            const txTime = (tx.timestamp || 0) * 1000;
+            if (txTime < cutoffTime) continue;
+
+            // Check token transfers
+            const tokenTransfers = tx.tokenTransfers || [];
+            for (const transfer of tokenTransfers) {
+              if (
+                transfer.mint === POLY_TOKEN_MINT &&
+                transfer.toUserAccount === DEPOSIT_WALLET_ADDRESS &&
+                transfer.fromUserAccount?.toLowerCase() === walletAddress.toLowerCase()
+              ) {
+                const amount = transfer.tokenAmount || 0;
+                
+                // Check if it meets minimum amount (with small tolerance)
+                if (minAmount && amount < minAmount * 0.99) continue;
+
+                // Check if already processed
+                const { data: existingDeposit } = await supabase
+                  .from('credit_deposits')
+                  .select('id')
+                  .eq('tx_signature', tx.signature)
+                  .single();
+
+                if (existingDeposit) {
+                  console.log(`[find-deposit] Transaction ${tx.signature} already processed`);
+                  continue;
+                }
+
+                console.log(`[find-deposit] Found matching deposit: ${tx.signature}, amount: ${amount}`);
+                
+                return new Response(
+                  JSON.stringify({ 
+                    found: true, 
+                    signature: tx.signature,
+                    amount: amount,
+                    timestamp: txTime
+                  }),
+                  { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+              }
+            }
+          }
+
+          console.log('[find-deposit] No matching deposit found');
+          return new Response(
+            JSON.stringify({ found: false }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+
+        } catch (heliusError) {
+          console.error('[find-deposit] Helius API error:', heliusError);
+          return new Response(
+            JSON.stringify({ found: false, error: 'Failed to search transactions' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       // Verify and process deposit using Helius API
       if (action === 'verify-deposit') {
         const { txSignature, userId, walletAddress, amount } = body;
@@ -198,7 +291,7 @@ serve(async (req) => {
       }
 
       // NOTE: Webhook handling is now done by the dedicated helius-webhook edge function
-      // This function only handles get-deposit-address and verify-deposit actions
+      // This function only handles get-deposit-address, find-deposit, and verify-deposit actions
 
       return new Response(
         JSON.stringify({ error: 'Invalid action' }),

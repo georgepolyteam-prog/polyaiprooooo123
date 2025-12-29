@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Zap, ClipboardList, ArrowLeft, Sparkles, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 
 interface DepositMethodSelectorProps {
   depositAmount: number;
@@ -21,16 +21,11 @@ export function DepositMethodSelector({
   onSelectManual,
   onBack
 }: DepositMethodSelectorProps) {
-  const { select, wallets } = useWallet();
+  const { setVisible } = useWalletModal();
 
   const handleConnectWallet = () => {
-    // Find Phantom wallet or use first available
-    const phantomWallet = wallets.find(w => w.adapter.name === 'Phantom');
-    if (phantomWallet) {
-      select(phantomWallet.adapter.name);
-    } else if (wallets.length > 0) {
-      select(wallets[0].adapter.name);
-    }
+    // Open the standard wallet modal (same as WalletMultiButton)
+    setVisible(true);
   };
   return (
     <motion.div
