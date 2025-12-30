@@ -651,7 +651,7 @@ const Index = () => {
 
         {/* Market Data Sidebar - Desktop (Fixed) */}
         {showSidebar && (
-          <aside className="hidden lg:flex lg:flex-col w-2/5 border-l border-border/50 fixed right-0 top-16 bottom-0 overflow-hidden bg-background/95 backdrop-blur-xl z-40">
+          <aside className="hidden lg:flex lg:flex-col w-2/5 border-l border-border/50 fixed right-0 top-0 bottom-0 overflow-hidden bg-background/95 backdrop-blur-xl z-40">
             {loadingMarket ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">

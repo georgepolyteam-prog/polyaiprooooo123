@@ -8,6 +8,7 @@ import { SolanaWalletProvider } from "@/providers/SolanaWalletProvider";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { AppSidebar } from "@/components/AppSidebar";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -40,32 +41,40 @@ const AppContent = () => {
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/chat" element={<Index />} />
-          <Route path="/markets" element={<Markets />} />
-          <Route path="/trades" element={<LiveTrades />} />
-          <Route path="/live-trades" element={<LiveTrades />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/builders" element={<BuilderStats />} />
-          <Route path="/my-trades" element={<MyTrades />} />
-          <Route path="/tracked-wallets" element={<TrackedWallets />} />
-          <Route path="/wallet/:address" element={<WalletProfile />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/disclaimer" element={<Disclaimer />} />
-          <Route path="/help" element={<Help />} />
-          <Route path="/status" element={<Status />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/capabilities" element={<Capabilities />} />
-          <Route path="/docs" element={<Documentation />} />
-          <Route path="/credits" element={<Credits />} />
-          <Route path="/pandora" element={<Pandora />} />
-          <Route path="/adminpanel" element={<AdminPanel />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <div className="min-h-screen flex w-full">
+          {/* Desktop Sidebar */}
+          <AppSidebar />
+          
+          {/* Main Content Area */}
+          <main className="flex-1 flex flex-col min-w-0">
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/chat" element={<Index />} />
+              <Route path="/markets" element={<Markets />} />
+              <Route path="/trades" element={<LiveTrades />} />
+              <Route path="/live-trades" element={<LiveTrades />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/builders" element={<BuilderStats />} />
+              <Route path="/my-trades" element={<MyTrades />} />
+              <Route path="/tracked-wallets" element={<TrackedWallets />} />
+              <Route path="/wallet/:address" element={<WalletProfile />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/disclaimer" element={<Disclaimer />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="/status" element={<Status />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/capabilities" element={<Capabilities />} />
+              <Route path="/docs" element={<Documentation />} />
+              <Route path="/credits" element={<Credits />} />
+              <Route path="/pandora" element={<Pandora />} />
+              <Route path="/adminpanel" element={<AdminPanel />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+        </div>
         <MobileBottomNav />
       </BrowserRouter>
     </>

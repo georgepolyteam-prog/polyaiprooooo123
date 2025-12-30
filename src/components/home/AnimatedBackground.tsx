@@ -31,9 +31,9 @@ export const AnimatedBackground = () => {
       particles = [];
       
       const colors = [
-        'rgba(139, 92, 246, 0.3)',  // Purple
-        'rgba(59, 130, 246, 0.2)',  // Blue
-        'rgba(16, 185, 129, 0.2)',  // Emerald
+        'rgba(6, 182, 212, 0.3)',   // Cyan
+        'rgba(14, 165, 233, 0.2)',  // Sky blue
+        'rgba(56, 189, 248, 0.25)', // Light cyan
         'rgba(255, 255, 255, 0.1)', // White
       ];
 
@@ -51,11 +51,11 @@ export const AnimatedBackground = () => {
     };
 
     const drawGradientOrbs = () => {
-      // Large ambient orbs
+      // Large ambient orbs - teal/cyan theme
       const orbs = [
-        { x: canvas.width * 0.2, y: canvas.height * 0.3, radius: 300, color: 'rgba(139, 92, 246, 0.08)' },
-        { x: canvas.width * 0.8, y: canvas.height * 0.6, radius: 250, color: 'rgba(59, 130, 246, 0.06)' },
-        { x: canvas.width * 0.5, y: canvas.height * 0.8, radius: 350, color: 'rgba(16, 185, 129, 0.05)' },
+        { x: canvas.width * 0.2, y: canvas.height * 0.3, radius: 300, color: 'rgba(6, 182, 212, 0.08)' },
+        { x: canvas.width * 0.8, y: canvas.height * 0.6, radius: 250, color: 'rgba(14, 165, 233, 0.06)' },
+        { x: canvas.width * 0.5, y: canvas.height * 0.8, radius: 350, color: 'rgba(56, 189, 248, 0.05)' },
       ];
 
       orbs.forEach(orb => {
@@ -126,7 +126,7 @@ export const AnimatedBackground = () => {
 
           if (distance < 120) {
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(139, 92, 246, ${0.05 * (1 - distance / 120)})`;
+            ctx.strokeStyle = `rgba(6, 182, 212, ${0.05 * (1 - distance / 120)})`;
             ctx.lineWidth = 0.5;
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
