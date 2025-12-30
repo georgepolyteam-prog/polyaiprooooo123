@@ -224,16 +224,27 @@ serve(async (req) => {
     const anchorTerms = extractAnchorTerms(query);
     console.log('[Irys Query] Anchor terms:', anchorTerms);
     
-    // Build GraphQL tags - ONLY filter by application-id at GraphQL level
-    // Status filtering (resolved) happens in code since the uploaded data may not have status tags
-    const tags = [
+    // Build GraphQL tags - filter by application-id AND category if detected
+    const tags: Array<{ name: string; values: string[] }> = [
       { name: "application-id", values: ["polymarket"] }
     ];
     
+    // Add category filter if we detected one from the query
+    if (category) {
+      tags.push({ name: "category", values: [category] });
+      console.log('[Irys Query] Adding category filter:', category);
+    }
+    
     console.log('[Irys Query] GraphQL tags filter:', JSON.stringify(tags));
     
-    // PAGINATION: Fetch deeper if we have anchor terms
-    const targetCandidates = anchorTerms.length > 0 ? Math.min(limit * 20, 500) : Math.min(limit * 10, 200);
+    // PAGINATION: With category filter we can fetch more (narrower results)
+    // Without category: keep conservative limit
+    const targetCandidates = category 
+      ? Math.min(limit * 50, 2000)  // Category filtered: up to 2000
+      : anchorTerms.length > 0 
+        ? Math.min(limit * 20, 500)  // Anchor terms: 500
+        : Math.min(limit * 10, 200); // Generic: 200
+    
     const pageSize = 100; // Irys GraphQL limit per page
     const maxPages = Math.ceil(targetCandidates / pageSize);
     
@@ -376,13 +387,23 @@ serve(async (req) => {
     const trumpQuestionCount = validMarkets.filter((m: any) => /trump/i.test(m.question || '')).length;
     console.log('[Irys Query] Markets containing "trump":', trumpQuestionCount);
     
-    // Sort by relevance score (highest first)
-    validMarkets.sort((a: any, b: any) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+    // Sort by relevance score (highest first), then by volume (higher volume = better data quality)
+    validMarkets.sort((a: any, b: any) => {
+      // First sort by relevance score
+      const scoreDiff = (b.relevanceScore || 0) - (a.relevanceScore || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      
+      // Then by volume (higher volume = better data quality)
+      const volA = parseFloat(a.volume || '0');
+      const volB = parseFloat(b.volume || '0');
+      return volB - volA;
+    });
     
     // Log top 5 scores for debugging
     console.log('[Irys Query] Top 5 market scores:');
     validMarkets.slice(0, 5).forEach((m: any, i: number) => {
-      console.log(`  ${i + 1}. Score ${m.relevanceScore}: "${m.question?.slice(0, 60)}..."`);
+      const vol = parseFloat(m.volume || '0');
+      console.log(`  ${i + 1}. Score ${m.relevanceScore} | Vol $${Math.round(vol/1000)}k: "${m.question?.slice(0, 50)}..."`);
     });
     
     // Take top N
