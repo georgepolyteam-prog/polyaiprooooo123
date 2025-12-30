@@ -20,11 +20,11 @@ const ANCHOR_TERMS = [
   'zuckerberg'
 ];
 
-// Election-specific keywords
+// Election-specific keywords - NO EXCLUSIONS (Claude handles filtering via tool)
 const ELECTION_KEYWORDS = {
   high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'inaugurated', 'inauguration'],
-  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican'],
-  exclude: ['meeting', 'meet', 'zelensky', 'zelenskyy', 'pardon', 'turkey', 'speech', 'summit', 'diplomacy', 'talk', 'visit', 'erdogan', 'says', 'say']
+  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican']
+  // exclude list removed - Claude now decides what's relevant via query_irys_historical_markets tool
 };
 
 function inferCategoryFromQuery(query: string): string | null {
@@ -82,32 +82,39 @@ function extractAnchorTerms(query: string): string[] {
   return found;
 }
 
-// Calculate relevance score with anchor term requirement
-function calculateRelevance(question: string, userQuery: string, anchorTerms: string[], category: string): number {
+// Calculate relevance score with anchor term and keyword matching
+function calculateRelevance(question: string, userQuery: string, anchorTerms: string[], category: string, requiredKeywords: string[] = []): number {
   const q = question.toLowerCase();
   const query = userQuery.toLowerCase();
   let score = 0;
   
-  // STEP 1: Check for exclusion terms (auto-disqualify)
-  for (const term of ELECTION_KEYWORDS.exclude) {
-    if (q.includes(term)) {
-      console.log(`[Relevance] Excluded "${question.slice(0, 60)}" - contains "${term}"`);
-      return -1000; // Disqualified
+  // STEP 1: Required keywords (from Claude's tool call) - MUST match
+  if (requiredKeywords.length > 0) {
+    const matchedKeywords = requiredKeywords.filter(kw => q.includes(kw.toLowerCase()));
+    const matchRatio = matchedKeywords.length / requiredKeywords.length;
+    
+    if (matchRatio === 0) {
+      // No keywords matched - heavily penalize
+      return -1000;
+    } else if (matchRatio < 0.5) {
+      // Less than half matched - penalize but don't disqualify
+      score -= 50;
+    } else {
+      // Good keyword match - boost based on match ratio
+      score += Math.round(matchRatio * 100);
     }
   }
   
-  // STEP 2: ANCHOR TERM REQUIREMENT (most important)
+  // STEP 2: ANCHOR TERM REQUIREMENT (most important for entity-based queries)
   if (anchorTerms.length > 0) {
     const hasAnchor = anchorTerms.some(term => q.includes(term));
     
     if (!hasAnchor) {
       // Market doesn't contain any anchor term - heavily penalize
-      console.log(`[Relevance] Penalized "${question.slice(0, 60)}" - missing anchor terms: ${anchorTerms.join(', ')}`);
-      score -= 100; // Heavy penalty but not disqualification
+      score -= 100;
     } else {
       // Market contains anchor term - HUGE boost
       score += 100;
-      console.log(`[Relevance] Boosted "${question.slice(0, 60)}" - contains anchor term`);
     }
   }
   
@@ -210,18 +217,30 @@ serve(async (req) => {
   }
 
   try {
-    const { query, limit = 30, debug = false } = await req.json();
+    // Accept new params from Claude's tool call
+    const { 
+      query, 
+      limit = 30, 
+      debug = false,
+      category: providedCategory,  // Claude can specify category directly
+      keywords = [],               // Claude can specify required keywords
+      minVolume = 0                // Claude can filter by minimum volume
+    } = await req.json();
     
     console.log('[Irys Query] ========================================');
     console.log('[Irys Query] Query:', query);
     console.log('[Irys Query] Limit:', limit);
+    console.log('[Irys Query] Provided category:', providedCategory);
+    console.log('[Irys Query] Required keywords:', keywords);
+    console.log('[Irys Query] Min volume:', minVolume);
     
-    // Infer category
-    const category = inferCategoryFromQuery(query);
-    console.log('[Irys Query] Category:', category);
+    // Use provided category or infer from query
+    const category = providedCategory || inferCategoryFromQuery(query);
+    console.log('[Irys Query] Final category:', category);
     
-    // Extract anchor terms
-    const anchorTerms = extractAnchorTerms(query);
+    // Combine query terms with provided keywords for anchor extraction
+    const combinedQuery = keywords.length > 0 ? [...keywords, query].join(' ') : query;
+    const anchorTerms = extractAnchorTerms(combinedQuery);
     console.log('[Irys Query] Anchor terms:', anchorTerms);
     
     // Build GraphQL tags - filter by application-id AND category if detected
@@ -358,12 +377,13 @@ serve(async (req) => {
             return null;
           }
           
-          // Calculate relevance score
+          // Calculate relevance score with required keywords from Claude
           const relevanceScore = calculateRelevance(
             normalized.question || '',
             query,
             anchorTerms,
-            category || ''
+            category || '',
+            keywords // Pass Claude's required keywords
           );
           
           return {
@@ -381,7 +401,17 @@ serve(async (req) => {
     // Filter out nulls and disqualified markets
     let validMarkets = candidateMarkets.filter((m: any) => m !== null && m.relevanceScore >= 0);
     
-    console.log('[Irys Query] Valid markets after filtering:', validMarkets.length);
+    console.log('[Irys Query] Valid markets after relevance filtering:', validMarkets.length);
+    
+    // Apply minVolume filter if specified by Claude
+    if (minVolume > 0) {
+      const beforeCount = validMarkets.length;
+      validMarkets = validMarkets.filter((m: any) => {
+        const vol = parseFloat(m.volume || '0');
+        return vol >= minVolume;
+      });
+      console.log(`[Irys Query] Volume filter ($${minVolume}+): ${beforeCount} → ${validMarkets.length} markets`);
+    }
     
     // DEBUG: Count Trump markets
     const trumpQuestionCount = validMarkets.filter((m: any) => /trump/i.test(m.question || '')).length;

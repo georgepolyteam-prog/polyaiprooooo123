@@ -1248,6 +1248,49 @@ DO NOT give up after one search. Try at least 3 different phrasings.`,
       required: ['market_slug']
     }
   },
+  // === NEW: IRYS HISTORICAL DATA TOOL ===
+  {
+    name: 'query_irys_historical_markets',
+    description: `Query 50,000+ historical RESOLVED Polymarket markets stored permanently on Irys blockchain. Use this when users ask about:
+- Historical prediction market data, accuracy, or past outcomes
+- How accurate prediction markets were for specific events (elections, sports, etc.)
+- Comparing predicted probabilities vs actual outcomes
+- Finding resolved markets on a topic (Trump, Biden, elections, crypto, etc.)
+
+This tool lets you dynamically query with specific filters. Results include blockchain proof URLs.
+
+WHEN TO USE:
+- User asks "how accurate were election markets?" → query_irys_historical_markets
+- User asks "show me Trump election markets" → query_irys_historical_markets  
+- User asks "did markets predict X correctly?" → query_irys_historical_markets
+- User asks about "prediction accuracy" or "historical data" → query_irys_historical_markets
+
+NOTE: Only works when Irys mode is enabled (irysMode=true).`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['elections', 'crypto', 'sports', 'finance', 'entertainment', 'science-tech', 'health', 'other', 'all'],
+          description: 'Market category to filter by. Use "all" for no category filter.'
+        },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Keywords that MUST appear in market question (e.g., ["trump", "2024", "presidential"]). Markets not matching these are filtered out.'
+        },
+        minVolume: {
+          type: 'number',
+          description: 'Minimum trading volume in USD (e.g., 100000 for $100k+ markets). Higher volume = more reliable data.'
+        },
+        limit: {
+          type: 'number',
+          description: 'Number of markets to return (default: 30, max: 100)'
+        }
+      },
+      required: ['category']
+    }
+  },
 ];
 
 // Claude's native web search tool - uses Anthropic's built-in web search capability
@@ -1749,6 +1792,104 @@ async function executeToolCall(
           verification: 'REAL_LIVE_DATA'
         }
       });
+    }
+    
+    // === NEW: IRYS HISTORICAL MARKETS TOOL ===
+    if (tool.name === 'query_irys_historical_markets') {
+      const { category = 'all', keywords = [], minVolume = 0, limit = 30 } = tool.input;
+      
+      console.log(`[Irys Tool] Querying historical markets - category: ${category}, keywords: ${keywords.join(',')}, minVolume: ${minVolume}`);
+      const fetchStartTime = Date.now();
+      
+      try {
+        // Build query string from keywords
+        const queryString = keywords.length > 0 ? keywords.join(' ') : '';
+        
+        // Call query-irys with Claude's params
+        const irysResponse = await fetch(`${supabaseUrl}/functions/v1/query-irys`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`
+          },
+          body: JSON.stringify({
+            query: queryString,
+            category: category === 'all' ? null : category,
+            keywords,
+            minVolume,
+            limit: Math.min(limit, 100)
+          })
+        });
+        
+        const fetchDuration = Date.now() - fetchStartTime;
+        
+        if (!irysResponse.ok) {
+          console.error(`[Irys Tool] Query failed: ${irysResponse.status}`);
+          return JSON.stringify({
+            error: 'Failed to query Irys historical data',
+            status: irysResponse.status
+          });
+        }
+        
+        const irysData = await irysResponse.json();
+        
+        if (!irysData.success || !irysData.markets?.length) {
+          return JSON.stringify({
+            error: 'No matching historical markets found',
+            suggestion: 'Try different keywords or a broader category',
+            query: { category, keywords, minVolume }
+          });
+        }
+        
+        console.log(`[Irys Tool] ✅ Retrieved ${irysData.count} historical markets`);
+        
+        // Format markets for Claude's analysis
+        const formattedMarkets = irysData.markets.slice(0, limit).map((m: any) => ({
+          question: m.question || m.title || 'Unknown',
+          predicted: m.predictedOutcome || 'Unknown',
+          predictedProbability: m.predictedProbability ? `${m.predictedProbability}%` : 'N/A',
+          actualOutcome: m.resolvedOutcome || 'Unknown',
+          wasCorrect: m.isCorrectPrediction === true ? 'YES' : (m.isCorrectPrediction === false ? 'NO' : 'Unknown'),
+          volume: m.volume ? `$${(parseFloat(m.volume) / 1000000).toFixed(2)}M` : 'N/A',
+          volumeRaw: parseFloat(m.volume || 0),
+          proofUrl: m.proofUrl || `https://gateway.irys.xyz/${m.txId}`,
+          txId: m.txId,
+          category: m.category || category
+        }));
+        
+        // Calculate accuracy stats
+        const withPredictions = formattedMarkets.filter((m: any) => m.wasCorrect !== 'Unknown');
+        const correctCount = withPredictions.filter((m: any) => m.wasCorrect === 'YES').length;
+        const totalWithOutcomes = withPredictions.length;
+        const accuracyPercentage = totalWithOutcomes > 0 ? Math.round((correctCount / totalWithOutcomes) * 100) : null;
+        
+        return JSON.stringify({
+          success: true,
+          markets: formattedMarkets,
+          count: formattedMarkets.length,
+          totalAvailable: irysData.totalAvailable || irysData.count,
+          category: irysData.inferredCategory || category,
+          accuracyStats: accuracyPercentage !== null ? {
+            correct: correctCount,
+            total: totalWithOutcomes,
+            percentage: accuracyPercentage
+          } : null,
+          sampleProofUrl: formattedMarkets[0]?.proofUrl,
+          queryParams: { category, keywords, minVolume, limit },
+          data_source: {
+            api: 'Irys Blockchain',
+            fetched_at: new Date().toISOString(),
+            fetch_duration_ms: fetchDuration,
+            verification: 'BLOCKCHAIN_VERIFIED'
+          }
+        });
+      } catch (irysError) {
+        console.error('[Irys Tool] Error:', irysError);
+        return JSON.stringify({
+          error: 'Failed to query Irys historical data',
+          message: irysError instanceof Error ? irysError.message : 'Unknown error'
+        });
+      }
     }
     
     // Note: web_search is handled natively by Claude via web_search_20250305 tool
@@ -5694,7 +5835,21 @@ Use this sidebar whale data to enhance your analysis:
 - Reference specific whale activity when present
 - Note whale buy/sell ratios for market sentiment
 - Highlight if whales are accumulating or distributing
-`;
+` + (irysMode ? `
+
+=== 🔗 IRYS HISTORICAL DATA MODE ENABLED ===
+You have access to 50,000+ RESOLVED historical Polymarket markets on Irys blockchain.
+
+**USE query_irys_historical_markets tool** for any historical/accuracy questions:
+- category: elections, crypto, sports, finance, etc. (or "all")
+- keywords: ["trump", "2024"] - specific terms to match
+- minVolume: 100000+ for high-quality markets
+- limit: 30-50 for comprehensive analysis
+
+Example: User asks "Trump election accuracy" → Call tool with category="elections", keywords=["trump", "election"]
+
+After getting results: Include proof links and accuracy stats in your response!
+` : '');
 
     try {
       // Select model based on query complexity
