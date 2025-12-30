@@ -164,11 +164,12 @@ const Index = () => {
   // Auth state
   const { user, session, isLoading: authLoading } = useAuth();
   const { address: walletAddress, isConnected: isWalletConnected } = useAccount();
-  
+
+  // Email auth is required to chat; wallet connection alone should not unlock chat input.
   const hasValidSession = !!session?.access_token;
   const hasValidWallet = isWalletConnected && !!walletAddress;
-  const isAuthenticated = hasValidSession || hasValidWallet;
-  
+  const isAuthenticated = hasValidSession;
+
   const effectiveWalletAddress = hasValidWallet ? walletAddress : null;
   
   const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData, deepResearch, toggleDeepResearch, irysMode, toggleIrysMode } = usePolyChat(session, effectiveWalletAddress);
@@ -425,8 +426,9 @@ const Index = () => {
     } | null;
     
     // WAIT for auth to finish loading before triggering autoAnalyze
-    // This prevents the "sign in required" error when navigating from LiveTrades while logged in
+    // Require email auth to trigger chat automatically (wallet-only should still see the auth gate)
     if (authLoading) return;
+    if (!isAuthenticated) return;
     
     // Use location.key to prevent re-triggering on the same navigation
     const stateKey = state ? `${state.marketContext?.url}-${state.deepResearch}-${location.key}` : null;
@@ -455,11 +457,14 @@ const Index = () => {
       sendMessage(state.initialMessage);
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch, authLoading]);
+  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch, authLoading, isAuthenticated]);
 
   useEffect(() => {
     const marketQuery = searchParams.get("market");
     const questionQuery = searchParams.get("q");
+
+    if (authLoading) return;
+    if (!isAuthenticated) return;
 
     if (marketQuery && !hasAskedRef.current && messages.length === 0) {
       hasAskedRef.current = true;
@@ -473,7 +478,7 @@ const Index = () => {
       hasAskedRef.current = true;
       sendMessage(questionQuery);
     }
-  }, [searchParams, sendMessage, messages.length]);
+  }, [searchParams, sendMessage, messages.length, authLoading, isAuthenticated]);
 
   const handleSubmit = useCallback(async (message: string, isVoice: boolean, audioBlob?: Blob) => {
     if (isVoice && audioBlob) {
@@ -530,8 +535,8 @@ const Index = () => {
   const handleQuickQuestion = (question: string) => {
     if (!isAuthenticated) {
       toast({
-        title: "Connect to chat",
-        description: "Connect your wallet or sign up to chat with Poly",
+        title: "Sign in required",
+        description: "Sign in with email to use chat analysis.",
       });
       return;
     }
@@ -541,8 +546,8 @@ const Index = () => {
   const handleMarketClick = (url: string) => {
     if (!isAuthenticated) {
       toast({
-        title: "Connect to analyze",
-        description: "Connect your wallet or sign up to analyze markets",
+        title: "Sign in required",
+        description: "Sign in with email to analyze markets.",
       });
       return;
     }
