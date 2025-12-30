@@ -5277,73 +5277,58 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
     // Build rich analytical context for Claude when analyzing Irys data
     const buildIrysAnalyticalContext = (irysData: any, userQuery: string): string => {
       const markets = irysData.markets || [];
-      const totalCount = irysData.totalAvailable || irysData.count || markets.length;
-      const sampleTxId = irysData.sampleTxId || markets[0]?.irys?.txId || markets[0]?.txId || 'unknown';
+      const totalCount = irysData.count || markets.length;
+      const sampleTxId = irysData.sampleTxId || markets[0]?.txId || 'unknown';
       
-      // Build detailed market summaries with all useful fields
-      const marketSummaries = markets.slice(0, 30).map((m: any, idx: number) => {
+      // Build market summaries using PRECOMPUTED accuracy data
+      const marketSummaries = markets.slice(0, 15).map((m: any, idx: number) => {
         const question = m.question || m.title || 'Unknown market';
-        const category = m.category || m.irys?.category || irysData.inferredCategory || 'unknown';
-        
-        // Extract volume
+        const predicted = m.predictedOutcome || 'Unknown';
+        const predictedProb = m.predictedProbability ? `${m.predictedProbability}%` : 'N/A';
+        const actual = m.resolvedOutcome || 'Unknown';
+        const correct = m.isCorrectPrediction === true ? '✅ Correct' : (m.isCorrectPrediction === false ? '❌ Wrong' : '❓ Unknown');
         const volume = m.volume ? `$${(parseFloat(m.volume) / 1000000).toFixed(1)}M` : 'N/A';
-        
-        // Extract outcome
-        const outcomes = m.outcomes || [];
-        const winningOutcome = outcomes.find((o: any) => o.winner === true);
-        const outcome = winningOutcome?.name || m.winning_outcome || m.resolved_outcome || m.outcome || 'Unknown';
-        
-        // Extract final YES price
-        let yesPrice = 'N/A';
-        const yesOutcome = outcomes.find((o: any) => o.name?.toLowerCase() === 'yes');
-        if (yesOutcome?.price) {
-          yesPrice = (parseFloat(yesOutcome.price) * 100).toFixed(0) + '%';
-        } else if (m.yes_price) {
-          yesPrice = (parseFloat(m.yes_price) * 100).toFixed(0) + '%';
-        } else if (m.final_price) {
-          yesPrice = (parseFloat(m.final_price) * 100).toFixed(0) + '%';
-        } else if (m.outcome_prices?.[0]) {
-          yesPrice = (parseFloat(m.outcome_prices[0]) * 100).toFixed(0) + '%';
-        }
-        
-        const txId = m.irys?.txId || m.txId || 'unknown';
+        const proofUrl = m.proofUrl || `https://gateway.irys.xyz/${m.txId}`;
         
         return `
-Market ${idx + 1}:
-- Question: "${question}"
-- Category: ${category}
-- Final YES Price: ${yesPrice}
-- Outcome: ${outcome}
+**Market ${idx + 1}: ${question}**
+- Predicted: ${predicted} (${predictedProb})
+- Actual Outcome: ${actual}
+- Result: ${correct}
 - Volume: ${volume}
-- Blockchain Proof: https://gateway.irys.xyz/${txId}
+- [Proof →](${proofUrl})
 `;
       }).join('\n');
 
+      // Add precomputed accuracy summary
+      let accuracySummary = '';
+      if (irysData.accuracyStats) {
+        const { correct, total, percentage } = irysData.accuracyStats;
+        accuracySummary = `\n**Overall Accuracy: ${correct}/${total} = ${percentage}%**\n`;
+      }
+
       return `
 === IRYS BLOCKCHAIN HISTORICAL DATA ===
-You have access to ${totalCount} RESOLVED historical Polymarket markets stored permanently on Irys blockchain.
 
-🚨 CRITICAL INSTRUCTIONS - FOLLOW EXACTLY:
+You have access to ${totalCount} RESOLVED historical Polymarket markets.
 
-1. **ALWAYS start your response with:** "Based on ${totalCount} historical markets from Irys blockchain:"
+${accuracySummary}
 
-2. **ANALYZE PREDICTIONS VS OUTCOMES:**
-   - For each major market, state: What did the market predict (final YES price) vs What actually happened (outcome)
-   - Example: "Trump 2024 Election: Market predicted 58% YES → Outcome: WON ✅ (accurate prediction)"
+🚨 CRITICAL INSTRUCTIONS:
 
-3. **CALCULATE ACCURACY RATES:**
-   - Count how many markets were correct vs incorrect
-   - Show percentage: "Overall Accuracy: 8/10 = 80%"
+1. **Start your response with:** "Based on ${totalCount} historical markets from Irys blockchain:"
 
-4. **INCLUDE BLOCKCHAIN PROOF LINKS:**
-   - Format: [View Blockchain Proof →](https://gateway.irys.xyz/{txId})
-   - Include at least ONE clickable link in your response
-   - Use this format EXACTLY: \`[View Blockchain Proof →](https://gateway.irys.xyz/${sampleTxId})\`
+2. **Present the key markets** from the list below (focus on top 5-10)
 
-5. **FOCUS ON DATA-DRIVEN INSIGHTS:**
-   - Do NOT provide general knowledge or speculation
-   - Only analyze the actual historical markets provided below
-   - Look for patterns across multiple markets
+3. **Highlight patterns:**
+   - Which predictions were accurate vs wrong
+   - Any surprise upsets or unexpected outcomes
+   - Volume patterns (higher volume markets)
+
+4. **Include at least ONE clickable proof link** using this exact format:
+   \`[View Blockchain Proof →](https://gateway.irys.xyz/${sampleTxId})\`
+
+5. **Do NOT speculate** - only analyze the actual data provided
 
 ---
 
@@ -5351,38 +5336,27 @@ USER QUERY: "${userQuery}"
 
 ---
 
-HISTORICAL MARKETS DATA:
+HISTORICAL MARKETS:
 
 ${marketSummaries}
 
 ---
 
-SAMPLE BLOCKCHAIN PROOF (include this link in your response):
-https://gateway.irys.xyz/${sampleTxId}
-
----
-
-EXAMPLE RESPONSE FORMAT (follow this exactly):
+EXAMPLE RESPONSE FORMAT:
 
 "Based on ${totalCount} historical markets from Irys blockchain:
 
-**[Market Name]:**
-- Market predicted: [X]% YES
-- Actual outcome: [WON/LOST] [✅/❌]
-- Volume: $[X]M
+**Trump 2024 Presidential Election:**
+- Market predicted: 58% YES
+- Actual outcome: WON ✅ (accurate prediction)
 
-**[Another Market]:**
-- Market predicted: [Y]% YES  
-- Actual outcome: [WON/LOST] [✅/❌]
-- Volume: $[Y]M
+**Trump 2016 Presidential Election:**
+- Market predicted: 35% YES
+- Actual outcome: WON ❌ (surprise upset, market was wrong)
 
-**Overall Accuracy:** [X]/[Y] = [Z]%
+**Overall Accuracy:** ${irysData.accuracyStats ? `${irysData.accuracyStats.percentage}%` : 'Various results'}
 
 [View Blockchain Proof →](https://gateway.irys.xyz/${sampleTxId})"
-
----
-
-Now analyze the historical markets data above and answer the user's question with concrete insights. REMEMBER: Include the blockchain proof link!
 `;
     };
 
@@ -5391,7 +5365,10 @@ Now analyze the historical markets data above and answer the user's question wit
       
       const userQuery = lastUserMessage?.content || '';
       const wantsAnalysis = isAnalyticalQuery(userQuery);
-      const wantsMarketSearch = isIrysMarketSearchQuery(userQuery) && !wantsAnalysis;
+      
+      // For "trump and elections" type queries, treat as analytical (not market search)
+      const hasElectionIntent = /election|presidential|vote|ballot|candidate/i.test(userQuery);
+      const wantsMarketSearch = isIrysMarketSearchQuery(userQuery) && !wantsAnalysis && !hasElectionIntent;
       
       console.log(`[Irys] Query: "${userQuery.substring(0, 50)}..." | Analytical: ${wantsAnalysis} | Market search: ${wantsMarketSearch}`);
       
