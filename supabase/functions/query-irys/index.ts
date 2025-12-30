@@ -244,10 +244,15 @@ serve(async (req) => {
     
     // Paginate through results
     for (let page = 0; page < maxPages; page++) {
+      // Format tags for GraphQL (unquoted field names)
+      const tagsGraphQL = tags.map((t: { name: string; values: string[] }) => 
+        `{ name: "${t.name}", values: [${t.values.map(v => `"${v}"`).join(', ')}] }`
+      ).join(', ');
+      
       const graphqlQueryStr: string = `
         query {
           transactions(
-            tags: ${JSON.stringify(tags)},
+            tags: [${tagsGraphQL}],
             limit: ${pageSize},
             ${after ? `after: "${after}",` : ''}
             order: DESC
@@ -265,6 +270,7 @@ serve(async (req) => {
       `;
       
       console.log(`[Irys Query] Fetching page ${page + 1}/${maxPages}`);
+      console.log('[Irys Query] GraphQL query:', graphqlQueryStr.replace(/\s+/g, ' ').trim());
       
       const response: Response = await fetch('https://uploader.irys.xyz/graphql', {
         method: 'POST',
@@ -272,7 +278,22 @@ serve(async (req) => {
         body: JSON.stringify({ query: graphqlQueryStr })
       });
       
-      const data: any = await response.json();
+      console.log('[Irys Query] Response status:', response.status);
+      const rawText: string = await response.text();
+      console.log('[Irys Query] Raw response (first 500 chars):', rawText.slice(0, 500));
+      
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error('[Irys Query] Failed to parse JSON:', e);
+        break;
+      }
+      
+      if (data.errors) {
+        console.error('[Irys Query] GraphQL errors:', JSON.stringify(data.errors));
+      }
+      
       const edges: any[] = data.data?.transactions?.edges || [];
       
       if (edges.length === 0) {
