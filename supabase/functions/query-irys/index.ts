@@ -224,15 +224,14 @@ serve(async (req) => {
     const anchorTerms = extractAnchorTerms(query);
     console.log('[Irys Query] Anchor terms:', anchorTerms);
     
-    // Build GraphQL tags
+    // Build GraphQL tags - ONLY filter by application-id and status at GraphQL level
+    // Category filtering happens in code via relevance scoring (Polymarket uses different category names)
     const tags = [
       { name: "application-id", values: ["polymarket"] },
       { name: "status", values: ["resolved"] }
     ];
     
-    if (category) {
-      tags.push({ name: "category", values: [category] });
-    }
+    console.log('[Irys Query] GraphQL tags filter:', JSON.stringify(tags));
     
     // PAGINATION: Fetch deeper if we have anchor terms
     const targetCandidates = anchorTerms.length > 0 ? Math.min(limit * 20, 500) : Math.min(limit * 10, 200);
