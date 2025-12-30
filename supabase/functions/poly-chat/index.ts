@@ -17,7 +17,7 @@ async function getDeepResearch(query: string): Promise<{ answer: string; citatio
 
   try {
     console.log(`[DeepResearch] Starting research for: ${query.substring(0, 100)}...`);
-    const response = await fetch("https://factsai.org", {
+    const response = await fetch("factsai.org", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
