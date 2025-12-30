@@ -37,7 +37,7 @@ function inferCategoryFromQuery(query: string): string | null {
   return null;
 }
 
-// Normalize market data with accurate outcome detection
+// Normalize market data with accurate outcome detection AND closing price extraction
 function normalizeMarket(market: any, txId: string) {
   let outcomes: string[] = [];
   let outcomePrices: number[] = [];
@@ -61,12 +61,33 @@ function normalizeMarket(market: any, txId: string) {
   // ONLY use explicit outcome fields - don't infer from price
   const resolvedOutcome = market.outcome || market.winning_outcome || market.resolved_outcome || null;
   
-  // Predicted outcome (what market said before resolution)
-  const predictedOutcome = isYesNo && finalYesPrice !== null 
-    ? (finalYesPrice >= 0.5 ? 'Yes' : 'No')
-    : null;
+  // === CLOSING PRICE EXTRACTION ===
+  // Try to get the CLOSING price (prediction before resolution)
+  // Priority: 1. explicit closingPrice, 2. lastTradePrice (if not 0/1), 3. bestBid/Ask average
+  let closingPrice: number | null = null;
   
-  const predictedProbability = finalYesPrice !== null ? (finalYesPrice * 100) : null;
+  if (market.closingPrice !== undefined && market.closingPrice !== null) {
+    closingPrice = parseFloat(market.closingPrice);
+  } else if (market.lastTradePrice !== undefined && market.lastTradePrice !== 1 && market.lastTradePrice !== 0) {
+    // lastTradePrice is useful if not exactly 0 or 1 (post-resolution artifact)
+    closingPrice = parseFloat(market.lastTradePrice);
+  } else {
+    // For yes/no markets, try to get best bid/ask spread as proxy
+    const bestBid = parseFloat(market.bestBid || '0');
+    const bestAsk = parseFloat(market.bestAsk || '0');
+    if (bestBid > 0.01 && bestAsk > 0.01 && bestBid < 0.99 && bestAsk < 0.99) {
+      closingPrice = (bestBid + bestAsk) / 2;
+    }
+  }
+  
+  // Use closing price for prediction if available, otherwise fall back to finalYesPrice
+  const predictedProbability = closingPrice !== null 
+    ? (closingPrice * 100) 
+    : (finalYesPrice !== null ? (finalYesPrice * 100) : null);
+  
+  const predictedOutcome = closingPrice !== null
+    ? (closingPrice >= 0.5 ? 'Yes' : 'No')
+    : (isYesNo && finalYesPrice !== null ? (finalYesPrice >= 0.5 ? 'Yes' : 'No') : null);
   
   // Check if prediction was correct (ONLY if we have explicit outcome)
   const isCorrectPrediction = (predictedOutcome && resolvedOutcome) 
@@ -80,6 +101,8 @@ function normalizeMarket(market: any, txId: string) {
     outcomes,
     outcomePrices,
     finalYesPrice,
+    closingPrice,
+    closingPriceYes: closingPrice, // Explicit YES probability for clarity
     resolvedOutcome,
     predictedOutcome,
     predictedProbability,
@@ -153,8 +176,8 @@ serve(async (req) => {
     
     console.log('[Irys Query] GraphQL tags filter:', JSON.stringify(tags));
     
-    // Fetch more candidates so Claude has options to filter from
-    const targetCandidates = Math.min(limit * 5, 500);
+    // Fetch MORE candidates for deep pattern analysis (Claude filters)
+    const targetCandidates = Math.min(limit * 10, 2000);
     const pageSize = 100;
     const maxPages = Math.ceil(targetCandidates / pageSize);
     

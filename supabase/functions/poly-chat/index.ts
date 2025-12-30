@@ -1294,7 +1294,7 @@ NOTE: Only works when Irys mode is enabled (irysMode=true).`,
         },
         limit: {
           type: 'number',
-          description: 'Number of markets to return (default: 100 to give you options to filter)'
+          description: 'Number of markets to return (default: 200 for deep pattern analysis, max: 500). Request more for multi-year analysis.'
         }
       },
       required: ['category']
@@ -1805,7 +1805,7 @@ async function executeToolCall(
     
     // === NEW: IRYS HISTORICAL MARKETS TOOL ===
     if (tool.name === 'query_irys_historical_markets') {
-      const { category = 'all', keywords = [], minVolume = 0, limit = 30 } = tool.input;
+      const { category = 'all', keywords = [], minVolume = 0, limit = 200 } = tool.input;
       
       console.log(`[Irys Tool] Querying historical markets - category: ${category}, keywords: ${keywords.join(',')}, minVolume: ${minVolume}`);
       const fetchStartTime = Date.now();
@@ -1826,7 +1826,7 @@ async function executeToolCall(
             category: category === 'all' ? null : category,
             keywords,
             minVolume,
-            limit: Math.min(limit, 100)
+            limit: Math.min(limit, 500)
           })
         });
         
@@ -5604,18 +5604,74 @@ Use this sidebar whale data to enhance your analysis:
 - Highlight if whales are accumulating or distributing
 ` + (irysMode ? `
 
-=== 🔗 IRYS HISTORICAL DATA MODE ENABLED ===
+=== 🔗 IRYS HISTORICAL DATA MODE - DEEP ANALYSIS ENABLED ===
+
 You have access to 50,000+ RESOLVED historical Polymarket markets on Irys blockchain.
 
-**USE query_irys_historical_markets tool** for any historical/accuracy questions:
+**USE query_irys_historical_markets tool** with these parameters:
 - category: elections, crypto, sports, finance, etc. (or "all")
-- keywords: ["trump", "2024"] - specific terms to match
-- minVolume: 100000+ for high-quality markets
-- limit: 30-50 for comprehensive analysis
+- keywords: ["trump", "presidential", "2024", "2020", "2016"] - include ALL relevant years for pattern analysis
+- minVolume: 100000 for high-quality markets ($100k+ = reliable signal)
+- limit: 200 for comprehensive pattern analysis (default - request more for deep multi-year studies)
 
-Example: User asks "Trump election accuracy" → Call tool with category="elections", keywords=["trump", "election"]
+=== DEEP ANALYSIS WORKFLOW ===
 
-After getting results: Include proof links and accuracy stats in your response!
+1. **Query Strategy (request MORE data):**
+   - Request 200+ markets for multi-year pattern analysis
+   - Include keywords for ALL relevant time periods (e.g., "trump", "2024", "2020", "2016")
+   - Use minVolume: 100000 to filter to high-quality markets
+   - Results are sorted by volume - top results are usually major events
+
+2. **Intelligent Filtering (your job):**
+   - Filter received data based on user's ACTUAL intent
+   - "Trump election accuracy" → Keep only election OUTCOME markets (wins/losses, electoral votes)
+   - Exclude: meetings, tariffs, praise, pardons, cabinet appointments
+   - Keep: presidential wins/losses, electoral votes, inaugurations, primaries
+   - Always explain your filtering: "I found 150 markets, filtered to 15 actual elections"
+
+3. **Multi-Year Pattern Analysis:**
+   - Compare accuracy across election cycles (2016, 2020, 2024)
+   - Calculate: Did markets get smarter over time?
+   - Identify: Volume = confidence correlation (higher volume → higher accuracy)
+   - Note: Incumbency effects, surprise outcomes, confidence levels
+   - Use closingPrice field for the actual prediction before resolution
+
+4. **Synthesis for Future Predictions:**
+   - Apply historical patterns to future questions
+   - Example: "Markets were 67% correct on Trump in 2016, 95%+ in 2020-2024"
+   - "Volume > $100M = 95% accuracy historically"
+   - "Incumbents above 55% probability win 85% of the time"
+   - Provide actionable insights based on patterns
+
+=== EXAMPLE RESPONSE FORMAT ===
+
+User: "Will Trump win in 2028?"
+
+Your Response:
+"Based on 15 historical presidential election markets from Irys blockchain:
+
+📊 **Market Accuracy Evolution:**
+- 2016: Markets predicted 35% → Trump won (SURPRISE upset, low volume)
+- 2020: Markets predicted 42% → Trump lost (CORRECT, high volume)
+- 2024: Markets predicted 58% → Trump won (CORRECT, very high volume)
+
+🔍 **Key Patterns Discovered:**
+1. Market accuracy improved: 50% (2016) → 100% (2020-2024)
+2. Volume = confidence: $100M+ markets were 95% accurate
+3. Incumbency advantage: Sitting presidents >55% win 85% of time
+
+🎯 **2028 Implications:**
+- Historical pattern suggests markets will be highly accurate by 2028
+- Watch for volume as confidence indicator
+- Trump as challenger vs incumbent patterns differ
+
+[View 15 Markets on Blockchain →]"
+
+=== CRITICAL ===
+- ALWAYS include blockchain proof links (proofUrl) for major claims
+- Calculate accuracy from YOUR filtered set (not raw count)
+- Be transparent about data source and filtering applied
+- Use closingPrice when available (the actual prediction before resolution)
 ` : '');
 
     try {
