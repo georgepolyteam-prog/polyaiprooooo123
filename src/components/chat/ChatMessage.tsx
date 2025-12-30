@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, ExternalLink, ChevronDown, AlertTriangle, SkipForward, Newspaper, Coins } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Copy, TrendingUp, TrendingDown, BarChart2, ExternalLink, ChevronDown, AlertTriangle, SkipForward, Newspaper, Coins, ShieldCheck, Link } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -844,6 +844,19 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
           </div>
         ) : (
           <>
+            {/* Irys Blockchain Verification Banner */}
+            {(displayedContent.toLowerCase().includes('irys blockchain') || 
+              displayedContent.toLowerCase().includes('blockchain-verified') ||
+              displayedContent.includes('gateway.irys.xyz')) && (
+              <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-2 backdrop-blur-sm">
+                <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                <span className="text-sm text-blue-400 font-medium">
+                  Analysis based on blockchain-verified historical data
+                </span>
+                <Link className="w-3 h-3 text-blue-400/60 ml-auto flex-shrink-0" />
+              </div>
+            )}
+            
             {/* Intro text */}
             {introText && (
               <div className="p-3 sm:p-4 rounded-2xl rounded-tl-sm bg-muted/60 border border-border/60 shadow-soft backdrop-blur-sm overflow-hidden">
