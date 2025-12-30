@@ -66,11 +66,11 @@ const formatContent = (content: string): string => {
 // Poly Avatar component
 const PolyAvatar = memo(({ isSpeaking }: { isSpeaking: boolean }) => (
   <div className={cn(
-    "relative w-9 h-9 rounded-sm overflow-hidden shrink-0 transition-all duration-150 bg-background flex items-center justify-center",
+    "relative w-9 h-9 rounded-lg overflow-hidden shrink-0 transition-all duration-150 bg-black flex items-center justify-center",
     "ring-2 shadow-md",
     isSpeaking 
       ? "ring-primary shadow-primary/30 scale-105" 
-      : "ring-border/50 shadow-transparent"
+      : "ring-primary/30 shadow-transparent"
   )}>
     <img src={polyLogo} alt="Poly" className="w-6 h-6 object-contain" />
     {isSpeaking && (

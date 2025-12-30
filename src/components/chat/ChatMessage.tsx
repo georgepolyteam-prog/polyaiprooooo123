@@ -755,7 +755,7 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
   return (
     <div className="flex items-start gap-2 sm:gap-3 animate-fade-in group">
       {/* Poly Avatar */}
-      <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-xl gradient-bg flex items-center justify-center shadow-soft overflow-hidden">
+      <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-black flex items-center justify-center shadow-soft overflow-hidden ring-2 ring-primary/30">
         <img src={polyLogo} alt="Poly" className="w-4 h-4 sm:w-5 sm:h-5 object-contain" />
       </div>
       
