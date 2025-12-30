@@ -114,8 +114,8 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
           )
         )}
         
-        {/* Irys Toggle - temporarily hidden */}
-        {/* {irysToggle} */}
+        {/* Irys Toggle */}
+        {irysToggle}
       </div>
       
       <input
