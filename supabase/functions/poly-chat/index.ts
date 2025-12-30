@@ -1852,25 +1852,43 @@ async function executeToolCall(
         
         console.log(`[Irys Tool] ✅ Retrieved ${irysData.count} historical markets`);
         
-        // Format markets for Claude's analysis
-        const formattedMarkets = irysData.markets.slice(0, limit).map((m: any) => ({
-          question: m.question || m.title || 'Unknown',
-          predicted: m.predictedOutcome || 'Unknown',
-          predictedProbability: m.predictedProbability ? `${m.predictedProbability}%` : 'N/A',
-          actualOutcome: m.resolvedOutcome || 'Unknown',
-          wasCorrect: m.isCorrectPrediction === true ? 'YES' : (m.isCorrectPrediction === false ? 'NO' : 'Unknown'),
-          volume: m.volume ? `$${(parseFloat(m.volume) / 1000000).toFixed(2)}M` : 'N/A',
-          volumeRaw: parseFloat(m.volume || 0),
-          proofUrl: m.proofUrl || `https://gateway.irys.xyz/${m.txId}`,
-          txId: m.txId,
-          category: m.category || category
-        }));
+        // Format markets for Claude's analysis with volume confidence
+        const formattedMarkets = irysData.markets.slice(0, limit).map((m: any) => {
+          const volumeRaw = parseFloat(m.volume || '0');
+          const volumeConfidence = volumeRaw > 10000000 ? 'HIGH' :
+                                   volumeRaw > 1000000 ? 'MEDIUM' : 'LOW';
+          
+          return {
+            question: m.question || m.title || 'Unknown',
+            outcome: m.resolvedOutcome || (m.outcomes?.[0] === 'Yes' && m.outcomePrices?.[0] === 1 ? 'Yes' : 
+                     m.outcomes?.[1] === 'No' && m.outcomePrices?.[1] === 1 ? 'No' : 'Unknown'),
+            volume: m.volume ? `$${(volumeRaw / 1000000).toFixed(2)}M` : 'N/A',
+            volumeRaw,
+            volumeConfidence,
+            volumeContext: volumeConfidence === 'HIGH' ? 'Strong market conviction (top 5%)' :
+                           volumeConfidence === 'MEDIUM' ? 'Moderate market activity' : 'Limited market interest',
+            proofUrl: m.proofUrl || `https://gateway.irys.xyz/${m.txId}`,
+            txId: m.txId,
+            category: m.category || category,
+            closedTime: m.closedTime || m.endDate || null,
+            // Flag if we have usable closing price (most won't)
+            hasClosingPrice: m.closingPrice !== null && m.closingPrice > 0.01 && m.closingPrice < 0.99,
+            // Only include if actually usable (not post-resolution 0 or 1)
+            closingPrice: m.closingPrice !== null && m.closingPrice > 0.01 && m.closingPrice < 0.99 
+              ? `${(m.closingPrice * 100).toFixed(1)}%` : null,
+            researchHint: `${(m.question || m.title || '').slice(0, 50)} outcome details results`
+          };
+        });
         
-        // Calculate accuracy stats
-        const withPredictions = formattedMarkets.filter((m: any) => m.wasCorrect !== 'Unknown');
-        const correctCount = withPredictions.filter((m: any) => m.wasCorrect === 'YES').length;
-        const totalWithOutcomes = withPredictions.length;
-        const accuracyPercentage = totalWithOutcomes > 0 ? Math.round((correctCount / totalWithOutcomes) * 100) : null;
+        // Count markets with usable closing prices
+        const marketsWithClosingPrice = formattedMarkets.filter((m: any) => m.hasClosingPrice).length;
+        
+        // Calculate volume distribution stats for pattern analysis
+        const volumeStats = {
+          high: formattedMarkets.filter((m: any) => m.volumeConfidence === 'HIGH').length,
+          medium: formattedMarkets.filter((m: any) => m.volumeConfidence === 'MEDIUM').length,
+          low: formattedMarkets.filter((m: any) => m.volumeConfidence === 'LOW').length
+        };
         
         return JSON.stringify({
           success: true,
@@ -1878,13 +1896,24 @@ async function executeToolCall(
           count: formattedMarkets.length,
           totalAvailable: irysData.totalAvailable || irysData.count,
           category: irysData.inferredCategory || category,
-          accuracyStats: accuracyPercentage !== null ? {
-            correct: correctCount,
-            total: totalWithOutcomes,
-            percentage: accuracyPercentage
-          } : null,
-          sampleProofUrl: formattedMarkets[0]?.proofUrl,
+          volumeDistribution: volumeStats,
           queryParams: { category, keywords, minVolume, limit },
+          dataLimitations: {
+            hasClosingPrices: marketsWithClosingPrice > 0,
+            closingPriceCount: marketsWithClosingPrice,
+            totalMarkets: formattedMarkets.length,
+            note: 'Most markets lack closing prices (pre-resolution predictions). Use volume as confidence indicator. Research event outcomes via web_search for context.',
+            volumeConfidenceLevels: {
+              HIGH: '>$10M = strong market conviction (top 5%)',
+              MEDIUM: '$1-10M = moderate market activity',
+              LOW: '<$1M = limited market interest'
+            }
+          },
+          researchQueries: formattedMarkets.slice(0, 5).map((m: any) => ({
+            market: m.question,
+            suggestedQuery: m.researchHint
+          })),
+          sampleProofUrl: formattedMarkets[0]?.proofUrl,
           data_source: {
             api: 'Irys Blockchain',
             fetched_at: new Date().toISOString(),
@@ -5604,74 +5633,158 @@ Use this sidebar whale data to enhance your analysis:
 - Highlight if whales are accumulating or distributing
 ` + (irysMode ? `
 
-=== 🔗 IRYS HISTORICAL DATA MODE - DEEP ANALYSIS ENABLED ===
+=== 🔗 IRYS HISTORICAL DATA MODE - RESEARCH-DRIVEN ANALYSIS ===
 
 You have access to 50,000+ RESOLVED historical Polymarket markets on Irys blockchain.
 
-**USE query_irys_historical_markets tool** with these parameters:
-- category: elections, crypto, sports, finance, etc. (or "all")
-- keywords: ["trump", "presidential", "2024", "2020", "2016"] - include ALL relevant years for pattern analysis
-- minVolume: 100000 for high-quality markets ($100k+ = reliable signal)
-- limit: 200 for comprehensive pattern analysis (default - request more for deep multi-year studies)
+**CRITICAL DATA LIMITATION:**
+- Markets include: outcomes, volumes, descriptions, timestamps, blockchain proof
+- Markets DO NOT include: closing prices (predictions before resolution)
+- This means you CANNOT say "market closed at X%" or "market predicted Y%"
+- The price data (outcomePrices, lastTradePrice) shows POST-RESOLUTION values (0 or 1), not predictions
 
-=== DEEP ANALYSIS WORKFLOW ===
+**MUST use query_irys_historical_markets tool IMMEDIATELY for ANY historical query.**
 
-1. **Query Strategy (request MORE data):**
-   - Request 200+ markets for multi-year pattern analysis
-   - Include keywords for ALL relevant time periods (e.g., "trump", "2024", "2020", "2016")
-   - Use minVolume: 100000 to filter to high-quality markets
-   - Results are sorted by volume - top results are usually major events
+=== VOLUME-BASED CONFIDENCE INDICATOR ===
 
-2. **Intelligent Filtering (your job):**
-   - Filter received data based on user's ACTUAL intent
-   - "Trump election accuracy" → Keep only election OUTCOME markets (wins/losses, electoral votes)
-   - Exclude: meetings, tariffs, praise, pardons, cabinet appointments
-   - Keep: presidential wins/losses, electoral votes, inaugurations, primaries
-   - Always explain your filtering: "I found 150 markets, filtered to 15 actual elections"
+Since closing prices aren't available, use VOLUME as the primary confidence signal:
+- **HIGH** (>$10M): Strong market conviction, top 5% of all markets, highly reliable
+- **MEDIUM** ($1M-$10M): Moderate market activity, typical for significant events
+- **LOW** (<$1M): Limited market interest, less reliable signal
 
-3. **Multi-Year Pattern Analysis:**
-   - Compare accuracy across election cycles (2016, 2020, 2024)
-   - Calculate: Did markets get smarter over time?
-   - Identify: Volume = confidence correlation (higher volume → higher accuracy)
-   - Note: Incumbency effects, surprise outcomes, confidence levels
-   - Use closingPrice field for the actual prediction before resolution
+Historical pattern: High-volume outcomes are more reliable than low-volume ones.
 
-4. **Synthesis for Future Predictions:**
-   - Apply historical patterns to future questions
-   - Example: "Markets were 67% correct on Trump in 2016, 95%+ in 2020-2024"
-   - "Volume > $100M = 95% accuracy historically"
-   - "Incumbents above 55% probability win 85% of the time"
-   - Provide actionable insights based on patterns
+=== RESEARCH-DRIVEN ANALYSIS WORKFLOW (3 Steps) ===
 
-=== EXAMPLE RESPONSE FORMAT ===
+**Step 1: Query Irys for Markets**
 
-User: "Will Trump win in 2028?"
+Call query_irys_historical_markets with:
+- category: elections, sports, crypto, etc. (or "all")
+- keywords: ["trump", "2024", "2020", "election"] - include ALL relevant entities and years
+- minVolume: 10000 for elections, 50000 for other categories (tiered thresholds)
+- limit: 200 for comprehensive pattern analysis
+
+**Step 2: Research Context for Key Markets**
+
+For each significant market (top 3-5 by volume), use web_search to research:
+- What actually happened in the event
+- Key statistics/facts about outcome
+- Historical context and comparisons
+
+Example web search queries:
+- "Thunder NBA Finals 2024-25 outcome statistics results"
+- "Trump 2024 election final results electoral votes"
+- "Bitcoin price December 2024 peak all-time high"
+
+**Step 3: Provide Research-Driven Analysis**
+
+**Structure for EVERY market:**
+
+[Market Name] (ID: txId)
+- Outcome: YES/NO ✅
+- Volume: $XM (confidence: HIGH/MEDIUM/LOW)
+  * Context: What this volume level means (e.g., "top 3% of all NBA markets")
+- Research Context: [What actually happened - from web search]
+- Historical Pattern: [Similar events and their outcomes]
+- Trader Insight: [Actionable intelligence]
+- [View Proof →](proofUrl)
+
+=== PATTERN RECOGNITION ACROSS MULTIPLE MARKETS ===
+
+After analyzing individual markets, synthesize patterns:
+
+**📊 Pattern Identified: [Pattern Name]**
+- Occurrences: X times in Y years
+- Volume Correlation: >$XM volume typically indicates [insight]
+- Historical Examples:
+  1. [Event 1]: Volume $X → Outcome [Y]
+  2. [Event 2]: Volume $X → Outcome [Y]
+
+**Trader Takeaway:**
+[Specific actionable insight about when this pattern appears and what it predicts]
+
+**Is This Tradeable?**
+YES/NO because [reason]
+
+=== EXAMPLE GOOD ANALYSIS ===
+
+User: "analyse nba 2024 season"
 
 Your Response:
-"Based on 15 historical presidential election markets from Irys blockchain:
+"I found 87 NBA markets from 2024-25 season on Irys blockchain.
 
-📊 **Market Accuracy Evolution:**
-- 2016: Markets predicted 35% → Trump won (SURPRISE upset, low volume)
-- 2020: Markets predicted 42% → Trump lost (CORRECT, high volume)
-- 2024: Markets predicted 58% → Trump won (CORRECT, very high volume)
+🏆 **Thunder Championship Market Analysis**
 
-🔍 **Key Patterns Discovered:**
-1. Market accuracy improved: 50% (2016) → 100% (2020-2024)
-2. Volume = confidence: $100M+ markets were 95% accurate
-3. Incumbency advantage: Sitting presidents >55% win 85% of time
+Thunder to Win 2024-25 NBA Finals (ID: abc123...)
+- Outcome: YES ✅
+- Volume: $45M (HIGH confidence - top 3% of all NBA markets)
+  * For comparison: Average NBA Finals market = $12M
+  * This volume level indicates extremely strong market conviction
 
-🎯 **2028 Implications:**
-- Historical pattern suggests markets will be highly accurate by 2028
-- Watch for volume as confidence indicator
-- Trump as challenger vs incumbent patterns differ
+- Research Context (from web search):
+  * Thunder finished 68-14 (best record in NBA)
+  * +12.8 net rating (2nd highest all-time)
+  * Beat Pacers 4-3 in Finals
+  * Shai Gilgeous-Alexander: 32.7 PPG, MVP + Finals MVP
 
-[View 15 Markets on Blockchain →]"
+- Historical Pattern Analysis:
+  * Teams with 65+ wins: 14 occurrences since 2000
+  * Championship rate: 11/14 (78%)
+  * High volume (>$40M) + 65+ wins: 8/9 won (89%)
 
-=== CRITICAL ===
-- ALWAYS include blockchain proof links (proofUrl) for major claims
-- Calculate accuracy from YOUR filtered set (not raw count)
-- Be transparent about data source and filtering applied
-- Use closingPrice when available (the actual prediction before resolution)
+- **Trader Insight:** This is a TRADEABLE pattern. When NBA Finals market exceeds $40M + team has 65+ wins, historically wins 89% of time.
+
+[View Proof →](https://gateway.irys.xyz/abc123...)
+
+📊 **Volume = Accuracy Pattern**
+- >$40M volume: 92% accuracy (11/12 markets)
+- $20-40M: 72% accuracy (13/18)
+- <$20M: 60% accuracy (15/25)
+
+🎯 **Key Takeaway for Traders:**
+When you see dominant regular season (65+ wins) + extreme market volume (>$40M), historically predicts championship 89% of time. Volume IS the signal.
+
+⚠️ Note: Analysis based on outcomes and volumes. Closing prices (pre-resolution predictions) are not available in the archived data.
+
+[Verified from 87 blockchain markets]"
+
+=== CRITICAL REQUIREMENTS ===
+
+**For EVERY response:**
+✅ Research actual event outcomes (use web_search for top markets)
+✅ Use volume as confidence indicator (HIGH/MEDIUM/LOW)
+✅ Calculate patterns across multiple markets
+✅ Provide actionable trader insights
+✅ Include blockchain proof links (proofUrl)
+✅ Flag data limitations (no closing prices)
+✅ Focus on PATTERNS not individual predictions
+✅ Quantify edges where they exist
+✅ Be honest when no edge exists (randomness)
+
+**NEVER say:**
+❌ "Market got it RIGHT/WRONG" (circular logic - outcomes match by definition)
+❌ "Market closed at X%" (we don't have closing prices!)
+❌ "Market predicted Y%" (we don't have pre-resolution predictions!)
+
+**ALWAYS say:**
+✅ "Volume: $XM indicates [HIGH/MEDIUM/LOW] confidence"
+✅ "Research shows: [actual outcome details from web search]"
+✅ "Historical pattern: [X/Y similar events had same outcome]"
+✅ "Trader insight: [specific actionable intelligence]"
+✅ "[View Proof →]" with blockchain transaction link
+
+=== HANDLING MISSING DATA ===
+
+Always include this note at the end of historical analyses:
+
+"⚠️ Note: This analysis is based on outcomes and volumes. Closing prices (pre-resolution predictions) are not available in the archived data.
+
+Volume-based confidence levels:
+- HIGH (>$10M): Market had strong conviction
+- MEDIUM ($1-10M): Moderate market activity  
+- LOW (<$1M): Limited market interest
+
+High-volume outcomes are historically more reliable than low-volume ones."
 ` : '');
 
     try {
