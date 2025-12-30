@@ -18,43 +18,116 @@ interface GraphQLEdge {
   };
 }
 
-// Infer category from user query
+// Infer category from user query - IMPROVED for better accuracy
 function inferCategoryFromQuery(query: string): string | null {
   const q = query.toLowerCase();
   
-  if (q.includes('election') || q.includes('president') || q.includes('political') || 
-      q.includes('trump') || q.includes('biden') || q.includes('senate') || 
-      q.includes('congress') || q.includes('governor') || q.includes('vote')) {
+  // ELECTIONS - Expanded patterns (prioritize this for political figures)
+  if (
+    q.includes('election') || 
+    q.includes('president') || 
+    q.includes('presidential') ||
+    q.includes('political') || 
+    q.includes('trump') || 
+    q.includes('biden') ||
+    q.includes('harris') ||
+    q.includes('senate') ||
+    q.includes('congress') ||
+    q.includes('governor') ||
+    q.includes('vote') ||
+    q.includes('voting') ||
+    q.includes('candidate') ||
+    q.includes('primary') ||
+    q.includes('democrat') ||
+    q.includes('republican') ||
+    q.includes('electoral') ||
+    q.includes('ballot')
+  ) {
     return 'elections';
   }
-  if (q.includes('crypto') || q.includes('bitcoin') || q.includes('eth') || 
-      q.includes('solana') || q.includes('btc') || q.includes('ethereum') ||
-      q.includes('token') || q.includes('blockchain')) {
+  
+  // CRYPTO
+  if (
+    q.includes('crypto') || 
+    q.includes('bitcoin') || 
+    q.includes('eth') || 
+    q.includes('ethereum') ||
+    q.includes('solana') ||
+    q.includes('btc') ||
+    q.includes('token') ||
+    q.includes('blockchain') && !q.includes('irys') // Don't match "irys blockchain"
+  ) {
     return 'crypto';
   }
-  if (q.includes('sport') || q.includes('nba') || q.includes('nfl') || 
-      q.includes('soccer') || q.includes('lakers') || q.includes('game') ||
-      q.includes('super bowl') || q.includes('world cup') || q.includes('championship') ||
-      q.includes('playoff') || q.includes('finals')) {
+  
+  // SPORTS
+  if (
+    q.includes('sport') || 
+    q.includes('nba') || 
+    q.includes('nfl') || 
+    q.includes('soccer') || 
+    q.includes('lakers') ||
+    q.includes('football') ||
+    q.includes('basketball') ||
+    q.includes('baseball') ||
+    q.includes('super bowl') ||
+    q.includes('world cup') ||
+    q.includes('championship') ||
+    q.includes('playoffs') ||
+    q.includes('finals') ||
+    q.includes('game') && (q.includes('win') || q.includes('score'))
+  ) {
     return 'sports';
   }
-  if (q.includes('stock') || q.includes('market') || q.includes('finance') || 
-      q.includes('recession') || q.includes('fed') || q.includes('interest rate') ||
-      q.includes('inflation') || q.includes('gdp')) {
+  
+  // FINANCE
+  if (
+    q.includes('stock') || 
+    q.includes('market') && !q.includes('prediction market') || 
+    q.includes('finance') || 
+    q.includes('recession') ||
+    q.includes('inflation') ||
+    q.includes('fed') ||
+    q.includes('interest rate') ||
+    q.includes('gdp') ||
+    q.includes('economy')
+  ) {
     return 'finance';
   }
-  if (q.includes('movie') || q.includes('oscar') || q.includes('grammy') || 
-      q.includes('entertainment') || q.includes('celebrity') || q.includes('tv show') ||
-      q.includes('netflix') || q.includes('award')) {
+  
+  // ENTERTAINMENT
+  if (
+    q.includes('movie') || 
+    q.includes('oscar') || 
+    q.includes('grammy') || 
+    q.includes('entertainment') ||
+    q.includes('netflix') ||
+    q.includes('hollywood') ||
+    q.includes('celebrity') ||
+    q.includes('tv show') ||
+    q.includes('award')
+  ) {
     return 'entertainment';
   }
-  if (q.includes('tech') || q.includes('ai') || q.includes('spacex') || 
-      q.includes('science') || q.includes('nasa') || q.includes('openai') ||
-      q.includes('apple') || q.includes('google') || q.includes('microsoft')) {
+  
+  // SCIENCE & TECH
+  if (
+    q.includes('tech') || 
+    q.includes('ai') || 
+    q.includes('spacex') || 
+    q.includes('science') ||
+    q.includes('nasa') ||
+    q.includes('openai') ||
+    q.includes('elon') ||
+    q.includes('musk') ||
+    q.includes('apple') ||
+    q.includes('google') ||
+    q.includes('microsoft')
+  ) {
     return 'science-tech';
   }
   
-  return null; // Return all categories
+  return null; // Return all categories if no match
 }
 
 serve(async (req) => {
