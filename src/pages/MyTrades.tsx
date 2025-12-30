@@ -595,8 +595,8 @@ export default function MyTrades() {
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden">
-        <div className="fixed inset-0 cyber-grid opacity-30" />
-        <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
+        <div className="fixed inset-0 cyber-grid opacity-30 pointer-events-none" />
+        <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
         
         <TopBar />
         <main className="relative max-w-7xl mx-auto px-4 py-12">
@@ -630,7 +630,7 @@ export default function MyTrades() {
   if (isLoadingPositions && !hasTriedFetchPositions) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden">
-        <div className="fixed inset-0 cyber-grid opacity-30" />
+        <div className="fixed inset-0 cyber-grid opacity-30 pointer-events-none" />
         <TopBar />
         <CyberLoader />
       </div>
@@ -639,9 +639,9 @@ export default function MyTrades() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden pb-24 md:pb-0">
-      {/* Background effects */}
-      <div className="fixed inset-0 cyber-grid opacity-20" />
-      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5" />
+      {/* Background effects - pointer-events-none to not block sidebar */}
+      <div className="fixed inset-0 cyber-grid opacity-20 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
       
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(15)].map((_, i) => (

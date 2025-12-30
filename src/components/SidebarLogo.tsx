@@ -33,7 +33,7 @@ export const SidebarLogo = ({ collapsed = false }: SidebarLogoProps) => {
           <span className="text-lg font-bold tracking-tight text-foreground">
             Poly
           </span>
-          <span className="text-[10px] text-muted-foreground/70 tracking-wider uppercase">
+          <span className="text-[10px] text-foreground/60 tracking-wider uppercase">
             Market Terminal
           </span>
         </motion.div>

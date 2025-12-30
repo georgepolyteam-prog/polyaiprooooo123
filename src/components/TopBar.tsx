@@ -90,8 +90,8 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
           <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
             <Link to="/" className="flex items-center gap-1.5 sm:gap-2 hover:opacity-80 transition-opacity shrink-0">
               <div className="relative">
-                <img src={polyLogo} alt="Poly" className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 object-contain" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 lg:w-3 lg:h-3 bg-emerald-500 rounded-full border-2 border-[#0f0a1f]" />
+              <img src={polyLogo} alt="Poly" className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 object-contain" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 sm:w-2.5 sm:h-2.5 lg:w-3 lg:h-3 bg-primary rounded-full border-2 border-[#0f0a1f]" />
               </div>
 
               <div className="flex flex-col">
@@ -383,6 +383,56 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
+          {/* Mobile Account Button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`md:hidden ${user ? 'text-primary' : 'text-gray-400'} hover:text-white`}
+              >
+                <User className="w-5 h-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-[#1a1525] border-white/10 min-w-[180px]">
+              {user ? (
+                <>
+                  <div className="px-3 py-2 border-b border-white/10">
+                    <p className="text-xs text-muted-foreground">Signed in as</p>
+                    <p className="text-sm font-medium text-foreground truncate">{user.email}</p>
+                  </div>
+                  <Link to="/my-trades" onClick={() => setMobileMenuOpen(false)}>
+                    <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                      <Receipt className="w-4 h-4" />
+                      My Trades
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link to="/tracked-wallets" onClick={() => setMobileMenuOpen(false)}>
+                    <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                      <Star className="w-4 h-4" />
+                      Tracked Wallets
+                    </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator className="bg-white/10" />
+                  <DropdownMenuItem
+                    onClick={() => signOut()}
+                    className="gap-2 cursor-pointer text-red-400 hover:text-red-300 focus:text-red-300 focus:bg-red-500/10"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                  <DropdownMenuItem className="gap-2 cursor-pointer text-gray-300 hover:text-white focus:text-white focus:bg-white/10">
+                    <LogIn className="w-4 h-4" />
+                    Sign In / Sign Up
+                  </DropdownMenuItem>
+                </Link>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Mobile Menu Button */}
           <Button

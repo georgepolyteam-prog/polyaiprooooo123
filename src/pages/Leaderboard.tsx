@@ -370,13 +370,13 @@ export default function Leaderboard() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Background effects */}
-      <div className="fixed inset-0 cyber-grid-animated opacity-10" />
+      {/* Background effects - pointer-events-none to not block sidebar */}
+      <div className="fixed inset-0 cyber-grid-animated opacity-10 pointer-events-none" />
       <CyberParticles />
       
-      {/* Ambient glow orbs */}
-      <div className="fixed top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] animate-pulse" />
-      <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[120px] animate-pulse" />
+      {/* Ambient glow orbs - pointer-events-none to not block sidebar */}
+      <div className="fixed top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] animate-pulse pointer-events-none" />
+      <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-[120px] animate-pulse pointer-events-none" />
       
       <TopBar />
       
