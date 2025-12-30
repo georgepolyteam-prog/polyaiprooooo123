@@ -63,16 +63,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     
-    --primary: 172 66% 50%;
+    --primary: 187 85% 43%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 160 84% 39%;
+    --secondary: 195 90% 38%;
     --secondary-foreground: 0 0% 100%;
     
     --muted: 180 20% 96%;
     --muted-foreground: 215 16% 47%;
     
-    --accent: 187 92% 35%;
+    --accent: 200 95% 40%;
     --accent-foreground: 0 0% 100%;
     
     --destructive: 0 84% 60%;
@@ -86,30 +86,30 @@
     
     --border: 180 20% 91%;
     --input: 180 20% 91%;
-    --ring: 172 66% 50%;
+    --ring: 187 85% 43%;
     
     --radius: 0.75rem;
     
     /* Teal/Cyan Theme Colors */
-    --poly-purple: 280 65% 60%;
-    --poly-cyan: 172 66% 50%;
-    --poly-pink: 330 80% 60%;
-    --poly-blue: 217 91% 60%;
+    --poly-purple: 195 90% 50%;
+    --poly-cyan: 187 85% 50%;
+    --poly-pink: 200 95% 55%;
+    --poly-blue: 210 95% 55%;
     
     /* Glow colors */
-    --glow-purple: 280 100% 60%;
-    --glow-cyan: 172 100% 50%;
-    --glow-pink: 330 100% 60%;
+    --glow-purple: 195 100% 55%;
+    --glow-cyan: 187 100% 50%;
+    --glow-pink: 200 100% 55%;
     
     /* Sidebar - light mode */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 172 66% 50%;
+    --sidebar-primary: 187 85% 43%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 172 66% 50%;
+    --sidebar-ring: 187 85% 43%;
   }
 
   .dark {
@@ -123,16 +123,16 @@
     --popover: 220 18% 7%;
     --popover-foreground: 0 0% 98%;
     
-    --primary: 160 70% 45%;
+    --primary: 187 80% 48%;
     --primary-foreground: 0 0% 100%;
     
-    --secondary: 142 65% 40%;
+    --secondary: 195 85% 42%;
     --secondary-foreground: 0 0% 100%;
     
     --muted: 220 15% 14%;
     --muted-foreground: 220 10% 60%;
     
-    --accent: 200 80% 45%;
+    --accent: 200 85% 50%;
     --accent-foreground: 0 0% 100%;
     
     --destructive: 0 70% 55%;
@@ -146,17 +146,17 @@
     
     --border: 220 15% 18%;
     --input: 220 15% 18%;
-    --ring: 160 70% 45%;
+    --ring: 187 80% 48%;
     
     /* Sidebar - dark mode */
     --sidebar-background: 220 18% 7%;
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 160 70% 45%;
+    --sidebar-primary: 187 80% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 15% 14%;
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 220 15% 22%;
-    --sidebar-ring: 160 70% 45%;
+    --sidebar-ring: 187 80% 48%;
   }
 }
 
@@ -180,9 +180,9 @@
 
   .dark body {
     background: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(172 66% 15% / 0.4) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(160 84% 20% / 0.25) 0%, transparent 40%),
-      radial-gradient(ellipse 40% 30% at 20% 90%, hsl(187 92% 20% / 0.15) 0%, transparent 30%),
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(187 85% 15% / 0.4) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(195 90% 20% / 0.25) 0%, transparent 40%),
+      radial-gradient(ellipse 40% 30% at 20% 90%, hsl(200 95% 20% / 0.15) 0%, transparent 30%),
       hsl(200 25% 3.5%);
     background-attachment: fixed;
   }
