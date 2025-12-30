@@ -30,7 +30,9 @@ async function getDeepResearch(query: string): Promise<{ answer: string; citatio
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
       console.error(`[DeepResearch] API error: ${response.status}`);
+      console.error(`[DeepResearch] Error body: ${errorBody}`);
       return null;
     }
 
