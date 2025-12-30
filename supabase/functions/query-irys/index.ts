@@ -275,10 +275,14 @@ serve(async (req) => {
 
   try {
     const { query, category, limit = 20, debug = false } = await req.json();
-    
+
+    console.log('[DEBUG] query-irys called with:', { query, category, limit });
+
     // Infer category from user query if not explicitly provided
     const inferredCategory = category || (query ? inferCategoryFromQuery(query) : null);
-    
+
+    console.log('[DEBUG] Inferred category:', inferredCategory);
+
     console.log(`[Irys] Query: "${query?.substring(0, 50)}...", Category: ${inferredCategory || 'all'}, Limit: ${limit}`);
 
     // Build GraphQL tags filter
@@ -290,6 +294,8 @@ serve(async (req) => {
     if (inferredCategory && inferredCategory !== 'all') {
       tags.push({ name: "category", values: [inferredCategory] });
     }
+
+    console.log('[DEBUG] Built tags:', tags);
 
     // Fetch MORE candidates for post-filtering (10x limit)
     const candidateLimit = Math.min(limit * 10, 200);
@@ -337,6 +343,11 @@ serve(async (req) => {
 
     const graphqlData = await graphqlRes.json();
     const edges: GraphQLEdge[] = graphqlData.data?.transactions?.edges || [];
+
+    console.log('[DEBUG] GraphQL response:', {
+      edgesCount: graphqlData?.data?.transactions?.edges?.length || 0,
+      firstEdge: graphqlData?.data?.transactions?.edges?.[0]
+    });
 
     console.log(`[Irys] Retrieved ${edges.length} candidate transactions`);
 
@@ -399,7 +410,15 @@ serve(async (req) => {
     );
 
     // Filter out null results and disqualified markets (negative score)
-    let validMarkets = candidateMarkets.filter(m => m !== null && m.relevanceScore >= 0);
+    const fetchedMarkets = candidateMarkets.filter((m): m is any => m !== null);
+
+    console.log('[DEBUG] Fetched markets from gateway:', {
+      count: fetchedMarkets.length,
+      firstQuestion: fetchedMarkets[0]?.question,
+      firstCategory: fetchedMarkets[0]?.category
+    });
+
+    let validMarkets = fetchedMarkets.filter((m) => m.relevanceScore >= 0);
 
     console.log(`[Irys] Valid markets after null/disqualified filter: ${validMarkets.length}`);
 
@@ -409,6 +428,14 @@ serve(async (req) => {
       validMarkets = validMarkets.filter(m => m.relevanceScore > 0);
       console.log(`[Irys] After election keyword filter: ${validMarkets.length} (removed ${beforeCount - validMarkets.length})`);
     }
+
+    console.log('[DEBUG] After relevance filter:', {
+      filteredCount: validMarkets.length,
+      topScores: validMarkets.slice(0, 5).map(m => ({
+        question: m.question?.slice(0, 60),
+        score: m.relevanceScore
+      }))
+    });
 
     // Sort by relevance score (highest first)
     validMarkets.sort((a, b) => (b?.relevanceScore || 0) - (a?.relevanceScore || 0));
@@ -455,6 +482,11 @@ serve(async (req) => {
         }))
       };
     }
+
+    console.log('[DEBUG] Final return:', {
+      marketsCount: result.markets?.length || 0,
+      accuracyStats: result.accuracyStats
+    });
 
     return new Response(
       JSON.stringify(result),
