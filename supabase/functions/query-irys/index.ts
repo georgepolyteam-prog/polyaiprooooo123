@@ -7,7 +7,7 @@ const corsHeaders = {
 
 // Election-specific keywords for relevance scoring
 const ELECTION_KEYWORDS = {
-  high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'victory', 'defeat'],
+  high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'victory', 'defeat', 'inaugurated', 'inauguration'],
   medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican', 'electoral', 'swing state'],
   exclude: ['meeting', 'meet', 'meets', 'zelensky', 'zelenskyy', 'pardon', 'pardons', 'turkey', 'speech', 'summit', 'diplomacy', 'talk', 'talks', 'visit', 'visits', 'erdogan', 'call', 'calls', 'phone', 'announces', 'says', 'said', 'remarks', 'statement']
 };
@@ -294,13 +294,17 @@ serve(async (req) => {
     // Fetch MORE candidates for post-filtering (10x limit)
     const candidateLimit = Math.min(limit * 10, 200);
 
-    // Build the GraphQL query
+    // Build the GraphQL query with timestamp filter for Dec 29, 2024 upload window
     const graphqlQuery = `
       query {
         transactions(
           tags: [
             ${tags.map(t => `{ name: "${t.name}", values: ${JSON.stringify(t.values)} }`).join(', ')}
           ]
+          timestamp: {
+            from: 1767010000000
+            to: 1767070000000
+          }
           limit: ${candidateLimit}
           order: DESC
         ) {
