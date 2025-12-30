@@ -42,7 +42,7 @@ const AppContent = () => {
       <Sonner />
       <BrowserRouter>
         <div className="min-h-screen flex w-full">
-          {/* Desktop Sidebar */}
+          {/* Desktop Sidebar - Must be inside BrowserRouter for useLocation to work */}
           <AppSidebar />
           
           {/* Main Content Area */}
