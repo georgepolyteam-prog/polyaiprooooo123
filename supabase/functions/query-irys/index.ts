@@ -251,8 +251,8 @@ serve(async (req) => {
           transactions(
             tags: ${JSON.stringify(tags)},
             timestamp: {
-              from: 1735430400000,
-              to: 1735689600000
+              from: 1767010000000,
+              to: 1767100000000
             },
             limit: ${pageSize},
             ${after ? `after: "${after}",` : ''}
