@@ -3,12 +3,15 @@ import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PolyfactualToggle } from "@/components/chat/PolyfactualToggle";
 import { PolyfactualHint } from "@/components/chat/PolyfactualHint";
+import { IrysToggle } from "@/components/chat/IrysToggle";
 
 interface UnifiedInputProps {
   onSubmit: (message: string, isVoice: boolean, audioBlob?: Blob) => void;
   disabled?: boolean;
   deepResearch?: boolean;
   onToggleDeepResearch?: () => void;
+  irysMode?: boolean;
+  onToggleIrysMode?: () => void;
   showPolyfactualHint?: boolean;
   onDismissHint?: () => void;
 }
@@ -18,6 +21,8 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
   disabled,
   deepResearch = false,
   onToggleDeepResearch,
+  irysMode = false,
+  onToggleIrysMode,
   showPolyfactualHint = false,
   onDismissHint
 }, ref) => {
@@ -54,9 +59,11 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
 
   const placeholder = isMobile 
     ? "Ask anything..." 
-    : deepResearch 
-      ? "Deep research mode - ask anything..." 
-      : "Paste a market URL or ask anything...";
+    : irysMode
+      ? "Query 51K historical markets..."
+      : deepResearch 
+        ? "Deep research mode - ask anything..." 
+        : "Paste a market URL or ask anything...";
 
   const polyfactualToggle = onToggleDeepResearch ? (
     <PolyfactualToggle 
@@ -66,31 +73,50 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
     />
   ) : null;
 
+  const irysToggle = onToggleIrysMode ? (
+    <IrysToggle 
+      enabled={irysMode} 
+      onToggle={onToggleIrysMode}
+      disabled={disabled}
+    />
+  ) : null;
+
+  // Determine border color based on active mode
+  const getBorderClass = () => {
+    if (irysMode) return "border-blue-500/50 shadow-lg shadow-blue-500/10";
+    if (deepResearch) return "border-accent/50 shadow-glow-cyan";
+    return "border-border/50 hover:border-primary/30 focus-within:border-primary/50";
+  };
+
   return (
     <div 
       ref={ref} 
       className={cn(
         "relative flex items-center gap-2 sm:gap-3 p-2 rounded-2xl transition-all duration-300",
         "glass-card border-2",
-        deepResearch 
-          ? "border-accent/50 shadow-glow-cyan" 
-          : "border-border/50 hover:border-primary/30 focus-within:border-primary/50",
+        getBorderClass(),
         "focus-within:shadow-glow"
       )}
     >
       {/* Gradient border effect */}
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
       
-      {/* Polyfactual Toggle with optional hint */}
-      {polyfactualToggle && (
-        showPolyfactualHint && onDismissHint ? (
-          <PolyfactualHint show={showPolyfactualHint} onDismiss={onDismissHint}>
-            {polyfactualToggle}
-          </PolyfactualHint>
-        ) : (
-          polyfactualToggle
-        )
-      )}
+      {/* Toggles container */}
+      <div className="flex items-center gap-1 sm:gap-2">
+        {/* Polyfactual Toggle with optional hint */}
+        {polyfactualToggle && (
+          showPolyfactualHint && onDismissHint ? (
+            <PolyfactualHint show={showPolyfactualHint} onDismiss={onDismissHint}>
+              {polyfactualToggle}
+            </PolyfactualHint>
+          ) : (
+            polyfactualToggle
+          )
+        )}
+        
+        {/* Irys Toggle */}
+        {irysToggle}
+      </div>
       
       <input
         ref={inputRef}

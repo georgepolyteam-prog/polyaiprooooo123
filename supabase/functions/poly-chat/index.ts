@@ -5228,6 +5228,65 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
       }
     }
 
+    // ============= IRYS BLOCKCHAIN DATA MODE =============
+    if (irysMode) {
+      console.log("[Irys] Irys mode enabled, querying historical markets...");
+      
+      try {
+        // Query Irys for relevant historical markets
+        const irysResponse = await fetch(`${supabaseUrl}/functions/v1/query-irys`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`
+          },
+          body: JSON.stringify({ 
+            query: lastUserMessage?.content || '',
+            limit: 20
+          })
+        });
+        
+        if (irysResponse.ok) {
+          const irysData = await irysResponse.json();
+          
+          if (irysData.success && irysData.markets?.length > 0) {
+            console.log(`[Irys] ✅ Retrieved ${irysData.count} historical markets (category: ${irysData.inferredCategory || 'all'})`);
+            
+            // Add Irys context to the enriched messages
+            const irysContext = `
+=== IRYS BLOCKCHAIN VERIFIED DATA ===
+You have access to ${irysData.count} historical Polymarket markets stored permanently on Irys blockchain.
+Category: ${irysData.inferredCategory || 'all'}
+Sample Proof URL: https://gateway.irys.xyz/${irysData.sampleTxId}
+
+Historical Markets:
+${JSON.stringify(irysData.markets.slice(0, 10), null, 2)}
+
+Instructions for using this data:
+- Analyze patterns across these resolved markets
+- Compare accuracy rates and outcomes
+- Look for trends and insights
+- Calculate win rates when possible
+- IMPORTANT: Mention this data is blockchain-verified
+- Include proof links in your response: "View Blockchain Proof: https://gateway.irys.xyz/${irysData.sampleTxId}"
+`;
+            
+            // Prepend Irys context to the system prompt or add to messages
+            enrichedMessages = [
+              { role: 'user', content: `[IRYS DATA CONTEXT]\n${irysContext}` },
+              ...enrichedMessages
+            ];
+            
+            console.log(`[Irys] Added ${irysData.count} historical markets to context`);
+          } else {
+            console.log(`[Irys] No matching historical markets found`);
+          }
+        }
+      } catch (irysError) {
+        console.error('[Irys] Error querying Irys:', irysError);
+      }
+    }
+
     // ============= DEEP RESEARCH MODE =============
     if (deepResearch) {
       console.log("[DeepResearch] Deep research mode enabled, fetching comprehensive data...");
