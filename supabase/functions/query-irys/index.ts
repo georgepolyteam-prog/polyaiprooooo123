@@ -5,31 +5,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Election-specific keywords for relevance scoring
+// High-signal entity terms (anchor terms)
+const ANCHOR_TERMS = [
+  'trump', 'donald trump',
+  'biden', 'joe biden',
+  'harris', 'kamala harris',
+  'jd vance', 'vance',
+  'obama', 'barack obama',
+  'clinton', 'hillary clinton',
+  'putin', 'vladimir putin',
+  'xi', 'xi jinping',
+  'elon', 'musk', 'elon musk',
+  'bezos', 'jeff bezos',
+  'zuckerberg'
+];
+
+// Election-specific keywords
 const ELECTION_KEYWORDS = {
-  high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'victory', 'defeat', 'inaugurated', 'inauguration'],
-  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican', 'electoral', 'swing state'],
-  exclude: ['meeting', 'meet', 'meets', 'zelensky', 'zelenskyy', 'pardon', 'pardons', 'turkey', 'speech', 'summit', 'diplomacy', 'talk', 'talks', 'visit', 'visits', 'erdogan', 'call', 'calls', 'phone', 'announces', 'says', 'said', 'remarks', 'statement']
+  high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'inaugurated', 'inauguration'],
+  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican'],
+  exclude: ['meeting', 'meet', 'zelensky', 'zelenskyy', 'pardon', 'turkey', 'speech', 'summit', 'diplomacy', 'talk', 'visit', 'erdogan', 'says', 'say']
 };
 
-interface IrysTag {
-  name: string;
-  values: string[];
-}
-
-interface GraphQLEdge {
-  node: {
-    id: string;
-    timestamp: number;
-    tags: { name: string; value: string }[];
-  };
-}
-
-// Infer category from user query
 function inferCategoryFromQuery(query: string): string | null {
   const q = query.toLowerCase();
   
-  // ELECTIONS - Expanded patterns (prioritize this for political figures)
   if (
     q.includes('election') || 
     q.includes('president') || 
@@ -37,136 +37,97 @@ function inferCategoryFromQuery(query: string): string | null {
     q.includes('political') || 
     q.includes('trump') || 
     q.includes('biden') ||
-    q.includes('harris') ||
     q.includes('senate') ||
     q.includes('congress') ||
-    q.includes('governor') ||
     q.includes('vote') ||
-    q.includes('voting') ||
-    q.includes('candidate') ||
-    q.includes('primary') ||
-    q.includes('democrat') ||
-    q.includes('republican') ||
-    q.includes('electoral') ||
-    q.includes('ballot')
+    q.includes('candidate')
   ) {
     return 'elections';
   }
   
-  // CRYPTO
-  if (
-    q.includes('crypto') || 
-    q.includes('bitcoin') || 
-    q.includes('eth') || 
-    q.includes('ethereum') ||
-    q.includes('solana') ||
-    q.includes('btc') ||
-    q.includes('token') ||
-    (q.includes('blockchain') && !q.includes('irys'))
-  ) {
+  if (q.includes('crypto') || q.includes('bitcoin') || q.includes('eth') || q.includes('ethereum') || q.includes('solana') || q.includes('btc')) {
     return 'crypto';
   }
   
-  // SPORTS
-  if (
-    q.includes('sport') || 
-    q.includes('nba') || 
-    q.includes('nfl') || 
-    q.includes('soccer') || 
-    q.includes('lakers') ||
-    q.includes('football') ||
-    q.includes('basketball') ||
-    q.includes('baseball') ||
-    q.includes('super bowl') ||
-    q.includes('world cup') ||
-    q.includes('championship') ||
-    q.includes('playoffs') ||
-    q.includes('finals') ||
-    (q.includes('game') && (q.includes('win') || q.includes('score')))
-  ) {
+  if (q.includes('sport') || q.includes('nba') || q.includes('nfl') || q.includes('soccer') || q.includes('lakers') || q.includes('game') || q.includes('championship') || q.includes('playoffs')) {
     return 'sports';
   }
   
-  // FINANCE
-  if (
-    q.includes('stock') || 
-    (q.includes('market') && !q.includes('prediction market')) || 
-    q.includes('finance') || 
-    q.includes('recession') ||
-    q.includes('inflation') ||
-    q.includes('fed') ||
-    q.includes('interest rate') ||
-    q.includes('gdp') ||
-    q.includes('economy')
-  ) {
+  if (q.includes('stock') || q.includes('market') || q.includes('finance') || q.includes('recession') || q.includes('inflation') || q.includes('fed')) {
     return 'finance';
   }
   
-  // ENTERTAINMENT
-  if (
-    q.includes('movie') || 
-    q.includes('oscar') || 
-    q.includes('grammy') || 
-    q.includes('entertainment') ||
-    q.includes('netflix') ||
-    q.includes('hollywood') ||
-    q.includes('celebrity') ||
-    q.includes('tv show') ||
-    q.includes('award')
-  ) {
+  if (q.includes('movie') || q.includes('oscar') || q.includes('grammy') || q.includes('entertainment') || q.includes('netflix') || q.includes('hollywood')) {
     return 'entertainment';
   }
   
-  // SCIENCE & TECH
-  if (
-    q.includes('tech') || 
-    q.includes('ai') || 
-    q.includes('spacex') || 
-    q.includes('science') ||
-    q.includes('nasa') ||
-    q.includes('openai') ||
-    q.includes('elon') ||
-    q.includes('musk') ||
-    q.includes('apple') ||
-    q.includes('google') ||
-    q.includes('microsoft')
-  ) {
+  if (q.includes('tech') || q.includes('ai') || q.includes('spacex') || q.includes('science') || q.includes('elon') || q.includes('musk')) {
     return 'science-tech';
   }
   
   return null;
 }
 
-// Calculate relevance score for election markets - CRITICAL for filtering out non-election content
-function calculateElectionRelevance(question: string, userQuery: string): number {
+// Extract anchor terms from user query
+function extractAnchorTerms(query: string): string[] {
+  const q = query.toLowerCase();
+  const found: string[] = [];
+  
+  for (const term of ANCHOR_TERMS) {
+    if (q.includes(term)) {
+      found.push(term);
+    }
+  }
+  
+  return found;
+}
+
+// Calculate relevance score with anchor term requirement
+function calculateRelevance(question: string, userQuery: string, anchorTerms: string[], category: string): number {
   const q = question.toLowerCase();
   const query = userQuery.toLowerCase();
   let score = 0;
   
-  // Check for exclusion terms (auto-disqualify)
+  // STEP 1: Check for exclusion terms (auto-disqualify)
   for (const term of ELECTION_KEYWORDS.exclude) {
     if (q.includes(term)) {
-      console.log(`[Irys Relevance] EXCLUDED: "${question.substring(0, 50)}..." contains "${term}"`);
-      return -1000; // Disqualify
+      console.log(`[Relevance] Excluded "${question.slice(0, 60)}" - contains "${term}"`);
+      return -1000; // Disqualified
     }
   }
   
-  // High value election keywords (+10 each)
-  for (const term of ELECTION_KEYWORDS.high) {
-    if (q.includes(term)) {
-      score += 10;
+  // STEP 2: ANCHOR TERM REQUIREMENT (most important)
+  if (anchorTerms.length > 0) {
+    const hasAnchor = anchorTerms.some(term => q.includes(term));
+    
+    if (!hasAnchor) {
+      // Market doesn't contain any anchor term - heavily penalize
+      console.log(`[Relevance] Penalized "${question.slice(0, 60)}" - missing anchor terms: ${anchorTerms.join(', ')}`);
+      score -= 100; // Heavy penalty but not disqualification
+    } else {
+      // Market contains anchor term - HUGE boost
+      score += 100;
+      console.log(`[Relevance] Boosted "${question.slice(0, 60)}" - contains anchor term`);
     }
   }
   
-  // Medium value keywords (+5 each)
-  for (const term of ELECTION_KEYWORDS.medium) {
-    if (q.includes(term)) {
-      score += 5;
+  // STEP 3: Election keywords (only matters if anchor requirement is met)
+  if (category === 'elections') {
+    for (const term of ELECTION_KEYWORDS.high) {
+      if (q.includes(term)) {
+        score += 10;
+      }
+    }
+    
+    for (const term of ELECTION_KEYWORDS.medium) {
+      if (q.includes(term)) {
+        score += 5;
+      }
     }
   }
   
-  // Boost if query terms appear in question (+3 each)
-  const queryTerms = query.split(/\s+/).filter(t => t.length > 3);
+  // STEP 4: Query term matching
+  const queryTerms = query.split(' ').filter(t => t.length > 3);
   for (const term of queryTerms) {
     if (q.includes(term)) {
       score += 3;
@@ -176,87 +137,46 @@ function calculateElectionRelevance(question: string, userQuery: string): number
   return score;
 }
 
-// Compute normalized fields for analysis
-function normalizeMarket(market: any, txId: string, tagMap: Record<string, string>) {
-  // Parse outcomes - handle both string and array formats
+// Normalize market data with accurate outcome detection
+function normalizeMarket(market: any, txId: string) {
   let outcomes: string[] = [];
   let outcomePrices: number[] = [];
   
   try {
-    if (typeof market.outcomes === 'string') {
-      outcomes = JSON.parse(market.outcomes);
-    } else if (Array.isArray(market.outcomes)) {
-      // Handle array of objects with name/price
-      if (market.outcomes[0]?.name) {
-        outcomes = market.outcomes.map((o: any) => o.name);
-        outcomePrices = market.outcomes.map((o: any) => parseFloat(o.price) || 0);
-      } else {
-        outcomes = market.outcomes;
-      }
-    }
-    
-    if (typeof market.outcomePrices === 'string') {
-      outcomePrices = JSON.parse(market.outcomePrices).map((p: string) => parseFloat(p));
-    } else if (Array.isArray(market.outcomePrices) && outcomePrices.length === 0) {
-      outcomePrices = market.outcomePrices.map((p: any) => parseFloat(p) || 0);
-    }
-  } catch (e) {
-    console.log('[Irys Normalize] Failed to parse outcomes:', e);
+    outcomes = market.outcomes ? (typeof market.outcomes === 'string' ? JSON.parse(market.outcomes) : market.outcomes) : [];
+  } catch {
+    outcomes = [];
   }
   
-  // For binary Yes/No markets
-  const isYesNo = outcomes.length === 2 && 
-    outcomes[0]?.toLowerCase() === 'yes' && 
-    outcomes[1]?.toLowerCase() === 'no';
+  try {
+    const rawPrices = market.outcomePrices ? (typeof market.outcomePrices === 'string' ? JSON.parse(market.outcomePrices) : market.outcomePrices) : [];
+    outcomePrices = rawPrices.map((p: any) => typeof p === 'string' ? parseFloat(p) : p);
+  } catch {
+    outcomePrices = [];
+  }
   
+  const isYesNo = outcomes.length === 2 && outcomes[0] === 'Yes' && outcomes[1] === 'No';
   const finalYesPrice = isYesNo && outcomePrices[0] !== undefined ? outcomePrices[0] : null;
   
-  // Determine resolved outcome from various possible fields
-  let resolvedOutcome = null;
+  // ONLY use explicit outcome fields - don't infer from price
+  const resolvedOutcome = market.outcome || market.winning_outcome || market.resolved_outcome || null;
   
-  // Check for winning outcome in outcomes array
-  if (Array.isArray(market.outcomes) && market.outcomes[0]?.winner !== undefined) {
-    const winner = market.outcomes.find((o: any) => o.winner === true);
-    if (winner) {
-      resolvedOutcome = winner.name;
-    }
-  }
+  // Predicted outcome (what market said before resolution)
+  const predictedOutcome = isYesNo && finalYesPrice !== null 
+    ? (finalYesPrice >= 0.5 ? 'Yes' : 'No')
+    : null;
   
-  // Fallback to other fields
-  if (!resolvedOutcome) {
-    resolvedOutcome = market.outcome || market.winning_outcome || market.resolved_outcome || null;
-  }
+  const predictedProbability = finalYesPrice !== null ? (finalYesPrice * 100) : null;
   
-  // For closed binary markets, infer outcome from final price if not set
-  if (!resolvedOutcome && market.closed && isYesNo && finalYesPrice !== null) {
-    // Price >= 0.95 means Yes won, <= 0.05 means No won
-    if (finalYesPrice >= 0.95) {
-      resolvedOutcome = 'Yes';
-    } else if (finalYesPrice <= 0.05) {
-      resolvedOutcome = 'No';
-    }
-  }
-  
-  // Predicted outcome (what market predicted based on final price)
-  let predictedOutcome = null;
-  let predictedProbability = null;
-  
-  if (isYesNo && finalYesPrice !== null) {
-    predictedOutcome = finalYesPrice >= 0.5 ? 'Yes' : 'No';
-    predictedProbability = Math.round((finalYesPrice >= 0.5 ? finalYesPrice : 1 - finalYesPrice) * 100);
-  }
-  
-  // Check if prediction was correct
-  let isCorrectPrediction = null;
-  if (predictedOutcome && resolvedOutcome) {
-    isCorrectPrediction = predictedOutcome.toLowerCase() === resolvedOutcome.toLowerCase();
-  }
+  // Check if prediction was correct (ONLY if we have explicit outcome)
+  const isCorrectPrediction = (predictedOutcome && resolvedOutcome) 
+    ? predictedOutcome.toLowerCase() === resolvedOutcome.toLowerCase()
+    : null;
   
   return {
     ...market,
     txId,
     proofUrl: `https://gateway.irys.xyz/${txId}`,
-    category: tagMap['category'] || market.category || 'unknown',
     outcomes,
     outcomePrices,
     finalYesPrice,
@@ -267,246 +187,236 @@ function normalizeMarket(market: any, txId: string, tagMap: Record<string, strin
   };
 }
 
+// Fetch with concurrency limit
+async function fetchWithConcurrency<T>(
+  items: T[],
+  fn: (item: T) => Promise<any>,
+  limit: number = 20
+): Promise<any[]> {
+  const results: any[] = [];
+  
+  for (let i = 0; i < items.length; i += limit) {
+    const batch = items.slice(i, i + limit);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
+  
+  return results;
+}
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { query, category, limit = 20, debug = false } = await req.json();
-
-    console.log('[DEBUG] query-irys called with:', { query, category, limit });
-
-    // Infer category from user query if not explicitly provided
-    const inferredCategory = category || (query ? inferCategoryFromQuery(query) : null);
-
-    console.log('[DEBUG] Inferred category:', inferredCategory);
-
-    console.log(`[Irys] Query: "${query?.substring(0, 50)}...", Category: ${inferredCategory || 'all'}, Limit: ${limit}`);
-
-    // Build GraphQL tags filter
-    const tags: IrysTag[] = [
+    const { query, limit = 30, debug = false } = await req.json();
+    
+    console.log('[Irys Query] ========================================');
+    console.log('[Irys Query] Query:', query);
+    console.log('[Irys Query] Limit:', limit);
+    
+    // Infer category
+    const category = inferCategoryFromQuery(query);
+    console.log('[Irys Query] Category:', category);
+    
+    // Extract anchor terms
+    const anchorTerms = extractAnchorTerms(query);
+    console.log('[Irys Query] Anchor terms:', anchorTerms);
+    
+    // Build GraphQL tags
+    const tags = [
       { name: "application-id", values: ["polymarket"] },
       { name: "status", values: ["resolved"] }
     ];
-
-    if (inferredCategory && inferredCategory !== 'all') {
-      tags.push({ name: "category", values: [inferredCategory] });
+    
+    if (category) {
+      tags.push({ name: "category", values: [category] });
     }
-
-    console.log('[DEBUG] Built tags:', tags);
-
-    // Fetch MORE candidates for post-filtering (10x limit)
-    const candidateLimit = Math.min(limit * 10, 200);
-
-    // Build the GraphQL query with timestamp filter for Dec 29, 2024 upload window
-    const graphqlQuery = `
-      query {
-        transactions(
-          tags: [
-            ${tags.map(t => `{ name: "${t.name}", values: ${JSON.stringify(t.values)} }`).join(', ')}
-          ]
-          timestamp: {
-            from: 1767010000000
-            to: 1767070000000
-          }
-          limit: ${candidateLimit}
-          order: DESC
-        ) {
-          edges {
-            node {
-              id
-              timestamp
-              tags {
-                name
-                value
+    
+    // PAGINATION: Fetch deeper if we have anchor terms
+    const targetCandidates = anchorTerms.length > 0 ? Math.min(limit * 20, 500) : Math.min(limit * 10, 200);
+    const pageSize = 100; // Irys GraphQL limit per page
+    const maxPages = Math.ceil(targetCandidates / pageSize);
+    
+    console.log('[Irys Query] Target candidates:', targetCandidates, 'Pages:', maxPages);
+    
+    let allEdges: any[] = [];
+    let after: string | null = null;
+    
+    // Paginate through results
+    for (let page = 0; page < maxPages; page++) {
+      const graphqlQueryStr: string = `
+        query {
+          transactions(
+            tags: ${JSON.stringify(tags)},
+            limit: ${pageSize},
+            ${after ? `after: "${after}",` : ''}
+            order: DESC
+          ) {
+            edges {
+              cursor
+              node {
+                id
+                timestamp
+                tags { name value }
               }
             }
           }
         }
+      `;
+      
+      console.log(`[Irys Query] Fetching page ${page + 1}/${maxPages}`);
+      
+      const response: Response = await fetch('https://uploader.irys.xyz/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: graphqlQueryStr })
+      });
+      
+      const data: any = await response.json();
+      const edges: any[] = data.data?.transactions?.edges || [];
+      
+      if (edges.length === 0) {
+        console.log('[Irys Query] No more results, stopping pagination');
+        break;
       }
-    `;
-
-    console.log(`[Irys] Fetching ${candidateLimit} candidates from Irys GraphQL...`);
-
-    // Query Irys GraphQL endpoint
-    const graphqlRes = await fetch('https://uploader.irys.xyz/graphql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: graphqlQuery })
-    });
-
-    if (!graphqlRes.ok) {
-      throw new Error(`Irys GraphQL error: ${graphqlRes.status}`);
+      
+      allEdges.push(...edges);
+      after = edges[edges.length - 1]?.cursor;
+      
+      console.log(`[Irys Query] Page ${page + 1}: Retrieved ${edges.length} transactions (Total: ${allEdges.length})`);
+      
+      // If we have enough candidates with anchor terms, we can stop early
+      if (anchorTerms.length > 0 && allEdges.length >= limit * 10) {
+        console.log('[Irys Query] Sufficient candidates, stopping pagination early');
+        break;
+      }
     }
-
-    const graphqlData = await graphqlRes.json();
-    const edges: GraphQLEdge[] = graphqlData.data?.transactions?.edges || [];
-
-    console.log('[DEBUG] GraphQL response:', {
-      edgesCount: graphqlData?.data?.transactions?.edges?.length || 0,
-      firstEdge: graphqlData?.data?.transactions?.edges?.[0]
-    });
-
-    console.log(`[Irys] Retrieved ${edges.length} candidate transactions`);
-
-    if (edges.length === 0) {
+    
+    console.log('[Irys Query] Total transactions fetched:', allEdges.length);
+    
+    // DEBUG: Check for known TX ID
+    const knownTxId = '9KGFjwMRTMJRbMnrPQSan8Q4cgj3iELm3omeyC5KWJsT';
+    const hasKnownTx = allEdges.some((e: any) => e.node.id === knownTxId);
+    console.log('[Irys Query] Contains known TX', knownTxId, ':', hasKnownTx);
+    
+    if (allEdges.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: true,
-          markets: [],
-          count: 0,
-          category: inferredCategory,
-          source: 'irys'
-        }),
+        JSON.stringify({ markets: [], count: 0, category }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Check if this is an election-intent query (requires strict filtering)
-    const hasElectionIntent = query && /election|presidential|vote|ballot|candidate|wins|won/i.test(query);
-    console.log(`[Irys] Election intent: ${hasElectionIntent}`);
-
-    // Fetch actual market data from each transaction
-    const candidateMarkets = await Promise.all(
-      edges.map(async (edge) => {
+    
+    // Fetch market data with concurrency limit
+    console.log('[Irys Query] Fetching market data from gateway (concurrency: 20)...');
+    
+    const candidateMarkets = await fetchWithConcurrency(
+      allEdges,
+      async (edge: any) => {
         try {
           const txId = edge.node.id;
-          const dataRes = await fetch(`https://gateway.irys.xyz/${txId}`);
-          if (!dataRes.ok) return null;
+          const marketResponse = await fetch(`https://gateway.irys.xyz/${txId}`);
+          const marketData = await marketResponse.json();
           
-          const market = await dataRes.json();
+          const normalized = normalizeMarket(marketData, txId);
           
-          // Extract tags into a map
-          const tagMap: Record<string, string> = {};
-          edge.node.tags.forEach(t => { tagMap[t.name] = t.value; });
-
-          // Normalize market data
-          const normalized = normalizeMarket(market, txId, tagMap);
+          // Calculate relevance score
+          const relevanceScore = calculateRelevance(
+            normalized.question || '',
+            query,
+            anchorTerms,
+            category || ''
+          );
           
-          // Calculate relevance score for election queries
-          let relevanceScore = 0;
-          if (inferredCategory === 'elections') {
-            relevanceScore = calculateElectionRelevance(normalized.question || '', query || '');
-          }
-
           return {
             ...normalized,
-            relevanceScore,
-            irys: {
-              txId: edge.node.id,
-              timestamp: edge.node.timestamp,
-              proofUrl: `https://gateway.irys.xyz/${edge.node.id}`,
-              category: tagMap['category'],
-              finalPrice: tagMap['final-price']
-            }
+            relevanceScore
           };
         } catch (err) {
-          console.error(`[Irys] Failed to fetch market ${edge.node.id}:`, err);
+          console.error('[Irys Query] Failed to fetch market:', err);
           return null;
         }
-      })
+      },
+      20 // Concurrency limit
     );
-
-    // Filter out null results and disqualified markets (negative score)
-    const fetchedMarkets = candidateMarkets.filter((m): m is any => m !== null);
-
-    console.log('[DEBUG] Fetched markets from gateway:', {
-      count: fetchedMarkets.length,
-      firstQuestion: fetchedMarkets[0]?.question,
-      firstCategory: fetchedMarkets[0]?.category
-    });
-
-    let validMarkets = fetchedMarkets.filter((m) => m.relevanceScore >= 0);
-
-    console.log(`[Irys] Valid markets after null/disqualified filter: ${validMarkets.length}`);
-
-    // For election-intent queries, ENFORCE strict filtering - only keep markets with positive relevance
-    if (inferredCategory === 'elections' && hasElectionIntent) {
-      const beforeCount = validMarkets.length;
-      validMarkets = validMarkets.filter(m => m.relevanceScore > 0);
-      console.log(`[Irys] After election keyword filter: ${validMarkets.length} (removed ${beforeCount - validMarkets.length})`);
-    }
-
-    console.log('[DEBUG] After relevance filter:', {
-      filteredCount: validMarkets.length,
-      topScores: validMarkets.slice(0, 5).map(m => ({
-        question: m.question?.slice(0, 60),
-        score: m.relevanceScore
-      }))
-    });
-
+    
+    // Filter out nulls and disqualified markets
+    let validMarkets = candidateMarkets.filter((m: any) => m !== null && m.relevanceScore >= 0);
+    
+    console.log('[Irys Query] Valid markets after filtering:', validMarkets.length);
+    
+    // DEBUG: Count Trump markets
+    const trumpQuestionCount = validMarkets.filter((m: any) => /trump/i.test(m.question || '')).length;
+    console.log('[Irys Query] Markets containing "trump":', trumpQuestionCount);
+    
     // Sort by relevance score (highest first)
-    validMarkets.sort((a, b) => (b?.relevanceScore || 0) - (a?.relevanceScore || 0));
-
-    // Take top N results
+    validMarkets.sort((a: any, b: any) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+    
+    // Log top 5 scores for debugging
+    console.log('[Irys Query] Top 5 market scores:');
+    validMarkets.slice(0, 5).forEach((m: any, i: number) => {
+      console.log(`  ${i + 1}. Score ${m.relevanceScore}: "${m.question?.slice(0, 60)}..."`);
+    });
+    
+    // Take top N
     const topMarkets = validMarkets.slice(0, limit);
-
-    console.log(`[Irys] Returning top ${topMarkets.length} markets`);
-
-    // Calculate accuracy stats
-    let accuracyStats = null;
-    const marketsWithPrediction = topMarkets.filter(m => m.isCorrectPrediction !== null);
-    if (marketsWithPrediction.length > 0) {
-      const correctCount = marketsWithPrediction.filter(m => m.isCorrectPrediction).length;
+    
+    console.log('[Irys Query] Returning top', topMarkets.length, 'markets');
+    
+    // Calculate accuracy stats (only for markets with explicit outcomes)
+    let accuracyStats: any = null;
+    if (category === 'elections') {
+      const marketsWithPrediction = topMarkets.filter((m: any) => m.isCorrectPrediction !== null);
+      const correctCount = marketsWithPrediction.filter((m: any) => m.isCorrectPrediction).length;
+      const totalCount = marketsWithPrediction.length;
+      
       accuracyStats = {
         correct: correctCount,
-        total: marketsWithPrediction.length,
-        percentage: Math.round((correctCount / marketsWithPrediction.length) * 100)
+        total: totalCount,
+        percentage: totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0
       };
+      
+      console.log('[Irys Query] Accuracy stats:', accuracyStats);
     }
-
-    // Build result
-    const result: any = { 
-      success: true,
+    
+    const result: any = {
       markets: topMarkets,
       count: topMarkets.length,
-      totalAvailable: edges.length,
-      inferredCategory,
+      category,
       sampleTxId: topMarkets[0]?.txId,
-      accuracyStats,
-      source: 'irys'
+      accuracyStats
     };
-
+    
     // Add debug info if requested
     if (debug) {
       result.debug = {
-        candidatesRetrieved: edges.length,
+        candidatesRetrieved: allEdges.length,
         validAfterFilter: validMarkets.length,
-        hasElectionIntent,
-        topSample: topMarkets.slice(0, 5).map(m => ({
-          question: m.question?.substring(0, 80),
+        trumpMarketCount: trumpQuestionCount,
+        hasKnownTx,
+        anchorTerms,
+        topScores: topMarkets.slice(0, 5).map((m: any) => ({
+          question: m.question?.slice(0, 80),
           score: m.relevanceScore,
           txId: m.txId
         }))
       };
     }
-
-    console.log('[DEBUG] Final return:', {
-      marketsCount: result.markets?.length || 0,
-      accuracyStats: result.accuracyStats
-    });
-
+    
+    console.log('[Irys Query] ========================================');
+    
     return new Response(
       JSON.stringify(result),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
+    
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[Irys] Error querying:', error);
+    console.error('[Irys Query] Error:', error);
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: errorMessage,
-        markets: [],
-        count: 0
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ error: errorMessage, markets: [], count: 0 }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
