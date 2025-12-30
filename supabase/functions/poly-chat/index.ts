@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.52.0";
 
 const anthropic = new Anthropic({
-  apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
+  apiKey: Deno.env.get("ANTHROPIC_API_KEY"),
 });
 
 // ============= DEEP RESEARCH API =============
@@ -14,19 +14,19 @@ async function getDeepResearch(query: string): Promise<{ answer: string; citatio
     console.log("[DeepResearch] API key not configured");
     return null;
   }
-  
+
   try {
     console.log(`[DeepResearch] Starting research for: ${query.substring(0, 100)}...`);
-    const response = await fetch('https://factsai.org/answer', {
-      method: 'POST',
+    const response = await fetch("https://factsai.org", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEP_RESEARCH_API_KEY}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${DEEP_RESEARCH_API_KEY}`,
       },
       body: JSON.stringify({
         query: query,
-        text: true
-      })
+        text: true,
+      }),
     });
 
     if (!response.ok) {
@@ -35,9 +35,9 @@ async function getDeepResearch(query: string): Promise<{ answer: string; citatio
     }
 
     const data = await response.json();
-    
+
     if (!data.success) {
-      console.error(`[DeepResearch] Failed: ${data.error || 'Unknown error'}`);
+      console.error(`[DeepResearch] Failed: ${data.error || "Unknown error"}`);
       return null;
     }
 
@@ -81,17 +81,17 @@ interface DomeMarket {
 }
 
 // Helper to interpret Dome market state
-function getDomeMarketState(market: DomeMarket): { 
-  isActive: boolean; 
-  isResolved: boolean; 
-  isClosed: boolean; 
+function getDomeMarketState(market: DomeMarket): {
+  isActive: boolean;
+  isResolved: boolean;
+  isClosed: boolean;
   statusText: string;
   winner: string | null;
 } {
   const isResolved = market.winning_side !== null;
   const isActive = market.status === "open";
   const isClosed = market.status === "closed" && !isResolved;
-  
+
   let statusText: string;
   if (isActive) {
     statusText = "ACTIVE - Currently Trading";
@@ -100,7 +100,7 @@ function getDomeMarketState(market: DomeMarket): {
   } else {
     statusText = "CLOSED - Awaiting Resolution";
   }
-  
+
   return { isActive, isResolved, isClosed, statusText, winner: market.winning_side };
 }
 
@@ -113,12 +113,12 @@ interface DomeMarketPrice {
 // Direct fetch-based client (SDK has Deno-incompatible dependencies)
 class DomeClient {
   private headers: Record<string, string>;
-  
+
   constructor() {
-    this.headers = DOME_API_KEY 
-      ? { "Authorization": `Bearer ${DOME_API_KEY}`, "Content-Type": "application/json" }
+    this.headers = DOME_API_KEY
+      ? { Authorization: `Bearer ${DOME_API_KEY}`, "Content-Type": "application/json" }
       : { "Content-Type": "application/json" };
-    console.log(`[Dome] Initialized with direct fetch, API key: ${DOME_API_KEY ? 'configured' : 'MISSING'}`);
+    console.log(`[Dome] Initialized with direct fetch, API key: ${DOME_API_KEY ? "configured" : "MISSING"}`);
   }
 
   async getMarketBySlug(slug: string): Promise<DomeMarket | null> {
@@ -126,22 +126,22 @@ class DomeClient {
       console.log("[Dome] API key not configured, skipping lookup");
       return null;
     }
-    
+
     try {
       console.log(`[Dome] Fetching market: ${slug}`);
       const response = await fetch(
         `${DOME_API_BASE}/polymarket/markets?market_slug=${encodeURIComponent(slug)}&limit=1`,
-        { headers: this.headers }
+        { headers: this.headers },
       );
-      
+
       if (!response.ok) {
         console.error(`[Dome] Markets API error: ${response.status} ${response.statusText}`);
         return null;
       }
-      
+
       const data = await response.json();
       console.log(`[Dome] Response:`, JSON.stringify(data).substring(0, 500));
-      
+
       if (data?.markets && Array.isArray(data.markets) && data.markets.length > 0) {
         const market = data.markets[0];
         if (market && market.title && market.status !== undefined) {
@@ -149,49 +149,54 @@ class DomeClient {
           return market as DomeMarket;
         }
       }
-      
+
       // === FALLBACK: Keyword search if exact slug match fails ===
       console.log(`[Dome] Exact slug match failed, trying keyword search...`);
-      const keywords = slug.replace(/-/g, ' ').split(' ').filter(w => w.length > 2).slice(0, 6).join(' ');
+      const keywords = slug
+        .replace(/-/g, " ")
+        .split(" ")
+        .filter((w) => w.length > 2)
+        .slice(0, 6)
+        .join(" ");
       console.log(`[Dome] Searching with keywords: "${keywords}"`);
-      
-      const searchResponse = await fetch(
-        `${DOME_API_BASE}/polymarket/markets?status=open&limit=20`,
-        { headers: this.headers }
-      );
-      
+
+      const searchResponse = await fetch(`${DOME_API_BASE}/polymarket/markets?status=open&limit=20`, {
+        headers: this.headers,
+      });
+
       if (searchResponse.ok) {
         const searchData = await searchResponse.json();
         const markets = searchData?.markets || [];
-        
+
         // Find best match by checking if title contains most of our slug words
-        const slugWords = slug.toLowerCase().split('-').filter(w => w.length > 2);
+        const slugWords = slug
+          .toLowerCase()
+          .split("-")
+          .filter((w) => w.length > 2);
         let bestMatch: DomeMarket | null = null;
         let bestScore = 0;
-        
+
         for (const market of markets) {
-          const titleLower = (market.title || '').toLowerCase();
-          const slugLower = (market.market_slug || '').toLowerCase();
-          
+          const titleLower = (market.title || "").toLowerCase();
+          const slugLower = (market.market_slug || "").toLowerCase();
+
           // Count how many slug words appear in title or market_slug
-          const matchCount = slugWords.filter(word => 
-            titleLower.includes(word) || slugLower.includes(word)
-          ).length;
-          
+          const matchCount = slugWords.filter((word) => titleLower.includes(word) || slugLower.includes(word)).length;
+
           const score = matchCount / slugWords.length;
-          
+
           if (score > bestScore && score >= 0.5) {
             bestScore = score;
             bestMatch = market as DomeMarket;
           }
         }
-        
+
         if (bestMatch) {
           console.log(`[Dome] ✅ Found via keyword match (${(bestScore * 100).toFixed(0)}%): ${bestMatch.title}`);
           return bestMatch;
         }
       }
-      
+
       console.log(`[Dome] ⚠️ No markets found for slug: ${slug}`);
       return null;
     } catch (error) {
@@ -205,21 +210,21 @@ class DomeClient {
       console.log("[Dome] API key not configured, skipping conditionId lookup");
       return null;
     }
-    
+
     try {
       console.log(`[Dome] Fetching market by conditionId: ${conditionId}`);
       const response = await fetch(
         `${DOME_API_BASE}/polymarket/markets?condition_id=${encodeURIComponent(conditionId)}&limit=1`,
-        { headers: this.headers }
+        { headers: this.headers },
       );
-      
+
       if (!response.ok) {
         console.error(`[Dome] Markets API error: ${response.status}`);
         return null;
       }
-      
+
       const data = await response.json();
-      
+
       if (data?.markets && Array.isArray(data.markets) && data.markets.length > 0) {
         const market = data.markets[0];
         if (market && market.title) {
@@ -227,7 +232,7 @@ class DomeClient {
           return market as DomeMarket;
         }
       }
-      
+
       console.log(`[Dome] ⚠️ No market found for conditionId: ${conditionId}`);
       return null;
     } catch (error) {
@@ -238,26 +243,25 @@ class DomeClient {
 
   async getMarketPrice(tokenId: string): Promise<DomeMarketPrice | null> {
     if (!DOME_API_KEY) return null;
-    
+
     try {
       console.log(`[Dome] Fetching price for token: ${tokenId}`);
       // FIXED: Use singular endpoint with path param, same as dashboard
-      const response = await fetch(
-        `${DOME_API_BASE}/polymarket/market-price/${encodeURIComponent(tokenId)}`,
-        { headers: this.headers }
-      );
-      
+      const response = await fetch(`${DOME_API_BASE}/polymarket/market-price/${encodeURIComponent(tokenId)}`, {
+        headers: this.headers,
+      });
+
       if (!response.ok) {
         console.error(`[Dome] Price API error: ${response.status}`);
         return null;
       }
-      
+
       const data = await response.json();
       console.log(`[Dome] Got price: ${data?.price}`);
       return {
         token_id: tokenId,
         price: data?.price ?? 0,
-        timestamp: data?.at_time ?? Date.now() / 1000
+        timestamp: data?.at_time ?? Date.now() / 1000,
       } as DomeMarketPrice;
     } catch (error) {
       console.error("[Dome] Error fetching price:", error);
@@ -267,24 +271,24 @@ class DomeClient {
 
   async searchMarkets(query: string, limit: number = 10): Promise<DomeMarket[]> {
     if (!DOME_API_KEY) return [];
-    
+
     try {
       console.log(`[Dome] Searching markets for: ${query}`);
-      const response = await fetch(
-        `${DOME_API_BASE}/polymarket/markets?status=open&limit=${limit}`,
-        { headers: this.headers }
-      );
-      
+      const response = await fetch(`${DOME_API_BASE}/polymarket/markets?status=open&limit=${limit}`, {
+        headers: this.headers,
+      });
+
       if (!response.ok) {
         console.error(`[Dome] Search API error: ${response.status}`);
         return [];
       }
-      
+
       const data = await response.json();
       const markets = data?.markets || [];
-      return markets.filter((m: any) => 
-        m.title?.toLowerCase().includes(query.toLowerCase()) ||
-        m.market_slug?.toLowerCase().includes(query.toLowerCase())
+      return markets.filter(
+        (m: any) =>
+          m.title?.toLowerCase().includes(query.toLowerCase()) ||
+          m.market_slug?.toLowerCase().includes(query.toLowerCase()),
       ) as DomeMarket[];
     } catch (error) {
       console.error("[Dome] Error searching markets:", error);
@@ -299,45 +303,44 @@ class DomeClient {
     start_time?: number;
     end_time?: number;
     limit?: number;
-    use24hFilter?: boolean;  // NEW: Default 24h filter to match dashboard
+    use24hFilter?: boolean; // NEW: Default 24h filter to match dashboard
   }): Promise<any[]> {
     if (!DOME_API_KEY) return [];
-    
+
     try {
       const queryParams = new URLSearchParams();
-      if (params.market_slug) queryParams.append('market_slug', params.market_slug);
-      if (params.condition_id) queryParams.append('condition_id', params.condition_id);
-      if (params.token_id) queryParams.append('token_id', params.token_id);
-      
+      if (params.market_slug) queryParams.append("market_slug", params.market_slug);
+      if (params.condition_id) queryParams.append("condition_id", params.condition_id);
+      if (params.token_id) queryParams.append("token_id", params.token_id);
+
       // Apply 24h filter by default (matching market-dashboard logic)
       const use24h = params.use24hFilter !== false;
       if (use24h && !params.start_time) {
         const nowSeconds = Math.floor(Date.now() / 1000);
         const oneDayAgoSeconds = nowSeconds - 86400;
-        queryParams.append('start_time', oneDayAgoSeconds.toString());
-        queryParams.append('end_time', nowSeconds.toString());
+        queryParams.append("start_time", oneDayAgoSeconds.toString());
+        queryParams.append("end_time", nowSeconds.toString());
         console.log(`[Dome] 24h filter applied: ${new Date(oneDayAgoSeconds * 1000).toISOString()} to now`);
       } else if (params.start_time) {
-        queryParams.append('start_time', params.start_time.toString());
+        queryParams.append("start_time", params.start_time.toString());
       }
       if (params.end_time && !use24h) {
-        queryParams.append('end_time', params.end_time.toString());
+        queryParams.append("end_time", params.end_time.toString());
       }
-      
-      queryParams.append('limit', (params.limit || 100).toString());
-      
-      console.log(`[Dome] Fetching orders for: ${params.market_slug || params.token_id || 'all'} (24h=${use24h})`);
-      
-      const response = await fetch(
-        `${DOME_API_BASE}/polymarket/orders?${queryParams.toString()}`,
-        { headers: this.headers }
-      );
-      
+
+      queryParams.append("limit", (params.limit || 100).toString());
+
+      console.log(`[Dome] Fetching orders for: ${params.market_slug || params.token_id || "all"} (24h=${use24h})`);
+
+      const response = await fetch(`${DOME_API_BASE}/polymarket/orders?${queryParams.toString()}`, {
+        headers: this.headers,
+      });
+
       if (!response.ok) {
         console.error(`[Dome] Orders API error: ${response.status}`);
         return [];
       }
-      
+
       const data = await response.json();
       const orders = data?.orders || [];
       console.log(`[Dome] ✅ Fetched ${orders.length} orders (24h filtered)`);
@@ -348,7 +351,10 @@ class DomeClient {
     }
   }
 
-  async getWhaleActivity(marketSlug: string, minSize: number = 1000): Promise<{
+  async getWhaleActivity(
+    marketSlug: string,
+    minSize: number = 1000,
+  ): Promise<{
     whaleCount: number;
     totalWhaleVolume: number;
     buyVolume: number;
@@ -359,73 +365,77 @@ class DomeClient {
     if (!DOME_API_KEY) {
       return { whaleCount: 0, totalWhaleVolume: 0, buyVolume: 0, sellVolume: 0, largestTrade: 0, topWhales: [] };
     }
-    
+
     try {
       console.log(`[Dome] Calculating whale activity for: ${marketSlug} (min: $${minSize})`);
-      
+
       const orders = await this.getTradeHistory({ market_slug: marketSlug, limit: 1000, use24hFilter: true });
-      
+
       if (orders.length === 0) {
         console.log(`[Dome] No orders found for whale calculation`);
         return { whaleCount: 0, totalWhaleVolume: 0, buyVolume: 0, sellVolume: 0, largestTrade: 0, topWhales: [] };
       }
-      
+
       // Filter for whale trades
       const whaleTrades = orders.filter((order: any) => {
         const shares = parseFloat(order.shares_normalized || order.shares || 0);
         const price = parseFloat(order.price || 0);
-        return (shares * price) >= minSize;
+        return shares * price >= minSize;
       });
-      
+
       console.log(`[Dome] ✅ Identified ${whaleTrades.length} whale trades (>$${minSize})`);
-      
-      const buyTrades = whaleTrades.filter((t: any) => (t.side || '').toUpperCase() === 'BUY');
-      const sellTrades = whaleTrades.filter((t: any) => (t.side || '').toUpperCase() === 'SELL');
-      
-      const calcVolume = (trades: any[]) => trades.reduce((sum: number, t: any) => {
-        const shares = parseFloat(t.shares_normalized || t.shares || 0);
-        const price = parseFloat(t.price || 0);
-        return sum + (shares * price);
-      }, 0);
-      
+
+      const buyTrades = whaleTrades.filter((t: any) => (t.side || "").toUpperCase() === "BUY");
+      const sellTrades = whaleTrades.filter((t: any) => (t.side || "").toUpperCase() === "SELL");
+
+      const calcVolume = (trades: any[]) =>
+        trades.reduce((sum: number, t: any) => {
+          const shares = parseFloat(t.shares_normalized || t.shares || 0);
+          const price = parseFloat(t.price || 0);
+          return sum + shares * price;
+        }, 0);
+
       const buyVolume = calcVolume(buyTrades);
       const sellVolume = calcVolume(sellTrades);
-      
+
       // Group by user
       const whalesByUser = new Map<string, { volume: number; tradeCount: number }>();
       whaleTrades.forEach((trade: any) => {
-        const user = trade.user || trade.taker || 'unknown';
+        const user = trade.user || trade.taker || "unknown";
         const shares = parseFloat(trade.shares_normalized || trade.shares || 0);
         const price = parseFloat(trade.price || 0);
         const volume = shares * price;
-        
+
         const existing = whalesByUser.get(user) || { volume: 0, tradeCount: 0 };
         whalesByUser.set(user, {
           volume: existing.volume + volume,
-          tradeCount: existing.tradeCount + 1
+          tradeCount: existing.tradeCount + 1,
         });
       });
-      
+
       const topWhales = Array.from(whalesByUser.entries())
         .map(([user, data]) => ({ user, ...data }))
         .sort((a, b) => b.volume - a.volume)
         .slice(0, 10);
-      
-      const largestTrade = whaleTrades.length > 0
-        ? Math.max(...whaleTrades.map((t: any) => {
-            const shares = parseFloat(t.shares_normalized || t.shares || 0);
-            const price = parseFloat(t.price || 0);
-            return shares * price;
-          }))
-        : 0;
-      
+
+      const largestTrade =
+        whaleTrades.length > 0
+          ? Math.max(
+              ...whaleTrades.map((t: any) => {
+                const shares = parseFloat(t.shares_normalized || t.shares || 0);
+                const price = parseFloat(t.price || 0);
+                return shares * price;
+              }),
+            )
+          : 0;
+
       return {
         whaleCount: whaleTrades.length,
         totalWhaleVolume: buyVolume + sellVolume,
         buyVolume,
         sellVolume,
         largestTrade,
-        topWhales
+        topWhales,
       };
     } catch (error) {
       console.error("[Dome] Error calculating whale activity:", error);
@@ -438,23 +448,40 @@ class DomeClient {
     priceA: DomeMarketPrice | null;
     priceB: DomeMarketPrice | null;
     recentTrades: any[];
-    tradeFlow: { 
-      direction: string; strength: number; buyCount: number; sellCount: number; 
-      buyVolume: number; sellVolume: number; netFlow: number; buyPressure: number; totalTrades: number;
+    tradeFlow: {
+      direction: string;
+      strength: number;
+      buyCount: number;
+      sellCount: number;
+      buyVolume: number;
+      sellVolume: number;
+      netFlow: number;
+      buyPressure: number;
+      totalTrades: number;
       // NEW: Token-based volume matching sidebar
-      yesVolume24h: number; noVolume24h: number; totalVolume24h: number; uniqueTraders24h: number;
+      yesVolume24h: number;
+      noVolume24h: number;
+      totalVolume24h: number;
+      uniqueTraders24h: number;
     };
-    whales: { 
+    whales: {
       whaleCount: number;
       totalWhaleVolume: number;
       buyVolume: number;
       sellVolume: number;
       largestTrade: number;
       topWhale: { user: string; volume: number } | null;
-      isWhaleActive: boolean 
+      isWhaleActive: boolean;
     };
     volatility: { weeklySwing: number; isVolatile: boolean };
-    priceHistory: { current: number; sevenDaysAgo: number; change7d: number; high7d: number; low7d: number; trend: string } | null;
+    priceHistory: {
+      current: number;
+      sevenDaysAgo: number;
+      change7d: number;
+      high7d: number;
+      low7d: number;
+      trend: string;
+    } | null;
     metadata: { dataSource: string; tradeCount: number; lastUpdate: number; dataFreshness: string };
   } | null> {
     if (!DOME_API_KEY) return null;
@@ -465,7 +492,7 @@ class DomeClient {
       const [market, recentTrades, whaleData] = await Promise.all([
         this.getMarketBySlug(marketSlug),
         this.getTradeHistory({ market_slug: marketSlug, limit: 1000, use24hFilter: true }), // Match sidebar (24h filter)
-        this.getWhaleActivity(marketSlug, 1000)
+        this.getWhaleActivity(marketSlug, 1000),
       ]);
 
       if (!market) {
@@ -475,16 +502,23 @@ class DomeClient {
 
       let priceA: DomeMarketPrice | null = null;
       let priceB: DomeMarketPrice | null = null;
-      
+
       if (market.side_a?.id) {
         priceA = await this.getMarketPrice(market.side_a.id);
       }
       if (market.side_b?.id) {
         priceB = await this.getMarketPrice(market.side_b.id);
       }
-      
+
       // Fetch candlesticks for price history
-      let priceHistory: { current: number; sevenDaysAgo: number; change7d: number; high7d: number; low7d: number; trend: string } | null = null;
+      let priceHistory: {
+        current: number;
+        sevenDaysAgo: number;
+        change7d: number;
+        high7d: number;
+        low7d: number;
+        trend: string;
+      } | null = null;
       if (market.condition_id || market.side_a?.id) {
         const candlesticks = await this.getCandlesticks(market.condition_id, market.side_a?.id);
         if (candlesticks.length > 1) {
@@ -495,41 +529,44 @@ class DomeClient {
             const change7d = current - sevenDaysAgo;
             const high7d = Math.max(...prices) * 100;
             const low7d = Math.min(...prices) * 100;
-            const trend = change7d > 2 ? 'RISING' : change7d < -2 ? 'FALLING' : 'STABLE';
+            const trend = change7d > 2 ? "RISING" : change7d < -2 ? "FALLING" : "STABLE";
             priceHistory = { current, sevenDaysAgo, change7d, high7d, low7d, trend };
-            console.log(`[Dome] ✅ Price history: ${sevenDaysAgo.toFixed(1)}% → ${current.toFixed(1)}% (${change7d > 0 ? '+' : ''}${change7d.toFixed(1)}%)`);
+            console.log(
+              `[Dome] ✅ Price history: ${sevenDaysAgo.toFixed(1)}% → ${current.toFixed(1)}% (${change7d > 0 ? "+" : ""}${change7d.toFixed(1)}%)`,
+            );
           }
         }
       }
-
 
       // Filter dust trades (< $0.10 or < 0.1% price) - matching market-dashboard logic
       const validTrades = recentTrades.filter((t: any) => {
         const shares = parseFloat(t.shares_normalized || t.shares || 0);
         const price = parseFloat(t.price || 0);
         const usdValue = shares * price;
-        return usdValue >= 0.10 && price >= 0.001;
+        return usdValue >= 0.1 && price >= 0.001;
       });
-      
-      console.log(`[Dome] Filtered ${recentTrades.length} -> ${validTrades.length} valid trades (removed ${recentTrades.length - validTrades.length} dust)`);
-      
+
+      console.log(
+        `[Dome] Filtered ${recentTrades.length} -> ${validTrades.length} valid trades (removed ${recentTrades.length - validTrades.length} dust)`,
+      );
+
       // Get token IDs for YES/NO volume calculation (matching market-dashboard)
       const yesTokenId = market.side_a?.id;
       const noTokenId = market.side_b?.id;
-      
+
       // Calculate YES/NO volume by token_id (matching sidebar exactly)
       let yesVolume24h = 0;
       let noVolume24h = 0;
       const uniqueTraders = new Set<string>();
-      
+
       validTrades.forEach((t: any) => {
         const shares = parseFloat(t.shares_normalized || t.shares || 0);
         const price = parseFloat(t.price || 0);
         const usdValue = shares * price;
-        
+
         // Track unique traders
         if (t.user) uniqueTraders.add(t.user);
-        
+
         // Sum volume by token_id (NOT by BUY/SELL - this is the key fix!)
         if (t.token_id === yesTokenId) {
           yesVolume24h += usdValue;
@@ -537,27 +574,28 @@ class DomeClient {
           noVolume24h += usdValue;
         }
       });
-      
+
       const totalVolume24h = yesVolume24h + noVolume24h;
       const uniqueTraders24h = uniqueTraders.size;
-      
+
       // Calculate trade flow stats matching market-dashboard
       const recentFlow = validTrades.slice(0, 100);
-      const buyTrades = recentFlow.filter((t: any) => (t.side || '').toUpperCase() === 'BUY');
-      const sellTrades = recentFlow.filter((t: any) => (t.side || '').toUpperCase() === 'SELL');
+      const buyTrades = recentFlow.filter((t: any) => (t.side || "").toUpperCase() === "BUY");
+      const sellTrades = recentFlow.filter((t: any) => (t.side || "").toUpperCase() === "SELL");
       const totalTrades = recentFlow.length;
-      
+
       // Calculate volumes in USD (for buy/sell flow, separate from YES/NO)
-      const calcUsdVolume = (trades: any[]) => trades.reduce((sum: number, t: any) => {
-        const shares = parseFloat(t.shares_normalized || t.shares || 0);
-        const price = parseFloat(t.price || 0);
-        return sum + (shares * price);
-      }, 0);
-      
+      const calcUsdVolume = (trades: any[]) =>
+        trades.reduce((sum: number, t: any) => {
+          const shares = parseFloat(t.shares_normalized || t.shares || 0);
+          const price = parseFloat(t.price || 0);
+          return sum + shares * price;
+        }, 0);
+
       const buyVolume = calcUsdVolume(buyTrades);
       const sellVolume = calcUsdVolume(sellTrades);
       const netFlow = buyVolume - sellVolume;
-      
+
       // Calculate pressure (count-based like market-dashboard)
       const buyPressure = totalTrades > 0 ? (buyTrades.length / totalTrades) * 100 : 50;
       const flowDirection = buyPressure > 55 ? "BUYING" : buyPressure < 45 ? "SELLING" : "NEUTRAL";
@@ -565,7 +603,8 @@ class DomeClient {
 
       let volatility = 0;
       if (validTrades.length > 5) {
-        const prices = validTrades.slice(0, 50)
+        const prices = validTrades
+          .slice(0, 50)
           .map((t: any) => parseFloat(t.price || 0))
           .filter((p: number) => p > 0 && p < 1);
         if (prices.length > 1) {
@@ -578,16 +617,18 @@ class DomeClient {
       const dataFreshness = `${Math.floor(now - latestTradeTime)}s ago`;
 
       // Verification logging - should match sidebar numbers
-      console.log('[VOLUME VERIFY] ============================================');
+      console.log("[VOLUME VERIFY] ============================================");
       console.log(`[VOLUME VERIFY] Market: ${marketSlug}`);
       console.log(`[VOLUME VERIFY] YES Volume (24h): $${(yesVolume24h / 1000).toFixed(1)}K`);
       console.log(`[VOLUME VERIFY] NO Volume (24h): $${(noVolume24h / 1000).toFixed(1)}K`);
       console.log(`[VOLUME VERIFY] Total Volume (24h): $${(totalVolume24h / 1000).toFixed(1)}K`);
-      console.log(`[VOLUME VERIFY] Math check: ${(yesVolume24h + noVolume24h).toFixed(0)} = ${totalVolume24h.toFixed(0)} ✓`);
+      console.log(
+        `[VOLUME VERIFY] Math check: ${(yesVolume24h + noVolume24h).toFixed(0)} = ${totalVolume24h.toFixed(0)} ✓`,
+      );
       console.log(`[VOLUME VERIFY] Unique traders: ${uniqueTraders24h}`);
-      console.log('[VOLUME VERIFY] ============================================');
-      
-      console.log('[Dome] ✅ Comprehensive data fetched:');
+      console.log("[VOLUME VERIFY] ============================================");
+
+      console.log("[Dome] ✅ Comprehensive data fetched:");
       console.log(`[Dome]    - ${validTrades.length} valid trades (24h)`);
       console.log(`[Dome]    - Buy pressure: ${buyPressure.toFixed(0)}%`);
       console.log(`[Dome]    - Net flow: $${netFlow.toFixed(2)}`);
@@ -599,10 +640,10 @@ class DomeClient {
         priceA,
         priceB,
         recentTrades: validTrades,
-        tradeFlow: { 
-          direction: flowDirection, 
-          strength: flowStrength, 
-          buyCount: buyTrades.length, 
+        tradeFlow: {
+          direction: flowDirection,
+          strength: flowStrength,
+          buyCount: buyTrades.length,
           sellCount: sellTrades.length,
           buyVolume,
           sellVolume,
@@ -613,7 +654,7 @@ class DomeClient {
           yesVolume24h,
           noVolume24h,
           totalVolume24h,
-          uniqueTraders24h
+          uniqueTraders24h,
         },
         whales: {
           whaleCount: whaleData.whaleCount,
@@ -622,11 +663,11 @@ class DomeClient {
           sellVolume: whaleData.sellVolume,
           largestTrade: whaleData.largestTrade,
           topWhale: whaleData.topWhales[0] || null,
-          isWhaleActive: whaleData.whaleCount > 5
+          isWhaleActive: whaleData.whaleCount > 5,
         },
         volatility: { weeklySwing: volatility, isVolatile: volatility > 0.15 },
         priceHistory,
-        metadata: { dataSource: 'dome-fetch', tradeCount: validTrades.length, lastUpdate: now, dataFreshness }
+        metadata: { dataSource: "dome-fetch", tradeCount: validTrades.length, lastUpdate: now, dataFreshness },
       };
     } catch (error) {
       console.error("[Dome] Error fetching comprehensive data:", error);
@@ -637,19 +678,19 @@ class DomeClient {
   // Get markets by event slug using Dome API's event_slug parameter (for multi-outcome events)
   async getMarketsByEvent(eventSlug: string, limit: number = 50): Promise<DomeMarket[]> {
     if (!DOME_API_KEY) return [];
-    
+
     try {
       console.log(`[Dome] Fetching markets by event_slug: ${eventSlug}`);
       const response = await fetch(
         `${DOME_API_BASE}/polymarket/markets?event_slug=${encodeURIComponent(eventSlug)}&limit=${limit}`,
-        { headers: this.headers }
+        { headers: this.headers },
       );
-      
+
       if (!response.ok) {
         console.error(`[Dome] Event markets API error: ${response.status}`);
         return [];
       }
-      
+
       const data = await response.json();
       const markets = data?.markets || [];
       console.log(`[Dome] ✅ Found ${markets.length} markets for event via event_slug`);
@@ -663,42 +704,42 @@ class DomeClient {
   // Get related markets for the same event (fallback with keyword matching)
   async getRelatedMarkets(eventSlug: string, limit: number = 20): Promise<DomeMarket[]> {
     if (!DOME_API_KEY) return [];
-    
+
     // First try the proper event_slug parameter
     const eventMarkets = await this.getMarketsByEvent(eventSlug, limit);
     if (eventMarkets.length > 0) {
       return eventMarkets;
     }
-    
+
     // Fallback to keyword matching
     try {
       console.log(`[Dome] Fallback: keyword matching for event: ${eventSlug}`);
-      const response = await fetch(
-        `${DOME_API_BASE}/polymarket/markets?status=open&limit=${limit}`,
-        { headers: this.headers }
-      );
-      
+      const response = await fetch(`${DOME_API_BASE}/polymarket/markets?status=open&limit=${limit}`, {
+        headers: this.headers,
+      });
+
       if (!response.ok) {
         console.error(`[Dome] Related markets API error: ${response.status}`);
         return [];
       }
-      
+
       const data = await response.json();
       const markets = data?.markets || [];
-      
+
       // Filter markets related to the same event
-      const eventKeywords = eventSlug.toLowerCase().replace(/-/g, ' ').split(' ')
+      const eventKeywords = eventSlug
+        .toLowerCase()
+        .replace(/-/g, " ")
+        .split(" ")
         .filter((w: string) => w.length > 3);
-      
+
       const related = markets.filter((m: DomeMarket) => {
-        const slug = m.market_slug?.toLowerCase() || '';
-        const title = m.title?.toLowerCase() || '';
-        const matchCount = eventKeywords.filter((kw: string) => 
-          slug.includes(kw) || title.includes(kw)
-        ).length;
+        const slug = m.market_slug?.toLowerCase() || "";
+        const title = m.title?.toLowerCase() || "";
+        const matchCount = eventKeywords.filter((kw: string) => slug.includes(kw) || title.includes(kw)).length;
         return matchCount >= Math.ceil(eventKeywords.length * 0.4);
       });
-      
+
       console.log(`[Dome] ✅ Found ${related.length} related markets via keyword matching`);
       return related as DomeMarket[];
     } catch (error) {
@@ -715,47 +756,50 @@ class DomeClient {
     velocity: number;
   }> {
     if (!DOME_API_KEY) {
-      return { change1h: 0, change24h: 0, direction: 'NEUTRAL', velocity: 0 };
+      return { change1h: 0, change24h: 0, direction: "NEUTRAL", velocity: 0 };
     }
-    
+
     try {
       console.log(`[Dome] Calculating momentum for: ${marketSlug}`);
       const trades = await this.getTradeHistory({ market_slug: marketSlug, limit: 500 });
-      
+
       if (trades.length < 2) {
-        return { change1h: 0, change24h: 0, direction: 'NEUTRAL', velocity: 0 };
+        return { change1h: 0, change24h: 0, direction: "NEUTRAL", velocity: 0 };
       }
-      
+
       const now = Date.now() / 1000;
       const oneHourAgo = now - 3600;
       const oneDayAgo = now - 86400;
-      
+
       // Get prices at different time points
       const latestPrice = parseFloat(trades[0]?.price || 0.5);
-      
+
       const trades1hAgo = trades.filter((t: any) => t.timestamp && t.timestamp <= oneHourAgo);
       const price1hAgo = trades1hAgo.length > 0 ? parseFloat(trades1hAgo[0]?.price || latestPrice) : latestPrice;
-      
+
       const trades24hAgo = trades.filter((t: any) => t.timestamp && t.timestamp <= oneDayAgo);
       const price24hAgo = trades24hAgo.length > 0 ? parseFloat(trades24hAgo[0]?.price || latestPrice) : latestPrice;
-      
+
       const change1h = (latestPrice - price1hAgo) * 100;
       const change24h = (latestPrice - price24hAgo) * 100;
-      
-      const direction = change1h > 2 ? 'BULLISH' : change1h < -2 ? 'BEARISH' : 'NEUTRAL';
+
+      const direction = change1h > 2 ? "BULLISH" : change1h < -2 ? "BEARISH" : "NEUTRAL";
       const velocity = Math.abs(change1h) + Math.abs(change24h) / 24;
-      
+
       console.log(`[Dome] ✅ Momentum: ${change1h.toFixed(2)}% (1h), ${change24h.toFixed(2)}% (24h)`);
-      
+
       return { change1h, change24h, direction, velocity };
     } catch (error) {
       console.error("[Dome] Error calculating momentum:", error);
-      return { change1h: 0, change24h: 0, direction: 'NEUTRAL', velocity: 0 };
+      return { change1h: 0, change24h: 0, direction: "NEUTRAL", velocity: 0 };
     }
   }
 
   // Calculate trade flow metrics (net buying/selling)
-  async calculateTradeFlow(marketSlug: string, timeWindowHours: number = 24): Promise<{
+  async calculateTradeFlow(
+    marketSlug: string,
+    timeWindowHours: number = 24,
+  ): Promise<{
     netFlow: number;
     buyVolume: number;
     sellVolume: number;
@@ -765,26 +809,29 @@ class DomeClient {
     signal: string;
   }> {
     if (!DOME_API_KEY) {
-      return { netFlow: 0, buyVolume: 0, sellVolume: 0, buyCount: 0, sellCount: 0, imbalance: 0, signal: 'NEUTRAL' };
+      return { netFlow: 0, buyVolume: 0, sellVolume: 0, buyCount: 0, sellCount: 0, imbalance: 0, signal: "NEUTRAL" };
     }
-    
+
     try {
       console.log(`[Dome] Calculating trade flow for: ${marketSlug} (${timeWindowHours}h)`);
       const trades = await this.getTradeHistory({ market_slug: marketSlug, limit: 500 });
-      
+
       const now = Date.now() / 1000;
-      const cutoff = now - (timeWindowHours * 3600);
-      
+      const cutoff = now - timeWindowHours * 3600;
+
       const recentTrades = trades.filter((t: any) => !t.timestamp || t.timestamp > cutoff);
-      
-      let buyVolume = 0, sellVolume = 0, buyCount = 0, sellCount = 0;
-      
+
+      let buyVolume = 0,
+        sellVolume = 0,
+        buyCount = 0,
+        sellCount = 0;
+
       recentTrades.forEach((t: any) => {
         const shares = parseFloat(t.shares_normalized || t.shares || t.size || 0);
         const price = parseFloat(t.price || 0);
         const volume = shares * price;
-        
-        if ((t.side || '').toUpperCase() === 'BUY') {
+
+        if ((t.side || "").toUpperCase() === "BUY") {
           buyVolume += volume;
           buyCount++;
         } else {
@@ -792,44 +839,44 @@ class DomeClient {
           sellCount++;
         }
       });
-      
+
       const netFlow = buyVolume - sellVolume;
       const totalVolume = buyVolume + sellVolume;
       const imbalance = totalVolume > 0 ? (buyVolume - sellVolume) / totalVolume : 0;
-      
-      const signal = imbalance > 0.2 ? 'BUY_PRESSURE' : imbalance < -0.2 ? 'SELL_PRESSURE' : 'BALANCED';
-      
+
+      const signal = imbalance > 0.2 ? "BUY_PRESSURE" : imbalance < -0.2 ? "SELL_PRESSURE" : "BALANCED";
+
       console.log(`[Dome] ✅ Trade flow: $${netFlow.toFixed(0)} net, ${signal}`);
-      
+
       return { netFlow, buyVolume, sellVolume, buyCount, sellCount, imbalance, signal };
     } catch (error) {
       console.error("[Dome] Error calculating trade flow:", error);
-      return { netFlow: 0, buyVolume: 0, sellVolume: 0, buyCount: 0, sellCount: 0, imbalance: 0, signal: 'NEUTRAL' };
+      return { netFlow: 0, buyVolume: 0, sellVolume: 0, buyCount: 0, sellCount: 0, imbalance: 0, signal: "NEUTRAL" };
     }
   }
 
   // Fetch candlesticks for price history
   async getCandlesticks(conditionId: string, tokenId?: string): Promise<any[]> {
     if (!DOME_API_KEY) return [];
-    
+
     try {
       const nowSeconds = Math.floor(Date.now() / 1000);
-      const sevenDaysAgoSeconds = nowSeconds - (7 * 24 * 60 * 60);
-      
+      const sevenDaysAgoSeconds = nowSeconds - 7 * 24 * 60 * 60;
+
       // Use tokenId if available, otherwise use conditionId
       const id = tokenId || conditionId;
       console.log(`[Dome] Fetching candlesticks for: ${id}`);
-      
+
       const response = await fetch(
         `${DOME_API_BASE}/polymarket/candlesticks/${encodeURIComponent(id)}?start_time=${sevenDaysAgoSeconds}&end_time=${nowSeconds}&interval=1440`,
-        { headers: this.headers }
+        { headers: this.headers },
       );
-      
+
       if (!response.ok) {
         console.log(`[Dome] Candlesticks API returned ${response.status}, trying alternative`);
         return [];
       }
-      
+
       const data = await response.json();
       const candlesticks = data?.candlesticks || data || [];
       console.log(`[Dome] ✅ Fetched ${candlesticks.length} candlesticks`);
@@ -840,22 +887,24 @@ class DomeClient {
     }
   }
 
-  async testConnection(testMarketSlug: string = 'brazil-presidential-election'): Promise<{ markets: boolean; orders: boolean; whales: boolean; details: string[] }> {
-    console.log('🧪 [TEST] Starting Dome API connection test...');
+  async testConnection(
+    testMarketSlug: string = "brazil-presidential-election",
+  ): Promise<{ markets: boolean; orders: boolean; whales: boolean; details: string[] }> {
+    console.log("🧪 [TEST] Starting Dome API connection test...");
     console.log(`[TEST] Using direct fetch (no SDK)`);
     console.log(`[TEST] Test market slug: ${testMarketSlug}`);
-    
+
     const results: string[] = [];
     let marketsOk = false;
     let ordersOk = false;
     let whalesOk = false;
-    
+
     // Test 1: Get market
     console.log(`[TEST] Fetching market: ${testMarketSlug}`);
     try {
       const market = await this.getMarketBySlug(testMarketSlug);
-      console.log('[TEST] Market response:', JSON.stringify(market, null, 2));
-      
+      console.log("[TEST] Market response:", JSON.stringify(market, null, 2));
+
       if (market) {
         marketsOk = true;
         results.push(`✅ Markets: Found "${market.title}"`);
@@ -868,39 +917,41 @@ class DomeClient {
         results.push(`❌ Markets: No market found for "${testMarketSlug}"`);
       }
     } catch (e) {
-      console.error('[TEST] Market error:', e);
-      results.push(`❌ Markets: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      console.error("[TEST] Market error:", e);
+      results.push(`❌ Markets: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
-    
+
     // Test 2: Get orders
     console.log(`[TEST] Fetching orders for: ${testMarketSlug}`);
     try {
       const orders = await this.getTradeHistory({ market_slug: testMarketSlug, limit: 20 });
-      console.log('[TEST] Orders count:', orders.length);
+      console.log("[TEST] Orders count:", orders.length);
       if (orders.length > 0) {
-        console.log('[TEST] First order:', JSON.stringify(orders[0], null, 2));
+        console.log("[TEST] First order:", JSON.stringify(orders[0], null, 2));
       }
-      
+
       if (orders.length > 0) {
         ordersOk = true;
         const firstOrder = orders[0];
-        const orderValue = (parseFloat(firstOrder.shares_normalized || firstOrder.shares || 0) * parseFloat(firstOrder.price || 0)).toFixed(2);
+        const orderValue = (
+          parseFloat(firstOrder.shares_normalized || firstOrder.shares || 0) * parseFloat(firstOrder.price || 0)
+        ).toFixed(2);
         results.push(`✅ Orders: ${orders.length} trades fetched`);
-        results.push(`   - Latest: $${orderValue} ${firstOrder.side || 'UNKNOWN'}`);
+        results.push(`   - Latest: $${orderValue} ${firstOrder.side || "UNKNOWN"}`);
       } else {
         results.push(`⚠️ Orders: 0 trades returned`);
       }
     } catch (e) {
-      console.error('[TEST] Orders error:', e);
-      results.push(`❌ Orders: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      console.error("[TEST] Orders error:", e);
+      results.push(`❌ Orders: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
-    
+
     // Test 3: Whale activity
     console.log(`[TEST] Calculating whales for: ${testMarketSlug}`);
     try {
       const whales = await this.getWhaleActivity(testMarketSlug, 1000);
-      console.log('[TEST] Whale data:', JSON.stringify(whales, null, 2));
-      
+      console.log("[TEST] Whale data:", JSON.stringify(whales, null, 2));
+
       whalesOk = true;
       if (whales.whaleCount > 0) {
         results.push(`✅ Whales: ${whales.whaleCount} trades >$1K`);
@@ -910,18 +961,18 @@ class DomeClient {
         results.push(`⚠️ Whales: 0 whale trades (>$1K)`);
       }
     } catch (e) {
-      console.error('[TEST] Whales error:', e);
-      results.push(`❌ Whales: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      console.error("[TEST] Whales error:", e);
+      results.push(`❌ Whales: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
-    
-    results.push('');
-    results.push('**Configuration:**');
+
+    results.push("");
+    results.push("**Configuration:**");
     results.push(`✅ Using: Direct fetch (Deno compatible)`);
     results.push(DOME_API_KEY ? `✅ API key: Configured` : `❌ API key: MISSING`);
     results.push(`✅ Base URL: ${DOME_API_BASE}`);
-    
-    console.log('[TEST] Complete results:', results.join('\n'));
-    
+
+    console.log("[TEST] Complete results:", results.join("\n"));
+
     return { markets: marketsOk, orders: ordersOk, whales: whalesOk, details: results };
   }
 }
@@ -936,68 +987,68 @@ const userRateLimitMap = new Map<string, { count: number; resetTime: number }>()
 
 // Rate limit config - User-based after auth requirement
 const RATE_LIMIT = {
-  IP_MAX_REQUESTS: 20,         // IP-based limit (secondary, more lenient)
-  IP_WINDOW_MS: 60 * 1000,     // 1 minute window
-  USER_MAX_REQUESTS: 15,       // Per-user limit (primary)
-  USER_WINDOW_MS: 60 * 1000,   // 1 minute window
-  CONV_MAX_REQUESTS: 10,       // Max requests per conversation per window
-  CONV_WINDOW_MS: 60 * 1000,   // 1 minute window
+  IP_MAX_REQUESTS: 20, // IP-based limit (secondary, more lenient)
+  IP_WINDOW_MS: 60 * 1000, // 1 minute window
+  USER_MAX_REQUESTS: 15, // Per-user limit (primary)
+  USER_WINDOW_MS: 60 * 1000, // 1 minute window
+  CONV_MAX_REQUESTS: 10, // Max requests per conversation per window
+  CONV_WINDOW_MS: 60 * 1000, // 1 minute window
 };
 
 // ============= BOT PROTECTION =============
 // Blocked User Agents (bots/scrapers)
 const BLOCKED_USER_AGENTS = [
-  'node-fetch',
-  'python-requests',
-  'python-urllib',
-  'curl',
-  'wget',
-  'postman',
-  'insomnia',
-  'axios',
-  'got',
-  'superagent',
-  'httpie',
-  'libwww',
-  'scrapy',
-  'httpclient',
-  'java/',
-  'okhttp',
-  'apache-httpclient',
-  'go-http-client',
-  'ruby',
-  'perl',
-  'php/',
+  "node-fetch",
+  "python-requests",
+  "python-urllib",
+  "curl",
+  "wget",
+  "postman",
+  "insomnia",
+  "axios",
+  "got",
+  "superagent",
+  "httpie",
+  "libwww",
+  "scrapy",
+  "httpclient",
+  "java/",
+  "okhttp",
+  "apache-httpclient",
+  "go-http-client",
+  "ruby",
+  "perl",
+  "php/",
 ];
 
 // Blocked IPs (known attackers)
 const BLOCKED_IPS = [
-  '173.249.219.6',   // node-fetch bot (3,370 requests Dec 2024)
-  '173.249.219.10',  // Same subnet
-  '173.249.219.',    // Block entire subnet (prefix match)
+  "173.249.219.6", // node-fetch bot (3,370 requests Dec 2024)
+  "173.249.219.10", // Same subnet
+  "173.249.219.", // Block entire subnet (prefix match)
 ];
 
 // Allowed Origins
 const ALLOWED_ORIGINS = [
-  'https://polyai.pro',
-  'https://www.polyai.pro',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:8080',
+  "https://polyai.pro",
+  "https://www.polyai.pro",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:8080",
   // Lovable preview domains
-  'https://lovable.dev',
-  'https://gptengineer.run',
+  "https://lovable.dev",
+  "https://gptengineer.run",
 ];
 
 function isBlockedUserAgent(userAgent: string): boolean {
   if (!userAgent) return true; // No UA = suspicious
   const lowerUA = userAgent.toLowerCase();
-  return BLOCKED_USER_AGENTS.some(blocked => lowerUA.includes(blocked));
+  return BLOCKED_USER_AGENTS.some((blocked) => lowerUA.includes(blocked));
 }
 
 function isBlockedIP(ip: string): boolean {
-  return BLOCKED_IPS.some(blocked => {
-    if (blocked.endsWith('.')) {
+  return BLOCKED_IPS.some((blocked) => {
+    if (blocked.endsWith(".")) {
       // Prefix match for subnet blocking
       return ip.startsWith(blocked);
     }
@@ -1011,60 +1062,66 @@ function isAllowedOrigin(origin: string | null): boolean {
   // Allow official origins and trusted preview domains
   return (
     ALLOWED_ORIGINS.includes(origin) ||
-    origin.endsWith('.lovable.dev') ||
-    origin.endsWith('.gptengineer.run') ||
-    origin.endsWith('.lovableproject.com')
+    origin.endsWith(".lovable.dev") ||
+    origin.endsWith(".gptengineer.run") ||
+    origin.endsWith(".lovableproject.com")
   );
 }
 
-function checkRateLimit(key: string, map: Map<string, { count: number; resetTime: number }>, maxRequests: number, windowMs: number): { allowed: boolean; remaining: number; resetIn: number } {
+function checkRateLimit(
+  key: string,
+  map: Map<string, { count: number; resetTime: number }>,
+  maxRequests: number,
+  windowMs: number,
+): { allowed: boolean; remaining: number; resetIn: number } {
   const now = Date.now();
   const record = map.get(key);
-  
+
   // Clean expired entries occasionally
-  if (Math.random() < 0.01) { // 1% chance to clean
+  if (Math.random() < 0.01) {
+    // 1% chance to clean
     for (const [k, v] of map.entries()) {
       if (now > v.resetTime) map.delete(k);
     }
   }
-  
+
   if (!record || now > record.resetTime) {
     // New window
     map.set(key, { count: 1, resetTime: now + windowMs });
     return { allowed: true, remaining: maxRequests - 1, resetIn: windowMs };
   }
-  
+
   if (record.count >= maxRequests) {
     return { allowed: false, remaining: 0, resetIn: record.resetTime - now };
   }
-  
+
   record.count++;
   return { allowed: true, remaining: maxRequests - record.count, resetIn: record.resetTime - now };
 }
 
 function getClientIP(req: Request): string {
   // Check various headers for client IP (Supabase Edge uses x-forwarded-for)
-  const forwarded = req.headers.get('x-forwarded-for');
+  const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) {
-    return forwarded.split(',')[0].trim();
+    return forwarded.split(",")[0].trim();
   }
-  const realIP = req.headers.get('x-real-ip');
+  const realIP = req.headers.get("x-real-ip");
   if (realIP) return realIP;
-  
+
   // Fallback - use a hash of user-agent + some other identifiable info
-  const ua = req.headers.get('user-agent') || 'unknown';
+  const ua = req.headers.get("user-agent") || "unknown";
   return `ua-${ua.substring(0, 50)}`;
 }
 
 // Model constants with cascade priority
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
-const SONNET_MODEL = 'claude-sonnet-4-20250514';
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";
+const SONNET_MODEL = "claude-sonnet-4-20250514";
 
 // Model cascade for fallback - try in order
 const MODEL_CASCADE = [
-  { name: HAIKU_MODEL, type: 'claude', label: 'Haiku' },
-  { name: SONNET_MODEL, type: 'claude', label: 'Sonnet' },
-  { name: 'google/gemini-2.5-flash', type: 'lovable', label: 'Gemini' },
+  { name: HAIKU_MODEL, type: "claude", label: "Haiku" },
+  { name: SONNET_MODEL, type: "claude", label: "Sonnet" },
+  { name: "google/gemini-2.5-flash", type: "lovable", label: "Gemini" },
 ];
 
 // In-memory queue for when all models are overwhelmed
@@ -1090,16 +1147,16 @@ function addToQueue(conversationId: string, message: string): QueueEntry {
     conversationId,
     message,
     timestamp: Date.now(),
-    position: Math.min(globalQueueCounter, 50) // Cap at 50 for display
+    position: Math.min(globalQueueCounter, 50), // Cap at 50 for display
   };
   requestQueue.set(entry.id, entry);
-  
+
   // Clean old entries (> 5 min old)
   const fiveMinAgo = Date.now() - 300000;
   for (const [id, e] of requestQueue.entries()) {
     if (e.timestamp < fiveMinAgo) requestQueue.delete(id);
   }
-  
+
   console.log(`[Queue] Added ${entry.id} at position ${entry.position}, queue size: ${requestQueue.size}`);
   return entry;
 }
@@ -1115,15 +1172,18 @@ function isOverloadError(error: any): boolean {
 }
 
 // Always use Haiku for speed - Sonnet is no longer used
-function selectModel(userMessage: string, context: { isVoice?: boolean; needsAnalysis?: boolean; isToolFollowUp?: boolean } = {}): string {
-  console.log('[MODEL] Always using Haiku for speed');
+function selectModel(
+  userMessage: string,
+  context: { isVoice?: boolean; needsAnalysis?: boolean; isToolFollowUp?: boolean } = {},
+): string {
+  console.log("[MODEL] Always using Haiku for speed");
   return HAIKU_MODEL;
 }
 
 // Define custom tools for Claude
 const POLY_TOOLS: Anthropic.Tool[] = [
   {
-    name: 'search_polymarket',
+    name: "search_polymarket",
     description: `Search Polymarket for prediction markets. CRITICAL: If first search fails, TRY MULTIPLE VARIATIONS before giving up.
     
 MULTI-ATTEMPT STRATEGY:
@@ -1145,112 +1205,118 @@ IMPORTANT: When user specifically mentions "Polymarket" or asks about a specific
 
 DO NOT give up after one search. Try at least 3 different phrasings.`,
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         query: {
-          type: 'string',
-          description: 'Search query - use simplified key terms, not full sentences'
+          type: "string",
+          description: "Search query - use simplified key terms, not full sentences",
         },
         limit: {
-          type: 'number',
-          description: 'Number of results to return (default: 10)'
-        }
+          type: "number",
+          description: "Number of results to return (default: 10)",
+        },
       },
-      required: ['query']
-    }
+      required: ["query"],
+    },
   },
   {
-    name: 'get_market_data',
-    description: 'Get detailed data for a specific Polymarket market URL. Use when the user provides a Polymarket link.',
+    name: "get_market_data",
+    description:
+      "Get detailed data for a specific Polymarket market URL. Use when the user provides a Polymarket link.",
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         url: {
-          type: 'string',
-          description: 'Full Polymarket market URL'
-        }
+          type: "string",
+          description: "Full Polymarket market URL",
+        },
       },
-      required: ['url']
-    }
+      required: ["url"],
+    },
   },
   {
-    name: 'get_whale_activity',
-    description: 'Get whale trading activity. Use when user asks about whale trades, big money, smart money, or large positions.',
+    name: "get_whale_activity",
+    description:
+      "Get whale trading activity. Use when user asks about whale trades, big money, smart money, or large positions.",
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         market_topic: {
-          type: 'string',
-          description: 'Optional market topic to filter whale trades for'
-        }
+          type: "string",
+          description: "Optional market topic to filter whale trades for",
+        },
       },
-      required: []
-    }
+      required: [],
+    },
   },
   {
-    name: 'get_recent_trades',
-    description: 'Get recent trades for a specific market using Dome API. Use when user asks about recent trades, trade activity, buy/sell pressure, or trading volume. Requires a market slug (e.g., "will-bitcoin-reach-100k").',
+    name: "get_recent_trades",
+    description:
+      'Get recent trades for a specific market using Dome API. Use when user asks about recent trades, trade activity, buy/sell pressure, or trading volume. Requires a market slug (e.g., "will-bitcoin-reach-100k").',
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         market_slug: {
-          type: 'string',
-          description: 'The Polymarket market slug (e.g., "will-bitcoin-reach-100k" or from URL path)'
+          type: "string",
+          description: 'The Polymarket market slug (e.g., "will-bitcoin-reach-100k" or from URL path)',
         },
         limit: {
-          type: 'number',
-          description: 'Number of trades to fetch (default: 50, max: 200)'
-        }
+          type: "number",
+          description: "Number of trades to fetch (default: 50, max: 200)",
+        },
       },
-      required: ['market_slug']
-    }
+      required: ["market_slug"],
+    },
   },
   // check_arbitrage tool removed - no longer used
   {
-    name: 'get_trade_flow',
-    description: 'Get buy/sell pressure and trade flow analysis for a market using Dome API. Shows net buying vs selling activity over the last 24 hours.',
+    name: "get_trade_flow",
+    description:
+      "Get buy/sell pressure and trade flow analysis for a market using Dome API. Shows net buying vs selling activity over the last 24 hours.",
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         market_slug: {
-          type: 'string',
-          description: 'The Polymarket market slug'
-        }
+          type: "string",
+          description: "The Polymarket market slug",
+        },
       },
-      required: ['market_slug']
-    }
+      required: ["market_slug"],
+    },
   },
   {
-    name: 'get_order_book',
-    description: 'Get the order book (bids and asks) for a specific Polymarket market. Shows current bid/ask prices, spread, and market depth. Use when user asks about order book, bids, asks, spread, or liquidity.',
+    name: "get_order_book",
+    description:
+      "Get the order book (bids and asks) for a specific Polymarket market. Shows current bid/ask prices, spread, and market depth. Use when user asks about order book, bids, asks, spread, or liquidity.",
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         market_slug: {
-          type: 'string',
-          description: 'The Polymarket market slug (e.g., "will-bitcoin-reach-100k")'
-        }
+          type: "string",
+          description: 'The Polymarket market slug (e.g., "will-bitcoin-reach-100k")',
+        },
       },
-      required: ['market_slug']
-    }
+      required: ["market_slug"],
+    },
   },
   {
-    name: 'get_price_history',
-    description: 'Get price history/candlesticks for a market. Shows how the price has changed over the past 7 days with open, high, low, close prices.',
+    name: "get_price_history",
+    description:
+      "Get price history/candlesticks for a market. Shows how the price has changed over the past 7 days with open, high, low, close prices.",
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         market_slug: {
-          type: 'string',
-          description: 'The Polymarket market slug'
-        }
+          type: "string",
+          description: "The Polymarket market slug",
+        },
       },
-      required: ['market_slug']
-    }
+      required: ["market_slug"],
+    },
   },
   // === IRYS HISTORICAL DATA TOOL - Claude queries dynamically ===
   {
-    name: 'query_irys_historical_markets',
+    name: "query_irys_historical_markets",
     description: `Query 50,000+ historical RESOLVED Polymarket markets stored permanently on Irys blockchain.
 
 🎯 WHEN TO USE:
@@ -1276,29 +1342,32 @@ ALWAYS:
 
 NOTE: Only works when Irys mode is enabled (irysMode=true).`,
     input_schema: {
-      type: 'object' as const,
+      type: "object" as const,
       properties: {
         category: {
-          type: 'string',
-          enum: ['elections', 'crypto', 'sports', 'finance', 'entertainment', 'science-tech', 'health', 'other', 'all'],
-          description: 'Market category to filter by. Use "all" for no category filter.'
+          type: "string",
+          enum: ["elections", "crypto", "sports", "finance", "entertainment", "science-tech", "health", "other", "all"],
+          description: 'Market category to filter by. Use "all" for no category filter.',
         },
         keywords: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Keywords using smart matching: entity words (trump, bitcoin, lakers) use OR logic, year words (2024, 2020, 2016) use OR logic. Example: ["trump", "election", "2024", "2020"] finds markets with (trump OR election) AND (2024 OR 2020).'
+          type: "array",
+          items: { type: "string" },
+          description:
+            'Keywords using smart matching: entity words (trump, bitcoin, lakers) use OR logic, year words (2024, 2020, 2016) use OR logic. Example: ["trump", "election", "2024", "2020"] finds markets with (trump OR election) AND (2024 OR 2020).',
         },
         minVolume: {
-          type: 'number',
-          description: 'Minimum trading volume in USD (e.g., 100000 for $100k+ markets). Higher volume = more reliable data.'
+          type: "number",
+          description:
+            "Minimum trading volume in USD (e.g., 100000 for $100k+ markets). Higher volume = more reliable data.",
         },
         limit: {
-          type: 'number',
-          description: 'Number of markets to return (default: 200 for deep pattern analysis, max: 500). Request more for multi-year analysis.'
-        }
+          type: "number",
+          description:
+            "Number of markets to return (default: 200 for deep pattern analysis, max: 500). Request more for multi-year analysis.",
+        },
       },
-      required: ['category']
-    }
+      required: ["category"],
+    },
   },
 ];
 
@@ -1316,11 +1385,16 @@ async function executeToolCall(
   supabaseKey: string,
   fetchPolymarketData: (path: string) => Promise<any>,
   fetchKalshiData: (ticker: string, series?: string) => Promise<any>,
-  extractMarketInfo: (text: string) => { platform: string | null; path: string | null; seriesTicker?: string; marketTicker?: string },
-  currentMarketContext?: { url?: string; slug?: string; eventSlug?: string; question?: string } | null
+  extractMarketInfo: (text: string) => {
+    platform: string | null;
+    path: string | null;
+    seriesTicker?: string;
+    marketTicker?: string;
+  },
+  currentMarketContext?: { url?: string; slug?: string; eventSlug?: string; question?: string } | null,
 ): Promise<string> {
   console.log(`[Tool] Executing ${tool.name} with input:`, tool.input);
-  
+
   // Auto-fill slugs from context if not provided
   const getMarketSlug = (): string | null => {
     if (tool.input.market_slug) return tool.input.market_slug;
@@ -1337,7 +1411,7 @@ async function executeToolCall(
     }
     return null;
   };
-  
+
   const getEventSlug = (): string | null => {
     if (tool.input.event_slug) return tool.input.event_slug;
     if (currentMarketContext?.eventSlug) {
@@ -1353,143 +1427,145 @@ async function executeToolCall(
     }
     return null;
   };
-  
+
   try {
-    if (tool.name === 'search_polymarket') {
+    if (tool.name === "search_polymarket") {
       const searchResponse = await fetch(`${supabaseUrl}/functions/v1/polymarket-data`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}` 
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseKey}`,
         },
-        body: JSON.stringify({ 
-          action: 'search', 
-          query: tool.input.query, 
-          limit: tool.input.limit || 10 
+        body: JSON.stringify({
+          action: "search",
+          query: tool.input.query,
+          limit: tool.input.limit || 10,
         }),
       });
       const searchData = await searchResponse.json();
       return JSON.stringify(searchData);
     }
-    
-    if (tool.name === 'get_market_data') {
+
+    if (tool.name === "get_market_data") {
       const { platform, path } = extractMarketInfo(tool.input.url);
-      if (platform === 'kalshi') {
+      if (platform === "kalshi") {
         return JSON.stringify({
-          error: 'Kalshi links are not supported right now. Please paste a Polymarket market URL.'
+          error: "Kalshi links are not supported right now. Please paste a Polymarket market URL.",
         });
-      } else if (platform === 'polymarket' && path) {
+      } else if (platform === "polymarket" && path) {
         const data = await fetchPolymarketData(path);
         return JSON.stringify(data);
       }
-      return JSON.stringify({ error: 'Invalid or unrecognized market URL' });
+      return JSON.stringify({ error: "Invalid or unrecognized market URL" });
     }
-    
-    if (tool.name === 'get_whale_activity') {
+
+    if (tool.name === "get_whale_activity") {
       // First try to use current market context for whale detection
       const marketSlug = getMarketSlug();
-      
+
       if (marketSlug) {
         // Use Dome API to get whale activity for the specific market
         console.log(`[Whale Tool] Getting whale activity for specific market: ${marketSlug}`);
         const whaleData = await dome.getWhaleActivity(marketSlug, 5000);
-        
+
         if (whaleData.whaleCount > 0) {
           return JSON.stringify({
             market_slug: marketSlug,
             whale_count: whaleData.whaleCount,
-            total_whale_volume: whaleData.totalWhaleVolume > 1000 
-              ? `$${(whaleData.totalWhaleVolume / 1000).toFixed(1)}K` 
-              : `$${whaleData.totalWhaleVolume.toFixed(0)}`,
-            buy_volume: whaleData.buyVolume > 1000 
-              ? `$${(whaleData.buyVolume / 1000).toFixed(1)}K` 
-              : `$${whaleData.buyVolume.toFixed(0)}`,
-            sell_volume: whaleData.sellVolume > 1000 
-              ? `$${(whaleData.sellVolume / 1000).toFixed(1)}K` 
-              : `$${whaleData.sellVolume.toFixed(0)}`,
-            largest_trade: whaleData.largestTrade > 1000 
-              ? `$${(whaleData.largestTrade / 1000).toFixed(1)}K` 
-              : `$${whaleData.largestTrade.toFixed(0)}`,
-            top_whales: whaleData.topWhales.slice(0, 5).map(w => ({
-              user: w.user.slice(0, 8) + '...',
+            total_whale_volume:
+              whaleData.totalWhaleVolume > 1000
+                ? `$${(whaleData.totalWhaleVolume / 1000).toFixed(1)}K`
+                : `$${whaleData.totalWhaleVolume.toFixed(0)}`,
+            buy_volume:
+              whaleData.buyVolume > 1000
+                ? `$${(whaleData.buyVolume / 1000).toFixed(1)}K`
+                : `$${whaleData.buyVolume.toFixed(0)}`,
+            sell_volume:
+              whaleData.sellVolume > 1000
+                ? `$${(whaleData.sellVolume / 1000).toFixed(1)}K`
+                : `$${whaleData.sellVolume.toFixed(0)}`,
+            largest_trade:
+              whaleData.largestTrade > 1000
+                ? `$${(whaleData.largestTrade / 1000).toFixed(1)}K`
+                : `$${whaleData.largestTrade.toFixed(0)}`,
+            top_whales: whaleData.topWhales.slice(0, 5).map((w) => ({
+              user: w.user.slice(0, 8) + "...",
               volume: w.volume > 1000 ? `$${(w.volume / 1000).toFixed(1)}K` : `$${w.volume.toFixed(0)}`,
-              trades: w.tradeCount
+              trades: w.tradeCount,
             })),
             data_source: {
-              api: 'Dome API',
+              api: "Dome API",
               market_slug: marketSlug,
-              threshold: '$5000+',
-              verification: 'REAL_LIVE_DATA'
-            }
+              threshold: "$5000+",
+              verification: "REAL_LIVE_DATA",
+            },
           });
         }
       }
-      
+
       // Fallback to whale-tracker for general whale activity
       const whaleResponse = await fetch(`${supabaseUrl}/functions/v1/whale-tracker?refresh=true&timeRange=24h`, {
-        headers: { "Authorization": `Bearer ${supabaseKey}` }
+        headers: { Authorization: `Bearer ${supabaseKey}` },
       });
       const whaleData = await whaleResponse.json();
-      
+
       // Filter by topic if provided
       if (tool.input.market_topic && whaleData.trades) {
         const topicLower = tool.input.market_topic.toLowerCase();
-        whaleData.trades = whaleData.trades.filter((t: any) => 
-          t.market_question?.toLowerCase().includes(topicLower)
-        );
+        whaleData.trades = whaleData.trades.filter((t: any) => t.market_question?.toLowerCase().includes(topicLower));
       }
-      
+
       return JSON.stringify({
         trades: whaleData.trades?.slice(0, 10) || [],
-        stats: whaleData.stats
+        stats: whaleData.stats,
       });
     }
-    
+
     // NEW: Dome API tools for real market data
-    if (tool.name === 'get_recent_trades') {
+    if (tool.name === "get_recent_trades") {
       const marketSlug = getMarketSlug();
       if (!marketSlug) {
-        return JSON.stringify({ 
-          error: 'No market context available',
-          suggestion: 'Please provide a market URL or specify which market you want to check trades for',
-          data_source: { available: false, reason: 'No market slug provided' }
+        return JSON.stringify({
+          error: "No market context available",
+          suggestion: "Please provide a market URL or specify which market you want to check trades for",
+          data_source: { available: false, reason: "No market slug provided" },
         });
       }
-      
+
       console.log(`[Dome Tool] Fetching recent trades for: ${marketSlug}`);
       const limit = Math.min(tool.input.limit || 100, 500);
       const fetchStartTime = Date.now();
-      const trades = await dome.getTradeHistory({ 
-        market_slug: marketSlug, 
+      const trades = await dome.getTradeHistory({
+        market_slug: marketSlug,
         limit,
-        use24hFilter: true  // Match sidebar's 24h filtered data
+        use24hFilter: true, // Match sidebar's 24h filtered data
       });
       const fetchDuration = Date.now() - fetchStartTime;
-      
+
       if (trades.length === 0) {
-        return JSON.stringify({ 
-          error: 'No trades found for this market',
-          suggestion: 'The market slug may be incorrect or the market has no recent activity',
+        return JSON.stringify({
+          error: "No trades found for this market",
+          suggestion: "The market slug may be incorrect or the market has no recent activity",
           data_source: {
-            api: 'Dome API',
+            api: "Dome API",
             endpoint: `${DOME_API_BASE}/polymarket/orders?market_slug=${marketSlug}`,
             fetched_at: new Date().toISOString(),
-            status: 'EMPTY_RESULT'
-          }
+            status: "EMPTY_RESULT",
+          },
         });
       }
-      
+
       // Helper to format time ago
       const formatTimeAgo = (timestamp: number): string => {
-        if (!timestamp) return 'Unknown';
+        if (!timestamp) return "Unknown";
         const now = Date.now() / 1000;
         const diff = now - timestamp;
-        if (diff < 60) return 'Just now';
+        if (diff < 60) return "Just now";
         if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
         if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
         return `${Math.floor(diff / 86400)}d ago`;
       };
-      
+
       // Calculate USD value for each trade
       const tradesWithUSD = trades.map((t: any) => {
         const shares = parseFloat(t.shares_normalized || t.shares || 0);
@@ -1497,178 +1573,186 @@ async function executeToolCall(
         const usdValue = shares * price;
         return { ...t, usdValue };
       });
-      
+
       // Calculate buy/sell breakdown with volumes
-      const buyTrades = tradesWithUSD.filter((t: any) => (t.side || '').toUpperCase() === 'BUY');
-      const sellTrades = tradesWithUSD.filter((t: any) => (t.side || '').toUpperCase() === 'SELL');
+      const buyTrades = tradesWithUSD.filter((t: any) => (t.side || "").toUpperCase() === "BUY");
+      const sellTrades = tradesWithUSD.filter((t: any) => (t.side || "").toUpperCase() === "SELL");
       const buyVolume = buyTrades.reduce((sum: number, t: any) => sum + t.usdValue, 0);
       const sellVolume = sellTrades.reduce((sum: number, t: any) => sum + t.usdValue, 0);
       const totalVolume = buyVolume + sellVolume;
       const netFlow = buyVolume - sellVolume;
-      
+
       // Sort by timestamp DESC for recent trades (newest first)
-      const recentSorted = [...tradesWithUSD]
-        .sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
-      
+      const recentSorted = [...tradesWithUSD].sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+
       // Sort by USD value DESC for largest trades (biggest first)
-      const largestSorted = [...tradesWithUSD]
-        .sort((a: any, b: any) => b.usdValue - a.usdValue);
-      
+      const largestSorted = [...tradesWithUSD].sort((a: any, b: any) => b.usdValue - a.usdValue);
+
       // Get timestamp range from actual trades
-      const newestTradeTime = recentSorted.length > 0 && recentSorted[0].timestamp 
-        ? new Date(recentSorted[0].timestamp * 1000).toISOString() 
-        : 'unknown';
-      const oldestTradeTime = recentSorted.length > 0 && recentSorted[recentSorted.length - 1].timestamp
-        ? new Date(recentSorted[recentSorted.length - 1].timestamp * 1000).toISOString() 
-        : 'unknown';
-      
+      const newestTradeTime =
+        recentSorted.length > 0 && recentSorted[0].timestamp
+          ? new Date(recentSorted[0].timestamp * 1000).toISOString()
+          : "unknown";
+      const oldestTradeTime =
+        recentSorted.length > 0 && recentSorted[recentSorted.length - 1].timestamp
+          ? new Date(recentSorted[recentSorted.length - 1].timestamp * 1000).toISOString()
+          : "unknown";
+
       const formatTrade = (t: any) => ({
         side: t.side,
-        value: t.usdValue > 1000 ? `$${(t.usdValue/1000).toFixed(1)}K` : `$${t.usdValue.toFixed(0)}`,
+        value: t.usdValue > 1000 ? `$${(t.usdValue / 1000).toFixed(1)}K` : `$${t.usdValue.toFixed(0)}`,
         usdValue: Math.round(t.usdValue * 100) / 100,
         price: `${(parseFloat(t.price || 0) * 100).toFixed(1)}%`,
-        timestamp: t.timestamp ? new Date(t.timestamp * 1000).toISOString() : 'unknown',
-        timeAgo: formatTimeAgo(t.timestamp)
+        timestamp: t.timestamp ? new Date(t.timestamp * 1000).toISOString() : "unknown",
+        timeAgo: formatTimeAgo(t.timestamp),
       });
-      
-      const formatVolume = (vol: number) => vol > 1000 ? `$${(vol/1000).toFixed(1)}K` : `$${vol.toFixed(0)}`;
-      
+
+      const formatVolume = (vol: number) => (vol > 1000 ? `$${(vol / 1000).toFixed(1)}K` : `$${vol.toFixed(0)}`);
+
       return JSON.stringify({
         market_slug: marketSlug,
         total_trades: trades.length,
         buy_count: buyTrades.length,
         sell_count: sellTrades.length,
-        buy_pressure: trades.length > 0 ? `${((buyTrades.length / trades.length) * 100).toFixed(0)}%` : '0%',
-        trend: buyTrades.length > sellTrades.length ? 'BULLISH' : buyTrades.length < sellTrades.length ? 'BEARISH' : 'NEUTRAL',
-        
+        buy_pressure: trades.length > 0 ? `${((buyTrades.length / trades.length) * 100).toFixed(0)}%` : "0%",
+        trend:
+          buyTrades.length > sellTrades.length
+            ? "BULLISH"
+            : buyTrades.length < sellTrades.length
+              ? "BEARISH"
+              : "NEUTRAL",
+
         // VOLUME SUMMARY (matching dashboard format)
         volume_summary: {
           total_volume: formatVolume(totalVolume),
           buy_volume: formatVolume(buyVolume),
           sell_volume: formatVolume(sellVolume),
-          net_flow: netFlow > 0 
-            ? `+${formatVolume(netFlow)} buying pressure`
-            : `-${formatVolume(Math.abs(netFlow))} selling pressure`,
-          raw: { total: totalVolume, buy: buyVolume, sell: sellVolume, net: netFlow }
+          net_flow:
+            netFlow > 0
+              ? `+${formatVolume(netFlow)} buying pressure`
+              : `-${formatVolume(Math.abs(netFlow))} selling pressure`,
+          raw: { total: totalVolume, buy: buyVolume, sell: sellVolume, net: netFlow },
         },
-        
+
         // RECENT TRADES - sorted by time (newest first)
         recent_trades: recentSorted.slice(0, 15).map(formatTrade),
-        
+
         // LARGEST TRADES - sorted by USD value (biggest first)
         largest_trades: largestSorted.slice(0, 10).map(formatTrade),
-        
+
         // DATA VERIFICATION METADATA
         data_source: {
-          api: 'Dome API',
+          api: "Dome API",
           endpoint: `${DOME_API_BASE}/polymarket/orders`,
           market_slug: marketSlug,
           fetched_at: new Date().toISOString(),
           fetch_duration_ms: fetchDuration,
           trade_time_range: {
             newest: newestTradeTime,
-            oldest: oldestTradeTime
+            oldest: oldestTradeTime,
           },
-          verification: 'REAL_LIVE_DATA'
-        }
+          verification: "REAL_LIVE_DATA",
+        },
       });
     }
-    
+
     // check_arbitrage tool removed - arbitrage analysis is no longer supported
-    
-    if (tool.name === 'get_trade_flow') {
+
+    if (tool.name === "get_trade_flow") {
       const marketSlug = getMarketSlug();
       if (!marketSlug) {
-        return JSON.stringify({ 
-          error: 'No market context available',
-          suggestion: 'Please provide a market URL or specify which market you want to check trade flow for',
-          data_source: { available: false, reason: 'No market slug provided' }
+        return JSON.stringify({
+          error: "No market context available",
+          suggestion: "Please provide a market URL or specify which market you want to check trade flow for",
+          data_source: { available: false, reason: "No market slug provided" },
         });
       }
-      
+
       console.log(`[Dome Tool] Getting trade flow for: ${marketSlug}`);
       const fetchStartTime = Date.now();
       const tradeFlow = await dome.calculateTradeFlow(marketSlug, 24);
       const fetchDuration = Date.now() - fetchStartTime;
-      
+
       if (tradeFlow.buyVolume === 0 && tradeFlow.sellVolume === 0) {
-        return JSON.stringify({ 
-          error: 'No trade flow data available',
-          suggestion: 'Market may have low activity or slug is incorrect',
+        return JSON.stringify({
+          error: "No trade flow data available",
+          suggestion: "Market may have low activity or slug is incorrect",
           data_source: {
-            api: 'Dome API',
+            api: "Dome API",
             endpoint: `${DOME_API_BASE}/polymarket/orders`,
             fetched_at: new Date().toISOString(),
-            status: 'NO_DATA'
-          }
+            status: "NO_DATA",
+          },
         });
       }
-      
-      const formatVol = (v: number) => v > 1000000 ? `$${(v/1000000).toFixed(1)}M` : v > 1000 ? `$${(v/1000).toFixed(1)}K` : `$${v.toFixed(0)}`;
-      
+
+      const formatVol = (v: number) =>
+        v > 1000000 ? `$${(v / 1000000).toFixed(1)}M` : v > 1000 ? `$${(v / 1000).toFixed(1)}K` : `$${v.toFixed(0)}`;
+
       return JSON.stringify({
         market_slug: marketSlug,
-        time_window: '24 hours',
+        time_window: "24 hours",
         buy_volume: formatVol(tradeFlow.buyVolume),
         sell_volume: formatVol(tradeFlow.sellVolume),
         net_flow: formatVol(Math.abs(tradeFlow.netFlow)),
-        net_direction: tradeFlow.netFlow > 0 ? 'NET BUYING' : tradeFlow.netFlow < 0 ? 'NET SELLING' : 'BALANCED',
+        net_direction: tradeFlow.netFlow > 0 ? "NET BUYING" : tradeFlow.netFlow < 0 ? "NET SELLING" : "BALANCED",
         buy_count: tradeFlow.buyCount,
         sell_count: tradeFlow.sellCount,
         imbalance: `${(tradeFlow.imbalance * 100).toFixed(0)}%`,
         signal: tradeFlow.signal,
         // DATA VERIFICATION METADATA
         data_source: {
-          api: 'Dome API',
+          api: "Dome API",
           endpoint: `${DOME_API_BASE}/polymarket/orders`,
           market_slug: marketSlug,
           fetched_at: new Date().toISOString(),
           fetch_duration_ms: fetchDuration,
-          time_window_analyzed: '24 hours',
-          verification: 'REAL_LIVE_DATA'
-        }
+          time_window_analyzed: "24 hours",
+          verification: "REAL_LIVE_DATA",
+        },
       });
     }
-    
-    if (tool.name === 'get_order_book') {
+
+    if (tool.name === "get_order_book") {
       const marketSlug = getMarketSlug();
       if (!marketSlug) {
-        return JSON.stringify({ 
-          error: 'No market context available',
-          suggestion: 'Please provide a market URL or specify which market you want to check the order book for',
-          data_source: { available: false, reason: 'No market slug provided' }
+        return JSON.stringify({
+          error: "No market context available",
+          suggestion: "Please provide a market URL or specify which market you want to check the order book for",
+          data_source: { available: false, reason: "No market slug provided" },
         });
       }
-      
+
       console.log(`[Dome Tool] Getting order book for: ${marketSlug}`);
       const fetchStartTime = Date.now();
-      
+
       // Get market data first to get token IDs
       const market = await dome.getMarketBySlug(marketSlug);
       if (!market) {
-        return JSON.stringify({ 
-          error: 'Market not found',
-          suggestion: 'Check the market slug is correct',
-          data_source: { api: 'Dome API', status: 'MARKET_NOT_FOUND' }
+        return JSON.stringify({
+          error: "Market not found",
+          suggestion: "Check the market slug is correct",
+          data_source: { api: "Dome API", status: "MARKET_NOT_FOUND" },
         });
       }
-      
+
       // Fetch recent orders to calculate order book depth
       const orders = await dome.getTradeHistory({ market_slug: marketSlug, limit: 200 });
       const fetchDuration = Date.now() - fetchStartTime;
-      
+
       // Get current prices
-      let priceA = 0.5, priceB = 0.5;
+      let priceA = 0.5,
+        priceB = 0.5;
       if (market.side_a?.id) {
         const priceData = await dome.getMarketPrice(market.side_a.id);
         if (priceData) priceA = priceData.price;
         priceB = 1 - priceA;
       }
-      
+
       // Simulate order book from recent trades
-      const buyOrders = orders.filter((o: any) => (o.side || '').toUpperCase() === 'BUY');
-      const sellOrders = orders.filter((o: any) => (o.side || '').toUpperCase() === 'SELL');
-      
+      const buyOrders = orders.filter((o: any) => (o.side || "").toUpperCase() === "BUY");
+      const sellOrders = orders.filter((o: any) => (o.side || "").toUpperCase() === "SELL");
+
       // Group by price level
       const groupByPrice = (orderList: any[], isBid: boolean) => {
         const levels: Record<string, { price: number; size: number; count: number }> = {};
@@ -1683,29 +1767,29 @@ async function executeToolCall(
           levels[priceKey].count += 1;
         });
         return Object.values(levels)
-          .sort((a, b) => isBid ? b.price - a.price : a.price - b.price)
+          .sort((a, b) => (isBid ? b.price - a.price : a.price - b.price))
           .slice(0, 10);
       };
-      
+
       const bids = groupByPrice(buyOrders, true);
       const asks = groupByPrice(sellOrders, false);
-      
+
       const bestBid = bids.length > 0 ? bids[0].price : priceA * 100;
-      const bestAsk = asks.length > 0 ? asks[0].price : (priceA * 100) + 1;
+      const bestAsk = asks.length > 0 ? asks[0].price : priceA * 100 + 1;
       const spread = bestAsk - bestBid;
       const midPrice = (bestBid + bestAsk) / 2;
-      
+
       const totalBidDepth = bids.reduce((sum, l) => sum + l.size, 0);
       const totalAskDepth = asks.reduce((sum, l) => sum + l.size, 0);
-      
-      const formatUsd = (n: number) => n >= 1000 ? `$${(n/1000).toFixed(1)}K` : `$${n.toFixed(0)}`;
-      
+
+      const formatUsd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}K` : `$${n.toFixed(0)}`);
+
       return JSON.stringify({
         market_slug: marketSlug,
         market_title: market.title,
         current_price: {
           yes: `${(priceA * 100).toFixed(1)}%`,
-          no: `${(priceB * 100).toFixed(1)}%`
+          no: `${(priceB * 100).toFixed(1)}%`,
         },
         order_book: {
           best_bid: `${bestBid.toFixed(1)}%`,
@@ -1714,159 +1798,172 @@ async function executeToolCall(
           mid_price: `${midPrice.toFixed(1)}%`,
           bid_depth: formatUsd(totalBidDepth),
           ask_depth: formatUsd(totalAskDepth),
-          bid_levels: bids.map(l => ({ price: `${l.price.toFixed(0)}%`, size: formatUsd(l.size), orders: l.count })),
-          ask_levels: asks.map(l => ({ price: `${l.price.toFixed(0)}%`, size: formatUsd(l.size), orders: l.count }))
+          bid_levels: bids.map((l) => ({ price: `${l.price.toFixed(0)}%`, size: formatUsd(l.size), orders: l.count })),
+          ask_levels: asks.map((l) => ({ price: `${l.price.toFixed(0)}%`, size: formatUsd(l.size), orders: l.count })),
         },
         liquidity_analysis: {
           total_depth: formatUsd(totalBidDepth + totalAskDepth),
-          imbalance: totalBidDepth > totalAskDepth ? 'More buyers' : totalAskDepth > totalBidDepth ? 'More sellers' : 'Balanced',
-          spread_quality: spread < 1 ? 'Tight (good liquidity)' : spread < 3 ? 'Normal' : 'Wide (low liquidity)'
+          imbalance:
+            totalBidDepth > totalAskDepth ? "More buyers" : totalAskDepth > totalBidDepth ? "More sellers" : "Balanced",
+          spread_quality: spread < 1 ? "Tight (good liquidity)" : spread < 3 ? "Normal" : "Wide (low liquidity)",
         },
         data_source: {
-          api: 'Dome API',
+          api: "Dome API",
           market_slug: marketSlug,
           fetched_at: new Date().toISOString(),
           fetch_duration_ms: fetchDuration,
-          note: 'Order book approximated from recent trade activity',
-          verification: 'REAL_LIVE_DATA'
-        }
+          note: "Order book approximated from recent trade activity",
+          verification: "REAL_LIVE_DATA",
+        },
       });
     }
-    
-    if (tool.name === 'get_price_history') {
+
+    if (tool.name === "get_price_history") {
       const marketSlug = getMarketSlug();
       if (!marketSlug) {
-        return JSON.stringify({ 
-          error: 'No market context available',
-          suggestion: 'Please provide a market URL or specify which market you want price history for',
-          data_source: { available: false, reason: 'No market slug provided' }
+        return JSON.stringify({
+          error: "No market context available",
+          suggestion: "Please provide a market URL or specify which market you want price history for",
+          data_source: { available: false, reason: "No market slug provided" },
         });
       }
-      
+
       console.log(`[Dome Tool] Getting price history for: ${marketSlug}`);
       const fetchStartTime = Date.now();
-      
+
       // Get market first to get condition_id
       const market = await dome.getMarketBySlug(marketSlug);
       if (!market) {
-        return JSON.stringify({ 
-          error: 'Market not found',
-          data_source: { api: 'Dome API', status: 'MARKET_NOT_FOUND' }
+        return JSON.stringify({
+          error: "Market not found",
+          data_source: { api: "Dome API", status: "MARKET_NOT_FOUND" },
         });
       }
-      
+
       const candlesticks = await dome.getCandlesticks(market.condition_id, market.side_a?.id);
       const fetchDuration = Date.now() - fetchStartTime;
-      
+
       if (candlesticks.length === 0) {
-        return JSON.stringify({ 
-          error: 'No price history available',
-          data_source: { api: 'Dome API', status: 'NO_DATA' }
+        return JSON.stringify({
+          error: "No price history available",
+          data_source: { api: "Dome API", status: "NO_DATA" },
         });
       }
-      
-      const prices = candlesticks.map((c: any) => parseFloat(c.close || c.price || 0) * 100).filter((p: number) => p > 0);
+
+      const prices = candlesticks
+        .map((c: any) => parseFloat(c.close || c.price || 0) * 100)
+        .filter((p: number) => p > 0);
       const current = prices[prices.length - 1] || 50;
       const sevenDaysAgo = prices[0] || 50;
       const change7d = current - sevenDaysAgo;
       const high7d = Math.max(...prices);
       const low7d = Math.min(...prices);
-      const trend = change7d > 2 ? 'RISING' : change7d < -2 ? 'FALLING' : 'STABLE';
-      
+      const trend = change7d > 2 ? "RISING" : change7d < -2 ? "FALLING" : "STABLE";
+
       return JSON.stringify({
         market_slug: marketSlug,
         market_title: market.title,
         price_history: {
           current: `${current.toFixed(1)}%`,
           seven_days_ago: `${sevenDaysAgo.toFixed(1)}%`,
-          change_7d: `${change7d > 0 ? '+' : ''}${change7d.toFixed(1)}%`,
+          change_7d: `${change7d > 0 ? "+" : ""}${change7d.toFixed(1)}%`,
           high_7d: `${high7d.toFixed(1)}%`,
           low_7d: `${low7d.toFixed(1)}%`,
           trend: trend,
-          range: `${low7d.toFixed(0)}% - ${high7d.toFixed(0)}%`
+          range: `${low7d.toFixed(0)}% - ${high7d.toFixed(0)}%`,
         },
         candlesticks: candlesticks.slice(-7).map((c: any) => ({
           date: new Date(c.timestamp * 1000).toLocaleDateString(),
           open: `${(parseFloat(c.open || 0) * 100).toFixed(1)}%`,
           high: `${(parseFloat(c.high || 0) * 100).toFixed(1)}%`,
           low: `${(parseFloat(c.low || 0) * 100).toFixed(1)}%`,
-          close: `${(parseFloat(c.close || 0) * 100).toFixed(1)}%`
+          close: `${(parseFloat(c.close || 0) * 100).toFixed(1)}%`,
         })),
         data_source: {
-          api: 'Dome API',
+          api: "Dome API",
           market_slug: marketSlug,
           fetched_at: new Date().toISOString(),
           fetch_duration_ms: fetchDuration,
           data_points: candlesticks.length,
-          verification: 'REAL_LIVE_DATA'
-        }
+          verification: "REAL_LIVE_DATA",
+        },
       });
     }
-    
+
     // === NEW: IRYS HISTORICAL MARKETS TOOL ===
-    if (tool.name === 'query_irys_historical_markets') {
-      const { category = 'all', keywords = [], minVolume = 0, limit = 200 } = tool.input;
-      
-      console.log(`[Irys Tool] Querying historical markets - category: ${category}, keywords: ${keywords.join(',')}, minVolume: ${minVolume}`);
+    if (tool.name === "query_irys_historical_markets") {
+      const { category = "all", keywords = [], minVolume = 0, limit = 200 } = tool.input;
+
+      console.log(
+        `[Irys Tool] Querying historical markets - category: ${category}, keywords: ${keywords.join(",")}, minVolume: ${minVolume}`,
+      );
       const fetchStartTime = Date.now();
-      
+
       try {
         // Build query string from keywords
-        const queryString = keywords.length > 0 ? keywords.join(' ') : '';
-        
+        const queryString = keywords.length > 0 ? keywords.join(" ") : "";
+
         // Call query-irys with Claude's params
         const irysResponse = await fetch(`${supabaseUrl}/functions/v1/query-irys`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseKey}`,
           },
           body: JSON.stringify({
             query: queryString,
-            category: category === 'all' ? null : category,
+            category: category === "all" ? null : category,
             keywords,
             minVolume,
-            limit: Math.min(limit, 500)
-          })
+            limit: Math.min(limit, 500),
+          }),
         });
-        
+
         const fetchDuration = Date.now() - fetchStartTime;
-        
+
         if (!irysResponse.ok) {
           console.error(`[Irys Tool] Query failed: ${irysResponse.status}`);
           return JSON.stringify({
-            error: 'Failed to query Irys historical data',
-            status: irysResponse.status
+            error: "Failed to query Irys historical data",
+            status: irysResponse.status,
           });
         }
-        
+
         const irysData = await irysResponse.json();
-        
+
         if (!irysData.success || !irysData.markets?.length) {
           return JSON.stringify({
-            error: 'No matching historical markets found',
-            suggestion: 'Try different keywords or a broader category',
-            query: { category, keywords, minVolume }
+            error: "No matching historical markets found",
+            suggestion: "Try different keywords or a broader category",
+            query: { category, keywords, minVolume },
           });
         }
-        
+
         console.log(`[Irys Tool] ✅ Retrieved ${irysData.count} historical markets`);
-        
+
         // Format markets for Claude's analysis with volume confidence
         const formattedMarkets = irysData.markets.slice(0, limit).map((m: any) => {
-          const volumeRaw = parseFloat(m.volume || '0');
-          const volumeConfidence = volumeRaw > 10000000 ? 'HIGH' :
-                                   volumeRaw > 1000000 ? 'MEDIUM' : 'LOW';
-          
+          const volumeRaw = parseFloat(m.volume || "0");
+          const volumeConfidence = volumeRaw > 10000000 ? "HIGH" : volumeRaw > 1000000 ? "MEDIUM" : "LOW";
+
           return {
-            question: m.question || m.title || 'Unknown',
-            outcome: m.resolvedOutcome || (m.outcomes?.[0] === 'Yes' && m.outcomePrices?.[0] === 1 ? 'Yes' : 
-                     m.outcomes?.[1] === 'No' && m.outcomePrices?.[1] === 1 ? 'No' : 'Unknown'),
-            volume: m.volume ? `$${(volumeRaw / 1000000).toFixed(2)}M` : 'N/A',
+            question: m.question || m.title || "Unknown",
+            outcome:
+              m.resolvedOutcome ||
+              (m.outcomes?.[0] === "Yes" && m.outcomePrices?.[0] === 1
+                ? "Yes"
+                : m.outcomes?.[1] === "No" && m.outcomePrices?.[1] === 1
+                  ? "No"
+                  : "Unknown"),
+            volume: m.volume ? `$${(volumeRaw / 1000000).toFixed(2)}M` : "N/A",
             volumeRaw,
             volumeConfidence,
-            volumeContext: volumeConfidence === 'HIGH' ? 'Strong market conviction (top 5%)' :
-                           volumeConfidence === 'MEDIUM' ? 'Moderate market activity' : 'Limited market interest',
+            volumeContext:
+              volumeConfidence === "HIGH"
+                ? "Strong market conviction (top 5%)"
+                : volumeConfidence === "MEDIUM"
+                  ? "Moderate market activity"
+                  : "Limited market interest",
             proofUrl: m.proofUrl || `https://gateway.irys.xyz/${m.txId}`,
             txId: m.txId,
             category: m.category || category,
@@ -1874,22 +1971,24 @@ async function executeToolCall(
             // Flag if we have usable closing price (most won't)
             hasClosingPrice: m.closingPrice !== null && m.closingPrice > 0.01 && m.closingPrice < 0.99,
             // Only include if actually usable (not post-resolution 0 or 1)
-            closingPrice: m.closingPrice !== null && m.closingPrice > 0.01 && m.closingPrice < 0.99 
-              ? `${(m.closingPrice * 100).toFixed(1)}%` : null,
-            researchHint: `${(m.question || m.title || '').slice(0, 50)} outcome details results`
+            closingPrice:
+              m.closingPrice !== null && m.closingPrice > 0.01 && m.closingPrice < 0.99
+                ? `${(m.closingPrice * 100).toFixed(1)}%`
+                : null,
+            researchHint: `${(m.question || m.title || "").slice(0, 50)} outcome details results`,
           };
         });
-        
+
         // Count markets with usable closing prices
         const marketsWithClosingPrice = formattedMarkets.filter((m: any) => m.hasClosingPrice).length;
-        
+
         // Calculate volume distribution stats for pattern analysis
         const volumeStats = {
-          high: formattedMarkets.filter((m: any) => m.volumeConfidence === 'HIGH').length,
-          medium: formattedMarkets.filter((m: any) => m.volumeConfidence === 'MEDIUM').length,
-          low: formattedMarkets.filter((m: any) => m.volumeConfidence === 'LOW').length
+          high: formattedMarkets.filter((m: any) => m.volumeConfidence === "HIGH").length,
+          medium: formattedMarkets.filter((m: any) => m.volumeConfidence === "MEDIUM").length,
+          low: formattedMarkets.filter((m: any) => m.volumeConfidence === "LOW").length,
         };
-        
+
         return JSON.stringify({
           success: true,
           markets: formattedMarkets,
@@ -1902,41 +2001,41 @@ async function executeToolCall(
             hasClosingPrices: marketsWithClosingPrice > 0,
             closingPriceCount: marketsWithClosingPrice,
             totalMarkets: formattedMarkets.length,
-            note: 'Most markets lack closing prices (pre-resolution predictions). Use volume as confidence indicator. Research event outcomes via web_search for context.',
+            note: "Most markets lack closing prices (pre-resolution predictions). Use volume as confidence indicator. Research event outcomes via web_search for context.",
             volumeConfidenceLevels: {
-              HIGH: '>$10M = strong market conviction (top 5%)',
-              MEDIUM: '$1-10M = moderate market activity',
-              LOW: '<$1M = limited market interest'
-            }
+              HIGH: ">$10M = strong market conviction (top 5%)",
+              MEDIUM: "$1-10M = moderate market activity",
+              LOW: "<$1M = limited market interest",
+            },
           },
           researchQueries: formattedMarkets.slice(0, 5).map((m: any) => ({
             market: m.question,
-            suggestedQuery: m.researchHint
+            suggestedQuery: m.researchHint,
           })),
           sampleProofUrl: formattedMarkets[0]?.proofUrl,
           data_source: {
-            api: 'Irys Blockchain',
+            api: "Irys Blockchain",
             fetched_at: new Date().toISOString(),
             fetch_duration_ms: fetchDuration,
-            verification: 'BLOCKCHAIN_VERIFIED'
-          }
+            verification: "BLOCKCHAIN_VERIFIED",
+          },
         });
       } catch (irysError) {
-        console.error('[Irys Tool] Error:', irysError);
+        console.error("[Irys Tool] Error:", irysError);
         return JSON.stringify({
-          error: 'Failed to query Irys historical data',
-          message: irysError instanceof Error ? irysError.message : 'Unknown error'
+          error: "Failed to query Irys historical data",
+          message: irysError instanceof Error ? irysError.message : "Unknown error",
         });
       }
     }
-    
+
     // Note: web_search is handled natively by Claude via web_search_20250305 tool
     // No custom implementation needed
-    
-    return JSON.stringify({ error: 'Unknown tool' });
+
+    return JSON.stringify({ error: "Unknown tool" });
   } catch (e) {
     console.error(`[Tool] Error executing ${tool.name}:`, e);
-    return JSON.stringify({ error: e instanceof Error ? e.message : 'Tool execution failed' });
+    return JSON.stringify({ error: e instanceof Error ? e.message : "Tool execution failed" });
   }
 }
 
@@ -1948,17 +2047,14 @@ const corsHeaders = {
 
 // Helper to create JSON response with CORS headers - ALWAYS use this for responses
 function corsResponse(body: any, status = 200, extraHeaders: Record<string, string> = {}) {
-  return new Response(
-    JSON.stringify(body),
-    {
-      status,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-        ...extraHeaders,
-      },
-    }
-  );
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
+  });
 }
 
 // Helper for streaming responses with CORS
@@ -1973,71 +2069,150 @@ function corsStreamResponse(body: ReadableStream | null, extraHeaders: Record<st
 }
 
 const LIVE_DATA_KEYWORDS = [
-  "what's moving", "whats moving", "best odds", "best trade", "top markets",
-  "trending", "what should i bet", "opportunities", "hot markets", "biggest",
-  "what's happening", "any plays", "where's the edge", "money right now",
-  "highest volume", "top picks", "best right now", "what's hot", "whats hot"
+  "what's moving",
+  "whats moving",
+  "best odds",
+  "best trade",
+  "top markets",
+  "trending",
+  "what should i bet",
+  "opportunities",
+  "hot markets",
+  "biggest",
+  "what's happening",
+  "any plays",
+  "where's the edge",
+  "money right now",
+  "highest volume",
+  "top picks",
+  "best right now",
+  "what's hot",
+  "whats hot",
 ];
 
 const WHALE_KEYWORDS = [
-  "whale", "whales", "wheel", // include common typo
-  "big money", "large bets", "smart money", "big bet",
-  "large trade", "whale activity", "whale tracker", "big players",
-  "institutional", "what are whales", "whales buying", "whales betting"
+  "whale",
+  "whales",
+  "wheel", // include common typo
+  "big money",
+  "large bets",
+  "smart money",
+  "big bet",
+  "large trade",
+  "whale activity",
+  "whale tracker",
+  "big players",
+  "institutional",
+  "what are whales",
+  "whales buying",
+  "whales betting",
 ];
 
 const MARKET_DISCOVERY_KEYWORDS = [
-  "crypto", "bitcoin", "ethereum", "sports", "politics", "political",
-  "nfl", "nba", "football", "basketball", "soccer", "tennis",
-  "trump", "election", "ai", "tech", "entertainment", "celebrity",
+  "crypto",
+  "bitcoin",
+  "ethereum",
+  "sports",
+  "politics",
+  "political",
+  "nfl",
+  "nba",
+  "football",
+  "basketball",
+  "soccer",
+  "tennis",
+  "trump",
+  "election",
+  "ai",
+  "tech",
+  "entertainment",
+  "celebrity",
   // International elections and events
-  "chile", "brazil", "uk", "france", "germany", "canada", "mexico",
-  "argentina", "australia", "japan", "china", "india", "russia",
-  "presidential", "prime minister", "parliament"
+  "chile",
+  "brazil",
+  "uk",
+  "france",
+  "germany",
+  "canada",
+  "mexico",
+  "argentina",
+  "australia",
+  "japan",
+  "china",
+  "india",
+  "russia",
+  "presidential",
+  "prime minister",
+  "parliament",
 ];
 
 function needsLiveData(message: string): boolean {
   const lowerMessage = message.toLowerCase();
-  return LIVE_DATA_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+  return LIVE_DATA_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
 }
 
 function needsWhaleData(message: string): boolean {
   const lowerMessage = message.toLowerCase();
-  return WHALE_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
+  return WHALE_KEYWORDS.some((keyword) => lowerMessage.includes(keyword));
 }
 
 function detectCategory(message: string): string | null {
   const lowerMessage = message.toLowerCase();
-  
-  if (lowerMessage.includes('crypto') || lowerMessage.includes('bitcoin') || lowerMessage.includes('ethereum') || lowerMessage.includes('btc') || lowerMessage.includes('eth')) {
-    return 'crypto';
+
+  if (
+    lowerMessage.includes("crypto") ||
+    lowerMessage.includes("bitcoin") ||
+    lowerMessage.includes("ethereum") ||
+    lowerMessage.includes("btc") ||
+    lowerMessage.includes("eth")
+  ) {
+    return "crypto";
   }
-  if (lowerMessage.includes('sport') || lowerMessage.includes('nfl') || lowerMessage.includes('nba') || lowerMessage.includes('football') || lowerMessage.includes('basketball') || lowerMessage.includes('soccer')) {
-    return 'sports';
+  if (
+    lowerMessage.includes("sport") ||
+    lowerMessage.includes("nfl") ||
+    lowerMessage.includes("nba") ||
+    lowerMessage.includes("football") ||
+    lowerMessage.includes("basketball") ||
+    lowerMessage.includes("soccer")
+  ) {
+    return "sports";
   }
-  if (lowerMessage.includes('politic') || lowerMessage.includes('election') || lowerMessage.includes('trump') || lowerMessage.includes('biden') || lowerMessage.includes('president')) {
-    return 'politics';
+  if (
+    lowerMessage.includes("politic") ||
+    lowerMessage.includes("election") ||
+    lowerMessage.includes("trump") ||
+    lowerMessage.includes("biden") ||
+    lowerMessage.includes("president")
+  ) {
+    return "politics";
   }
-  if (lowerMessage.includes('ai') || lowerMessage.includes('tech') || lowerMessage.includes('apple') || lowerMessage.includes('google') || lowerMessage.includes('microsoft')) {
-    return 'tech';
+  if (
+    lowerMessage.includes("ai") ||
+    lowerMessage.includes("tech") ||
+    lowerMessage.includes("apple") ||
+    lowerMessage.includes("google") ||
+    lowerMessage.includes("microsoft")
+  ) {
+    return "tech";
   }
-  
+
   return null;
 }
 
 // Check if a market has expired
 function isMarketExpired(market: any): boolean {
   const now = new Date();
-  
+
   // Check if market is closed/resolved
   if (market.closed === true || market.resolved === true) {
     return true;
   }
-  
+
   if (market.active === false) {
     return true;
   }
-  
+
   // Check end date from various possible fields
   const endDateStr = market.endDate || market.end_date || market.closingDate || market.expirationDate;
   if (endDateStr) {
@@ -2050,16 +2225,16 @@ function isMarketExpired(market: any): boolean {
       // Couldn't parse date
     }
   }
-  
+
   // Parse date from market title/question (e.g., "by November 30, 2025" or "before December 1, 2025")
-  const questionText = market.question || market.title || '';
+  const questionText = market.question || market.title || "";
   const datePatterns = [
     /by\s+(\w+\s+\d{1,2},?\s+\d{4})/i,
     /before\s+(\w+\s+\d{1,2},?\s+\d{4})/i,
     /on\s+(\w+\s+\d{1,2},?\s+\d{4})/i,
     /(\w+\s+\d{1,2},?\s+\d{4})/i, // Generic date pattern as last resort
   ];
-  
+
   for (const pattern of datePatterns) {
     const dateMatch = questionText.match(pattern);
     if (dateMatch) {
@@ -2077,14 +2252,17 @@ function isMarketExpired(market: any): boolean {
       }
     }
   }
-  
+
   // Check if odds are exactly 50/50 (often indicates expired/suspended market)
-  if (market.yesPrice === '50' || market.yesPrice === 50 || 
-      (parseFloat(market.yesPrice) === 50 && parseFloat(market.noPrice) === 50)) {
+  if (
+    market.yesPrice === "50" ||
+    market.yesPrice === 50 ||
+    (parseFloat(market.yesPrice) === 50 && parseFloat(market.noPrice) === 50)
+  ) {
     console.log(`Market "${questionText.substring(0, 50)}..." appears suspended (50/50 odds)`);
     return true;
   }
-  
+
   return false;
 }
 
@@ -2092,19 +2270,22 @@ function isMarketExpired(market: any): boolean {
 const getCurrentDateInfo = () => {
   const now = new Date();
   const year = now.getFullYear();
-  const month = now.toLocaleDateString('en-US', { month: 'long' });
+  const month = now.toLocaleDateString("en-US", { month: "long" });
   const day = now.getDate();
   return {
-    fullDate: now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    fullDate: now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
     year,
     month,
     day,
-    isoDate: now.toISOString().split('T')[0],
+    isoDate: now.toISOString().split("T")[0],
   };
 };
 
 // System prompt is now a function to ensure fresh date on each request
-const getPolySystemPrompt = (dateInfo: { fullDate: string; year: number; month: string; day: number; isoDate: string }, isVoice: boolean = false) => {
+const getPolySystemPrompt = (
+  dateInfo: { fullDate: string; year: number; month: string; day: number; isoDate: string },
+  isVoice: boolean = false,
+) => {
   return `You're Poly — a smart, friendly AI analyst who helps people understand prediction markets.
 
 === 🚨🚨🚨 MANDATORY: CURRENT DATE & RESEARCH REQUIREMENTS 🚨🚨🚨 ===
@@ -2366,12 +2547,10 @@ Never show technical errors. If something fails:
 Remember: You're helping people make smart bets. Be useful, specific, and conversational.`;
 };
 
-
-
 // Detect platform from URL
-function detectPlatform(text: string): 'polymarket' | 'kalshi' | null {
-  if (text.includes('polymarket.com')) return 'polymarket';
-  if (text.includes('kalshi.com')) return 'kalshi';
+function detectPlatform(text: string): "polymarket" | "kalshi" | null {
+  if (text.includes("polymarket.com")) return "polymarket";
+  if (text.includes("kalshi.com")) return "kalshi";
   return null;
 }
 
@@ -2397,7 +2576,13 @@ function extractEventSlugFromUrl(url: string | undefined): string | null {
 }
 
 // Extract market info from URL
-function extractMarketInfo(text: string): { platform: 'polymarket' | 'kalshi' | null, path: string | null, seriesTicker?: string, marketTicker?: string, tokenIdFromUrl?: string | null } {
+function extractMarketInfo(text: string): {
+  platform: "polymarket" | "kalshi" | null;
+  path: string | null;
+  seriesTicker?: string;
+  marketTicker?: string;
+  tokenIdFromUrl?: string | null;
+} {
   // Kalshi URL patterns - extract both series and market tickers
   // URL format: kalshi.com/markets/{SERIES_TICKER}/{slug}/{MARKET_TICKER}
   // Example: kalshi.com/markets/kxmichcoach/michigan-next-coach/kxmichcoach-26
@@ -2407,47 +2592,44 @@ function extractMarketInfo(text: string): { platform: 'polymarket' | 'kalshi' | 
     const seriesTicker = kalshiFullMatch[1].toUpperCase();
     const marketTicker = kalshiFullMatch[2].toUpperCase();
     console.log("Extracted Kalshi tickers - series:", seriesTicker, "market:", marketTicker);
-    return { platform: 'kalshi', path: marketTicker, seriesTicker, marketTicker };
+    return { platform: "kalshi", path: marketTicker, seriesTicker, marketTicker };
   }
-  
+
   // Simpler Kalshi patterns
-  const kalshiPatterns = [
-    /kalshi\.com\/markets\/([a-zA-Z0-9_-]+)/i,
-    /kalshi\.com\/events\/([a-zA-Z0-9_-]+)/i,
-  ];
-  
+  const kalshiPatterns = [/kalshi\.com\/markets\/([a-zA-Z0-9_-]+)/i, /kalshi\.com\/events\/([a-zA-Z0-9_-]+)/i];
+
   for (const pattern of kalshiPatterns) {
     const match = text.match(pattern);
     if (match) {
       const ticker = match[1].toUpperCase();
-      return { platform: 'kalshi', path: ticker, seriesTicker: ticker };
+      return { platform: "kalshi", path: ticker, seriesTicker: ticker };
     }
   }
-  
+
   // Polymarket patterns - handle URLs with query params like ?tid=...
   // CRITICAL: Preserve tid= for multi-outcome markets
   const polymarketPatterns = [
     /polymarket\.com\/event\/([a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)?)/i,
     /polymarket\.com\/market\/([a-zA-Z0-9_-]+)/i,
   ];
-  
+
   // Extract tid= token ID if present (for multi-outcome market selection)
   const tidMatch = text.match(/[?&]tid=(\d+)/);
   const tokenIdFromUrl = tidMatch ? tidMatch[1] : null;
   if (tokenIdFromUrl) {
     console.log(`[URL] Extracted tid= token ID: ${tokenIdFromUrl}`);
   }
-  
+
   for (const pattern of polymarketPatterns) {
     const match = text.match(pattern);
     if (match) {
       // Remove query params and hash fragments from path only
-      const path = match[1].split('?')[0].split('#')[0];
-      console.log(`[URL] Extracted Polymarket slug: ${path}${tokenIdFromUrl ? `, tid=${tokenIdFromUrl}` : ''}`);
-      return { platform: 'polymarket', path, tokenIdFromUrl };
+      const path = match[1].split("?")[0].split("#")[0];
+      console.log(`[URL] Extracted Polymarket slug: ${path}${tokenIdFromUrl ? `, tid=${tokenIdFromUrl}` : ""}`);
+      return { platform: "polymarket", path, tokenIdFromUrl };
     }
   }
-  
+
   return { platform: null, path: null, tokenIdFromUrl: null };
 }
 
@@ -2486,82 +2668,80 @@ function extractOutcome(market: any): string {
 
   // PRIORITY 5: Fallback to ticker base if it looks like initials
   if (market.ticker && /^[A-Z]{2,10}-[A-Z0-9]+$/i.test(market.ticker)) {
-    const tickerBase = market.ticker.split('-')[0];
+    const tickerBase = market.ticker.split("-")[0];
     return tickerBase;
   }
 
   // LAST RESORT: return cleaned up title
   const cleaned = title
-    .replace(/^Will\s+/i, '')
-    .replace(/\s+(?:win|be|become).*$/i, '')
-    .replace(/\?$/, '')
+    .replace(/^Will\s+/i, "")
+    .replace(/\s+(?:win|be|become).*$/i, "")
+    .replace(/\?$/, "")
     .trim();
 
-  return cleaned || market.ticker || 'Unknown';
+  return cleaned || market.ticker || "Unknown";
 }
 
 // Fetch Kalshi market data - ALWAYS fetches series for multi-outcome support
 async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Promise<any | null> {
   try {
     console.log("Fetching Kalshi data - market:", marketTicker, "series:", seriesTicker);
-    
-    const effectiveSeriesTicker = seriesTicker || marketTicker.split('-')[0];
+
+    const effectiveSeriesTicker = seriesTicker || marketTicker.split("-")[0];
     console.log("Fetching Kalshi series:", effectiveSeriesTicker);
-    
+
     const seriesUrl = `https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=${effectiveSeriesTicker}&status=open&limit=50`;
     console.log("Calling Kalshi API:", seriesUrl);
-    
+
     const response = await fetch(seriesUrl, {
-      headers: { "Accept": "application/json" }
+      headers: { Accept: "application/json" },
     });
-    
+
     console.log("Kalshi API response status:", response.status);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.log("Kalshi API error:", errorText);
       return null;
     }
-    
+
     const data = await response.json();
     const markets = data.markets || [];
-    
+
     console.log(`Found ${markets.length} markets in series ${effectiveSeriesTicker}`);
-    
+
     if (markets.length === 0) {
       return null;
     }
-    
+
     // DEBUG: Log raw market data to see available fields
     console.log("===== RAW KALSHI DATA SAMPLE =====");
     markets.slice(0, 3).forEach((m: any, i: number) => {
       console.log(`Market ${i + 1}: ticker="${m.ticker}"`);
       console.log(`  title: "${m.title}"`);
-      console.log(`  subtitle: "${m.subtitle || 'NONE'}"`);
+      console.log(`  subtitle: "${m.subtitle || "NONE"}"`);
       console.log(`  floor_strike: ${m.floor_strike}`);
       console.log(`  cap_strike: ${m.cap_strike}`);
-      console.log(`  yes_sub_title: "${m.yes_sub_title || 'NONE'}"`);
-      console.log(`  no_sub_title: "${m.no_sub_title || 'NONE'}"`);
+      console.log(`  yes_sub_title: "${m.yes_sub_title || "NONE"}"`);
+      console.log(`  no_sub_title: "${m.no_sub_title || "NONE"}"`);
       console.log(`  yes_bid: ${m.yes_bid}, last_price: ${m.last_price}`);
     });
     console.log("===== END RAW DATA =====");
-    
+
     // Check if this is a ranged market
-    const hasRangeData = markets.some((m: any) => 
-      m.floor_strike !== undefined || m.cap_strike !== undefined || 
-      m.yes_sub_title || m.no_sub_title
+    const hasRangeData = markets.some(
+      (m: any) => m.floor_strike !== undefined || m.cap_strike !== undefined || m.yes_sub_title || m.no_sub_title,
     );
-    
+
     // Format all markets as outcomes
     const formattedMarkets = markets
       .map((m: any) => {
-        const yesPrice = m.yes_bid ? m.yes_bid / 100 : 
-                        (m.last_price ? m.last_price / 100 : 0);
-        const noPrice = m.no_bid ? m.no_bid / 100 : (1 - yesPrice);
-        
+        const yesPrice = m.yes_bid ? m.yes_bid / 100 : m.last_price ? m.last_price / 100 : 0;
+        const noPrice = m.no_bid ? m.no_bid / 100 : 1 - yesPrice;
+
         // Extract outcome - try multiple strategies
         let outcome = "";
-        
+
         // Strategy 1: Use floor_strike and cap_strike if available
         if (m.floor_strike !== undefined && m.cap_strike !== undefined) {
           const min = Number(m.floor_strike).toLocaleString();
@@ -2584,13 +2764,13 @@ async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Pro
           outcome = extractOutcome(m);
           console.log(`Using extracted outcome: ${outcome}`);
         }
-        
-        const urlSlug = effectiveSeriesTicker.toLowerCase().replace(/_/g, '-');
+
+        const urlSlug = effectiveSeriesTicker.toLowerCase().replace(/_/g, "-");
         const volume = Number(m.volume);
         const safeVolume = isNaN(volume) ? 0 : volume;
         const liquidity = Number(m.open_interest);
         const safeLiquidity = isNaN(liquidity) ? 0 : liquidity;
-        
+
         return {
           question: outcome,
           fullTitle: m.title || m.subtitle || m.ticker,
@@ -2599,19 +2779,24 @@ async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Pro
           volume: safeVolume,
           liquidity: safeLiquidity,
           url: `https://kalshi.com/markets/${urlSlug}`,
-          ticker: m.ticker
+          ticker: m.ticker,
         };
       })
       .filter((m: any) => parseFloat(m.yesPrice) > 0.1)
       .sort((a: any, b: any) => parseFloat(b.yesPrice) - parseFloat(a.yesPrice));
-    
-    console.log(`Formatted ${formattedMarkets.length} outcomes:`, 
-                formattedMarkets.slice(0, 5).map((m: any) => `"${m.question}": ${m.yesPrice}%`).join(', '));
-    
+
+    console.log(
+      `Formatted ${formattedMarkets.length} outcomes:`,
+      formattedMarkets
+        .slice(0, 5)
+        .map((m: any) => `"${m.question}": ${m.yesPrice}%`)
+        .join(", "),
+    );
+
     // Determine if multi-outcome
     const significantMarkets = formattedMarkets.filter((m: any) => parseFloat(m.yesPrice) >= 5);
     const isMultiOutcome = significantMarkets.length > 1;
-    
+
     // Extract event title
     let eventTitle = markets[0]?.event_ticker_name || effectiveSeriesTicker;
     if (markets[0]?.title) {
@@ -2622,21 +2807,21 @@ async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Pro
       }
       // For "how many" / range markets
       else if (hasRangeData || /how\s+many/i.test(markets[0].title)) {
-        eventTitle = markets[0].title.replace(/\?$/, '').trim() + '?';
+        eventTitle = markets[0].title.replace(/\?$/, "").trim() + "?";
       }
     }
-    
-    const urlSlug = effectiveSeriesTicker.toLowerCase().replace(/_/g, '-');
-    
+
+    const urlSlug = effectiveSeriesTicker.toLowerCase().replace(/_/g, "-");
+
     return {
-      platform: 'kalshi',
+      platform: "kalshi",
       eventTitle: eventTitle,
       eventSlug: effectiveSeriesTicker,
       category: markets[0]?.category || "General",
       url: `https://kalshi.com/markets/${urlSlug}`,
-      targetMarket: marketTicker ? formattedMarkets.find((m: any) => 
-        m.ticker?.toUpperCase() === marketTicker.toUpperCase()
-      ) : formattedMarkets[0],
+      targetMarket: marketTicker
+        ? formattedMarkets.find((m: any) => m.ticker?.toUpperCase() === marketTicker.toUpperCase())
+        : formattedMarkets[0],
       allMarkets: formattedMarkets.slice(0, 5), // Limit to top 5 outcomes to prevent spam
       totalMarketCount: formattedMarkets.length,
       totalVolume: markets.reduce((sum: number, m: any) => {
@@ -2645,9 +2830,8 @@ async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Pro
       }, 0),
       source: "kalshi-api-series",
       isMultiOutcome: isMultiOutcome,
-      marketType: hasRangeData ? 'range' : 'multi-outcome'
+      marketType: hasRangeData ? "range" : "multi-outcome",
     };
-    
   } catch (error) {
     console.error("Error fetching Kalshi data:", error);
     return null;
@@ -2656,61 +2840,80 @@ async function fetchKalshiData(marketTicker: string, seriesTicker?: string): Pro
 
 async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | null): Promise<any | null> {
   try {
-    console.log("Fetching Polymarket data for URL path:", urlPath, tokenIdFromUrl ? `with tid=${tokenIdFromUrl}` : '');
-    
-    let cleanPath = urlPath.replace(/\?.*$/, '').replace(/\/+$/, '').replace(/^\/+/, '');
-    
-    const parts = cleanPath.split('/').filter(Boolean);
+    console.log("Fetching Polymarket data for URL path:", urlPath, tokenIdFromUrl ? `with tid=${tokenIdFromUrl}` : "");
+
+    let cleanPath = urlPath.replace(/\?.*$/, "").replace(/\/+$/, "").replace(/^\/+/, "");
+
+    const parts = cleanPath.split("/").filter(Boolean);
     const eventSlug = parts[0];
     const marketSlug = parts.length > 1 ? parts[1] : null;
-    
+
     // Strip numeric suffix from slug (e.g., "college-football-champion-2026-684" -> "college-football-champion-2026")
-    const baseSlug = eventSlug.replace(/-\d+$/, '');
+    const baseSlug = eventSlug.replace(/-\d+$/, "");
     // Also try just the core words without year/numbers at end
-    const coreSlug = eventSlug.replace(/-\d{4}(-\d+)?$/, '').replace(/-\d+$/, '');
-    
-    console.log("Looking for eventSlug:", eventSlug, "baseSlug:", baseSlug, "coreSlug:", coreSlug, "marketSlug:", marketSlug);
-    
+    const coreSlug = eventSlug.replace(/-\d{4}(-\d+)?$/, "").replace(/-\d+$/, "");
+
+    console.log(
+      "Looking for eventSlug:",
+      eventSlug,
+      "baseSlug:",
+      baseSlug,
+      "coreSlug:",
+      coreSlug,
+      "marketSlug:",
+      marketSlug,
+    );
+
     // ============= TRY DOME API FIRST WITH COMPREHENSIVE DATA =============
     if (DOME_API_KEY) {
       console.log("[Dome] Attempting comprehensive Dome API lookup for:", eventSlug);
       const slugsToTry = [eventSlug, baseSlug, coreSlug].filter((s, i, arr) => arr.indexOf(s) === i);
-      
+
       // Also try the marketSlug if provided (it's often the correct market_slug for Dome)
       if (marketSlug && !slugsToTry.includes(marketSlug)) {
         slugsToTry.unshift(marketSlug); // Try marketSlug first as it's more specific
       }
-      
+
       for (const slugAttempt of slugsToTry) {
         const comprehensiveData = await dome.getComprehensiveMarketData(slugAttempt);
-        
+
         if (comprehensiveData && comprehensiveData.market) {
           const { market: domeMarket, priceA, priceB, recentTrades, tradeFlow, whales, volatility } = comprehensiveData;
-          
+
           console.log("[Dome] Found comprehensive market data:", domeMarket.market_slug || domeMarket.title);
           console.log("[Dome] Trade flow:", tradeFlow.direction, "Strength:", tradeFlow.strength.toFixed(2));
-          console.log("[Dome] Whale active:", whales.isWhaleActive, "Total Volume:", whales.totalWhaleVolume.toFixed(0));
-          console.log("[Dome] Volatility:", volatility.isVolatile, "Swing:", (volatility.weeklySwing * 100).toFixed(1) + "%");
-          
+          console.log(
+            "[Dome] Whale active:",
+            whales.isWhaleActive,
+            "Total Volume:",
+            whales.totalWhaleVolume.toFixed(0),
+          );
+          console.log(
+            "[Dome] Volatility:",
+            volatility.isVolatile,
+            "Swing:",
+            (volatility.weeklySwing * 100).toFixed(1) + "%",
+          );
+
           // Get market state using the helper
           const marketState = getDomeMarketState(domeMarket);
           console.log("[Dome] Market state:", marketState.statusText);
-          
+
           const yesPriceValue = priceA?.price || 0.5;
-          const noPriceValue = priceB?.price || (1 - yesPriceValue);
-          
+          const noPriceValue = priceB?.price || 1 - yesPriceValue;
+
           const marketUrl = `https://polymarket.com/event/${domeMarket.market_slug || eventSlug}`;
-          
+
           // Format recent trades for context
           const formattedTrades = recentTrades.slice(0, 5).map((t: any) => ({
             side: t.side,
             price: t.price,
             size: t.shares_normalized || t.size || 0,
-            amount: (t.shares_normalized || t.size || 0) * (t.price || 0)
+            amount: (t.shares_normalized || t.size || 0) * (t.price || 0),
           }));
-          
+
           return {
-            platform: 'polymarket',
+            platform: "polymarket",
             eventTitle: domeMarket.title,
             eventSlug: domeMarket.market_slug || eventSlug,
             category: domeMarket.tags?.[0] || "General",
@@ -2723,19 +2926,24 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
               volume: domeMarket.volume_total || 0,
               liquidity: 0,
               url: marketUrl,
-              outcomes: domeMarket.side_a && domeMarket.side_b ? [
-                { label: domeMarket.side_a.label, price: (yesPriceValue * 100).toFixed(1) },
-                { label: domeMarket.side_b.label, price: (noPriceValue * 100).toFixed(1) }
-              ] : undefined
+              outcomes:
+                domeMarket.side_a && domeMarket.side_b
+                  ? [
+                      { label: domeMarket.side_a.label, price: (yesPriceValue * 100).toFixed(1) },
+                      { label: domeMarket.side_b.label, price: (noPriceValue * 100).toFixed(1) },
+                    ]
+                  : undefined,
             },
-            allMarkets: [{
-              question: domeMarket.title,
-              yesPrice: (yesPriceValue * 100).toFixed(1),
-              noPrice: (noPriceValue * 100).toFixed(1),
-              volume: domeMarket.volume_total || 0,
-              liquidity: 0,
-              url: marketUrl
-            }],
+            allMarkets: [
+              {
+                question: domeMarket.title,
+                yesPrice: (yesPriceValue * 100).toFixed(1),
+                noPrice: (noPriceValue * 100).toFixed(1),
+                volume: domeMarket.volume_total || 0,
+                liquidity: 0,
+                url: marketUrl,
+              },
+            ],
             totalMarketCount: 1,
             totalVolume: domeMarket.volume_total || 0,
             volumeWeek: domeMarket.volume_1_week || 0,
@@ -2752,7 +2960,7 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
               strength: tradeFlow.strength,
               buyCount: tradeFlow.buyCount,
               sellCount: tradeFlow.sellCount,
-              recentTrades: formattedTrades
+              recentTrades: formattedTrades,
             },
             whaleActivity: {
               isActive: whales.isWhaleActive,
@@ -2761,31 +2969,30 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
               buyVolume: whales.buyVolume,
               sellVolume: whales.sellVolume,
               largestTrade: whales.largestTrade,
-              topWhale: whales.topWhale
+              topWhale: whales.topWhale,
             },
             volatility: {
               isVolatile: volatility.isVolatile,
-              weeklySwing: volatility.weeklySwing
+              weeklySwing: volatility.weeklySwing,
             },
-            source: "dome-api-comprehensive"
+            source: "dome-api-comprehensive",
           };
         }
       }
-      
+
       // === FALLBACK: Use Gamma API to get the correct market slug, then retry Dome ===
       console.log("[Dome] Direct slug lookup failed, trying Gamma API to resolve correct slug...");
       try {
-        const gammaResponse = await fetch(
-          `https://gamma-api.polymarket.com/events?slug=${eventSlug}`,
-          { headers: { "Accept": "application/json" } }
-        );
-        
+        const gammaResponse = await fetch(`https://gamma-api.polymarket.com/events?slug=${eventSlug}`, {
+          headers: { Accept: "application/json" },
+        });
+
         if (gammaResponse.ok) {
           const gammaEvents = await gammaResponse.json();
           if (gammaEvents && gammaEvents.length > 0) {
             const gammaEvent = gammaEvents[0];
             const gammaMarkets = gammaEvent.markets || [];
-            
+
             // Try each market's conditionId with Dome
             for (const gammaMarket of gammaMarkets.slice(0, 3)) {
               const conditionId = gammaMarket.conditionId;
@@ -2799,20 +3006,20 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
                     const { market, priceA, priceB, recentTrades, tradeFlow, whales, volatility } = comprehensiveData;
                     const marketState = getDomeMarketState(market);
                     const yesPriceValue = priceA?.price || 0.5;
-                    const noPriceValue = priceB?.price || (1 - yesPriceValue);
+                    const noPriceValue = priceB?.price || 1 - yesPriceValue;
                     const marketUrl = `https://polymarket.com/event/${market.market_slug || eventSlug}`;
-                    
+
                     const formattedTrades = recentTrades.slice(0, 5).map((t: any) => ({
                       side: t.side,
                       price: t.price,
                       size: t.shares_normalized || t.size || 0,
-                      amount: (t.shares_normalized || t.size || 0) * (t.price || 0)
+                      amount: (t.shares_normalized || t.size || 0) * (t.price || 0),
                     }));
-                    
+
                     console.log(`[Dome] ✅ Found via Gamma conditionId resolution: ${market.title}`);
-                    
+
                     return {
-                      platform: 'polymarket',
+                      platform: "polymarket",
                       eventTitle: market.title,
                       eventSlug: market.market_slug || eventSlug,
                       category: market.tags?.[0] || "General",
@@ -2825,16 +3032,18 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
                         volume: market.volume_total || 0,
                         liquidity: 0,
                         url: marketUrl,
-                        conditionId: conditionId
+                        conditionId: conditionId,
                       },
-                      allMarkets: [{
-                        question: market.title,
-                        yesPrice: (yesPriceValue * 100).toFixed(1),
-                        noPrice: (noPriceValue * 100).toFixed(1),
-                        volume: market.volume_total || 0,
-                        liquidity: 0,
-                        url: marketUrl
-                      }],
+                      allMarkets: [
+                        {
+                          question: market.title,
+                          yesPrice: (yesPriceValue * 100).toFixed(1),
+                          noPrice: (noPriceValue * 100).toFixed(1),
+                          volume: market.volume_total || 0,
+                          liquidity: 0,
+                          url: marketUrl,
+                        },
+                      ],
                       totalMarketCount: 1,
                       totalVolume: market.volume_total || 0,
                       volumeWeek: market.volume_1_week || 0,
@@ -2849,7 +3058,7 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
                         strength: tradeFlow.strength,
                         buyCount: tradeFlow.buyCount,
                         sellCount: tradeFlow.sellCount,
-                        recentTrades: formattedTrades
+                        recentTrades: formattedTrades,
                       },
                       whaleActivity: {
                         isActive: whales.isWhaleActive,
@@ -2858,13 +3067,13 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
                         buyVolume: whales.buyVolume,
                         sellVolume: whales.sellVolume,
                         largestTrade: whales.largestTrade,
-                        topWhale: whales.topWhale
+                        topWhale: whales.topWhale,
                       },
                       volatility: {
                         isVolatile: volatility.isVolatile,
-                        weeklySwing: volatility.weeklySwing
+                        weeklySwing: volatility.weeklySwing,
                       },
-                      source: "dome-api-via-gamma-conditionId"
+                      source: "dome-api-via-gamma-conditionId",
                     };
                   }
                 }
@@ -2875,160 +3084,167 @@ async function fetchPolymarketData(urlPath: string, tokenIdFromUrl?: string | nu
       } catch (e) {
         console.log("[Dome] Gamma conditionId resolution failed:", e);
       }
-      
+
       console.log("[Dome] All Dome lookups failed, falling back to Gamma API");
     }
-    
+
     // ============= FALLBACK TO GAMMA API =============
     // Try direct event lookup first (faster)
     const slugsToTry = [eventSlug, baseSlug, coreSlug].filter((s, i, arr) => arr.indexOf(s) === i);
-    
+
     for (const slugAttempt of slugsToTry) {
       try {
-        const directResponse = await fetch(
-          `https://gamma-api.polymarket.com/events?slug=${slugAttempt}`,
-          { headers: { "Accept": "application/json" } }
-        );
+        const directResponse = await fetch(`https://gamma-api.polymarket.com/events?slug=${slugAttempt}`, {
+          headers: { Accept: "application/json" },
+        });
         if (directResponse.ok) {
           const events = await directResponse.json();
           if (events && events.length > 0) {
             console.log("Found event via direct slug lookup:", events[0].slug);
-            return { ...formatEventData(events[0], marketSlug), platform: 'polymarket' };
+            return { ...formatEventData(events[0], marketSlug), platform: "polymarket" };
           }
         }
       } catch (e) {
         console.log("Direct slug lookup failed for:", slugAttempt);
       }
     }
-    
+
     if (marketSlug) {
       console.log("Trying to find market by slug:", marketSlug);
       try {
-        const marketResponse = await fetch(
-          `https://gamma-api.polymarket.com/markets?slug=${marketSlug}&closed=false`,
-          { headers: { "Accept": "application/json" } }
-        );
+        const marketResponse = await fetch(`https://gamma-api.polymarket.com/markets?slug=${marketSlug}&closed=false`, {
+          headers: { Accept: "application/json" },
+        });
         if (marketResponse.ok) {
           const markets = await marketResponse.json();
           if (markets && markets.length > 0) {
             const market = markets[0];
             console.log("Found market via slug query:", market.slug);
             const parentEventSlug = market.events?.[0]?.slug || eventSlug;
-            return { ...formatMarketData(market, parentEventSlug), platform: 'polymarket' };
+            return { ...formatMarketData(market, parentEventSlug), platform: "polymarket" };
           }
         }
       } catch (e) {
         console.log("Market slug query failed:", e);
       }
     }
-    
+
     // Search through all active markets
     console.log("Searching markets for event slug:", eventSlug);
     try {
-      const response = await fetch(
-        `https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=200`,
-        { headers: { "Accept": "application/json" } }
-      );
-      
+      const response = await fetch(`https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=200`, {
+        headers: { Accept: "application/json" },
+      });
+
       if (response.ok) {
         const markets = await response.json();
         console.log(`Searching through ${markets.length} markets`);
-        
+
         // Convert slug to search terms for title matching
-        const searchTerms = coreSlug.split('-').filter((w: string) => w.length > 2);
-        
+        const searchTerms = coreSlug.split("-").filter((w: string) => w.length > 2);
+
         const matchingMarkets = markets.filter((m: any) => {
-          const parentSlug = m.events?.[0]?.slug || '';
-          const title = (m.question || '').toLowerCase();
-          const eventTitle = (m.events?.[0]?.title || '').toLowerCase();
-          
+          const parentSlug = m.events?.[0]?.slug || "";
+          const title = (m.question || "").toLowerCase();
+          const eventTitle = (m.events?.[0]?.title || "").toLowerCase();
+
           // Exact or partial slug match
-          if (parentSlug === eventSlug || 
-              parentSlug === baseSlug ||
-              parentSlug.toLowerCase().includes(baseSlug.toLowerCase()) ||
-              baseSlug.toLowerCase().includes(parentSlug.toLowerCase().replace(/-\d+$/, ''))) {
+          if (
+            parentSlug === eventSlug ||
+            parentSlug === baseSlug ||
+            parentSlug.toLowerCase().includes(baseSlug.toLowerCase()) ||
+            baseSlug.toLowerCase().includes(parentSlug.toLowerCase().replace(/-\d+$/, ""))
+          ) {
             return true;
           }
-          
+
           // Title-based match - check if most search terms are in title
-          const matchCount = searchTerms.filter((term: string) => 
-            title.includes(term.toLowerCase()) || eventTitle.includes(term.toLowerCase())
+          const matchCount = searchTerms.filter(
+            (term: string) => title.includes(term.toLowerCase()) || eventTitle.includes(term.toLowerCase()),
           ).length;
-          
+
           return matchCount >= Math.ceil(searchTerms.length * 0.6);
         });
-        
+
         if (matchingMarkets.length > 0) {
           console.log(`Found ${matchingMarkets.length} matching markets`);
           const parentEventSlug = matchingMarkets[0].events?.[0]?.slug || eventSlug;
           const parentEventTitle = matchingMarkets[0].events?.[0]?.title || matchingMarkets[0].question;
-          
+
           // Sort by volume - return ALL markets for chooser display
-          const sortedMatches = matchingMarkets.sort((a: any, b: any) => 
-            (parseFloat(b.volume) || 0) - (parseFloat(a.volume) || 0)
+          const sortedMatches = matchingMarkets.sort(
+            (a: any, b: any) => (parseFloat(b.volume) || 0) - (parseFloat(a.volume) || 0),
           );
-          
+
           return {
-            platform: 'polymarket',
+            platform: "polymarket",
             eventTitle: parentEventTitle,
             eventSlug: parentEventSlug,
             category: matchingMarkets[0].events?.[0]?.category || "General",
             url: `https://polymarket.com/event/${parentEventSlug}`,
-            targetMarket: marketSlug ? formatSingleMarket(sortedMatches.find((m: any) => m.slug === marketSlug) || sortedMatches[0], parentEventSlug) : null,
+            targetMarket: marketSlug
+              ? formatSingleMarket(
+                  sortedMatches.find((m: any) => m.slug === marketSlug) || sortedMatches[0],
+                  parentEventSlug,
+                )
+              : null,
             allMarkets: sortedMatches.map((m: any) => formatSingleMarket(m, parentEventSlug)), // Return ALL markets
             totalMarketCount: matchingMarkets.length,
             totalVolume: matchingMarkets.reduce((sum: number, m: any) => sum + (parseFloat(m.volume) || 0), 0),
-            source: "gamma-api-markets"
+            source: "gamma-api-markets",
           };
         }
       }
     } catch (e) {
       console.log("Market search failed:", e);
     }
-    
+
     // Fallback to events endpoint with broader search
     console.log("Falling back to events endpoint for:", eventSlug);
     try {
       const eventsResponse = await fetch(
         `https://gamma-api.polymarket.com/events?closed=false&active=true&limit=100&order=volume24hr&ascending=false`,
-        { headers: { "Accept": "application/json" } }
+        { headers: { Accept: "application/json" } },
       );
-      
+
       if (eventsResponse.ok) {
         const events = await eventsResponse.json();
         console.log(`Searching through ${events.length} events`);
-        
-        const searchTerms = coreSlug.split('-').filter((w: string) => w.length > 2);
-        
+
+        const searchTerms = coreSlug.split("-").filter((w: string) => w.length > 2);
+
         const matchingEvent = events.find((e: any) => {
-          const eSlug = e.slug?.toLowerCase() || '';
-          const eTitle = (e.title || '').toLowerCase();
+          const eSlug = e.slug?.toLowerCase() || "";
+          const eTitle = (e.title || "").toLowerCase();
           const target = eventSlug.toLowerCase();
           const baseTarget = baseSlug.toLowerCase();
-          
+
           // Slug matches
-          if (eSlug === target || eSlug === baseTarget ||
-              eSlug.includes(baseTarget) || baseTarget.includes(eSlug.replace(/-\d+$/, ''))) {
+          if (
+            eSlug === target ||
+            eSlug === baseTarget ||
+            eSlug.includes(baseTarget) ||
+            baseTarget.includes(eSlug.replace(/-\d+$/, ""))
+          ) {
             return true;
           }
-          
+
           // Title match
           const matchCount = searchTerms.filter((term: string) => eTitle.includes(term.toLowerCase())).length;
           return matchCount >= Math.ceil(searchTerms.length * 0.6);
         });
-        
+
         if (matchingEvent) {
           console.log("Found event via events endpoint:", matchingEvent.slug);
-          return { ...formatEventData(matchingEvent, marketSlug), platform: 'polymarket' };
+          return { ...formatEventData(matchingEvent, marketSlug), platform: "polymarket" };
         }
       }
     } catch (e) {
       console.log("Events search failed:", e);
     }
-    
+
     console.log("No matching data found for:", eventSlug);
     return null;
-    
   } catch (error) {
     console.error("Error fetching Polymarket data:", error);
     return null;
@@ -3039,30 +3255,32 @@ function formatSingleMarket(market: any, parentEventSlug: string): any {
   let yesPrice = 0.5;
   try {
     if (market.outcomePrices) {
-      const prices = typeof market.outcomePrices === 'string' 
-        ? JSON.parse(market.outcomePrices) 
-        : market.outcomePrices;
+      const prices = typeof market.outcomePrices === "string" ? JSON.parse(market.outcomePrices) : market.outcomePrices;
       yesPrice = parseFloat(prices[0]) || 0.5;
     }
-  } catch { yesPrice = 0.5; }
-  
+  } catch {
+    yesPrice = 0.5;
+  }
+
   // Extract both YES and NO token IDs by outcome
   let yesTokenId = null;
   let noTokenId = null;
   try {
     if (market.tokens && market.tokens.length > 0) {
       // Find YES and NO tokens by outcome property
-      const yesToken = market.tokens.find((t: any) => t.outcome?.toLowerCase() === 'yes');
-      const noToken = market.tokens.find((t: any) => t.outcome?.toLowerCase() === 'no');
+      const yesToken = market.tokens.find((t: any) => t.outcome?.toLowerCase() === "yes");
+      const noToken = market.tokens.find((t: any) => t.outcome?.toLowerCase() === "no");
       yesTokenId = yesToken?.token_id || market.tokens[0]?.token_id; // Fallback to first token for YES
       noTokenId = noToken?.token_id || market.tokens[1]?.token_id; // Fallback to second token for NO
     }
-  } catch { /* ignore */ }
-  
-  const marketUrl = market.slug 
+  } catch {
+    /* ignore */
+  }
+
+  const marketUrl = market.slug
     ? `https://polymarket.com/event/${parentEventSlug}/${market.slug}`
     : `https://polymarket.com/event/${parentEventSlug}`;
-  
+
   return {
     question: market.question,
     yesPrice: (yesPrice * 100).toFixed(1),
@@ -3072,13 +3290,13 @@ function formatSingleMarket(market: any, parentEventSlug: string): any {
     url: marketUrl,
     tokenId: yesTokenId, // Keep for backward compatibility
     yesTokenId,
-    noTokenId
+    noTokenId,
   };
 }
 
 function formatMarketData(market: any, parentEventSlug: string): any {
   const formatted = formatSingleMarket(market, parentEventSlug);
-  
+
   return {
     eventTitle: market.events?.[0]?.title || market.question,
     eventSlug: parentEventSlug,
@@ -3087,48 +3305,49 @@ function formatMarketData(market: any, parentEventSlug: string): any {
     targetMarket: formatted,
     allMarkets: [formatted],
     totalVolume: parseFloat(market.volume) || 0,
-    source: "gamma-api-markets"
+    source: "gamma-api-markets",
   };
 }
 
 function formatEventData(event: any, targetMarketSlug: string | null): any {
   const markets = event.markets || [];
-  
+
   let targetMarket = null;
   if (targetMarketSlug) {
-    targetMarket = markets.find((m: any) => 
-      m.slug === targetMarketSlug || 
-      m.slug?.toLowerCase() === targetMarketSlug.toLowerCase()
+    targetMarket = markets.find(
+      (m: any) => m.slug === targetMarketSlug || m.slug?.toLowerCase() === targetMarketSlug.toLowerCase(),
     );
   }
-  
+
   const formatMarket = (m: any) => {
     let yesPrice = 0.5;
     try {
       if (m.outcomePrices) {
-        const prices = typeof m.outcomePrices === 'string' 
-          ? JSON.parse(m.outcomePrices) 
-          : m.outcomePrices;
+        const prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices;
         yesPrice = parseFloat(prices[0]) || 0.5;
       }
-    } catch { yesPrice = 0.5; }
-    
+    } catch {
+      yesPrice = 0.5;
+    }
+
     // Extract both YES and NO token IDs by outcome
     let yesTokenId = null;
     let noTokenId = null;
     try {
       if (m.tokens && m.tokens.length > 0) {
-        const yesToken = m.tokens.find((t: any) => t.outcome?.toLowerCase() === 'yes');
-        const noToken = m.tokens.find((t: any) => t.outcome?.toLowerCase() === 'no');
+        const yesToken = m.tokens.find((t: any) => t.outcome?.toLowerCase() === "yes");
+        const noToken = m.tokens.find((t: any) => t.outcome?.toLowerCase() === "no");
         yesTokenId = yesToken?.token_id || m.tokens[0]?.token_id;
         noTokenId = noToken?.token_id || m.tokens[1]?.token_id;
       }
-    } catch { /* ignore */ }
-    
-    const marketUrl = m.slug 
+    } catch {
+      /* ignore */
+    }
+
+    const marketUrl = m.slug
       ? `https://polymarket.com/event/${event.slug}/${m.slug}`
       : `https://polymarket.com/event/${event.slug}`;
-    
+
     return {
       question: m.question,
       yesPrice: (yesPrice * 100).toFixed(1),
@@ -3138,27 +3357,27 @@ function formatEventData(event: any, targetMarketSlug: string | null): any {
       url: marketUrl,
       tokenId: yesTokenId,
       yesTokenId,
-      noTokenId
+      noTokenId,
     };
   };
-  
+
   // Filter and sort markets: exclude expired (50/50) and sort by volume
   const validMarkets = markets
     .filter((m: any) => {
       // Skip closed/resolved markets
       if (m.closed === true || m.resolved === true) return false;
-      
+
       // Skip 50/50 markets (expired/suspended)
       try {
         if (m.outcomePrices) {
-          const prices = typeof m.outcomePrices === 'string' 
-            ? JSON.parse(m.outcomePrices) 
-            : m.outcomePrices;
+          const prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices;
           const yesPrice = parseFloat(prices[0]) || 0.5;
           if (yesPrice === 0.5) return false;
         }
-      } catch { /* keep it */ }
-      
+      } catch {
+        /* keep it */
+      }
+
       return true;
     })
     .sort((a: any, b: any) => {
@@ -3166,7 +3385,7 @@ function formatEventData(event: any, targetMarketSlug: string | null): any {
       const volB = parseFloat(b.volume) || 0;
       return volB - volA; // Sort by volume descending
     });
-  
+
   // Return ALL valid markets - let Claude show chooser for multi-market events
   return {
     eventTitle: event.title,
@@ -3179,464 +3398,464 @@ function formatEventData(event: any, targetMarketSlug: string | null): any {
     totalMarketCount: validMarkets.length,
     totalVolume: markets.reduce((sum: number, m: any) => sum + (parseFloat(m.volume) || 0), 0),
     url: `https://polymarket.com/event/${event.slug}`,
-    source: "gamma-api"
+    source: "gamma-api",
   };
 }
 
 // Sanitize messages to remove orphaned tool_use blocks that could cause Claude errors
 // CRITICAL: Also remove web_search tool blocks which can cause "no web_search_tool_result" errors
 function sanitizeMessages(messages: any[]): any[] {
-  return messages.map((msg, idx) => {
-    // If content is an array (Claude's structured format)
-    if (Array.isArray(msg.content)) {
-      // Filter out tool_use blocks AND web_search related blocks
-      // These can cause errors if included without proper tool_result responses
-      const relevantBlocks = msg.content.filter((block: any) => {
-        // Remove any tool_use blocks (including web_search)
-        if (block.type === 'tool_use') {
-          console.log(`[Sanitize] Removing tool_use block: ${block.name || 'unknown'}`);
+  return messages
+    .map((msg, idx) => {
+      // If content is an array (Claude's structured format)
+      if (Array.isArray(msg.content)) {
+        // Filter out tool_use blocks AND web_search related blocks
+        // These can cause errors if included without proper tool_result responses
+        const relevantBlocks = msg.content.filter((block: any) => {
+          // Remove any tool_use blocks (including web_search)
+          if (block.type === "tool_use") {
+            console.log(`[Sanitize] Removing tool_use block: ${block.name || "unknown"}`);
+            return false;
+          }
+          // Remove web_search_tool_result blocks (native web search results)
+          if (block.type === "web_search_tool_result") {
+            console.log(`[Sanitize] Removing web_search_tool_result block`);
+            return false;
+          }
+          // Remove server_tool_use blocks (another form of web_search)
+          if (block.type === "server_tool_use") {
+            console.log(`[Sanitize] Removing server_tool_use block`);
+            return false;
+          }
+          // Keep text blocks
+          if (block.type === "text") {
+            return true;
+          }
+          // Remove tool_result blocks from history as they can cause orphan issues
+          if (block.type === "tool_result") {
+            console.log(`[Sanitize] Removing orphaned tool_result block`);
+            return false;
+          }
           return false;
+        });
+
+        if (relevantBlocks.length === 0) {
+          console.log(`[Sanitize] Message ${idx}: No relevant content after filtering, skipping`);
+          return null;
         }
-        // Remove web_search_tool_result blocks (native web search results)
-        if (block.type === 'web_search_tool_result') {
-          console.log(`[Sanitize] Removing web_search_tool_result block`);
-          return false;
+
+        // Flatten to text only - don't preserve complex structures in history
+        const textContent = relevantBlocks
+          .filter((b: any) => b.type === "text")
+          .map((b: any) => b.text)
+          .join("");
+
+        if (!textContent.trim()) {
+          console.log(`[Sanitize] Message ${idx}: Empty text content, skipping`);
+          return null;
         }
-        // Remove server_tool_use blocks (another form of web_search)
-        if (block.type === 'server_tool_use') {
-          console.log(`[Sanitize] Removing server_tool_use block`);
-          return false;
-        }
-        // Keep text blocks
-        if (block.type === 'text') {
-          return true;
-        }
-        // Remove tool_result blocks from history as they can cause orphan issues
-        if (block.type === 'tool_result') {
-          console.log(`[Sanitize] Removing orphaned tool_result block`);
-          return false;
-        }
-        return false;
-      });
-      
-      if (relevantBlocks.length === 0) {
-        console.log(`[Sanitize] Message ${idx}: No relevant content after filtering, skipping`);
-        return null;
+
+        return { role: msg.role, content: textContent };
       }
-      
-      // Flatten to text only - don't preserve complex structures in history
-      const textContent = relevantBlocks
-        .filter((b: any) => b.type === 'text')
-        .map((b: any) => b.text)
-        .join('');
-      
-      if (!textContent.trim()) {
-        console.log(`[Sanitize] Message ${idx}: Empty text content, skipping`);
-        return null;
-      }
-      
-      return { role: msg.role, content: textContent };
-    }
-    
-    // String content - check for embedded tool artifacts
-    if (typeof msg.content === 'string') {
-      // Skip messages that contain tool use patterns that could cause errors
-      if (msg.content.includes('"type":"tool_use"') || 
+
+      // String content - check for embedded tool artifacts
+      if (typeof msg.content === "string") {
+        // Skip messages that contain tool use patterns that could cause errors
+        if (
+          msg.content.includes('"type":"tool_use"') ||
           msg.content.includes('"type":"web_search"') ||
-          msg.content.includes('web_search_tool_result') ||
-          msg.content.includes('server_tool_use')) {
-        console.log(`[Sanitize] Message ${idx}: Contains tool artifacts in string, skipping`);
-        return null;
+          msg.content.includes("web_search_tool_result") ||
+          msg.content.includes("server_tool_use")
+        ) {
+          console.log(`[Sanitize] Message ${idx}: Contains tool artifacts in string, skipping`);
+          return null;
+        }
+        return { role: msg.role, content: msg.content };
       }
-      return { role: msg.role, content: msg.content };
-    }
-    
-    return null;
-  }).filter(Boolean);
+
+      return null;
+    })
+    .filter(Boolean);
 }
 
 serve(async (req) => {
   // Handle CORS preflight with full headers
   if (req.method === "OPTIONS") {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
       headers: {
         ...corsHeaders,
         "Access-Control-Max-Age": "86400",
-      }
+      },
     });
   }
 
   // ============= BOT PROTECTION CHECKS =============
   const clientIP = getClientIP(req);
-  const userAgent = req.headers.get('user-agent') || '';
-  const origin = req.headers.get('origin');
-  const referer = req.headers.get('referer');
+  const userAgent = req.headers.get("user-agent") || "";
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
 
   // 1. Block known bad IPs FIRST (fastest check)
   if (isBlockedIP(clientIP)) {
     console.log(`[BOT BLOCK] 🚫 Blocked IP: ${clientIP}`);
-    return corsResponse(
-      { error: "Access denied." },
-      403
-    );
+    return corsResponse({ error: "Access denied." }, 403);
   }
 
   // 2. Block non-browser user agents (stops 96.5% of bot abuse)
   if (isBlockedUserAgent(userAgent)) {
     console.log(`[BOT BLOCK] 🚫 Blocked UA: ${userAgent.substring(0, 50)} from IP: ${clientIP}`);
-    return corsResponse(
-      { error: "Automated access not permitted. Please use the web interface at polyai.pro" },
-      403
-    );
+    return corsResponse({ error: "Automated access not permitted. Please use the web interface at polyai.pro" }, 403);
   }
 
   // 3. Validate origin (only if origin header is present)
   if (origin && !isAllowedOrigin(origin)) {
     console.log(`[BOT BLOCK] 🚫 Invalid origin: ${origin} from IP: ${clientIP}`);
-    return corsResponse(
-      { error: "Invalid origin. Please use the official site." },
-      403
-    );
+    return corsResponse({ error: "Invalid origin. Please use the official site." }, 403);
   }
 
   // 4. Suspicious: No user agent at all
   if (!userAgent || userAgent.length < 10) {
     console.log(`[BOT BLOCK] 🚫 Missing/short UA from IP: ${clientIP}`);
-    return corsResponse(
-      { error: "Invalid request." },
-      403
-    );
+    return corsResponse({ error: "Invalid request." }, 403);
   }
 
   // ============= RATE LIMITING CHECK =============
   const ipRateLimit = checkRateLimit(clientIP, rateLimitMap, RATE_LIMIT.IP_MAX_REQUESTS, RATE_LIMIT.IP_WINDOW_MS);
-  
+
   if (!ipRateLimit.allowed) {
     console.log(`[RATE LIMIT] IP ${clientIP} exceeded limit. Reset in ${Math.ceil(ipRateLimit.resetIn / 1000)}s`);
     return corsResponse(
-      { 
+      {
         error: "Too many requests. Please slow down.",
-        retryAfter: Math.ceil(ipRateLimit.resetIn / 1000)
+        retryAfter: Math.ceil(ipRateLimit.resetIn / 1000),
       },
       429,
-      { "Retry-After": String(Math.ceil(ipRateLimit.resetIn / 1000)) }
+      { "Retry-After": String(Math.ceil(ipRateLimit.resetIn / 1000)) },
     );
   }
 
   try {
-    const { messages, detailMode = "advanced", voiceMode = false, marketUrl: providedMarketUrl, currentMarket, explicitContext, conversationId, sidebarData, authToken, walletAddress, authType, deepResearch = false, irysMode = false } = await req.json();
-    
+    const {
+      messages,
+      detailMode = "advanced",
+      voiceMode = false,
+      marketUrl: providedMarketUrl,
+      currentMarket,
+      explicitContext,
+      conversationId,
+      sidebarData,
+      authToken,
+      walletAddress,
+      authType,
+      deepResearch = false,
+      irysMode = false,
+    } = await req.json();
+
     // ============= AUTHENTICATION REQUIRED =============
     // Require either Supabase auth OR wallet connection
     if (!authToken && !walletAddress) {
       console.log(`[AUTH] ❌ Unauthenticated request from IP: ${clientIP}`);
-      return corsResponse(
-        { error: "Authentication required. Please sign in or connect your wallet." },
-        401
-      );
+      return corsResponse({ error: "Authentication required. Please sign in or connect your wallet." }, 401);
     }
 
     // Determine user identifier for rate limiting
     // REQUIREMENT: Email sign-in (Supabase auth) is REQUIRED to chat
     // Wallet-only authentication is no longer sufficient
     let userId: string | null = null;
-    let authMethod: string = 'unknown';
+    let authMethod: string = "unknown";
 
     if (authToken) {
       // Verify Supabase JWT token - this is the ONLY valid auth method for chat
       try {
-        const authSupabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_ANON_KEY")!
-        );
-        const { data: { user }, error: authError } = await authSupabase.auth.getUser(authToken);
-        
+        const authSupabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
+        const {
+          data: { user },
+          error: authError,
+        } = await authSupabase.auth.getUser(authToken);
+
         if (authError || !user) {
           console.log(`[AUTH] ❌ Invalid auth token from IP: ${clientIP}`);
-          return corsResponse(
-            { error: "Invalid authentication token. Please sign in again." },
-            401
-          );
+          return corsResponse({ error: "Invalid authentication token. Please sign in again." }, 401);
         }
         userId = user.id;
-        authMethod = 'supabase';
+        authMethod = "supabase";
         console.log(`[AUTH] ✅ Supabase user: ${userId.substring(0, 8)}...`);
       } catch (authErr) {
         console.error(`[AUTH] Token verification error:`, authErr);
-        return corsResponse(
-          { error: "Authentication error. Please try again." },
-          401
-        );
+        return corsResponse({ error: "Authentication error. Please try again." }, 401);
       }
     } else {
       // No Supabase auth token - reject the request
       // Wallet-only users must sign in with email to chat
       console.log(`[AUTH] ❌ No email auth - wallet-only access denied from IP: ${clientIP}`);
-      return corsResponse(
-        { error: "Email sign-in required. Please sign in with your email to chat." },
-        401
-      );
+      return corsResponse({ error: "Email sign-in required. Please sign in with your email to chat." }, 401);
     }
 
     // ============= USER-BASED RATE LIMITING (PRIMARY) =============
     if (userId) {
-      const userRateLimit = checkRateLimit(userId, userRateLimitMap, RATE_LIMIT.USER_MAX_REQUESTS, RATE_LIMIT.USER_WINDOW_MS);
-      
+      const userRateLimit = checkRateLimit(
+        userId,
+        userRateLimitMap,
+        RATE_LIMIT.USER_MAX_REQUESTS,
+        RATE_LIMIT.USER_WINDOW_MS,
+      );
+
       if (!userRateLimit.allowed) {
-        console.log(`[RATE LIMIT] User ${userId.substring(0, 12)}... exceeded limit. Reset in ${Math.ceil(userRateLimit.resetIn / 1000)}s`);
+        console.log(
+          `[RATE LIMIT] User ${userId.substring(0, 12)}... exceeded limit. Reset in ${Math.ceil(userRateLimit.resetIn / 1000)}s`,
+        );
         return corsResponse(
-          { 
+          {
             error: "Too many requests. Please slow down.",
-            retryAfter: Math.ceil(userRateLimit.resetIn / 1000)
+            retryAfter: Math.ceil(userRateLimit.resetIn / 1000),
           },
           429,
-          { "Retry-After": String(Math.ceil(userRateLimit.resetIn / 1000)) }
+          { "Retry-After": String(Math.ceil(userRateLimit.resetIn / 1000)) },
         );
       }
     }
 
     // ============= CREDIT SYSTEM CHECK =============
     // Check if user has sufficient credits for this request
-    const adminSupabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const adminSupabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Only check credits for Supabase authenticated users with valid UUID
     const isValidUUID = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-    
-    if (authMethod === 'supabase' && isValidUUID) {
+
+    if (authMethod === "supabase" && isValidUUID) {
       const { data: userCredits, error: creditsError } = await adminSupabase
-        .from('user_credits')
-        .select('credits_balance')
-        .eq('user_id', userId)
+        .from("user_credits")
+        .select("credits_balance")
+        .eq("user_id", userId)
         .single();
 
       // If no credits record exists, user needs to deposit first (NO FREE CREDITS)
-      if (creditsError && creditsError.code === 'PGRST116') {
+      if (creditsError && creditsError.code === "PGRST116") {
         console.log(`[CREDITS] ❌ No credits record for user ${userId!.substring(0, 8)}... - needs to deposit`);
         return corsResponse(
-          { 
+          {
             error: "No credits available. Please deposit POLY tokens to start chatting.",
             needsCredits: true,
-            creditsBalance: 0
+            creditsBalance: 0,
           },
-          402 // Payment Required
+          402, // Payment Required
         );
       } else if (userCredits) {
         // Check if user has credits
         if (userCredits.credits_balance < 1) {
-          console.log(`[CREDITS] ❌ User ${userId!.substring(0, 8)}... has insufficient credits: ${userCredits.credits_balance}`);
+          console.log(
+            `[CREDITS] ❌ User ${userId!.substring(0, 8)}... has insufficient credits: ${userCredits.credits_balance}`,
+          );
           return corsResponse(
-            { 
+            {
               error: "Insufficient credits. Please deposit POLY tokens to continue.",
               needsCredits: true,
-              creditsBalance: userCredits.credits_balance
+              creditsBalance: userCredits.credits_balance,
             },
-            402 // Payment Required
+            402, // Payment Required
           );
         }
-        
+
         console.log(`[CREDITS] ✅ User ${userId!.substring(0, 8)}... has ${userCredits.credits_balance} credits`);
-        
+
         // Deduct 1 credit for this request (upfront)
         const newBalance = userCredits.credits_balance - 1;
         await adminSupabase
-          .from('user_credits')
+          .from("user_credits")
           .update({
             credits_balance: newBalance,
-            total_spent: (userCredits.credits_balance || 0) + 1
+            total_spent: (userCredits.credits_balance || 0) + 1,
           })
-          .eq('user_id', userId);
-        
+          .eq("user_id", userId);
+
         // Log credit usage
-        await adminSupabase
-          .from('credit_usage')
-          .insert({
-            user_id: userId,
-            credits_used: 1
-          });
-        
+        await adminSupabase.from("credit_usage").insert({
+          user_id: userId,
+          credits_used: 1,
+        });
+
         console.log(`[CREDITS] 💳 Deducted 1 credit, new balance: ${newBalance}`);
       }
     }
 
     // Per-conversation rate limiting (if conversationId provided)
     if (conversationId) {
-      const convRateLimit = checkRateLimit(conversationId, conversationRateLimitMap, RATE_LIMIT.CONV_MAX_REQUESTS, RATE_LIMIT.CONV_WINDOW_MS);
+      const convRateLimit = checkRateLimit(
+        conversationId,
+        conversationRateLimitMap,
+        RATE_LIMIT.CONV_MAX_REQUESTS,
+        RATE_LIMIT.CONV_WINDOW_MS,
+      );
       if (!convRateLimit.allowed) {
         console.log(`[RATE LIMIT] Conversation ${conversationId.substring(0, 8)} exceeded limit`);
         return corsResponse(
-          { 
+          {
             error: "Too many messages. Please wait a moment.",
-            retryAfter: Math.ceil(convRateLimit.resetIn / 1000)
+            retryAfter: Math.ceil(convRateLimit.resetIn / 1000),
           },
           429,
-          { "Retry-After": String(Math.ceil(convRateLimit.resetIn / 1000)) }
+          { "Retry-After": String(Math.ceil(convRateLimit.resetIn / 1000)) },
         );
       }
     }
-    
+
     // Log request for monitoring
-    console.log(`[Request] User: ${userId?.substring(0, 12) || 'none'}... (${authMethod}) Conv: ${conversationId?.substring(0, 8) || 'none'} Voice: ${voiceMode}`);
-    
+    console.log(
+      `[Request] User: ${userId?.substring(0, 12) || "none"}... (${authMethod}) Conv: ${conversationId?.substring(0, 8) || "none"} Voice: ${voiceMode}`,
+    );
+
     // === CHAT LOGGING FOR ANALYTICS ===
     // Log to database for analysis (non-blocking)
-    const lastUserMsg = messages?.filter((m: any) => m.role === 'user').pop();
+    const lastUserMsg = messages?.filter((m: any) => m.role === "user").pop();
     // userAgent already defined above in bot protection checks
-    
+
     const logChatRequest = async () => {
       try {
-        const logSupabase = createClient(
-          Deno.env.get("SUPABASE_URL")!,
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-        );
-        await logSupabase.from('chat_logs').insert({
+        const logSupabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+        await logSupabase.from("chat_logs").insert({
           ip_address: clientIP,
           conversation_id: conversationId || null,
-          user_message: lastUserMsg?.content?.substring(0, 2000) || '[no message]',
+          user_message: lastUserMsg?.content?.substring(0, 2000) || "[no message]",
           message_count: messages?.length || 1,
           user_agent: userAgent.substring(0, 500),
           is_voice: voiceMode || false,
-          detail_mode: detailMode || 'advanced'
+          detail_mode: detailMode || "advanced",
         });
       } catch (logErr) {
-        console.error('[LOG] Failed to save chat log:', logErr);
+        console.error("[LOG] Failed to save chat log:", logErr);
       }
     };
     // Fire and forget - don't wait for logging
     logChatRequest();
-    
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
+
     // CONVERSATION MEMORY: Load previous conversation history with timeout
     let conversationHistory: { role: string; content: string }[] = [];
     const MEMORY_TIMEOUT = 3000; // 3 second timeout for DB query
-    
+
     if (conversationId) {
       try {
         // Wrap DB query in timeout to prevent hanging on 522 errors
         const historyPromise = supabase
-          .from('conversation_messages')
-          .select('role, content, tool_calls')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true })
+          .from("conversation_messages")
+          .select("role, content, tool_calls")
+          .eq("conversation_id", conversationId)
+          .order("created_at", { ascending: true })
           .limit(20);
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Memory load timeout')), MEMORY_TIMEOUT)
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Memory load timeout")), MEMORY_TIMEOUT),
         );
-        
-        const { data: history, error: historyError } = await Promise.race([
+
+        const { data: history, error: historyError } = (await Promise.race([
           historyPromise,
-          timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
-        ]) as any;
-        
+          timeoutPromise.then(() => ({ data: null, error: { message: "Timeout" } })),
+        ])) as any;
+
         if (historyError) {
-          console.warn('[Memory] Skipping history (continuing without):', historyError.message || historyError);
+          console.warn("[Memory] Skipping history (continuing without):", historyError.message || historyError);
         } else if (history) {
           // Filter out messages with tool_calls to avoid "tool_use without tool_result" errors
           conversationHistory = (history || [])
             .filter((m: any) => {
               if (m.tool_calls) return false;
               if (!m.content) return false;
-              if (typeof m.content === 'string') {
-                const hasToolArtifacts = 
-                  m.content.includes('tool_use') || 
-                  m.content.includes('web_search') ||
-                  m.content.includes('tool_result') ||
-                  m.content.includes('server_tool_use') ||
+              if (typeof m.content === "string") {
+                const hasToolArtifacts =
+                  m.content.includes("tool_use") ||
+                  m.content.includes("web_search") ||
+                  m.content.includes("tool_result") ||
+                  m.content.includes("server_tool_use") ||
                   m.content.includes('"type":"web_search"') ||
-                  m.content.includes('web_search_tool_result');
+                  m.content.includes("web_search_tool_result");
                 if (hasToolArtifacts) return false;
               }
               return true;
             })
             .map((m: any) => ({ role: m.role, content: m.content }));
-          console.log(`[Memory] Loaded ${conversationHistory.length} messages for ${conversationId.substring(0, 8)}...`);
+          console.log(
+            `[Memory] Loaded ${conversationHistory.length} messages for ${conversationId.substring(0, 8)}...`,
+          );
         }
       } catch (memoryError: any) {
         // Gracefully continue without history on any error
-        console.warn('[Memory] Error loading history, continuing without:', memoryError.message || memoryError);
+        console.warn("[Memory] Error loading history, continuing without:", memoryError.message || memoryError);
       }
     }
-    
+
     // Merge conversation history with current messages
     // The current messages from client may be a subset, so we use stored history as the source of truth
     const currentUserMessage = messages[messages.length - 1];
     let messagesWithHistory = [...messages];
-    
+
     if (conversationHistory.length > 0) {
       // Use database history + current message
-      messagesWithHistory = [
-        ...conversationHistory,
-        currentUserMessage
-      ];
-      console.log(`[Memory] Using ${messagesWithHistory.length} messages (${conversationHistory.length} from DB + 1 current)`);
+      messagesWithHistory = [...conversationHistory, currentUserMessage];
+      console.log(
+        `[Memory] Using ${messagesWithHistory.length} messages (${conversationHistory.length} from DB + 1 current)`,
+      );
     }
-    
+
     const lastUserMessage = messages.filter((m: any) => m.role === "user").pop();
-    const userMessageLower = lastUserMessage?.content?.toLowerCase() || '';
-    
+    const userMessageLower = lastUserMessage?.content?.toLowerCase() || "";
+
     // ============= TEST DOME COMMAND =============
     // Allow users to verify Dome API connectivity with detailed logging
-    if (userMessageLower.includes('test dome') || userMessageLower.includes('/test-dome')) {
-      console.log('🧪 [TEST] User triggered Dome API connection test');
-      
+    if (userMessageLower.includes("test dome") || userMessageLower.includes("/test-dome")) {
+      console.log("🧪 [TEST] User triggered Dome API connection test");
+
       const results: string[] = [];
-      
+
       // Step 1: List ANY markets (no filter)
-      console.log('[TEST] Fetching markets without filter...');
-      results.push('Step 1: Discovering available markets\n');
-      
+      console.log("[TEST] Fetching markets without filter...");
+      results.push("Step 1: Discovering available markets\n");
+
       try {
-        const response = await fetch(
-          `https://api.domeapi.io/v1/polymarket/markets?limit=10&status=open`,
-          {
-            headers: {
-              'Authorization': `Bearer ${DOME_API_KEY || ''}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
+        const response = await fetch(`https://api.domeapi.io/v1/polymarket/markets?limit=10&status=open`, {
+          headers: {
+            Authorization: `Bearer ${DOME_API_KEY || ""}`,
+            "Content-Type": "application/json",
+          },
+        });
+
         console.log(`[TEST] Response status: ${response.status}`);
         const responseText = await response.text();
         console.log(`[TEST] Response body: ${responseText.substring(0, 1000)}`);
-        
+
         const data = JSON.parse(responseText);
-        
+
         if (data.markets && data.markets.length > 0) {
           results.push(`✅ Found ${data.markets.length} markets in Dome\n`);
-          results.push('First 3 markets:');
-          
+          results.push("First 3 markets:");
+
           data.markets.slice(0, 3).forEach((m: any) => {
             results.push(`\n📊 "${m.market_slug}"`);
             results.push(`   Title: ${m.title}`);
             results.push(`   Volume: $${m.volume_total?.toLocaleString() || 0}`);
           });
-          
+
           // Step 2: Test with first market
           const testSlug = data.markets[0].market_slug;
           results.push(`\n---\nStep 2: Testing with "${testSlug}"\n`);
-          
+
           const ordersResponse = await fetch(
             `https://api.domeapi.io/v1/polymarket/orders?market_slug=${testSlug}&limit=10`,
-            { headers: { 'Authorization': `Bearer ${DOME_API_KEY || ''}` } }
+            { headers: { Authorization: `Bearer ${DOME_API_KEY || ""}` } },
           );
-          
+
           const ordersData = await ordersResponse.json();
           console.log(`[TEST] Orders response:`, JSON.stringify(ordersData).substring(0, 500));
-          
+
           if (ordersData.orders && ordersData.orders.length > 0) {
             results.push(`✅ ${ordersData.orders.length} orders fetched`);
             const latest = ordersData.orders[0];
@@ -3644,161 +3863,184 @@ serve(async (req) => {
           } else {
             results.push(`⚠️ No orders for this market`);
           }
-          
         } else {
-          results.push('❌ No markets returned from Dome API');
+          results.push("❌ No markets returned from Dome API");
           results.push(`\nResponse: ${responseText.substring(0, 500)}`);
         }
-        
       } catch (error) {
-        console.error('[TEST] Error:', error);
-        results.push(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.error("[TEST] Error:", error);
+        results.push(`❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
-      
-      results.push('\n---\nConfiguration:');
-      results.push(`✅ API Key: ${DOME_API_KEY ? 'Present' : '❌ MISSING'}`);
-      
+
+      results.push("\n---\nConfiguration:");
+      results.push(`✅ API Key: ${DOME_API_KEY ? "Present" : "❌ MISSING"}`);
+
       return corsResponse({
-        content: `🧪 Dome API Test\n\n${results.join('\n')}`,
-        type: 'debug'
+        content: `🧪 Dome API Test\n\n${results.join("\n")}`,
+        type: "debug",
       });
     }
-    
+
     const userWantsLiveData = lastUserMessage?.content && needsLiveData(lastUserMessage.content);
     const userWantsWhaleData = lastUserMessage?.content && needsWhaleData(lastUserMessage.content);
     const requestedCategory = lastUserMessage?.content ? detectCategory(lastUserMessage.content) : null;
-    
+
     // ============= FOLLOW-UP QUERY DETECTION =============
     // Detect if user is asking for more detail about a market we already discussed
     const FOLLOWUP_KEYWORDS = {
-    detailed_trades: ["dig deeper", "more detail", "trade data", "trades", "recent trades", "order flow", "trade history", "show trades"],
+      detailed_trades: [
+        "dig deeper",
+        "more detail",
+        "trade data",
+        "trades",
+        "recent trades",
+        "order flow",
+        "trade history",
+        "show trades",
+      ],
       whales: ["whale activity", "whales", "big money", "smart money", "whale", "large traders"],
-      all_markets: ["all markets", "other markets", "across all", "rotation", "compare all", "all the markets", "every market"],
-      volatility: ["volatility", "volatile", "price swings", "how volatile"]
+      all_markets: [
+        "all markets",
+        "other markets",
+        "across all",
+        "rotation",
+        "compare all",
+        "all the markets",
+        "every market",
+      ],
+      volatility: ["volatility", "volatile", "price swings", "how volatile"],
     };
-    
+
     // userMessageLower already defined above
-    
+
     const detectFollowUpType = (msg: string): string | null => {
       for (const [type, keywords] of Object.entries(FOLLOWUP_KEYWORDS)) {
-        if (keywords.some(kw => msg.includes(kw))) return type;
+        if (keywords.some((kw) => msg.includes(kw))) return type;
       }
       return null;
     };
-    
+
     const followUpType = detectFollowUpType(userMessageLower);
-    
+
     // If this is a follow-up query AND we have market context, fetch REAL data
     if (followUpType && currentMarket?.slug) {
       console.log(`[FOLLOWUP] Detected follow-up type: ${followUpType} for market: ${currentMarket.slug}`);
-      
+
       // DETAILED TRADES: Fetch real trade history from Dome
-      if (followUpType === 'detailed_trades') {
+      if (followUpType === "detailed_trades") {
         console.log(`[FOLLOWUP] Fetching detailed trade data from Dome API...`);
-        
-        const trades = await dome.getTradeHistory({ 
-          market_slug: currentMarket.slug, 
-          limit: 100 
+
+        const trades = await dome.getTradeHistory({
+          market_slug: currentMarket.slug,
+          limit: 100,
         });
-        
+
         if (trades.length === 0) {
           return corsResponse({
             content: `I don't have recent trade data for this market yet. It might be too new or have low activity. Want me to check the whale tracker for broader market activity instead?`,
-            type: "analysis"
+            type: "analysis",
           });
         }
-        
+
         // Calculate REAL numbers from actual trades
         const now = Date.now() / 1000;
         const last24h = trades.filter((t: any) => t.timestamp > now - 86400);
-        const buyTrades = last24h.filter((t: any) => (t.side || '').toUpperCase() === 'BUY');
-        const sellTrades = last24h.filter((t: any) => (t.side || '').toUpperCase() === 'SELL');
-        
+        const buyTrades = last24h.filter((t: any) => (t.side || "").toUpperCase() === "BUY");
+        const sellTrades = last24h.filter((t: any) => (t.side || "").toUpperCase() === "SELL");
+
         const buyVolume = buyTrades.reduce((sum: number, t: any) => {
           const shares = parseFloat(t.shares_normalized || t.shares || t.size || 0);
           const price = parseFloat(t.price || 0);
-          return sum + (shares * price);
+          return sum + shares * price;
         }, 0);
-        
+
         const sellVolume = sellTrades.reduce((sum: number, t: any) => {
           const shares = parseFloat(t.shares_normalized || t.shares || t.size || 0);
           const price = parseFloat(t.price || 0);
-          return sum + (shares * price);
+          return sum + shares * price;
         }, 0);
-        
+
         // Find largest trades
         const sortedBySize = [...last24h].sort((a: any, b: any) => {
-          const sizeA = (parseFloat(a.shares_normalized || a.shares || a.size || 0)) * parseFloat(a.price || 0);
-          const sizeB = (parseFloat(b.shares_normalized || b.shares || b.size || 0)) * parseFloat(b.price || 0);
+          const sizeA = parseFloat(a.shares_normalized || a.shares || a.size || 0) * parseFloat(a.price || 0);
+          const sizeB = parseFloat(b.shares_normalized || b.shares || b.size || 0) * parseFloat(b.price || 0);
           return sizeB - sizeA;
         });
         const top5Trades = sortedBySize.slice(0, 5);
-        
+
         const formatTime = (ts: number) => {
           const d = new Date(ts * 1000);
-          return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
         };
-        
+
         const formatSize = (amt: number) => {
           if (amt >= 1000) return `$${(amt / 1000).toFixed(1)}K`;
           return `$${amt.toFixed(0)}`;
         };
-        
+
         const detailedAnalysis = `Here's the trade breakdown for the last 24 hours:
 
 **Volume Summary**
 • ${last24h.length} total trades
 • ${buyTrades.length} buys (${formatSize(buyVolume)}) vs ${sellTrades.length} sells (${formatSize(sellVolume)})
-• Net flow: ${buyVolume > sellVolume ? 'Buying pressure' : 'Selling pressure'} of ${formatSize(Math.abs(buyVolume - sellVolume))}
+• Net flow: ${buyVolume > sellVolume ? "Buying pressure" : "Selling pressure"} of ${formatSize(Math.abs(buyVolume - sellVolume))}
 
 **Biggest Trades**
-${top5Trades.length > 0 ? top5Trades.map((t: any, i: number) => {
-  const size = (parseFloat(t.shares_normalized || t.shares || t.size || 0)) * parseFloat(t.price || 0);
-  const side = (t.side || 'UNKNOWN').toUpperCase();
-  const price = parseFloat(t.price || 0) * 100;
-  const time = t.timestamp ? formatTime(t.timestamp) : 'N/A';
-  return `• ${side} ${formatSize(size)} at ${price.toFixed(1)}% (${time})`;
-}).join('\n') : '• No large trades in this window'}
+${
+  top5Trades.length > 0
+    ? top5Trades
+        .map((t: any, i: number) => {
+          const size = parseFloat(t.shares_normalized || t.shares || t.size || 0) * parseFloat(t.price || 0);
+          const side = (t.side || "UNKNOWN").toUpperCase();
+          const price = parseFloat(t.price || 0) * 100;
+          const time = t.timestamp ? formatTime(t.timestamp) : "N/A";
+          return `• ${side} ${formatSize(size)} at ${price.toFixed(1)}% (${time})`;
+        })
+        .join("\n")
+    : "• No large trades in this window"
+}
 
 **My Read**
-${buyVolume > sellVolume * 1.2 
-  ? 'Strong accumulation happening - buyers are clearly outpacing sellers. Could signal informed money moving in.'
-  : sellVolume > buyVolume * 1.2
-    ? 'Distribution phase - sellers are dominating. Watch for continued pressure or reversal.'
-    : 'Pretty balanced flow right now. No clear directional signal from trade data.'}`;
-        
+${
+  buyVolume > sellVolume * 1.2
+    ? "Strong accumulation happening - buyers are clearly outpacing sellers. Could signal informed money moving in."
+    : sellVolume > buyVolume * 1.2
+      ? "Distribution phase - sellers are dominating. Watch for continued pressure or reversal."
+      : "Pretty balanced flow right now. No clear directional signal from trade data."
+}`;
+
         return corsResponse({
           content: detailedAnalysis,
           type: "analysis",
           marketSlug: currentMarket.slug,
-          eventSlug: currentMarket.eventSlug
+          eventSlug: currentMarket.eventSlug,
         });
       }
-      
+
       // WHALE ANALYSIS: Fetch real whale data using new getWhaleActivity method
-      if (followUpType === 'whales') {
+      if (followUpType === "whales") {
         console.log(`[FOLLOWUP] Fetching whale data from Dome API...`);
-        
+
         const whaleData = await dome.getWhaleActivity(currentMarket.slug, 1000);
         const marketData = await dome.getMarketBySlug(currentMarket.slug);
-        
+
         if (whaleData.whaleCount === 0) {
           return corsResponse({
             content: `No whale activity data available for this market yet. It might have lower volume or be too new - whales typically show up once a market hits $100K+ volume. Want me to look at something else?`,
-            type: "analysis"
+            type: "analysis",
           });
         }
-        
+
         const totalVolume = marketData?.volume_1_week || 0;
-        const concentration = totalVolume > 0 ? (whaleData.totalWhaleVolume / totalVolume * 100).toFixed(1) : '0';
-        
+        const concentration = totalVolume > 0 ? ((whaleData.totalWhaleVolume / totalVolume) * 100).toFixed(1) : "0";
+
         const formatVol = (v: number) => {
           if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
           if (v >= 1000) return `$${(v / 1000).toFixed(0)}K`;
           return `$${v.toFixed(0)}`;
         };
-        
-        const whaleAnalysis = `Here's the whale activity for ${currentMarket.question || 'this market'}:
+
+        const whaleAnalysis = `Here's the whale activity for ${currentMarket.question || "this market"}:
 
 **Summary**
 • ${whaleData.whaleCount} whale trades (>$1K each)
@@ -3807,11 +4049,14 @@ ${buyVolume > sellVolume * 1.2
 • Largest single trade: ${formatVol(whaleData.largestTrade)}
 
 **Top Whales**
-${whaleData.topWhales.slice(0, 5).map((t: any, i: number) => {
-  const addr = t.user ? `${t.user.slice(0, 6)}...${t.user.slice(-4)}` : 'Unknown';
-  const vol = formatVol(t.volume || 0);
-  return `• ${addr} — ${vol} (${t.tradeCount} trades)`;
-}).join('\n')}
+${whaleData.topWhales
+  .slice(0, 5)
+  .map((t: any, i: number) => {
+    const addr = t.user ? `${t.user.slice(0, 6)}...${t.user.slice(-4)}` : "Unknown";
+    const vol = formatVol(t.volume || 0);
+    return `• ${addr} — ${vol} (${t.tradeCount} trades)`;
+  })
+  .join("\n")}
 
 **Concentration**
 • Whale volume: ${formatVol(whaleData.totalWhaleVolume)}
@@ -3819,68 +4064,74 @@ ${whaleData.topWhales.slice(0, 5).map((t: any, i: number) => {
 • Whale share: ${concentration}%
 
 **My Take**
-${parseFloat(concentration) > 30 
-  ? `That's high concentration (${concentration}%). Whales have significant control here - watch for potential manipulation or big moves when they exit.`
-  : parseFloat(concentration) > 15 
-    ? `Moderate whale influence at ${concentration}%. Keep an eye on large position changes - they could move the market.`
-    : `Healthy distribution at ${concentration}%. No single dominant player, which is good for fair price discovery.`}
+${
+  parseFloat(concentration) > 30
+    ? `That's high concentration (${concentration}%). Whales have significant control here - watch for potential manipulation or big moves when they exit.`
+    : parseFloat(concentration) > 15
+      ? `Moderate whale influence at ${concentration}%. Keep an eye on large position changes - they could move the market.`
+      : `Healthy distribution at ${concentration}%. No single dominant player, which is good for fair price discovery.`
+}
 
-${whaleData.buyVolume > whaleData.sellVolume * 1.3 
-  ? `**Signal**: Whales are net BUYING (${formatVol(whaleData.buyVolume - whaleData.sellVolume)} more buys). Could indicate smart money accumulation.`
-  : whaleData.sellVolume > whaleData.buyVolume * 1.3
-    ? `**Signal**: Whales are net SELLING (${formatVol(whaleData.sellVolume - whaleData.buyVolume)} more sells). Watch for distribution.`
-    : `**Signal**: Balanced whale flow - no strong directional bias.`}`;
-        
+${
+  whaleData.buyVolume > whaleData.sellVolume * 1.3
+    ? `**Signal**: Whales are net BUYING (${formatVol(whaleData.buyVolume - whaleData.sellVolume)} more buys). Could indicate smart money accumulation.`
+    : whaleData.sellVolume > whaleData.buyVolume * 1.3
+      ? `**Signal**: Whales are net SELLING (${formatVol(whaleData.sellVolume - whaleData.buyVolume)} more sells). Watch for distribution.`
+      : `**Signal**: Balanced whale flow - no strong directional bias.`
+}`;
+
         return corsResponse({
           content: whaleAnalysis,
           type: "analysis",
           marketSlug: currentMarket.slug,
-          eventSlug: currentMarket.eventSlug
+          eventSlug: currentMarket.eventSlug,
         });
       }
-      
+
       // ALL MARKETS ANALYSIS: Fetch all markets in event
-      if (followUpType === 'all_markets' && currentMarket.eventSlug) {
+      if (followUpType === "all_markets" && currentMarket.eventSlug) {
         console.log(`[FOLLOWUP] Analyzing all markets in event: ${currentMarket.eventSlug}`);
-        
+
         try {
-          const eventResponse = await fetch(
-            `https://gamma-api.polymarket.com/events?slug=${currentMarket.eventSlug}`
-          );
-          
+          const eventResponse = await fetch(`https://gamma-api.polymarket.com/events?slug=${currentMarket.eventSlug}`);
+
           if (!eventResponse.ok) {
-            throw new Error('Failed to fetch event data');
+            throw new Error("Failed to fetch event data");
           }
-          
+
           const eventData = await eventResponse.json();
           const allMarkets = eventData[0]?.markets || [];
-          
+
           console.log(`[FOLLOWUP] Found ${allMarkets.length} markets in event`);
-          
+
           if (allMarkets.length === 0) {
             return corsResponse({
               content: `I couldn't find the markets for this event. Try pasting the direct event URL and I'll analyze it.`,
-              type: "analysis"
+              type: "analysis",
             });
           }
-          
+
           // Sort by volume and take top 10
-          const topMarkets = allMarkets
-            .sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0))
-            .slice(0, 10);
-          
+          const topMarkets = allMarkets.sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0)).slice(0, 10);
+
           // Analyze each market with Dome
           const marketAnalyses = await Promise.all(
             topMarkets.map(async (m: any) => {
               const trades = await dome.getTradeHistory({ market_slug: m.market_slug, limit: 20 });
-              
+
               const buyVol = trades
-                .filter((t: any) => (t.side || '').toUpperCase() === 'BUY')
-                .reduce((s: number, t: any) => s + (parseFloat(t.shares_normalized || t.size || 0) * parseFloat(t.price || 0)), 0);
+                .filter((t: any) => (t.side || "").toUpperCase() === "BUY")
+                .reduce(
+                  (s: number, t: any) => s + parseFloat(t.shares_normalized || t.size || 0) * parseFloat(t.price || 0),
+                  0,
+                );
               const sellVol = trades
-                .filter((t: any) => (t.side || '').toUpperCase() === 'SELL')
-                .reduce((s: number, t: any) => s + (parseFloat(t.shares_normalized || t.size || 0) * parseFloat(t.price || 0)), 0);
-              
+                .filter((t: any) => (t.side || "").toUpperCase() === "SELL")
+                .reduce(
+                  (s: number, t: any) => s + parseFloat(t.shares_normalized || t.size || 0) * parseFloat(t.price || 0),
+                  0,
+                );
+
               return {
                 question: m.question || m.title,
                 slug: m.market_slug,
@@ -3888,135 +4139,157 @@ ${whaleData.buyVolume > whaleData.sellVolume * 1.3
                 yesPrice: parseFloat(m.outcomes?.[0]?.price || m.yes_price || 0) * 100,
                 buyVol,
                 sellVol,
-                netFlow: buyVol - sellVol
+                netFlow: buyVol - sellVol,
               };
-            })
+            }),
           );
-          
+
           // Calculate aggregates
           const totalVolume = marketAnalyses.reduce((s, m) => s + m.volume, 0);
           const totalBuyVol = marketAnalyses.reduce((s, m) => s + m.buyVol, 0);
           const totalSellVol = marketAnalyses.reduce((s, m) => s + m.sellVol, 0);
           const netFlow = totalBuyVol - totalSellVol;
-          
+
           const strongBuying = marketAnalyses
-            .filter(m => m.netFlow > 0)
+            .filter((m) => m.netFlow > 0)
             .sort((a, b) => b.netFlow - a.netFlow)
             .slice(0, 3);
-          
+
           const strongSelling = marketAnalyses
-            .filter(m => m.netFlow < 0)
+            .filter((m) => m.netFlow < 0)
             .sort((a, b) => a.netFlow - b.netFlow)
             .slice(0, 3);
-          
+
           const formatVol = (v: number) => {
             if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
             if (v >= 1000) return `$${(v / 1000).toFixed(0)}K`;
             return `$${v.toFixed(0)}`;
           };
-          
+
           const multiMarketAnalysis = `Here's the breakdown across all ${allMarkets.length} markets in this event:
 
 **Overall Flow**
 • Total volume: ${formatVol(totalVolume)}
 • Buy pressure: ${formatVol(totalBuyVol)}
 • Sell pressure: ${formatVol(totalSellVol)}
-• Net: ${netFlow > 0 ? 'Buying +' : 'Selling -'}${formatVol(Math.abs(netFlow))}
+• Net: ${netFlow > 0 ? "Buying +" : "Selling -"}${formatVol(Math.abs(netFlow))}
 
 **Where Money Is Flowing In**
-${strongBuying.length > 0 ? strongBuying.map((m, i) => 
-  `• ${m.question.slice(0, 40)}${m.question.length > 40 ? '...' : ''} (+${formatVol(m.netFlow)})`
-).join('\n') : '• No strong buying on any specific outcome'}
+${
+  strongBuying.length > 0
+    ? strongBuying
+        .map((m, i) => `• ${m.question.slice(0, 40)}${m.question.length > 40 ? "..." : ""} (+${formatVol(m.netFlow)})`)
+        .join("\n")
+    : "• No strong buying on any specific outcome"
+}
 
 **Where Money Is Flowing Out**
-${strongSelling.length > 0 ? strongSelling.map((m, i) => 
-  `• ${m.question.slice(0, 40)}${m.question.length > 40 ? '...' : ''} (-${formatVol(Math.abs(m.netFlow))})`
-).join('\n') : '• No strong selling on any specific outcome'}
+${
+  strongSelling.length > 0
+    ? strongSelling
+        .map(
+          (m, i) =>
+            `• ${m.question.slice(0, 40)}${m.question.length > 40 ? "..." : ""} (-${formatVol(Math.abs(m.netFlow))})`,
+        )
+        .join("\n")
+    : "• No strong selling on any specific outcome"
+}
 
 **My Take**
-${netFlow > 5000 
-  ? `Strong buying pressure across this event (+${formatVol(netFlow)} net). Whales are accumulating - could signal conviction on certain outcomes.`
-  : netFlow < -5000
-    ? `Notable selling across this event (-${formatVol(Math.abs(netFlow))} net). Could be profit-taking or distribution.`
-    : `Flow is pretty balanced. Whales are rotating between outcomes rather than taking directional bets.`}`;
-          
+${
+  netFlow > 5000
+    ? `Strong buying pressure across this event (+${formatVol(netFlow)} net). Whales are accumulating - could signal conviction on certain outcomes.`
+    : netFlow < -5000
+      ? `Notable selling across this event (-${formatVol(Math.abs(netFlow))} net). Could be profit-taking or distribution.`
+      : `Flow is pretty balanced. Whales are rotating between outcomes rather than taking directional bets.`
+}`;
+
           return new Response(
             JSON.stringify({
               content: multiMarketAnalysis,
               type: "analysis",
               marketSlug: currentMarket.slug,
-              eventSlug: currentMarket.eventSlug
+              eventSlug: currentMarket.eventSlug,
             }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         } catch (err) {
-          console.error('[FOLLOWUP] Error analyzing all markets:', err);
+          console.error("[FOLLOWUP] Error analyzing all markets:", err);
         }
       }
-      
+
       // Arbitrage analysis removed - no longer supported
     }
-    
+
     // Check for contextual references like "this market", "more about this", etc.
-    const userMessage = lastUserMessage?.content?.toLowerCase() || '';
-    const isContextualRequest = /\b(this|that|it|the market|this market|that market|more about|more info|tell me more|what do you think|whale.*(this|it)|data.*(this|it)|yes|yeah|sure|okay|please|continue|go on|do it)\b/i.test(userMessage);
-    
+    const userMessage = lastUserMessage?.content?.toLowerCase() || "";
+    const isContextualRequest =
+      /\b(this|that|it|the market|this market|that market|more about|more info|tell me more|what do you think|whale.*(this|it)|data.*(this|it)|yes|yeah|sure|okay|please|continue|go on|do it)\b/i.test(
+        userMessage,
+      );
+
     // CHOOSER SELECTION DETECTION - Handle user responding to multi-market chooser
-    const chooserSelectionMatch = userMessage.match(/^(?:analyze\s+)?(?:market\s+)?(\d+(?:\s*,\s*\d+)*|a|all|q|quick)$/i);
+    const chooserSelectionMatch = userMessage.match(
+      /^(?:analyze\s+)?(?:market\s+)?(\d+(?:\s*,\s*\d+)*|a|all|q|quick)$/i,
+    );
     const isChooserSelection = chooserSelectionMatch !== null;
     let selectedMarketIndices: number[] = [];
     let wantsAllMarkets = false;
     let wantsQuickCompare = false;
-    
+
     if (isChooserSelection && chooserSelectionMatch) {
       const selection = chooserSelectionMatch[1].toLowerCase().trim();
-      if (selection === 'a' || selection === 'all') {
+      if (selection === "a" || selection === "all") {
         wantsAllMarkets = true;
-        console.log('[CHOOSER] User selected ALL markets');
-      } else if (selection === 'q' || selection === 'quick') {
+        console.log("[CHOOSER] User selected ALL markets");
+      } else if (selection === "q" || selection === "quick") {
         wantsQuickCompare = true;
-        console.log('[CHOOSER] User selected QUICK compare');
+        console.log("[CHOOSER] User selected QUICK compare");
       } else {
         // Parse comma-separated numbers
-        selectedMarketIndices = selection.split(',').map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
-        console.log('[CHOOSER] User selected markets:', selectedMarketIndices);
+        selectedMarketIndices = selection
+          .split(",")
+          .map((s: string) => parseInt(s.trim()))
+          .filter((n: number) => !isNaN(n) && n > 0);
+        console.log("[CHOOSER] User selected markets:", selectedMarketIndices);
       }
     }
-    
+
     // CHOOSER: If user selected a market number, extract URL from previous message's market list
     let chooserSelectedUrl: string | null = null;
     let chooserSelectedMarket: any = null;
     let chooserEventMarkets: any[] = [];
-    
+
     // Look for the most recent market chooser response with markets array
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       // Check for structured market_selection type (from frontend Message interface)
-      if (msg.role === 'assistant' && msg.event?.markets && Array.isArray(msg.event.markets)) {
+      if (msg.role === "assistant" && msg.event?.markets && Array.isArray(msg.event.markets)) {
         chooserEventMarkets = msg.event.markets;
         console.log(`[CHOOSER] Found ${chooserEventMarkets.length} markets from previous chooser response`);
         break;
       }
     }
-    
+
     if (isChooserSelection && chooserEventMarkets.length > 0) {
       // HANDLE "ALL" - Analyze top 2 by volume
       if (wantsAllMarkets) {
         console.log(`[CHOOSER] ALL selected - will analyze top 2 by volume from ${chooserEventMarkets.length} markets`);
-        
+
         // Sort by volume descending and take top 2
-        const sortedByVolume = [...chooserEventMarkets].sort((a: any, b: any) => 
-          (b.volume || 0) - (a.volume || 0)
-        );
+        const sortedByVolume = [...chooserEventMarkets].sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0));
         const top2 = sortedByVolume.slice(0, 2);
-        
-        console.log('[CHOOSER] Top 2 markets by volume:', top2.map((m: any) => m.question || m.title).join(', '));
-        
+
+        console.log("[CHOOSER] Top 2 markets by volume:", top2.map((m: any) => m.question || m.title).join(", "));
+
         // Select both markets for analysis
-        selectedMarketIndices = top2.map((m: any) => 
-          chooserEventMarkets.findIndex((em: any) => (em.url || em.market_slug) === (m.url || m.market_slug)) + 1
-        ).filter((i: number) => i > 0);
-        
+        selectedMarketIndices = top2
+          .map(
+            (m: any) =>
+              chooserEventMarkets.findIndex((em: any) => (em.url || em.market_slug) === (m.url || m.market_slug)) + 1,
+          )
+          .filter((i: number) => i > 0);
+
         // Use first market's URL for sidebar, but analyze both
         if (top2[0]?.url) {
           chooserSelectedUrl = top2[0].url;
@@ -4025,7 +4298,7 @@ ${netFlow > 5000
       } else if (selectedMarketIndices.length > 0) {
         // Single market selection
         const selectedIndex = selectedMarketIndices[0] - 1; // Convert from 1-based to 0-based
-        
+
         if (selectedIndex >= 0 && selectedIndex < chooserEventMarkets.length) {
           chooserSelectedMarket = chooserEventMarkets[selectedIndex];
           chooserSelectedUrl = chooserSelectedMarket.url;
@@ -4035,7 +4308,7 @@ ${netFlow > 5000
           console.log(`[CHOOSER] Invalid index ${selectedMarketIndices[0]} for ${chooserEventMarkets.length} markets`);
         }
       }
-      
+
       // CRITICAL: Return JSON response with marketUrl to trigger sidebar
       // This ensures the frontend receives the selected market URL before analysis
       if (chooserSelectedUrl && chooserSelectedMarket) {
@@ -4043,50 +4316,50 @@ ${netFlow > 5000
         return new Response(
           JSON.stringify({
             marketUrl: chooserSelectedUrl,
-            marketSlug: chooserSelectedUrl.split('/').pop(),
+            marketSlug: chooserSelectedUrl.split("/").pop(),
             eventSlug: chooserSelectedMarket.eventSlug || currentMarket?.eventSlug,
             metadata: {
               market: chooserSelectedMarket.question,
               price: chooserSelectedMarket.yesPrice,
-              volume: chooserSelectedMarket.volume
+              volume: chooserSelectedMarket.volume,
             },
-            triggerAnalysis: true // Signal frontend to send follow-up for full analysis
+            triggerAnalysis: true, // Signal frontend to send follow-up for full analysis
           }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
-    
+
     // Check for manual price input (e.g., "Jose Antonio is 98%, TNX Jarrah is 2%")
     const manualPricePattern = /(\w+(?:\s+\w+){0,3})\s+(?:is|at|=)\s*(\d+(?:\.\d+)?)\s*%/gi;
     const manualPrices: { name: string; price: string }[] = [];
     let priceMatch;
-    while ((priceMatch = manualPricePattern.exec(lastUserMessage?.content || '')) !== null) {
+    while ((priceMatch = manualPricePattern.exec(lastUserMessage?.content || "")) !== null) {
       manualPrices.push({
         name: priceMatch[1].trim(),
-        price: priceMatch[2] + '%'
+        price: priceMatch[2] + "%",
       });
     }
     const hasManualPrices = manualPrices.length >= 2;
-    
-    console.log("Voice mode context:", { 
-      currentMarket, 
-      providedMarketUrl, 
+
+    console.log("Voice mode context:", {
+      currentMarket,
+      providedMarketUrl,
       isContextualRequest,
       hasManualPrices,
       manualPrices: manualPrices.length > 0 ? manualPrices : undefined,
-      userMessage: userMessage.substring(0, 50) 
+      userMessage: userMessage.substring(0, 50),
     });
-    
+
     let liveMarkets: any[] = [];
     let whaleData: any = null;
-    
+
     // Fetch whale data if requested
     if (userWantsWhaleData) {
       console.log("User asked about whales, fetching whale data...");
       try {
         const whaleResponse = await fetch(`${supabaseUrl}/functions/v1/whale-tracker?refresh=true&timeRange=24h`, {
-          headers: { "Authorization": `Bearer ${supabaseKey}` }
+          headers: { Authorization: `Bearer ${supabaseKey}` },
         });
         if (whaleResponse.ok) {
           whaleData = await whaleResponse.json();
@@ -4096,13 +4369,13 @@ ${netFlow > 5000
         console.error("Failed to fetch whale data:", e);
       }
     }
-    
+
     // Fetch live market data
     if (userWantsLiveData) {
       console.log("User asked about live markets, fetching from Polymarket...");
       try {
         const liveResponse = await fetch(`${supabaseUrl}/functions/v1/polymarket-live`, {
-          headers: { "Authorization": `Bearer ${supabaseKey}` }
+          headers: { Authorization: `Bearer ${supabaseKey}` },
         });
         if (liveResponse.ok) {
           liveMarkets = await liveResponse.json();
@@ -4124,14 +4397,14 @@ ${netFlow > 5000
       .limit(10);
 
     let liveDataContext = "";
-    
+
     const formatVolume = (amt: number) => {
       if (!amt || isNaN(amt)) return "$0";
       if (amt >= 1_000_000) return `$${(amt / 1_000_000).toFixed(1)}M`;
       if (amt >= 1_000) return `$${(amt / 1_000).toFixed(1)}K`;
       return `$${amt.toFixed(0)}`;
     };
-    
+
     // Add whale data context
     if (whaleData && whaleData.trades && whaleData.trades.length > 0) {
       const topWhales = whaleData.trades.slice(0, 10);
@@ -4140,37 +4413,43 @@ ${netFlow > 5000
         if (amt >= 1000) return `$${(amt / 1000).toFixed(0)}K`;
         return `$${amt.toFixed(0)}`;
       };
-      
+
       liveDataContext += `
 WHALE ACTIVITY (Large trades from last 24 hours):
 
 TOP 10 WHALE TRADES:
-${topWhales.map((t: any, i: number) => 
-  `${i + 1}. ${formatAmount(t.amount)} ${t.side} on "${t.market_question}"
+${topWhales
+  .map(
+    (t: any, i: number) =>
+      `${i + 1}. ${formatAmount(t.amount)} ${t.side} on "${t.market_question}"
    Price: ${(t.price * 100).toFixed(0)}% | Platform: ${t.platform.toUpperCase()}
-   ${t.market_url ? `URL: ${t.market_url}` : ''}`
-).join('\n\n')}
+   ${t.market_url ? `URL: ${t.market_url}` : ""}`,
+  )
+  .join("\n\n")}
 
 WHALE STATS:
 - Total Volume: ${formatAmount(whaleData.stats?.totalVolume || 0)}
 - Trade Count: ${whaleData.stats?.tradeCount || 0}
-- Net Flow: ${formatAmount(Math.abs(whaleData.stats?.netFlow || 0))} ${(whaleData.stats?.netFlow || 0) > 0 ? 'BULLISH (more YES)' : 'BEARISH (more NO)'}
+- Net Flow: ${formatAmount(Math.abs(whaleData.stats?.netFlow || 0))} ${(whaleData.stats?.netFlow || 0) > 0 ? "BULLISH (more YES)" : "BEARISH (more NO)"}
 
 `;
     }
-    
+
     if (liveMarkets.length > 0) {
       const top10 = liveMarkets.slice(0, 10);
       liveDataContext += `
 LIVE POLYMARKET DATA (fetched just now):
 
 TOP ACTIVE MARKETS BY VOLUME:
-${top10.map((m: any, i: number) => 
-  `${i + 1}. "${m.question}"
+${top10
+  .map(
+    (m: any, i: number) =>
+      `${i + 1}. "${m.question}"
    Odds: ${(parseFloat(m.yesPrice) * 100).toFixed(1)}% YES / ${(parseFloat(m.noPrice) * 100).toFixed(1)}% NO
    Volume: ${formatVolume(m.volume)}
-   URL: ${m.url}`
-).join('\n\n')}
+   URL: ${m.url}`,
+  )
+  .join("\n\n")}
 
 Use these exact numbers and URLs in your response.
 `;
@@ -4180,81 +4459,93 @@ Use these exact numbers and URLs in your response.
       // Filter by category if requested
       let filteredMarkets = cachedMarkets;
       if (requestedCategory) {
-        filteredMarkets = cachedMarkets.filter((m: any) => 
-          m.category?.toLowerCase().includes(requestedCategory) ||
-          m.title?.toLowerCase().includes(requestedCategory)
+        filteredMarkets = cachedMarkets.filter(
+          (m: any) =>
+            m.category?.toLowerCase().includes(requestedCategory) || m.title?.toLowerCase().includes(requestedCategory),
         );
         if (filteredMarkets.length === 0) filteredMarkets = cachedMarkets; // Fallback
       }
-      
+
       liveDataContext += `
 POLY'S PRE-ANALYZED MARKETS (with edge calculations):
-${filteredMarkets.slice(0, 5).map((m: any, i: number) => 
-  `${i + 1}. "${m.title}"
+${filteredMarkets
+  .slice(0, 5)
+  .map(
+    (m: any, i: number) =>
+      `${i + 1}. "${m.title}"
    Market: ${m.current_odds}% → Poly's estimate: ${m.poly_probability || m.vera_probability}%
-   Edge: ${m.edge > 0 ? '+' : ''}${m.edge}% | Confidence: ${m.confidence}
+   Edge: ${m.edge > 0 ? "+" : ""}${m.edge}% | Confidence: ${m.confidence}
    Recommendation: ${m.recommendation}
-   URL: https://polymarket.com/event/${m.slug}`
-).join('\n\n')}
+   URL: https://polymarket.com/event/${m.slug}`,
+  )
+  .join("\n\n")}
 `;
     }
 
     // Use messages with conversation history
     let enrichedMessages = [...messagesWithHistory];
     let fetchedMarketData = false;
-    let fetchedMarketInfo: { url?: string; question?: string; price?: string; platform?: string; searchResults?: any[] } | null = null;
+    let fetchedMarketInfo: {
+      url?: string;
+      question?: string;
+      price?: string;
+      platform?: string;
+      searchResults?: any[];
+    } | null = null;
     // Store search results for follow-up and deterministic selection
     let searchResults: any[] = [];
     // Track when a user asked for a very specific market but we couldn't find it via search
     let failedSearchTopic: string | null = null;
-    
+
     // Helper to save conversation messages
     const saveConversationTurn = async (userContent: string, assistantContent: string) => {
       if (!conversationId) return;
-      
+
       try {
-        await supabase.from('conversation_messages').insert([
+        await supabase.from("conversation_messages").insert([
           {
             conversation_id: conversationId,
-            role: 'user',
-            content: userContent
+            role: "user",
+            content: userContent,
           },
           {
             conversation_id: conversationId,
-            role: 'assistant',
-            content: assistantContent
-          }
+            role: "assistant",
+            content: assistantContent,
+          },
         ]);
         console.log(`[Memory] Saved conversation turn for ${conversationId.substring(0, 8)}...`);
       } catch (e) {
-        console.error('[Memory] Failed to save conversation:', e);
+        console.error("[Memory] Failed to save conversation:", e);
       }
     };
-    
+
     // Check for market URL - Priority: 1) chooser selection, 2) explicit URL, 3) currentMarket.url
     let effectiveMarketUrl = chooserSelectedUrl || providedMarketUrl || currentMarket?.url;
-    const userContent = lastUserMessage?.content || '';
-    
+    const userContent = lastUserMessage?.content || "";
+
     // HANDLE "ANALYZE ALL" - Inject context about top 2 markets by volume
-    let analyzeAllContext = '';
+    let analyzeAllContext = "";
     if (wantsAllMarkets && chooserEventMarkets.length > 0) {
-      const sortedByVolume = [...chooserEventMarkets].sort((a: any, b: any) => 
-        (b.volume || 0) - (a.volume || 0)
-      );
+      const sortedByVolume = [...chooserEventMarkets].sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0));
       const top2 = sortedByVolume.slice(0, 2);
-      
+
       analyzeAllContext = `
 
 === USER SELECTED "ANALYZE ALL" ===
 The user wants a quick analysis of the TOP 2 MARKETS BY VOLUME from this event.
 Here are the top 2 markets to analyze (analyze BOTH briefly, focus on key metrics and whether there's edge):
 
-${top2.map((m: any, i: number) => `
+${top2
+  .map(
+    (m: any, i: number) => `
 MARKET ${i + 1}: ${m.question || m.title}
 - Current Odds: ${m.yesPrice || m.yes_price}% YES
 - Volume: $${((m.volume || 0) / 1000).toFixed(0)}K
 - URL: ${m.url}
-`).join('\n')}
+`,
+  )
+  .join("\n")}
 
 INSTRUCTIONS:
 1. Analyze BOTH markets briefly (2-3 sentences each)
@@ -4262,15 +4553,16 @@ INSTRUCTIONS:
 3. Say which one (if any) has better edge/opportunity
 4. Be concise - this is a "quick scan" of the top plays
 `;
-      
-      console.log('[CHOOSER] Injecting analyze-all context for top 2 markets');
+
+      console.log("[CHOOSER] Injecting analyze-all context for top 2 markets");
     }
-    
+
     // Check if user is simply confirming/affirming (before URL/search detection)
-    const isUserJustSayingYes = /^(yes|yeah|sure|ok|okay|yep|please|yea|do it|go ahead|continue|tell me more|first one|second one|the first|the second)\s*[.!?]*$/i.test(
-      userContent.trim() || ''
-    );
-    
+    const isUserJustSayingYes =
+      /^(yes|yeah|sure|ok|okay|yep|please|yea|do it|go ahead|continue|tell me more|first one|second one|the first|the second)\s*[.!?]*$/i.test(
+        userContent.trim() || "",
+      );
+
     // NEW: Detect explicit NEW market request (overrides loaded market context)
     // e.g., "analyze the market called X", "find the Y market", "what about Z"
     const newMarketRequestPatterns = [
@@ -4279,72 +4571,95 @@ INSTRUCTIONS:
       /market\s+(?:called|named|about)\s+["']?([^"'?]+)["']?/i,
       /(?:analyze|find)\s+["']([^"']+)["']/i,
     ];
-    
+
     let explicitNewMarketQuery: string | null = null;
     for (const pattern of newMarketRequestPatterns) {
       const match = userContent.match(pattern);
       if (match && match[1] && match[1].trim().length > 5) {
         explicitNewMarketQuery = match[1].trim();
-        console.log('🆕 Detected NEW market request, overriding loaded context:', explicitNewMarketQuery);
+        console.log("🆕 Detected NEW market request, overriding loaded context:", explicitNewMarketQuery);
         break;
       }
     }
-    
+
     // If user is asking about a NEW market by name, CLEAR the old context
     if (explicitNewMarketQuery && !isUserJustSayingYes) {
-      console.log('Clearing loaded market context for new search:', explicitNewMarketQuery);
+      console.log("Clearing loaded market context for new search:", explicitNewMarketQuery);
       effectiveMarketUrl = undefined; // Clear loaded URL
     }
-    
+
     // NEW: Detect natural language market search (no URL but descriptive query)
     // SKIP automatic search for general/explanatory questions - let Claude decide with tools
-    const isGeneralQuestion = /\b(what is|what are|explain|how does|how do|tell me about prediction markets?|what can you do)\b/i.test(userContent) &&
-      !/\b(market for|odds on|price of|bet on)\b/i.test(userContent);
-    
+    const isGeneralQuestion =
+      /\b(what is|what are|explain|how does|how do|tell me about prediction markets?|what can you do)\b/i.test(
+        userContent,
+      ) && !/\b(market for|odds on|price of|bet on)\b/i.test(userContent);
+
     const hasNoUrl = !effectiveMarketUrl && !/polymarket\.com|kalshi\.com/i.test(userContent);
-    const isAnalyzeIntent = /\b(analyze|find|search|show me|what about|look at|check|give me|find me|talk about|tell me about|best|looking for)\s+/i.test(userContent);
-    const hasSportsKeywords = /\b(sports?|betting|nfl|nba|football|basketball|soccer|tennis|baseball|hockey|mma|ufc|boxing|olympics)\b/i.test(userContent);
+    const isAnalyzeIntent =
+      /\b(analyze|find|search|show me|what about|look at|check|give me|find me|talk about|tell me about|best|looking for)\s+/i.test(
+        userContent,
+      );
+    const hasSportsKeywords =
+      /\b(sports?|betting|nfl|nba|football|basketball|soccer|tennis|baseball|hockey|mma|ufc|boxing|olympics)\b/i.test(
+        userContent,
+      );
     const hasTrumpKeywords = /\b(trump|donald|maga|republican|gop)\b/i.test(userContent);
-    const hasSearchCue = isAnalyzeIntent || /\bmarket\b/i.test(userContent) || /\bdecision\b/i.test(userContent) || hasSportsKeywords || hasTrumpKeywords;
-    
+    const hasSearchCue =
+      isAnalyzeIntent ||
+      /\bmarket\b/i.test(userContent) ||
+      /\bdecision\b/i.test(userContent) ||
+      hasSportsKeywords ||
+      hasTrumpKeywords;
+
     // Only trigger automatic search if it's clearly about a specific market, NOT a general question
     // Skip search if user made a chooser selection (already have URL)
-    const isMarketSearchQuery = !chooserSelectedUrl && !isGeneralQuestion && ((hasNoUrl && hasSearchCue && !isUserJustSayingYes && userContent.length > 10) || !!explicitNewMarketQuery);
-    
-    console.log(`[Search Logic] isGeneralQuestion: ${isGeneralQuestion}, isMarketSearchQuery: ${isMarketSearchQuery}, query: "${userContent.substring(0, 50)}"`);
-    
+    const isMarketSearchQuery =
+      !chooserSelectedUrl &&
+      !isGeneralQuestion &&
+      ((hasNoUrl && hasSearchCue && !isUserJustSayingYes && userContent.length > 10) || !!explicitNewMarketQuery);
+
+    console.log(
+      `[Search Logic] isGeneralQuestion: ${isGeneralQuestion}, isMarketSearchQuery: ${isMarketSearchQuery}, query: "${userContent.substring(0, 50)}"`,
+    );
+
     if (isMarketSearchQuery) {
       // Extract search keywords from user message - prioritize explicit new market query
-      let searchQuery = explicitNewMarketQuery || userContent
-        .replace(/^(hey\s+)?(poly)[,!.\s]*/i, '')  // Strip "Hey Poly" prefix
-        .replace(/\b(could you|can you|please|analyze|find|search|show me|what about|look at|check|give me|find me|talk about|tell me about|market|markets?|the|this|a|an|called|named)\b/gi, '')
-        .replace(/[?!.,'"]/g, '')
-        .trim();
-      
+      let searchQuery =
+        explicitNewMarketQuery ||
+        userContent
+          .replace(/^(hey\s+)?(poly)[,!.\s]*/i, "") // Strip "Hey Poly" prefix
+          .replace(
+            /\b(could you|can you|please|analyze|find|search|show me|what about|look at|check|give me|find me|talk about|tell me about|market|markets?|the|this|a|an|called|named)\b/gi,
+            "",
+          )
+          .replace(/[?!.,'"]/g, "")
+          .trim();
+
       if (searchQuery.length > 5) {
         console.log(`Natural language search detected: "${searchQuery}"`);
-        
+
         try {
           const searchResponse = await fetch(`${supabaseUrl}/functions/v1/polymarket-data`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseKey}` 
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseKey}`,
             },
-            body: JSON.stringify({ 
-              action: 'search', 
-              query: searchQuery, 
-              limit: 5 
+            body: JSON.stringify({
+              action: "search",
+              query: searchQuery,
+              limit: 5,
             }),
           });
-          
+
           if (searchResponse.ok) {
             const searchData = await searchResponse.json();
             searchResults = searchData.markets || [];
-            
+
             if (searchResults.length > 0) {
               console.log(`Found ${searchResults.length} markets matching search`);
-              
+
               // If there's exactly ONE clear match, hard-resolve it BEFORE calling the LLM
               if (searchResults.length === 1) {
                 const onlyMatch = searchResults[0];
@@ -4353,10 +4668,10 @@ INSTRUCTIONS:
                   url: onlyMatch.url,
                   question: onlyMatch.question,
                   price: `${onlyMatch.yesPrice}¢`,
-                  platform: 'polymarket',
+                  platform: "polymarket",
                   searchResults: [onlyMatch],
                 };
-                console.log('Single market match found, locking context to:', onlyMatch.url);
+                console.log("Single market match found, locking context to:", onlyMatch.url);
               } else {
                 // Multiple matches: enrich context and let Poly ask user which one
                 const formatVolumeSearch = (vol: number): string => {
@@ -4366,25 +4681,29 @@ INSTRUCTIONS:
                 };
                 const searchContext = `
 MARKET SEARCH RESULTS for "${searchQuery}":
-${searchResults.slice(0, 3).map((m: any, i: number) => 
-  `${i + 1}. "${m.question}"
+${searchResults
+  .slice(0, 3)
+  .map(
+    (m: any, i: number) =>
+      `${i + 1}. "${m.question}"
    Price: ${m.yesPrice}% YES / ${m.noPrice}% NO
    Volume: ${formatVolumeSearch(m.volume)}
-   URL: ${m.url}`
-).join('\n\n')}
+   URL: ${m.url}`,
+  )
+  .join("\n\n")}
 
 INSTRUCTION: Present these search results to the user. Ask which one they want to analyze in detail.
 If only 1 result, analyze it directly.
 `;
-                
+
                 // Enrich user message with search results
                 enrichedMessages = enrichedMessages.map((m: any) => {
                   if (m === lastUserMessage) {
-                    return { ...m, content: m.content + '\n\n' + searchContext };
+                    return { ...m, content: m.content + "\n\n" + searchContext };
                   }
                   return m;
                 });
-                
+
                 // Store for echoing back to client
                 fetchedMarketInfo = {
                   ...(fetchedMarketInfo || {}),
@@ -4394,8 +4713,8 @@ If only 1 result, analyze it directly.
             } else if (explicitNewMarketQuery) {
               // No results for a very specific market request - DO NOT pivot to random markets
               failedSearchTopic = explicitNewMarketQuery;
-              console.log('[Search] No markets found for specific topic:', explicitNewMarketQuery);
-              
+              console.log("[Search] No markets found for specific topic:", explicitNewMarketQuery);
+
               // Check if search response indicates failure with STT correction info
               if (searchData.sttCorrected) {
                 console.log(`[Search] STT correction was applied: "${searchData.sttCorrected}" but still no results`);
@@ -4403,87 +4722,96 @@ If only 1 result, analyze it directly.
             }
           }
         } catch (e) {
-          console.error('Market search failed:', e);
+          console.error("Market search failed:", e);
           failedSearchTopic = explicitNewMarketQuery || userContent.substring(0, 50);
         }
       }
     }
-    
+
     // After possible search resolution, build the content to scan for URLs
-    const contentToCheck = userContent + (effectiveMarketUrl ? ` ${effectiveMarketUrl}` : '');
+    const contentToCheck = userContent + (effectiveMarketUrl ? ` ${effectiveMarketUrl}` : "");
     if (contentToCheck) {
       const { platform, path, seriesTicker, marketTicker, tokenIdFromUrl } = extractMarketInfo(contentToCheck);
-      
+
       if (platform && path) {
-        console.log(`Detected ${platform} URL, fetching data for path:`, path, "series:", seriesTicker, "market:", marketTicker, "tokenId:", tokenIdFromUrl);
-        
+        console.log(
+          `Detected ${platform} URL, fetching data for path:`,
+          path,
+          "series:",
+          seriesTicker,
+          "market:",
+          marketTicker,
+          "tokenId:",
+          tokenIdFromUrl,
+        );
+
         let marketData = null;
-        if (platform === 'kalshi') {
+        if (platform === "kalshi") {
           marketData = await fetchKalshiData(marketTicker || path, seriesTicker);
         } else {
           marketData = await fetchPolymarketData(path, tokenIdFromUrl);
         }
-        
+
         if (marketData) {
           fetchedMarketData = true;
-          const platformLabel = platform === 'kalshi' ? 'KALSHI' : 'POLYMARKET';
-          
+          const platformLabel = platform === "kalshi" ? "KALSHI" : "POLYMARKET";
+
           // Store fetched market info for echoing back to client
           const targetMarket = marketData.targetMarket || marketData.allMarkets?.[0];
           // FIX: yesPrice is already a percentage (0-100), don't multiply by 100
           // FIX: yesPrice is already a percentage (0-100), don't multiply by 100
-          const priceValue = targetMarket?.yesPrice 
-            ? (parseFloat(targetMarket.yesPrice) > 1 
-              ? Math.round(parseFloat(targetMarket.yesPrice)) 
-              : Math.round(parseFloat(targetMarket.yesPrice) * 100))
+          const priceValue = targetMarket?.yesPrice
+            ? parseFloat(targetMarket.yesPrice) > 1
+              ? Math.round(parseFloat(targetMarket.yesPrice))
+              : Math.round(parseFloat(targetMarket.yesPrice) * 100)
             : undefined;
-          
+
           fetchedMarketInfo = {
             url: effectiveMarketUrl,
             question: marketData.eventTitle || targetMarket?.question,
             price: priceValue ? `${priceValue}¢` : undefined,
             platform: platform,
           };
-          
+
           // Filter out expired markets
           let expiredMarketCount = 0;
           if (marketData.allMarkets && Array.isArray(marketData.allMarkets)) {
             const originalCount = marketData.allMarkets.length;
             marketData.allMarkets = marketData.allMarkets.filter((m: any) => !isMarketExpired(m));
             expiredMarketCount = originalCount - marketData.allMarkets.length;
-            
+
             if (expiredMarketCount > 0) {
               console.log(`Filtered out ${expiredMarketCount} expired market(s) from ${originalCount} total`);
             }
-            
+
             // If ALL markets are expired, return early with helpful message
             if (marketData.allMarkets.length === 0) {
               console.log("All markets in this event have expired");
-              
+
               // For voice mode, return a quick expired notice
               if (voiceMode) {
                 return new Response(
                   JSON.stringify({
-                    voiceSummary: "Hey, this market has already expired or resolved. Want me to find some similar active markets for you instead?",
+                    voiceSummary:
+                      "Hey, this market has already expired or resolved. Want me to find some similar active markets for you instead?",
                     needsFullAnalysis: false,
                   }),
-                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } },
                 );
               }
             }
-            
+
             // PROGRAMMATIC MULTI-MARKET CHOOSER - Bypass Claude entirely for 3+ markets
             // SKIP chooser if deepResearch is enabled OR tokenIdFromUrl is present - just analyze the specific market
             const activeMarkets = marketData.allMarkets;
             let hasSpecificTarget = marketData.targetMarket !== null && marketData.targetMarket !== undefined;
-            
+
             // If we have a tokenIdFromUrl, find and set the matching market as target
             if (tokenIdFromUrl && !hasSpecificTarget && activeMarkets.length > 0) {
               console.log(`[tid=] Looking for market with tokenId: ${tokenIdFromUrl}`);
-              const matchedMarket = activeMarkets.find((m: any) => 
-                m.tokenId === tokenIdFromUrl || 
-                m.yesTokenId === tokenIdFromUrl || 
-                m.noTokenId === tokenIdFromUrl
+              const matchedMarket = activeMarkets.find(
+                (m: any) =>
+                  m.tokenId === tokenIdFromUrl || m.yesTokenId === tokenIdFromUrl || m.noTokenId === tokenIdFromUrl,
               );
               if (matchedMarket) {
                 console.log(`[tid=] ✅ Found matching market: ${matchedMarket.question?.substring(0, 50)}`);
@@ -4495,7 +4823,7 @@ If only 1 result, analyze it directly.
                 try {
                   const gammaTokenResponse = await fetch(
                     `https://gamma-api.polymarket.com/markets?token_id=${tokenIdFromUrl}`,
-                    { headers: { "Accept": "application/json" } }
+                    { headers: { Accept: "application/json" } },
                   );
                   if (gammaTokenResponse.ok) {
                     const gammaMarkets = await gammaTokenResponse.json();
@@ -4511,21 +4839,24 @@ If only 1 result, analyze it directly.
                 }
               }
             }
-            
+
             if (activeMarkets.length >= 3 && !hasSpecificTarget && !voiceMode) {
               console.log(`[CHOOSER] Detected ${activeMarkets.length} markets, returning chooser UI`);
-              
+
               // Build chooser response directly - no Claude call needed
-              const marketLines = activeMarkets.slice(0, 10).map((m: any, i: number) => {
-                const odds = parseFloat(m.yesPrice);
-                const vol = formatVolume(m.volume);
-                // Shorten question if too long
-                const shortQ = m.question.length > 60 ? m.question.substring(0, 57) + '...' : m.question;
-                return `${i + 1}) ${shortQ} — ${odds.toFixed(1)}% YES (${vol})`;
-              }).join('\n');
-              
-              const moreNote = activeMarkets.length > 10 ? `\n...and ${activeMarkets.length - 10} more markets` : '';
-              
+              const marketLines = activeMarkets
+                .slice(0, 10)
+                .map((m: any, i: number) => {
+                  const odds = parseFloat(m.yesPrice);
+                  const vol = formatVolume(m.volume);
+                  // Shorten question if too long
+                  const shortQ = m.question.length > 60 ? m.question.substring(0, 57) + "..." : m.question;
+                  return `${i + 1}) ${shortQ} — ${odds.toFixed(1)}% YES (${vol})`;
+                })
+                .join("\n");
+
+              const moreNote = activeMarkets.length > 10 ? `\n...and ${activeMarkets.length - 10} more markets` : "";
+
               const chooserContent = `This event has **${activeMarkets.length} active markets**. Which one would you like me to analyze?
 
 ${marketLines}${moreNote}
@@ -4543,54 +4874,57 @@ Reply with a number (e.g. "1") or a name (e.g. "Kevin Hassett").`;
                     question: m.question,
                     yesPrice: m.yesPrice,
                     volume: m.volume,
-                    url: m.url
+                    url: m.url,
                   })),
-                  eventSlug: marketData.eventSlug
+                  eventSlug: marketData.eventSlug,
                 }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } },
               );
             }
           }
-          
+
           // Check if target market is expired
           if (marketData.targetMarket && isMarketExpired(marketData.targetMarket)) {
             console.log("Target market is expired:", marketData.targetMarket.question?.substring(0, 50));
             marketData.targetMarket = null; // Clear expired target
-            
+
             // For voice mode, return a quick expired notice
             if (voiceMode) {
               return new Response(
                 JSON.stringify({
-                  voiceSummary: "Hey, that specific market has already expired. Let me check if there are other active markets in this event, or want me to find something similar?",
+                  voiceSummary:
+                    "Hey, that specific market has already expired. Let me check if there are other active markets in this event, or want me to find something similar?",
                   needsFullAnalysis: false,
                 }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } },
               );
             }
           }
-          
+
           // Detect if this is a date bracket market (cumulative probabilities)
-          const isDateBracket = marketData.allMarkets && marketData.allMarkets.length > 1 && 
-            marketData.allMarkets.every((m: any) => 
-              /before\s+\d{4}/i.test(m.question) || 
-              /by\s+\d{4}/i.test(m.question) ||
-              /before\s+[a-z]+\s+\d{1,2},?\s+\d{4}/i.test(m.question)
+          const isDateBracket =
+            marketData.allMarkets &&
+            marketData.allMarkets.length > 1 &&
+            marketData.allMarkets.every(
+              (m: any) =>
+                /before\s+\d{4}/i.test(m.question) ||
+                /by\s+\d{4}/i.test(m.question) ||
+                /before\s+[a-z]+\s+\d{1,2},?\s+\d{4}/i.test(m.question),
             );
-          
-          let marketsSection = '';
-          let expiredNote = expiredMarketCount > 0 
-            ? `\n\nNote: ${expiredMarketCount} expired market(s) were filtered out.` 
-            : '';
-          
+
+          let marketsSection = "";
+          let expiredNote =
+            expiredMarketCount > 0 ? `\n\nNote: ${expiredMarketCount} expired market(s) were filtered out.` : "";
+
           if (isDateBracket && marketData.allMarkets.length > 1) {
             // Sort by date ascending for date brackets
             const sortedByDate = [...marketData.allMarkets].sort((a: any, b: any) => {
               // Extract year from question
-              const yearA = parseInt(a.question.match(/\d{4}/)?.[0] || '9999');
-              const yearB = parseInt(b.question.match(/\d{4}/)?.[0] || '9999');
+              const yearA = parseInt(a.question.match(/\d{4}/)?.[0] || "9999");
+              const yearB = parseInt(b.question.match(/\d{4}/)?.[0] || "9999");
               return yearA - yearB;
             });
-            
+
             // Calculate implied probabilities for each period
             let previousProb = 0;
             const withImplied = sortedByDate.map((m: any) => {
@@ -4599,25 +4933,28 @@ Reply with a number (e.g. "1") or a name (e.g. "Kevin Hassett").`;
               previousProb = currentProb;
               return {
                 ...m,
-                impliedPeriodProbability: impliedPeriodProb.toFixed(1)
+                impliedPeriodProbability: impliedPeriodProb.toFixed(1),
               };
             });
-            
+
             marketData.allMarkets = withImplied;
-            marketData.marketType = 'date-bracket';
-            
+            marketData.marketType = "date-bracket";
+
             console.log("Detected DATE BRACKET market, calculated implied probabilities");
-            
+
             marketsSection = `
 DATE BRACKET MARKET (CUMULATIVE PROBABILITIES):
 These are NOT independent outcomes - each later date includes all earlier dates.
-${withImplied.map((m: any, i: number) => 
-  `${i + 1}. "${m.question}"
+${withImplied
+  .map(
+    (m: any, i: number) =>
+      `${i + 1}. "${m.question}"
    Cumulative: ${m.yesPrice}% (probability by this date)
    Implied Period: ${m.impliedPeriodProbability}% (probability of happening in THIS specific window)
    Volume: ${formatVolume(m.volume)}
-   URL: ${m.url}`
-).join('\n')}
+   URL: ${m.url}`,
+  )
+  .join("\n")}
 
 ANALYSIS NOTES:
 - Later dates should ALWAYS have >= probability than earlier dates
@@ -4625,43 +4962,53 @@ ANALYSIS NOTES:
 - Focus on which TIME WINDOW has the highest implied probability
 `;
           } else {
-            marketsSection = marketData.allMarkets && marketData.allMarkets.length > 0 ? `
+            marketsSection =
+              marketData.allMarkets && marketData.allMarkets.length > 0
+                ? `
 ALL MARKETS IN THIS EVENT:
-${marketData.allMarkets.map((m: any, i: number) => 
-  `${i + 1}. "${m.question}"
+${marketData.allMarkets
+  .map(
+    (m: any, i: number) =>
+      `${i + 1}. "${m.question}"
    Odds: ${m.yesPrice}% YES / ${m.noPrice}% NO
    Volume: ${formatVolume(m.volume)}
-   URL: ${m.url}`
-).join('\n')}
-` : '';
+   URL: ${m.url}`,
+  )
+  .join("\n")}
+`
+                : "";
           }
-          
+
           // ANALYSIS-ONLY MODE: Don't include Dome data in AI context
           // AI should focus on qualitative analysis, research, news - NOT prices/volumes
           // The sidebar shows live data separately
-          
+
           // Build a simple list of outcome names (no prices)
-          let outcomesSection = '';
+          let outcomesSection = "";
           if (marketData.allMarkets && marketData.allMarkets.length > 1) {
             outcomesSection = `
 POSSIBLE OUTCOMES IN THIS EVENT:
-${marketData.allMarkets.map((m: any, i: number) => `${i + 1}. ${m.question}`).join('\n')}
+${marketData.allMarkets.map((m: any, i: number) => `${i + 1}. ${m.question}`).join("\n")}
 `;
           }
-          
+
           const enrichedContent = `${lastUserMessage.content}${analyzeAllContext}
 
 ---
 MARKET TOPIC FOR ANALYSIS:
 Event: "${marketData.eventTitle}"
 Platform: ${platformLabel}
-End Date: ${marketData.endDate || 'Not specified'}
-${marketData.marketType === 'date-bracket' ? 'Market Type: DATE BRACKET (cumulative time periods)' : ''}${expiredNote}
+End Date: ${marketData.endDate || "Not specified"}
+${marketData.marketType === "date-bracket" ? "Market Type: DATE BRACKET (cumulative time periods)" : ""}${expiredNote}
 
-${marketData.targetMarket ? `
+${
+  marketData.targetMarket
+    ? `
 SPECIFIC OUTCOME TO ANALYZE:
 "${marketData.targetMarket.question}"
-` : ''}
+`
+    : ""
+}
 ${outcomesSection}
 
 YOUR TASK:
@@ -4670,59 +5017,61 @@ YOUR TASK:
 - DO NOT quote specific odds, volumes, or prices - the sidebar shows live data separately
 - Focus on: what's happening, key factors, timeline, risks
 ---`;
-          
+
           enrichedMessages = messages.map((m: any, i: number) => {
             if (i === messages.length - 1 && m.role === "user") {
               return { ...m, content: enrichedContent };
             }
             return m;
           });
-          
+
           // Enhanced market type detection and logging
           if (marketData && marketData.eventTitle) {
-            const eventTitle = marketData.eventTitle || '';
+            const eventTitle = marketData.eventTitle || "";
             const detectedTypes: string[] = [];
-            
+
             // Detect time-sensitive markets
             if (/2024|2025|this year|this season/i.test(eventTitle)) {
               detectedTypes.push("TEMPORAL: Must check current status");
             }
-            
+
             // Detect range/bracket markets
             if (marketData.allMarkets && marketData.allMarkets.length > 1) {
-              const hasRanges = marketData.allMarkets.some((m: any) => 
-                /\d+\s*to\s*\d+|before \d+|more than|less than|above|under/i.test(m.question)
+              const hasRanges = marketData.allMarkets.some((m: any) =>
+                /\d+\s*to\s*\d+|before \d+|more than|less than|above|under/i.test(m.question),
               );
               if (hasRanges) {
                 detectedTypes.push("RANGE: Mutually exclusive - recommend ONE range only");
               }
             }
-            
+
             // Detect competitive multi-outcome
             if (marketData.allMarkets && marketData.allMarkets.length > 5) {
               const isCompetitive = /will\s+(\w+)\s+win|who\s+will\s+win|winner\s+of|win\s+the/i.test(eventTitle);
               if (isCompetitive) {
-                const sportMatch = eventTitle.match(/(Premier League|NBA|NFL|World Cup|championship|election|tournament|Series|Conference|Division)/i);
-                const sport = sportMatch ? sportMatch[1] : 'competition';
+                const sportMatch = eventTitle.match(
+                  /(Premier League|NBA|NFL|World Cup|championship|election|tournament|Series|Conference|Division)/i,
+                );
+                const sport = sportMatch ? sportMatch[1] : "competition";
                 detectedTypes.push(`COMPETITIVE: ${sport} - check current standings`);
               }
             }
-            
+
             // Detect past events that should be resolved
             if (/2024 election|2024 winner|person of.*2024|poty 2024/i.test(eventTitle)) {
               detectedTypes.push("PAST EVENT: Already resolved - check results");
             }
-            
+
             // Detect TIME POTY / awards markets
             if (/time.*person|poty|person of the year/i.test(eventTitle)) {
               detectedTypes.push("AWARDS: Check if shortlist/winner announced");
             }
-            
+
             if (detectedTypes.length > 0) {
               console.log("Market analysis flags:", detectedTypes.join(" | "));
             }
           }
-          
+
           console.log(`Enriched message with live ${platform} market data`);
         } else {
           // URL provided but couldn't fetch - give helpful response without saying "no data"
@@ -4730,10 +5079,10 @@ YOUR TASK:
 
 ---
 NOTE: The provided ${platform} URL appears to be invalid, expired, or the market has been resolved.
-Respond helpfully by saying something like: "That market link doesn't seem to be active - it may have resolved or been removed. Try pasting a different ${platform === 'kalshi' ? 'Kalshi' : 'Polymarket'} URL, or ask me about any topic and I'll share my analysis based on current market conditions."
+Respond helpfully by saying something like: "That market link doesn't seem to be active - it may have resolved or been removed. Try pasting a different ${platform === "kalshi" ? "Kalshi" : "Polymarket"} URL, or ask me about any topic and I'll share my analysis based on current market conditions."
 DO NOT say "I don't have live data" or anything similar.
 ---`;
-          
+
           enrichedMessages = messages.map((m: any, i: number) => {
             if (i === messages.length - 1 && m.role === "user") {
               return { ...m, content: errorContent };
@@ -4748,16 +5097,16 @@ DO NOT say "I don't have live data" or anything similar.
     const requestDateInfo = getCurrentDateInfo();
     let systemPrompt = getPolySystemPrompt(requestDateInfo);
     console.log(`[DATE] Using current date: ${requestDateInfo.fullDate}`);
-    
+
     // If user asked for a very specific market and we couldn't find it, DO NOT distract with generic cached markets
     // Instead, give a clear "couldn't find that" response
     if (failedSearchTopic && voiceMode) {
-      liveDataContext = '';
-      
+      liveDataContext = "";
+
       // Return early with a helpful failure response instead of random markets
-      const cleanTopic = failedSearchTopic.replace(/analyze|find|show|me|please|the|market|on|for/gi, '').trim();
+      const cleanTopic = failedSearchTopic.replace(/analyze|find|show|me|please|the|market|on|for/gi, "").trim();
       const voiceSummary = `I couldn't find a market matching "${cleanTopic}" on Polymarket. Drop the exact link and I'll break it down for you instantly.`;
-      
+
       return new Response(
         JSON.stringify({
           voiceSummary,
@@ -4765,59 +5114,66 @@ DO NOT say "I don't have live data" or anything similar.
           searchFailed: true,
           currentMarket: null,
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     } else if (failedSearchTopic) {
-      liveDataContext = '';
+      liveDataContext = "";
     }
-    
+
     if (liveDataContext) {
       systemPrompt += `\n\n${liveDataContext}`;
     }
-    
+
     // CRITICAL: Inject sidebar data into system prompt so AI can reference it
-    if (sidebarData && typeof sidebarData === 'object') {
-      console.log('[SIDEBAR] Injecting sidebar market data into system prompt');
-      
+    if (sidebarData && typeof sidebarData === "object") {
+      console.log("[SIDEBAR] Injecting sidebar market data into system prompt");
+
       const formatUsd = (val: number) => {
-        if (!val || isNaN(val)) return '$0';
+        if (!val || isNaN(val)) return "$0";
         if (val >= 1000) return `$${(val / 1000).toFixed(1)}K`;
         return `$${val.toFixed(0)}`;
       };
-      
+
       const trades = sidebarData.recentTrades || [];
       const whales = sidebarData.whales || [];
       const tradeStats = sidebarData.tradeStats || {};
       const market = sidebarData.market || {};
-      
+
       // Calculate largest trade
-      const largestTradeSize = trades.length > 0 
-        ? Math.max(...trades.map((t: any) => t.size || 0))
-        : 0;
-      
+      const largestTradeSize = trades.length > 0 ? Math.max(...trades.map((t: any) => t.size || 0)) : 0;
+
       const sidebarContext = `
 === 🚨 CURRENT SIDEBAR DATA (USER CAN SEE THIS - YOUR ANSWERS MUST MATCH) ===
 The user has the market data sidebar open showing this EXACT data from Dome API:
 
-MARKET: ${market.question || 'Unknown'}
-CURRENT ODDS: ${market.odds || 'N/A'}%
+MARKET: ${market.question || "Unknown"}
+CURRENT ODDS: ${market.odds || "N/A"}%
 VOLUME: ${formatUsd(market.volume || 0)}
 
 RECENT TRADES (${trades.length} total):
-${trades.slice(0, 10).map((t: any, i: number) => 
-  `• ${t.side === 'BUY' ? '🟢' : '🔴'} ${formatUsd(t.size)} @ ${t.price}% (${t.timeAgo || 'recent'})`
-).join('\n') || '• No trades available'}
+${
+  trades
+    .slice(0, 10)
+    .map(
+      (t: any, i: number) =>
+        `• ${t.side === "BUY" ? "🟢" : "🔴"} ${formatUsd(t.size)} @ ${t.price}% (${t.timeAgo || "recent"})`,
+    )
+    .join("\n") || "• No trades available"
+}
 
 TRADE STATS:
 • Buy pressure: ${tradeStats.buyPressure || 0}%
 • Sell pressure: ${tradeStats.sellPressure || 0}%
-• Net flow: ${formatUsd(Math.abs(tradeStats.netFlow || 0))} ${(tradeStats.netFlow || 0) >= 0 ? 'buying' : 'selling'}
+• Net flow: ${formatUsd(Math.abs(tradeStats.netFlow || 0))} ${(tradeStats.netFlow || 0) >= 0 ? "buying" : "selling"}
 • Largest trade: ${formatUsd(largestTradeSize)}
 
 WHALE TRADES (>$10K): ${whales.length} detected
-${whales.slice(0, 5).map((w: any) => 
-  `• ${w.side === 'BUY' ? '🟢' : '🔴'} ${formatUsd(w.amount)} @ ${(w.price * 100).toFixed(1)}%`
-).join('\n') || '• No whale trades'}
+${
+  whales
+    .slice(0, 5)
+    .map((w: any) => `• ${w.side === "BUY" ? "🟢" : "🔴"} ${formatUsd(w.amount)} @ ${(w.price * 100).toFixed(1)}%`)
+    .join("\n") || "• No whale trades"
+}
 
 🚨 CRITICAL RULES:
 1. When user asks about trades, whales, or activity - USE THE DATA ABOVE
@@ -4827,10 +5183,10 @@ ${whales.slice(0, 5).map((w: any) =>
 5. NEVER make up trade data - use ONLY what's shown above
 6. If no data above, say "I don't have trade data for this market yet"
 `;
-      
+
       systemPrompt += sidebarContext;
     }
-    
+
     if (detailMode === "quick") {
       systemPrompt += `
 
@@ -4855,35 +5211,39 @@ Use the full detailed format above. Include thorough analysis while staying stru
     // VOICE MODE: Two-phase response - quick voice first, then detailed
     if (voiceMode) {
       // Determine intent for better voice responses
-      const hasWhaleContext = liveDataContext.includes('WHALE ACTIVITY');
-      const hasMarketContext = liveDataContext.includes('LIVE POLYMARKET') || liveDataContext.includes('PRE-ANALYZED');
+      const hasWhaleContext = liveDataContext.includes("WHALE ACTIVITY");
+      const hasMarketContext = liveDataContext.includes("LIVE POLYMARKET") || liveDataContext.includes("PRE-ANALYZED");
       const hasSpecificMarket = providedMarketUrl || fetchedMarketData || currentMarket?.url;
-      
+
       // Check if market data was successfully fetched and included in enriched messages
-      const marketDataInMessages = enrichedMessages.some((m: any) => 
-        m.content?.includes('=== LIVE MARKET DATA ===') || 
-        m.content?.includes('LIVE POLYMARKET') ||
-        m.content?.includes('MARKET DATA ENRICHMENT')
+      const marketDataInMessages = enrichedMessages.some(
+        (m: any) =>
+          m.content?.includes("=== LIVE MARKET DATA ===") ||
+          m.content?.includes("LIVE POLYMARKET") ||
+          m.content?.includes("MARKET DATA ENRICHMENT"),
       );
-      
+
       console.log("VOICE MODE DEBUG - providedMarketUrl:", providedMarketUrl);
       console.log("VOICE MODE DEBUG - currentMarket:", currentMarket);
       console.log("VOICE MODE DEBUG - fetchedMarketData:", fetchedMarketData);
       console.log("VOICE MODE DEBUG - hasSpecificMarket:", hasSpecificMarket);
       console.log("VOICE MODE DEBUG - marketDataInMessages:", marketDataInMessages);
       console.log("VOICE MODE DEBUG - isContextualRequest:", isContextualRequest);
-      
+
       // Build conversation context for better responses - include more detail
-      const conversationContext = enrichedMessages.slice(-6).map((m: any) => {
-        const content = m.content || '';
-        if (m.role === 'user') return `User: ${content.substring(0, 200)}`;
-        return `Poly: ${content.substring(0, 300)}`;
-      }).join('\n');
-      
+      const conversationContext = enrichedMessages
+        .slice(-6)
+        .map((m: any) => {
+          const content = m.content || "";
+          if (m.role === "user") return `User: ${content.substring(0, 200)}`;
+          return `Poly: ${content.substring(0, 300)}`;
+        })
+        .join("\n");
+
       // Extract any market mentioned in recent conversation
-      let recentMarketContext = '';
+      let recentMarketContext = "";
       for (const msg of [...enrichedMessages].reverse().slice(0, 4)) {
-        const content = msg.content || '';
+        const content = msg.content || "";
         // Look for market questions or analysis patterns
         const marketMatch = content.match(/[""]([^""]{10,100})[""]\s*(?:is at|trading at|at)\s*(\d+)/i);
         if (marketMatch) {
@@ -4897,19 +5257,19 @@ Use the full detailed format above. Include thorough analysis while staying stru
           break;
         }
       }
-      
+
       // Build current market info string - MAKE IT EXPLICIT
-      let currentMarketInfo = '';
+      let currentMarketInfo = "";
       const effectiveMarket = currentMarket?.question || currentMarket?.url || effectiveMarketUrl;
-      
+
       if (effectiveMarket) {
         currentMarketInfo = `
 🔒🔒🔒 LOADED MARKET (MANDATORY CONTEXT) 🔒🔒🔒
 ╔═════════════════════════════════════════════════════════╗
-║ MARKET: ${currentMarket?.question || 'Market from URL'}
-║ PRICE: ${currentMarket?.price || 'See data in conversation'}
-║ URL: ${currentMarket?.url || effectiveMarketUrl || 'N/A'}
-║ PLATFORM: ${(currentMarket?.platform || 'polymarket').toUpperCase()}
+║ MARKET: ${currentMarket?.question || "Market from URL"}
+║ PRICE: ${currentMarket?.price || "See data in conversation"}
+║ URL: ${currentMarket?.url || effectiveMarketUrl || "N/A"}
+║ PLATFORM: ${(currentMarket?.platform || "polymarket").toUpperCase()}
 ╚═════════════════════════════════════════════════════════╝
 
 ⚡ WHEN USER SAYS "this", "analyze this", "this market", "this rocket", "what do you think":
@@ -4927,97 +5287,117 @@ Use the full detailed format above. Include thorough analysis while staying stru
 When user says "this market", "what do you think?", "more about this" → THEY MEAN THIS MARKET!
 `;
       }
-      
+
       // Check if user is simply confirming/affirming OR asking about "this one", "this market"
-      const isUserJustSayingYes = /^(yes|yeah|sure|ok|okay|yep|please|yea|do it|go ahead|continue|tell me more|first one|second one|the first|the second|1|2|sounds good|let's do it|that one|this one)\s*[.!?]*$/i.test(userMessage.trim());
-      
+      const isUserJustSayingYes =
+        /^(yes|yeah|sure|ok|okay|yep|please|yea|do it|go ahead|continue|tell me more|first one|second one|the first|the second|1|2|sounds good|let's do it|that one|this one)\s*[.!?]*$/i.test(
+          userMessage.trim(),
+        );
+
       // NEW: Detect whale requests that reference current market context
-      const isAskingWhaleOnCurrentMarket = /whale\s+(?:activity|data|trades?)?\s+(?:on|for)\s+(?:this|that|the)\s+(?:one|market|specific|outcome)/i.test(userMessage) ||
-        /(?:analyze|show|get)\s+(?:the\s+)?whale\s+(?:activity|data)?\s+(?:on|for)?\s*(?:this|that)?/i.test(userMessage);
-      
+      const isAskingWhaleOnCurrentMarket =
+        /whale\s+(?:activity|data|trades?)?\s+(?:on|for)\s+(?:this|that|the)\s+(?:one|market|specific|outcome)/i.test(
+          userMessage,
+        ) ||
+        /(?:analyze|show|get)\s+(?:the\s+)?whale\s+(?:activity|data)?\s+(?:on|for)?\s*(?:this|that)?/i.test(
+          userMessage,
+        );
+
       // If asking whale on current market, force whale context
       if (isAskingWhaleOnCurrentMarket && (currentMarket?.question || currentMarket?.lastWhaleOfferTarget)) {
         const target = currentMarket?.lastWhaleOfferTarget || currentMarket?.question;
-        console.log('🐋 Detected whale request on current market, target:', target);
+        console.log("🐋 Detected whale request on current market, target:", target);
         // This will be handled by the whale lock logic below
       }
-      
+
       // HARD CONTEXT LOCK: Route ALL whale requests for the loaded market through deterministic logic
-      const lastOfferWasWhale = currentMarket?.lastPolyOffer === 'whale_data';
+      const lastOfferWasWhale = currentMarket?.lastPolyOffer === "whale_data";
       let whaleOfferTarget = currentMarket?.lastWhaleOfferTarget; // Specific candidate like "Scott Bessent"
-      
+
       // If asking about "this one" whale data but no explicit target, extract from explicitContext or last message
       if (isAskingWhaleOnCurrentMarket && !whaleOfferTarget) {
         // Try to get target from explicit context
-        const targetFromContext = explicitContext?.match(/WHALE_OFFER_TARGET:\s*"([^"]+)"/)?.[1] ||
+        const targetFromContext =
+          explicitContext?.match(/WHALE_OFFER_TARGET:\s*"([^"]+)"/)?.[1] ||
           explicitContext?.match(/POLY_JUST_OFFERED_WHALE_DATA_FOR:\s*"([^"]+)"/)?.[1] ||
           explicitContext?.match(/USER_WANTS_WHALE_DATA_ON_CURRENT_MARKET[^"]*"([^"]+)"/)?.[1];
-        
+
         if (targetFromContext) {
           whaleOfferTarget = targetFromContext;
-          console.log('🐋 Extracted whale target from context:', whaleOfferTarget);
+          console.log("🐋 Extracted whale target from context:", whaleOfferTarget);
         } else if (currentMarket?.question) {
           whaleOfferTarget = currentMarket.question;
-          console.log('🐋 Using current market question as whale target:', whaleOfferTarget);
+          console.log("🐋 Using current market question as whale target:", whaleOfferTarget);
         }
       }
-      
-      if (voiceMode && (userWantsWhaleData || isAskingWhaleOnCurrentMarket || (isUserJustSayingYes && lastOfferWasWhale)) && (currentMarket?.url || effectiveMarketUrl || whaleOfferTarget || currentMarket?.question)) {
+
+      if (
+        voiceMode &&
+        (userWantsWhaleData || isAskingWhaleOnCurrentMarket || (isUserJustSayingYes && lastOfferWasWhale)) &&
+        (currentMarket?.url || effectiveMarketUrl || whaleOfferTarget || currentMarket?.question)
+      ) {
         try {
-          console.log('🔒 Whale data request detected - locking context to:', whaleOfferTarget || currentMarket?.question || effectiveMarketUrl);
+          console.log(
+            "🔒 Whale data request detected - locking context to:",
+            whaleOfferTarget || currentMarket?.question || effectiveMarketUrl,
+          );
           // Fetch whale data if we don't already have it
           if (!whaleData) {
             const whaleResponse = await fetch(`${supabaseUrl}/functions/v1/whale-tracker?refresh=true&timeRange=24h`, {
-              headers: { "Authorization": `Bearer ${supabaseKey}` }
+              headers: { Authorization: `Bearer ${supabaseKey}` },
             });
             if (whaleResponse.ok) {
               whaleData = await whaleResponse.json();
             }
           }
-          
+
           const allTrades = whaleData?.trades || [];
           const marketUrlForFilter = currentMarket?.url || effectiveMarketUrl;
-          
+
           // Filter by specific target (candidate name) OR by URL
           let tradesForMarket = [];
           if (whaleOfferTarget) {
             // Filter by candidate/topic name (case-insensitive)
             const targetLower = whaleOfferTarget.toLowerCase();
-            tradesForMarket = allTrades.filter((t: any) => 
-              (t.market_question && t.market_question.toLowerCase().includes(targetLower)) ||
-              (t.market_url && t.market_url.toLowerCase().includes(targetLower.replace(/\s+/g, '-')))
+            tradesForMarket = allTrades.filter(
+              (t: any) =>
+                (t.market_question && t.market_question.toLowerCase().includes(targetLower)) ||
+                (t.market_url && t.market_url.toLowerCase().includes(targetLower.replace(/\s+/g, "-"))),
             );
             console.log(`Filtered ${tradesForMarket.length} whale trades for target: "${whaleOfferTarget}"`);
           } else if (marketUrlForFilter) {
-            tradesForMarket = allTrades.filter((t: any) => t.market_url && marketUrlForFilter && t.market_url.includes(marketUrlForFilter));
+            tradesForMarket = allTrades.filter(
+              (t: any) => t.market_url && marketUrlForFilter && t.market_url.includes(marketUrlForFilter),
+            );
           }
-          
+
           // ONLY use trades for this specific market. If none, report no whale data instead of switching markets.
           const tradesToUse = tradesForMarket.slice(0, 5);
-          
+
           const formatAmount = (amt: number) => {
             if (amt >= 1000000) return `$${(amt / 1000000).toFixed(1)}M`;
             if (amt >= 1000) return `$${(amt / 1000).toFixed(0)}K`;
             return `$${amt.toFixed(0)}`;
           };
-          
+
           let bullish = 0;
           let bearish = 0;
           for (const t of tradesToUse) {
-            if (t.side?.toLowerCase() === 'yes') bullish += t.amount || 0;
-            if (t.side?.toLowerCase() === 'no') bearish += t.amount || 0;
+            if (t.side?.toLowerCase() === "yes") bullish += t.amount || 0;
+            if (t.side?.toLowerCase() === "no") bearish += t.amount || 0;
           }
-          
+
           const total = bullish + bearish;
           const bullShare = total > 0 ? (bullish / total) * 100 : 0;
           const bearShare = total > 0 ? (bearish / total) * 100 : 0;
-          
+
           // Use the specific target name if available, otherwise fall back to market question
-          const marketLabel = whaleOfferTarget || currentMarket?.question || 'this market';
-          const voiceSummary = tradesToUse.length === 0
-            ? `I'm not seeing any recent whale-size trades specifically on ${marketLabel}. Overall flow in the last day is pretty balanced, so nothing major to copy yet. Want me to analyze the odds instead?`
-            : `Looking at whale activity for ${marketLabel}: recent flow is ${formatAmount(total)} total, with about ${bullShare.toFixed(0)}% on the YES side and ${bearShare.toFixed(0)}% on NO. Biggest tickets are around ${formatAmount(Math.max(...tradesToUse.map((t: any) => t.amount || 0)))}. ${bullShare > bearShare ? 'Smart money is leaning bullish' : 'Whales are leaning bearish'} here.`;
-          
+          const marketLabel = whaleOfferTarget || currentMarket?.question || "this market";
+          const voiceSummary =
+            tradesToUse.length === 0
+              ? `I'm not seeing any recent whale-size trades specifically on ${marketLabel}. Overall flow in the last day is pretty balanced, so nothing major to copy yet. Want me to analyze the odds instead?`
+              : `Looking at whale activity for ${marketLabel}: recent flow is ${formatAmount(total)} total, with about ${bullShare.toFixed(0)}% on the YES side and ${bearShare.toFixed(0)}% on NO. Biggest tickets are around ${formatAmount(Math.max(...tradesToUse.map((t: any) => t.amount || 0)))}. ${bullShare > bearShare ? "Smart money is leaning bullish" : "Whales are leaning bearish"} here.`;
+
           return new Response(
             JSON.stringify({
               voiceSummary,
@@ -5030,43 +5410,50 @@ When user says "this market", "what do you think?", "more about this" → THEY M
                 lastWhaleOfferTarget: whaleOfferTarget, // Echo back for context tracking
               },
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         } catch (err) {
-          console.error('Whale lock flow failed, falling back to LLM:', err);
+          console.error("Whale lock flow failed, falling back to LLM:", err);
         }
       }
-      
+
       // Check if Poly asked something in the last message
-      let polyLastAskedAbout = '';
+      let polyLastAskedAbout = "";
       let polyOfferedWhaleData = false;
       let polyOfferedSearchResults = false;
-      const assistantMsgs = enrichedMessages.filter((m: any) => m.role === 'assistant');
+      const assistantMsgs = enrichedMessages.filter((m: any) => m.role === "assistant");
       if (assistantMsgs.length > 0) {
         const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
         if (lastAssistant?.content) {
           const lowerContent = lastAssistant.content.toLowerCase();
-          if (lowerContent.includes('?')) {
+          if (lowerContent.includes("?")) {
             polyLastAskedAbout = lastAssistant.content.substring(0, 150);
           }
-          if (lowerContent.includes('whale') && lowerContent.includes('?')) {
+          if (lowerContent.includes("whale") && lowerContent.includes("?")) {
             polyOfferedWhaleData = true;
           }
-          if (lowerContent.includes('which one') || (lowerContent.includes('found') && lowerContent.includes('market'))) {
+          if (
+            lowerContent.includes("which one") ||
+            (lowerContent.includes("found") && lowerContent.includes("market"))
+          ) {
             polyOfferedSearchResults = true;
           }
         }
       }
-      
+
       // Build search results context if available
-      let searchResultsContext = '';
+      let searchResultsContext = "";
       if (searchResults.length > 0) {
         searchResultsContext = `
 🔍 SEARCH RESULTS FOUND:
-${searchResults.slice(0, 3).map((m: any, i: number) => 
-  `${i + 1}. "${m.question}" at ${m.yesPrice}% YES - Volume: ${formatVolume(m.volume)}
-   URL: ${m.url}`
-).join('\n')}
+${searchResults
+  .slice(0, 3)
+  .map(
+    (m: any, i: number) =>
+      `${i + 1}. "${m.question}" at ${m.yesPrice}% YES - Volume: ${formatVolume(m.volume)}
+   URL: ${m.url}`,
+  )
+  .join("\n")}
 
 When user says "first one", "1", "the first" → analyze market #1
 When user says "second one", "2", "the second" → analyze market #2
@@ -5075,7 +5462,7 @@ When user says "second one", "2", "the second" → analyze market #2
 
       // Re-compute current date at request time for freshness
       const requestDateInfo = getCurrentDateInfo();
-      
+
       const quickSystemPrompt = `You're Poly. Keep responses under 15 seconds of speech.
 
 Talk naturally like you're texting a friend:
@@ -5096,7 +5483,9 @@ CURRENT YEAR: ${requestDateInfo.year}
 - When discussing crypto, the NEXT halving is 2028, not 2024
 - Always ground your analysis in ${requestDateInfo.year} reality
 
-       ${explicitContext ? `
+       ${
+         explicitContext
+           ? `
 ╔══════════════════════════════════════════════════════════════════╗
 ║  EXPLICIT CONTEXT FROM CLIENT (HIGHEST PRIORITY - ALWAYS OBEY)  ║
 ╚══════════════════════════════════════════════════════════════════╝
@@ -5105,63 +5494,97 @@ ${explicitContext}
 ⚡ IF CONTEXT SAYS "USER_IS_CONFIRMING" → CONTINUE THE SAME ANALYSIS, DO NOT ASK "WHICH MARKET?"
 ⚡ IF CONTEXT HAS "WHALE_OFFER_TARGET" → PROVIDE WHALE DATA FOR THAT SPECIFIC TARGET
 ⚡ IF CONTEXT HAS "RECENTLY_DISCUSSED" OR "POLY_LAST_OFFERED_SPECIFIC_MARKET" → STAY ON THAT TOPIC
-` : ''}
+`
+           : ""
+       }
 +
        ${currentMarketInfo}
  
-       ${hasManualPrices ? `
+       ${
+         hasManualPrices
+           ? `
        🔢 USER PROVIDED MANUAL PRICES:
-       ${manualPrices.map(p => `- ${p.name}: ${p.price}`).join('\n')}
+       ${manualPrices.map((p) => `- ${p.name}: ${p.price}`).join("\n")}
  
        Analyze these exact prices! Calculate the edge between them. The user is telling you the odds directly - use them!
-       ` : ''}
+       `
+           : ""
+       }
  
-       ${hasSpecificMarket || marketDataInMessages ? `
+       ${
+         hasSpecificMarket || marketDataInMessages
+           ? `
        🚨 CRITICAL: The user has loaded a specific market. You have the market data in this conversation.
        Analyze THIS market directly with REAL numbers - DO NOT ask for a link!
        Include price, volume, and your edge calculation.
-       ` : ''}
+       `
+           : ""
+       }
  
-       ${isContextualRequest && currentMarket?.question ? `
+       ${
+         isContextualRequest && currentMarket?.question
+           ? `
        ⚠️ CONTEXTUAL REQUEST DETECTED!
        User said "${userMessage.substring(0, 50)}" which references the CURRENT MARKET:
-       "${currentMarket.question}" ${currentMarket.price ? `at ${currentMarket.price}` : ''}
+       "${currentMarket.question}" ${currentMarket.price ? `at ${currentMarket.price}` : ""}
  
        RESPOND ABOUT THIS MARKET - NOT A RANDOM DIFFERENT ONE!
-       ` : ''}
+       `
+           : ""
+       }
  
-       ${isContextualRequest && !hasSpecificMarket && !currentMarketInfo && !hasManualPrices ? `
+       ${
+         isContextualRequest && !hasSpecificMarket && !currentMarketInfo && !hasManualPrices
+           ? `
        ⚠️ User seems to be asking about "this market" but no market context found.
        Ask them: "Which market are you asking about? You can paste a Polymarket or Kalshi URL, or tell me the topic."
-       ` : ''}
+       `
+           : ""
+       }
  
-       ${isUserJustSayingYes && polyLastAskedAbout ? `
+       ${
+         isUserJustSayingYes && polyLastAskedAbout
+           ? `
        🎯 USER IS CONFIRMING YOUR LAST QUESTION!
        You asked: "${polyLastAskedAbout}..."
        User said: "${userMessage}"
  
        RESPOND TO YOUR OWN QUESTION! Don't ask "which market?" - just continue with what you offered!
-       ` : ''}
+       `
+           : ""
+       }
        
-       ${isUserJustSayingYes && polyOfferedWhaleData ? `
+       ${
+         isUserJustSayingYes && polyOfferedWhaleData
+           ? `
        🐋 USER WANTS WHALE DATA! You offered whale data and they said yes.
        PROVIDE THE WHALE DATA for the current market. Use the whale activity data in this conversation.
-       ` : ''}
+       `
+           : ""
+       }
        
-       ${isUserJustSayingYes && polyOfferedSearchResults && searchResults.length > 0 ? `
+       ${
+         isUserJustSayingYes && polyOfferedSearchResults && searchResults.length > 0
+           ? `
        🔍 USER IS SELECTING FROM SEARCH RESULTS!
        "first one" or "1" → Analyze: "${searchResults[0]?.question}" at ${searchResults[0]?.yesPrice}%
-       ${searchResults[1] ? `"second one" or "2" → Analyze: "${searchResults[1]?.question}" at ${searchResults[1]?.yesPrice}%` : ''}
-       ` : ''}
+       ${searchResults[1] ? `"second one" or "2" → Analyze: "${searchResults[1]?.question}" at ${searchResults[1]?.yesPrice}%` : ""}
+       `
+           : ""
+       }
        
        ${searchResultsContext}
  
-       ${conversationContext ? `
+       ${
+         conversationContext
+           ? `
        CONVERSATION HISTORY:
        ${conversationContext}
  
        When user says "yes", "sure" → they're CONFIRMING your last suggestion!
-       ` : ''}
+       `
+           : ""
+       }
  
        YOUR CAPABILITIES:
        1. 📊 MARKET ANALYSIS - Analyze with REAL data from the conversation: price, volume, edge, recommendation
@@ -5170,10 +5593,10 @@ ${explicitContext}
        4. 💰 EDGE CALCULATION - Calculate true odds vs market price
        5. 🔍 MARKET SEARCH - Find markets by topic (e.g., "find trump markets", "what about epstein files")
  
-       ${hasWhaleContext ? `USER ASKED ABOUT WHALES - Include SPECIFIC whale trades with REAL dollar amounts and sides from the data provided. DO NOT make up numbers.` : ''}
-       ${hasMarketContext && !hasSpecificMarket ? 'USER WANTS MARKET DISCOVERY - List top 2-3 markets with specific odds and your take.' : ''}
-       ${hasSpecificMarket ? 'USER HAS A SPECIFIC MARKET - Give price, your edge calculation, and clear YES/NO recommendation!' : ''}
-       ${searchResults.length > 0 ? 'SEARCH RESULTS FOUND - Present the top matches and ask which one to analyze (unless user already picked).' : ''}
+       ${hasWhaleContext ? `USER ASKED ABOUT WHALES - Include SPECIFIC whale trades with REAL dollar amounts and sides from the data provided. DO NOT make up numbers.` : ""}
+       ${hasMarketContext && !hasSpecificMarket ? "USER WANTS MARKET DISCOVERY - List top 2-3 markets with specific odds and your take." : ""}
+       ${hasSpecificMarket ? "USER HAS A SPECIFIC MARKET - Give price, your edge calculation, and clear YES/NO recommendation!" : ""}
+       ${searchResults.length > 0 ? "SEARCH RESULTS FOUND - Present the top matches and ask which one to analyze (unless user already picked)." : ""}
  
        CRITICAL RULES:
        1. NEVER ask for a link if you already have market data in the conversation
@@ -5239,17 +5662,30 @@ ${explicitContext}
        For confirmation responses ("yes", "sure"):
         "Diving deeper on that same market..." [Continue with more details about the CURRENT market, not a new one]`;
 
-      console.log("VOICE MODE: Generating quick voice response. Has whale data:", hasWhaleContext, "Has market data:", hasMarketContext, "Has specific market:", hasSpecificMarket, "Current market:", currentMarket?.question, "Manual prices:", hasManualPrices);
+      console.log(
+        "VOICE MODE: Generating quick voice response. Has whale data:",
+        hasWhaleContext,
+        "Has market data:",
+        hasMarketContext,
+        "Has specific market:",
+        hasSpecificMarket,
+        "Current market:",
+        currentMarket?.question,
+        "Manual prices:",
+        hasManualPrices,
+      );
 
       try {
         // Build Claude messages
-        const claudeMessages = enrichedMessages.map(msg => ({
+        const claudeMessages = enrichedMessages.map((msg) => ({
           role: msg.role as "user" | "assistant",
-          content: msg.content
+          content: msg.content,
         }));
 
         // Voice mode with tools
-        const voiceToolPrompt = quickSystemPrompt + `
+        const voiceToolPrompt =
+          quickSystemPrompt +
+          `
 
 === MANDATORY: REAL-TIME PRICE VERIFICATION ===
 NEVER guess or hallucinate current cryptocurrency, stock, or asset prices. You MUST use web_search to verify current prices.
@@ -5274,27 +5710,27 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
 `;
 
         // Voice mode: use Haiku for speed unless complex analysis needed
-        const voiceModel = selectModel(lastUserMessage?.content || '', { isVoice: true });
-        
+        const voiceModel = selectModel(lastUserMessage?.content || "", { isVoice: true });
+
         // Include web_search tool for voice mode to verify prices
         const voiceTools = [...POLY_TOOLS, WEB_SEARCH_TOOL as any];
-        
+
         const quickClaudeResponse = await anthropic.messages.create({
           model: voiceModel,
           max_tokens: 800,
           system: voiceToolPrompt,
           messages: claudeMessages,
-          tools: voiceTools
+          tools: voiceTools,
         });
 
         // Check if Claude wants to use tools
-        if (quickClaudeResponse.stop_reason === 'tool_use') {
-          console.log('[Voice] Claude requested tool use');
-          
+        if (quickClaudeResponse.stop_reason === "tool_use") {
+          console.log("[Voice] Claude requested tool use");
+
           const toolUses = quickClaudeResponse.content.filter(
-            (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+            (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
           );
-          
+
           // Execute tools
           const toolResults = await Promise.all(
             toolUses.map(async (tool) => {
@@ -5305,16 +5741,16 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
                 fetchPolymarketData,
                 fetchKalshiData,
                 extractMarketInfo,
-                fetchedMarketInfo || currentMarket // Pass current market context
+                fetchedMarketInfo || currentMarket, // Pass current market context
               );
               return {
-                type: 'tool_result' as const,
+                type: "tool_result" as const,
                 tool_use_id: tool.id,
-                content: result
+                content: result,
               };
-            })
+            }),
           );
-          
+
           // Get final response with tool results - use Sonnet for reasoning about tool data
           const finalResponse = await anthropic.messages.create({
             model: SONNET_MODEL, // Always Sonnet for tool follow-up
@@ -5323,44 +5759,44 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
             messages: [
               ...claudeMessages,
               {
-                role: 'assistant',
-                content: quickClaudeResponse.content
+                role: "assistant",
+                content: quickClaudeResponse.content,
               },
               {
-                role: 'user',
-                content: toolResults
-              }
-            ]
+                role: "user",
+                content: toolResults,
+              },
+            ],
           });
-          
+
           const voiceSummary = finalResponse.content
-            .filter(block => block.type === 'text')
-            .map(block => block.text)
-            .join('\n');
-          
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("\n");
+
           console.log("Voice summary with tools (Claude):", voiceSummary.substring(0, 100));
-          
+
           // Save to conversation memory
           await saveConversationTurn(currentUserMessage?.content || userMessage, voiceSummary);
-          
+
           const echoMarket = fetchedMarketInfo || currentMarket || null;
-          
+
           return new Response(
             JSON.stringify({
               voiceSummary: voiceSummary,
               needsFullAnalysis: true,
               currentMarket: echoMarket,
             }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
 
         // No tools used - direct response
         const voiceSummary = quickClaudeResponse.content
-          .filter(block => block.type === 'text')
-          .map(block => block.text)
-          .join('\n');
-        
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("\n");
+
         console.log("Quick voice summary generated (Claude):", voiceSummary.substring(0, 100));
 
         // Save to conversation memory
@@ -5368,38 +5804,45 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
 
         // Return the quick voice summary immediately
         const echoMarket = fetchedMarketInfo || currentMarket || null;
-        
+
         return new Response(
           JSON.stringify({
             voiceSummary: voiceSummary,
             needsFullAnalysis: true,
             currentMarket: echoMarket,
           }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       } catch (claudeError: any) {
         console.error("Quick voice response failed (Claude):", claudeError);
-        
+
         // Check if it's a rate limit or overload error - try Gemini fallback for voice
-        const shouldFallback = claudeError.status === 429 || claudeError.status === 529 || claudeError.status === 500 || claudeError.status === 503;
-        
+        const shouldFallback =
+          claudeError.status === 429 ||
+          claudeError.status === 529 ||
+          claudeError.status === 500 ||
+          claudeError.status === 503;
+
         if (shouldFallback) {
-          console.log('[Voice Fallback] Attempting Lovable AI (Gemini) fallback...');
-          const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-          
+          console.log("[Voice Fallback] Attempting Lovable AI (Gemini) fallback...");
+          const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+
           if (lovableApiKey) {
             try {
-              const fallbackResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-                method: 'POST',
+              const fallbackResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
                 headers: {
-                  'Authorization': `Bearer ${lovableApiKey}`,
-                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${lovableApiKey}`,
+                  "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                  model: 'google/gemini-2.5-flash',
+                  model: "google/gemini-2.5-flash",
                   messages: [
-                    { role: 'system', content: quickSystemPrompt + '\n\nKeep responses brief and conversational for voice.' },
-                    ...enrichedMessages.map(msg => ({ role: msg.role, content: msg.content }))
+                    {
+                      role: "system",
+                      content: quickSystemPrompt + "\n\nKeep responses brief and conversational for voice.",
+                    },
+                    ...enrichedMessages.map((msg) => ({ role: msg.role, content: msg.content })),
                   ],
                   max_tokens: 800,
                 }),
@@ -5407,33 +5850,35 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
 
               if (fallbackResponse.ok) {
                 const fallbackData = await fallbackResponse.json();
-                const voiceSummary = fallbackData.choices?.[0]?.message?.content || "I'm having trouble connecting right now. Please try again.";
-                
-                console.log('[Voice Fallback] Gemini response OK:', voiceSummary.substring(0, 100));
-                
+                const voiceSummary =
+                  fallbackData.choices?.[0]?.message?.content ||
+                  "I'm having trouble connecting right now. Please try again.";
+
+                console.log("[Voice Fallback] Gemini response OK:", voiceSummary.substring(0, 100));
+
                 // Save to conversation memory
-                await saveConversationTurn(lastUserMessage?.content || '', voiceSummary);
-                
+                await saveConversationTurn(lastUserMessage?.content || "", voiceSummary);
+
                 const echoMarket = fetchedMarketInfo || currentMarket || null;
-                
+
                 return new Response(
                   JSON.stringify({
                     voiceSummary: voiceSummary,
                     needsFullAnalysis: false, // Gemini already gave full response
                     currentMarket: echoMarket,
-                    fallbackUsed: 'gemini'
+                    fallbackUsed: "gemini",
                   }),
-                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } },
                 );
               } else {
-                console.error('[Voice Fallback] Gemini failed:', fallbackResponse.status);
+                console.error("[Voice Fallback] Gemini failed:", fallbackResponse.status);
               }
             } catch (fallbackError) {
-              console.error('[Voice Fallback] Gemini error:', fallbackError);
+              console.error("[Voice Fallback] Gemini error:", fallbackError);
             }
           }
         }
-        
+
         // Fall back to regular streaming if quick fails and Gemini fallback didn't work
       }
     }
@@ -5450,10 +5895,10 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
     // ============= DEEP RESEARCH MODE =============
     if (deepResearch) {
       console.log("[DeepResearch] Deep research mode enabled, fetching comprehensive data...");
-      
+
       // Use market TITLE for research, not the raw URL
-      let researchQuery = '';
-      
+      let researchQuery = "";
+
       // Priority 1: Use fetched market info (most reliable)
       if (fetchedMarketInfo?.question) {
         researchQuery = fetchedMarketInfo.question;
@@ -5461,73 +5906,75 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
       }
       // Priority 2: Use currentMarket from client
       else if (currentMarket?.question || currentMarket?.title) {
-        researchQuery = currentMarket.question || currentMarket.title || '';
+        researchQuery = currentMarket.question || currentMarket.title || "";
         console.log(`[DeepResearch] Using currentMarket title: "${researchQuery}"`);
       }
       // Priority 3: Extract quoted title from message (e.g., 'Analyze this market: "Will X happen?"')
       else {
-        const quotedMatch = (lastUserMessage?.content || '').match(/"([^"]{10,})"/);
+        const quotedMatch = (lastUserMessage?.content || "").match(/"([^"]{10,})"/);
         if (quotedMatch) {
           researchQuery = quotedMatch[1];
           console.log(`[DeepResearch] Extracted quoted title: "${researchQuery}"`);
         } else {
           // Fallback: Use message content after stripping URLs
-          researchQuery = (lastUserMessage?.content || '').replace(/https?:\/\/[^\s]+/g, '').trim();
+          researchQuery = (lastUserMessage?.content || "").replace(/https?:\/\/[^\s]+/g, "").trim();
           console.log(`[DeepResearch] Fallback to message content: "${researchQuery}"`);
         }
       }
-      
+
       // Strip any remaining URLs from the query - we want the title only
-      researchQuery = researchQuery.replace(/https?:\/\/[^\s]+/g, '').trim();
-      
+      researchQuery = researchQuery.replace(/https?:\/\/[^\s]+/g, "").trim();
+
       // Guard: If query is too short after stripping, log warning
       if (researchQuery.length < 10) {
         console.warn(`[DeepResearch] ⚠️ Query too short (${researchQuery.length} chars): "${researchQuery}"`);
       }
-      
+
       console.log(`[DeepResearch] Final research query: "${researchQuery.substring(0, 100)}..."`);
-      
+
       const researchData = await getDeepResearch(researchQuery);
-      
+
       if (researchData) {
         // Extract short summary (first 2-3 sentences) and key news
-        const fullAnswer = researchData.answer || '';
+        const fullAnswer = researchData.answer || "";
         const sentences = fullAnswer.split(/(?<=[.!?])\s+/).filter((s: string) => s.trim().length > 10);
-        const shortSummary = sentences.slice(0, 3).join(' ').trim();
-        const newsContent = sentences.slice(3).join(' ').trim();
-        
+        const shortSummary = sentences.slice(0, 3).join(" ").trim();
+        const newsContent = sentences.slice(3).join(" ").trim();
+
         // Format with clean markdown sections (no emojis)
         let formattedResponse = `## Summary\n\n${shortSummary}`;
-        
+
         if (newsContent) {
           formattedResponse += `\n\n## Key Developments\n\n${newsContent}`;
         }
-        
+
         // Filter out prediction market sources - only keep news/analysis
         if (researchData.citations && researchData.citations.length > 0) {
           const excludedDomains = [
-            'polymarket.com',
-            'kalshi.com',
-            'predictit.org',
-            'metaculus.com',
-            'manifold.markets',
-            'augur.net',
-            'betfair.com',
-            'smarkets.com'
+            "polymarket.com",
+            "kalshi.com",
+            "predictit.org",
+            "metaculus.com",
+            "manifold.markets",
+            "augur.net",
+            "betfair.com",
+            "smarkets.com",
           ];
-          
+
           const filteredCitations = researchData.citations.filter((c: any) => {
-            const url = (c.url || c.link || '').toLowerCase();
-            return !excludedDomains.some(domain => url.includes(domain));
+            const url = (c.url || c.link || "").toLowerCase();
+            return !excludedDomains.some((domain) => url.includes(domain));
           });
-          
-          console.log(`[DeepResearch] Filtered sources: ${filteredCitations.length} from ${researchData.citations.length} total`);
-          
+
+          console.log(
+            `[DeepResearch] Filtered sources: ${filteredCitations.length} from ${researchData.citations.length} total`,
+          );
+
           if (filteredCitations.length > 0) {
-            formattedResponse += '\n\n## Sources\n';
+            formattedResponse += "\n\n## Sources\n";
             filteredCitations.slice(0, 15).forEach((c: any, i: number) => {
-              const url = c.url || c.link || '';
-              const title = c.title || c.name || (url ? new URL(url).hostname : 'Source');
+              const url = c.url || c.link || "";
+              const title = c.title || c.name || (url ? new URL(url).hostname : "Source");
               if (url) {
                 formattedResponse += `${i + 1}. [${title}](${url})\n`;
               } else {
@@ -5536,22 +5983,22 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
             });
           }
         }
-        
+
         console.log("[DeepResearch] ✅ Returning research results");
-        
+
         // Return as streamed response
         const encoder = new TextEncoder();
         const readableStream = new ReadableStream({
           start(controller) {
             const sseData = JSON.stringify({
-              choices: [{ delta: { content: formattedResponse } }]
+              choices: [{ delta: { content: formattedResponse } }],
             });
             controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
-          }
+          },
         });
-        
+
         return new Response(readableStream, {
           headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
         });
@@ -5560,35 +6007,49 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
       }
     }
 
-    console.log("Calling Claude with tools,", enrichedMessages.length, "messages, mode:", detailMode, "voiceMode:", voiceMode, "fetched market data:", fetchedMarketData);
+    console.log(
+      "Calling Claude with tools,",
+      enrichedMessages.length,
+      "messages, mode:",
+      detailMode,
+      "voiceMode:",
+      voiceMode,
+      "fetched market data:",
+      fetchedMarketData,
+    );
 
     // Build Claude messages and sanitize to remove any tool_use artifacts
-    const claudeMessages = sanitizeMessages(enrichedMessages.map(msg => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content
-    })));
-    
+    const claudeMessages = sanitizeMessages(
+      enrichedMessages.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      })),
+    );
+
     console.log(`[Sanitize] Cleaned ${enrichedMessages.length} messages to ${claudeMessages.length} messages`);
 
     // Build current market context for Claude
     const currentMarketContext = fetchedMarketInfo || currentMarket || null;
-    const marketContextForPrompt = currentMarketContext 
+    const marketContextForPrompt = currentMarketContext
       ? `\n\n=== CURRENT MARKET CONTEXT (USE FOR FOLLOW-UP QUESTIONS) ===
 You are currently analyzing this market:
-- Question: ${currentMarketContext.question || currentMarketContext.title || 'Unknown'}
-- URL: ${currentMarketContext.url || 'N/A'}
-- Event: ${currentMarketContext.eventSlug || currentMarketContext.eventName || 'N/A'}
-- Market Slug: ${currentMarketContext.slug || extractSlugFromUrl(currentMarketContext.url) || 'N/A'}
+- Question: ${currentMarketContext.question || currentMarketContext.title || "Unknown"}
+- URL: ${currentMarketContext.url || "N/A"}
+- Event: ${currentMarketContext.eventSlug || currentMarketContext.eventName || "N/A"}
+- Market Slug: ${currentMarketContext.slug || extractSlugFromUrl(currentMarketContext.url) || "N/A"}
 
 CRITICAL: When user asks follow-up questions like "check trades", "check arbitrage", "what's the trade flow", "any whales" - they mean THIS market above. 
 DO NOT ask for the market URL or slug again. Use the context provided.
-For Dome tools, use market_slug: "${currentMarketContext.slug || extractSlugFromUrl(currentMarketContext.url) || ''}"
-For event-level tools (arbitrage), use event_slug: "${currentMarketContext.eventSlug || extractEventSlugFromUrl(currentMarketContext.url) || ''}"
+For Dome tools, use market_slug: "${currentMarketContext.slug || extractSlugFromUrl(currentMarketContext.url) || ""}"
+For event-level tools (arbitrage), use event_slug: "${currentMarketContext.eventSlug || extractEventSlugFromUrl(currentMarketContext.url) || ""}"
 `
-      : '';
+      : "";
 
     // Enhanced system prompt with tool guidance
-    const toolSystemPrompt = systemPrompt + marketContextForPrompt + `
+    const toolSystemPrompt =
+      systemPrompt +
+      marketContextForPrompt +
+      `
 
 === TOOL USAGE GUIDELINES ===
 You have access to tools for searching markets, getting market data, and checking whale activity.
@@ -5631,7 +6092,9 @@ Use this sidebar whale data to enhance your analysis:
 - Reference specific whale activity when present
 - Note whale buy/sell ratios for market sentiment
 - Highlight if whales are accumulating or distributing
-` + (irysMode ? `
+` +
+      (irysMode
+        ? `
 
 === 🔗 IRYS HISTORICAL DATA MODE - STRICT ANALYSIS RULES ===
 
@@ -5801,12 +6264,13 @@ Go directly to presenting results - no search narration like "I found some X but
 ❌ "Betting edges" based on historical accuracy
 
 Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Learned" or "Trading Implications".
-` : '');
+`
+        : "");
 
     try {
       // Select model based on query complexity
-      const textModel = selectModel(lastUserMessage?.content || '', { isVoice: false });
-      
+      const textModel = selectModel(lastUserMessage?.content || "", { isVoice: false });
+
       // First, call Claude with tools to let it decide if tools are needed
       const initialResponse = await anthropic.messages.create({
         model: textModel,
@@ -5814,29 +6278,32 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
         system: toolSystemPrompt,
         messages: claudeMessages,
         // Cast to any to allow web_search_20250305 tool type which SDK may not fully type yet
-        tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any
+        tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any,
       });
 
       console.log("Claude initial response stop_reason:", initialResponse.stop_reason);
 
       // Check if Claude wants to use tools
-      if (initialResponse.stop_reason === 'tool_use') {
-        console.log('[Claude] Requested tool use');
-        
+      if (initialResponse.stop_reason === "tool_use") {
+        console.log("[Claude] Requested tool use");
+
         // Extract any initial text content BEFORE tool execution
         const initialTextBlocks = initialResponse.content.filter(
-          (block): block is Anthropic.TextBlock => block.type === 'text'
+          (block): block is Anthropic.TextBlock => block.type === "text",
         );
-        const initialText = initialTextBlocks.map(b => b.text).join('').trim();
-        
+        const initialText = initialTextBlocks
+          .map((b) => b.text)
+          .join("")
+          .trim();
+
         if (initialText) {
-          console.log('[Claude] Found initial text before tools:', initialText.substring(0, 100) + '...');
+          console.log("[Claude] Found initial text before tools:", initialText.substring(0, 100) + "...");
         }
-        
+
         const toolUses = initialResponse.content.filter(
-          (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+          (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
         );
-        
+
         // Execute all tools in parallel
         const toolResults = await Promise.all(
           toolUses.map(async (tool) => {
@@ -5847,40 +6314,39 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
               fetchPolymarketData,
               fetchKalshiData,
               extractMarketInfo,
-              fetchedMarketInfo || currentMarket // Pass current market context
+              fetchedMarketInfo || currentMarket, // Pass current market context
             );
             return {
-              type: 'tool_result' as const,
+              type: "tool_result" as const,
               tool_use_id: tool.id,
-              content: result
+              content: result,
             };
-          })
+          }),
         );
-        
-        console.log('[Claude] Executed', toolResults.length, 'tools, getting final response');
-        
+
+        console.log("[Claude] Executed", toolResults.length, "tools, getting final response");
+
         // Prepare messages for follow-up call
         const followUpMessages = [
           ...claudeMessages,
           {
-            role: 'assistant' as const,
+            role: "assistant" as const,
             // CRITICAL: Filter out server_tool_use and web_search blocks from assistant content
             // to prevent "web_search_tool_result not found" errors
-            content: initialResponse.content.filter((block: any) => 
-              block.type !== 'server_tool_use' && 
-              block.type !== 'web_search_tool_result'
-            )
+            content: initialResponse.content.filter(
+              (block: any) => block.type !== "server_tool_use" && block.type !== "web_search_tool_result",
+            ),
           },
           {
-            role: 'user' as const,
-            content: toolResults
-          }
+            role: "user" as const,
+            content: toolResults,
+          },
         ];
-        
+
         // Continue conversation with tool results - streaming final response
         // Always use Sonnet for tool follow-up (needs reasoning about data)
         const STREAM_TIMEOUT = 25000; // 25 seconds max for stream initialization
-        
+
         let stream: any;
         try {
           // Add timeout wrapper for stream initialization
@@ -5891,54 +6357,54 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
               system: toolSystemPrompt,
               messages: followUpMessages,
               // Include tools in follow-up call as well
-              tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any
+              tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any,
             }),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Stream initialization timeout')), STREAM_TIMEOUT)
-            )
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Stream initialization timeout")), STREAM_TIMEOUT),
+            ),
           ]);
-          console.log('[Stream] Stream initialized successfully');
+          console.log("[Stream] Stream initialized successfully");
         } catch (streamInitError: any) {
-          console.error('[Stream] Stream init failed:', streamInitError.message || streamInitError);
-          
+          console.error("[Stream] Stream init failed:", streamInitError.message || streamInitError);
+
           // Fallback to non-streaming response
-          console.log('[Stream] Attempting non-streaming fallback...');
+          console.log("[Stream] Attempting non-streaming fallback...");
           try {
             const fallbackResponse = await anthropic.messages.create({
               model: SONNET_MODEL,
               max_tokens: 4096,
               system: toolSystemPrompt,
               messages: followUpMessages,
-              tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any
+              tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any,
             });
-            
+
             const fallbackText = fallbackResponse.content
-              .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-              .map(block => block.text)
-              .join('');
-            
-            console.log('[Stream] ✅ Non-streaming fallback succeeded, text length:', fallbackText.length);
-            
+              .filter((block): block is Anthropic.TextBlock => block.type === "text")
+              .map((block) => block.text)
+              .join("");
+
+            console.log("[Stream] ✅ Non-streaming fallback succeeded, text length:", fallbackText.length);
+
             const encoder = new TextEncoder();
             const fallbackStream = new ReadableStream({
               start(controller) {
                 const sseData = JSON.stringify({
-                  choices: [{ delta: { content: fallbackText } }]
+                  choices: [{ delta: { content: fallbackText } }],
                 });
                 controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
                 controller.close();
-              }
+              },
             });
-            
+
             return new Response(fallbackStream, {
               headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
             });
           } catch (fallbackError: any) {
-            console.error('[Stream] Non-streaming fallback also failed:', fallbackError.message || fallbackError);
+            console.error("[Stream] Non-streaming fallback also failed:", fallbackError.message || fallbackError);
             return new Response(
               JSON.stringify({ content: "We're experiencing heavy load right now. Please try again in a moment! 🔄" }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
             );
           }
         }
@@ -5951,71 +6417,77 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
               // FIRST: Stream any initial text that came before tool execution
               // This fixes "Let me check the trades..." text not appearing
               if (initialText) {
-                console.log('[Stream] Sending initial text before tool results...');
+                console.log("[Stream] Sending initial text before tool results...");
                 const initSseData = JSON.stringify({
-                  choices: [{ delta: { content: initialText + '\n\n' } }]
+                  choices: [{ delta: { content: initialText + "\n\n" } }],
                 });
                 controller.enqueue(encoder.encode(`data: ${initSseData}\n\n`));
                 chunkCount++;
               }
-              
-              console.log('[Stream] Starting to iterate over Claude stream...');
+
+              console.log("[Stream] Starting to iterate over Claude stream...");
               let hasTextContent = false;
               let secondaryToolName: string | null = null;
-              
+
               for await (const event of stream) {
-                if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
                   hasTextContent = true;
                   chunkCount++;
                   const sseData = JSON.stringify({
-                    choices: [{
-                      delta: { content: event.delta.text }
-                    }]
+                    choices: [
+                      {
+                        delta: { content: event.delta.text },
+                      },
+                    ],
                   });
                   controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
                 }
                 // Detect if Claude is requesting secondary tools instead of responding with text
-                if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+                if (event.type === "content_block_start" && event.content_block?.type === "tool_use") {
                   secondaryToolName = event.content_block.name;
-                  console.log('[Stream] ⚠️ Claude requested secondary tool:', secondaryToolName);
+                  console.log("[Stream] ⚠️ Claude requested secondary tool:", secondaryToolName);
                 }
               }
-              
+
               // If no text was streamed but Claude wanted more tools, send a completion message
               // This prevents the "freeze" where Claude says "let me check..." then dies
               if (!hasTextContent && secondaryToolName) {
-                console.log('[Stream] ⚠️ Follow-up had tool_use but no text, sending analysis completion');
-                const fallbackText = "I've gathered the market data but need a moment to process it. Please try your question again and I'll have the full analysis ready! 🔄";
+                console.log("[Stream] ⚠️ Follow-up had tool_use but no text, sending analysis completion");
+                const fallbackText =
+                  "I've gathered the market data but need a moment to process it. Please try your question again and I'll have the full analysis ready! 🔄";
                 const fallbackSse = JSON.stringify({
-                  choices: [{ delta: { content: fallbackText } }]
+                  choices: [{ delta: { content: fallbackText } }],
                 });
                 controller.enqueue(encoder.encode(`data: ${fallbackSse}\n\n`));
                 chunkCount++;
               }
-              
-              console.log(`[Stream] ✅ Completed successfully, sent ${chunkCount} chunks${secondaryToolName ? ` (secondary tool blocked: ${secondaryToolName})` : ''}`);
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+
+              console.log(
+                `[Stream] ✅ Completed successfully, sent ${chunkCount} chunks${secondaryToolName ? ` (secondary tool blocked: ${secondaryToolName})` : ""}`,
+              );
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               controller.close();
             } catch (streamError: any) {
               console.error(`[Stream] ❌ Failed after ${chunkCount} chunks:`, streamError.message || streamError);
-              
+
               // Try to send a graceful error message via SSE
               try {
-                const errorText = chunkCount > 0 
-                  ? "\n\n---\n*Response interrupted. Please try again for the complete analysis.*"
-                  : "Oops! We hit a snag. Please try again - I'll get that analysis for you! 🔄";
+                const errorText =
+                  chunkCount > 0
+                    ? "\n\n---\n*Response interrupted. Please try again for the complete analysis.*"
+                    : "Oops! We hit a snag. Please try again - I'll get that analysis for you! 🔄";
                 const errorSse = JSON.stringify({
-                  choices: [{ delta: { content: errorText } }]
+                  choices: [{ delta: { content: errorText } }],
                 });
                 controller.enqueue(encoder.encode(`data: ${errorSse}\n\n`));
-                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.enqueue(encoder.encode("data: [DONE]\n\n"));
                 controller.close();
               } catch (e) {
-                console.error('[Stream] Failed to send error message:', e);
+                console.error("[Stream] Failed to send error message:", e);
                 controller.error(streamError);
               }
             }
-          }
+          },
         });
 
         return new Response(readableStream, {
@@ -6025,9 +6497,9 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
 
       // No tools used - stream the text response directly
       const textContent = initialResponse.content
-        .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-        .map(block => block.text)
-        .join('');
+        .filter((block): block is Anthropic.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("");
 
       // Convert to SSE format for frontend compatibility
       const encoder = new TextEncoder();
@@ -6035,14 +6507,16 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
         start(controller) {
           // Send the entire text as a single chunk (it's already complete)
           const sseData = JSON.stringify({
-            choices: [{
-              delta: { content: textContent }
-            }]
+            choices: [
+              {
+                delta: { content: textContent },
+              },
+            ],
           });
           controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
-        }
+        },
       });
 
       return new Response(readableStream, {
@@ -6050,88 +6524,85 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
       });
     } catch (claudeError: any) {
       console.error("Claude API error:", claudeError);
-      
+
       // Check if it's a rate limit or overload error - try model cascade
       if (isOverloadError(claudeError)) {
-        console.log('[Cascade] Primary model failed, attempting cascade...');
-        
+        console.log("[Cascade] Primary model failed, attempting cascade...");
+
         // Try Sonnet as first fallback
         try {
-          console.log('[Cascade] Trying Sonnet...');
+          console.log("[Cascade] Trying Sonnet...");
           const sonnetResponse = await anthropic.messages.create({
             model: SONNET_MODEL,
             max_tokens: 4096,
             system: toolSystemPrompt,
             messages: claudeMessages,
-            tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any
+            tools: [...POLY_TOOLS, WEB_SEARCH_TOOL] as any,
           });
-          
+
           // Success with Sonnet - stream the response
           const textContent = sonnetResponse.content
-            .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-            .map(block => block.text)
-            .join('');
-          
-          console.log('[Cascade] ✅ Sonnet succeeded');
+            .filter((block): block is Anthropic.TextBlock => block.type === "text")
+            .map((block) => block.text)
+            .join("");
+
+          console.log("[Cascade] ✅ Sonnet succeeded");
           const encoder = new TextEncoder();
           const readableStream = new ReadableStream({
             start(controller) {
               const sseData = JSON.stringify({
-                choices: [{ delta: { content: textContent } }]
+                choices: [{ delta: { content: textContent } }],
               });
               controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               controller.close();
-            }
+            },
           });
-          
+
           return new Response(readableStream, {
             headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
           });
         } catch (sonnetError: any) {
-          console.log('[Cascade] Sonnet failed:', sonnetError.status || sonnetError.message);
-          
+          console.log("[Cascade] Sonnet failed:", sonnetError.status || sonnetError.message);
+
           // Try Gemini as second fallback
-          const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+          const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
           if (lovableApiKey) {
             try {
-              console.log('[Cascade] Trying Gemini...');
-              const geminiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-                method: 'POST',
+              console.log("[Cascade] Trying Gemini...");
+              const geminiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
                 headers: {
-                  'Authorization': `Bearer ${lovableApiKey}`,
-                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${lovableApiKey}`,
+                  "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                  model: 'google/gemini-2.5-flash',
-                  messages: [
-                    { role: 'system', content: systemPrompt },
-                    ...claudeMessages
-                  ],
+                  model: "google/gemini-2.5-flash",
+                  messages: [{ role: "system", content: systemPrompt }, ...claudeMessages],
                   stream: true,
                 }),
               });
-              
+
               if (geminiResponse.ok && geminiResponse.body) {
-                console.log('[Cascade] ✅ Gemini succeeded');
+                console.log("[Cascade] ✅ Gemini succeeded");
                 return new Response(geminiResponse.body, {
                   headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
                 });
               }
-              console.log('[Cascade] Gemini failed:', geminiResponse.status);
+              console.log("[Cascade] Gemini failed:", geminiResponse.status);
             } catch (geminiError) {
-              console.error('[Cascade] Gemini error:', geminiError);
+              console.error("[Cascade] Gemini error:", geminiError);
             }
           }
         }
-        
+
         // All models failed - add to queue and return 202 Accepted
-        const userMessage = lastUserMessage?.content || '';
+        const userMessage = lastUserMessage?.content || "";
         const queueEntry = addToQueue(conversationId, userMessage);
         const estimatedWait = queueEntry.position * 5; // ~5 sec per position
-        
+
         console.log(`[Queue] All models overwhelmed, queued request at position ${queueEntry.position}`);
-        
+
         return new Response(
           JSON.stringify({
             queued: true,
@@ -6139,26 +6610,32 @@ Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Le
             queuePosition: queueEntry.position,
             estimatedWaitSeconds: estimatedWait,
             message: `We're experiencing high demand. You're #${queueEntry.position} in queue. Estimated wait: ~${estimatedWait}s`,
-            cascadeAttempted: ['Haiku', 'Sonnet', 'Gemini']
+            cascadeAttempted: ["Haiku", "Sonnet", "Gemini"],
           }),
-          { 
+          {
             status: 202, // Accepted - queued for processing
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-          }
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
-      
+
       // Non-overload error - return user-friendly message
       return corsResponse(
-        { error: "Something went wrong. Please try again.", content: "Something went wrong on our end. Please try again! 🔄" },
-        500
+        {
+          error: "Something went wrong. Please try again.",
+          content: "Something went wrong on our end. Please try again! 🔄",
+        },
+        500,
       );
     }
   } catch (e) {
     console.error("poly-chat error:", e);
     return corsResponse(
-      { error: e instanceof Error ? e.message : "Unknown error", content: "We're experiencing some issues. Please try again in a moment! 🔄" },
-      500
+      {
+        error: e instanceof Error ? e.message : "Unknown error",
+        content: "We're experiencing some issues. Please try again in a moment! 🔄",
+      },
+      500,
     );
   }
 });
