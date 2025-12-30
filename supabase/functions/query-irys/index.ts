@@ -248,11 +248,7 @@ serve(async (req) => {
         query {
           transactions(
             tags: ${JSON.stringify(tags)},
-            timestamp: {
-              from: 1767010000000,
-              to: 1767100000000
-            },
-            first: ${pageSize},
+            limit: ${pageSize},
             ${after ? `after: "${after}",` : ''}
             order: DESC
           ) {
