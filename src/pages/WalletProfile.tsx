@@ -345,7 +345,7 @@ export default function WalletProfile() {
   if (loading && !profile) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden">
-        <div className="fixed inset-0 cyber-grid-animated opacity-10" />
+        <div className="fixed inset-0 cyber-grid-animated opacity-10 pointer-events-none" />
         <CyberParticles />
         <TopBar />
         <div className="max-w-6xl mx-auto px-4 py-6 pt-20 relative">
@@ -359,7 +359,7 @@ export default function WalletProfile() {
   if (!profile) {
     return (
       <div className="min-h-screen bg-background relative overflow-hidden">
-        <div className="fixed inset-0 cyber-grid-animated opacity-10" />
+        <div className="fixed inset-0 cyber-grid-animated opacity-10 pointer-events-none" />
         <TopBar />
         <div className="max-w-6xl mx-auto px-4 py-6 pt-20 relative">
           <motion.div 
@@ -390,11 +390,11 @@ export default function WalletProfile() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Background effects */}
-      <div className="fixed inset-0 cyber-grid-animated opacity-10" />
+      {/* Background effects - pointer-events-none to not block sidebar */}
+      <div className="fixed inset-0 cyber-grid-animated opacity-10 pointer-events-none" />
       <CyberParticles />
-      <div className="fixed top-0 left-1/4 w-64 h-64 bg-poly-purple/10 rounded-full blur-[100px]" />
-      <div className="fixed bottom-0 right-1/4 w-64 h-64 bg-poly-cyan/10 rounded-full blur-[100px]" />
+      <div className="fixed top-0 left-1/4 w-64 h-64 bg-poly-purple/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-0 right-1/4 w-64 h-64 bg-poly-cyan/10 rounded-full blur-[100px] pointer-events-none" />
       
       <TopBar />
       

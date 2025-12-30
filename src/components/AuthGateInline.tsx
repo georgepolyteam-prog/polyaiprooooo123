@@ -1,7 +1,26 @@
 import { Link } from "react-router-dom";
-import { Mail, MessageSquare, Wallet, ArrowRight, Coins } from "lucide-react";
+import { Mail, Wallet, ArrowRight, Coins } from "lucide-react";
 
-export const AuthGateInline = () => {
+interface AuthGateInlineProps {
+  variant?: 'compact' | 'full';
+}
+
+export const AuthGateInline = ({ variant = 'full' }: AuthGateInlineProps) => {
+  // Compact variant for mobile - just a button
+  if (variant === 'compact') {
+    return (
+      <Link 
+        to="/auth?step=email"
+        className="flex items-center justify-center gap-2 w-full h-12 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors"
+      >
+        <Mail className="w-4 h-4" />
+        <span>Sign in with Email</span>
+        <ArrowRight className="w-4 h-4 ml-1" />
+      </Link>
+    );
+  }
+
+  // Full variant for desktop
   return (
     <div className="w-full max-w-md mx-auto">
       {/* Clean white card */}

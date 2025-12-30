@@ -643,7 +643,15 @@ const Index = () => {
                   onDismissHint={dismissPolyfactualHint}
                 />
               ) : (
-                <AuthGateInline />
+                <>
+                  {/* Compact on mobile, full on desktop */}
+                  <div className="md:hidden">
+                    <AuthGateInline variant="compact" />
+                  </div>
+                  <div className="hidden md:block">
+                    <AuthGateInline variant="full" />
+                  </div>
+                </>
               )}
             </div>
           </div>

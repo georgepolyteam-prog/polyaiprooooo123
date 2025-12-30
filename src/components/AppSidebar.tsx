@@ -16,9 +16,11 @@ import {
   ChevronRight,
   Wallet,
   Coins,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SidebarLogo } from './SidebarLogo';
+import { SidebarAccount } from './SidebarAccount';
 import { CreditsPill } from './credits/CreditsPill';
 import { ConnectWallet } from './ConnectWallet';
 import { PolyPriceCompact } from './PolyPriceCompact';
@@ -142,14 +144,14 @@ export const AppSidebar = () => {
       animate={{ width: collapsed ? 72 : 280 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       className={cn(
-        'hidden md:flex flex-col h-screen sticky top-0',
-        'bg-black/30 backdrop-blur-2xl',
-        'border-r border-white/10',
-        'shadow-[inset_-1px_0_0_rgba(255,255,255,0.05)]'
+        'hidden md:flex flex-col h-screen sticky top-0 z-50',
+        'bg-black/40 backdrop-blur-2xl',
+        'border-r border-white/15',
+        'shadow-[inset_-1px_0_0_rgba(255,255,255,0.08)]'
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/20">
+      <div className="flex items-center justify-between p-4 border-b border-white/15 bg-black/30">
         <SidebarLogo collapsed={collapsed} />
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -208,18 +210,23 @@ export const AppSidebar = () => {
 
       {/* Footer */}
       <div className={cn(
-        'p-3 border-t border-white/10 space-y-2 bg-black/20',
+        'p-3 border-t border-white/15 space-y-2 bg-black/30',
         collapsed && 'flex flex-col items-center'
       )}>
         {/* Poly Price - Only when expanded */}
         {!collapsed && <PolyPriceCompact />}
+
+        {/* Account */}
+        <div className={cn(collapsed && 'w-full flex justify-center')}>
+          <SidebarAccount collapsed={collapsed} />
+        </div>
 
         {/* Credits */}
         <div className={cn(collapsed && 'w-full flex justify-center')}>
           {collapsed ? (
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
-                <div className="p-2 rounded-lg bg-white/10 cursor-pointer hover:bg-white/15 transition-colors">
+                <div className="p-2 rounded-lg bg-white/15 cursor-pointer hover:bg-white/20 transition-colors">
                   <Coins className="w-4 h-4 text-primary" />
                 </div>
               </TooltipTrigger>
@@ -235,7 +242,7 @@ export const AppSidebar = () => {
           {collapsed ? (
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
-                <div className="p-2 rounded-lg bg-white/10 cursor-pointer hover:bg-white/15 transition-colors">
+                <div className="p-2 rounded-lg bg-white/15 cursor-pointer hover:bg-white/20 transition-colors">
                   <Wallet className="w-4 h-4 text-foreground/70" />
                 </div>
               </TooltipTrigger>
