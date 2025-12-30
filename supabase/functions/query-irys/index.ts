@@ -127,12 +127,24 @@ async function fetchWithConcurrency<T>(
   return results;
 }
 
-// Simple keyword matching - Claude specifies what keywords must be present
+// Smart keyword matching - OR logic for years, AND logic for entities
 function matchesKeywords(question: string, keywords: string[]): boolean {
   if (keywords.length === 0) return true;
   const q = question.toLowerCase();
-  // All keywords must be present
-  return keywords.every(kw => q.includes(kw.toLowerCase()));
+  
+  // Separate keywords into entities (names/topics) and years
+  const yearPattern = /^(19|20)\d{2}$/;
+  const entities = keywords.filter(kw => !yearPattern.test(kw));
+  const years = keywords.filter(kw => yearPattern.test(kw));
+  
+  // At least ONE entity must match (OR logic within entities)
+  const hasEntity = entities.length === 0 || entities.some(kw => q.includes(kw.toLowerCase()));
+  
+  // At least ONE year must match (OR logic within years)
+  const hasYear = years.length === 0 || years.some(kw => q.includes(kw.toLowerCase()));
+  
+  // Both conditions must be satisfied (entity match AND year match)
+  return hasEntity && hasYear;
 }
 
 serve(async (req) => {
@@ -168,10 +180,19 @@ serve(async (req) => {
       { name: "application-id", values: ["polymarket"] }
     ];
     
-    // Add category filter if we detected one
+    // Add category filter with variations (different tagging styles)
     if (category) {
-      tags.push({ name: "category", values: [category] });
-      console.log('[Irys Query] Adding category filter:', category);
+      const categoryVariations: Record<string, string[]> = {
+        'elections': ['elections', 'politics', 'political-figure'],
+        'sports': ['sports', 'nba', 'nfl', 'soccer', 'mlb'],
+        'crypto': ['crypto', 'cryptocurrency', 'defi', 'bitcoin'],
+        'finance': ['finance', 'economics', 'stocks'],
+        'entertainment': ['entertainment', 'movies', 'music'],
+        'science-tech': ['science-tech', 'technology', 'ai']
+      };
+      const variations = categoryVariations[category] || [category];
+      tags.push({ name: "category", values: variations });
+      console.log('[Irys Query] Adding category filter with variations:', variations);
     }
     
     console.log('[Irys Query] GraphQL tags filter:', JSON.stringify(tags));
@@ -276,8 +297,14 @@ serve(async (req) => {
           }
           
           // Apply keyword filter if Claude specified keywords
-          if (keywords.length > 0 && !matchesKeywords(normalized.question || '', keywords)) {
-            return null;
+          if (keywords.length > 0) {
+            const matches = matchesKeywords(normalized.question || '', keywords);
+            if (!matches) {
+              if (debug) {
+                console.log(`[Irys Query] Keyword filter rejected: "${normalized.question?.slice(0, 50)}..."`);
+              }
+              return null;
+            }
           }
           
           return normalized;
