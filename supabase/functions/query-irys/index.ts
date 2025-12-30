@@ -366,6 +366,11 @@ serve(async (req) => {
       console.log('[Irys Query] Accuracy stats:', accuracyStats);
     }
     
+    // Check how many markets have usable closing prices
+    const marketsWithClosingPrice = topMarkets.filter((m: any) => 
+      m.closingPrice !== null && m.closingPrice > 0.01 && m.closingPrice < 0.99
+    ).length;
+    
     const result: any = {
       success: true,
       markets: topMarkets,
@@ -373,9 +378,15 @@ serve(async (req) => {
       totalAvailable: validMarkets.length,
       inferredCategory: category,
       sampleTxId: topMarkets[0]?.txId,
-      accuracyStats,
+      // Data limitations flag - critical for Claude's analysis approach
+      dataLimitations: {
+        hasClosingPrices: marketsWithClosingPrice > 0,
+        closingPriceCount: marketsWithClosingPrice,
+        totalMarkets: topMarkets.length,
+        recommendation: 'Use volume as confidence indicator. Research event outcomes via web search for context.'
+      },
       // Remind Claude to filter intelligently
-      note: 'RAW results sorted by volume. Filter based on user intent before presenting.',
+      note: 'RAW results sorted by volume. Use volume as confidence indicator. Research actual outcomes via web search.',
       filteringHint: keywords.length > 0 
         ? `Filtered to markets containing: ${keywords.join(', ')}`
         : 'No keyword filter applied - apply intelligent filtering based on user query'
