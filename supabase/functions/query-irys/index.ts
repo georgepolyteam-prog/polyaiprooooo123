@@ -224,11 +224,10 @@ serve(async (req) => {
     const anchorTerms = extractAnchorTerms(query);
     console.log('[Irys Query] Anchor terms:', anchorTerms);
     
-    // Build GraphQL tags - ONLY filter by application-id and status at GraphQL level
-    // Category filtering happens in code via relevance scoring (Polymarket uses different category names)
+    // Build GraphQL tags - ONLY filter by application-id at GraphQL level
+    // Status filtering (resolved) happens in code since the uploaded data may not have status tags
     const tags = [
-      { name: "application-id", values: ["polymarket"] },
-      { name: "status", values: ["resolved"] }
+      { name: "application-id", values: ["polymarket"] }
     ];
     
     console.log('[Irys Query] GraphQL tags filter:', JSON.stringify(tags));
@@ -323,6 +322,13 @@ serve(async (req) => {
           const marketData = await marketResponse.json();
           
           const normalized = normalizeMarket(marketData, txId);
+          
+          // Filter for resolved markets in code instead of GraphQL
+          const isResolved = normalized.closed === true || normalized.closed === 'true';
+          if (!isResolved) {
+            console.log('[Irys Query] Skipping non-resolved market:', (normalized.question || '').slice(0, 60));
+            return null;
+          }
           
           // Calculate relevance score
           const relevanceScore = calculateRelevance(
