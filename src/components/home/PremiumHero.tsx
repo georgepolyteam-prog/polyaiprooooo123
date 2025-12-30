@@ -19,11 +19,9 @@ export const PremiumHero = ({ isAuthenticated }: PremiumHeroProps) => {
 
       {/* Logo - Clean & Simple like chat */}
       <div className="relative flex justify-center items-center mb-8 animate-fade-in" style={{ animationDelay: '50ms' }}>
-        <img 
-          src={polyLogo} 
-          alt="Poly" 
-          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-contain" 
-        />
+        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-black rounded-2xl flex items-center justify-center ring-2 ring-primary/30 shadow-lg shadow-primary/20">
+          <img src={polyLogo} alt="Poly" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
+        </div>
       </div>
 
       {/* Title & Subtitle */}

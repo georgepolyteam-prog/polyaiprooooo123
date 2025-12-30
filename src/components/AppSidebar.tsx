@@ -114,7 +114,7 @@ const NavGroup = ({ label, items, currentPath, collapsed }: NavGroupProps) => {
     <div className="space-y-1">
       {!collapsed && (
         <div className="px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground/80">
             {label}
           </span>
         </div>
@@ -182,7 +182,7 @@ export const AppSidebar = () => {
           ))}
         </div>
 
-        <div className="h-px bg-white/5" />
+        <div className="h-px bg-white/10" />
 
         <NavGroup
           label="Explore"

@@ -186,7 +186,9 @@ const Auth = () => {
           <span className="text-sm font-medium">Back</span>
         </button>
         <div className="flex items-center gap-2">
-          <img src={polyLogo} alt="Poly" className="w-8 h-8" />
+          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center ring-1 ring-primary/30">
+            <img src={polyLogo} alt="Poly" className="w-5 h-5 object-contain" />
+          </div>
           <span className="font-semibold text-gray-900 dark:text-white">Poly AI</span>
         </div>
         <div className="w-16" />
@@ -203,8 +205,8 @@ const Auth = () => {
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             {/* Card Header */}
             <div className="p-8 text-center border-b border-gray-100 dark:border-gray-700">
-              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <img src={polyLogo} alt="Poly" className="w-10 h-10" />
+              <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-4 ring-2 ring-primary/30 shadow-lg shadow-primary/20">
+                <img src={polyLogo} alt="Poly" className="w-10 h-10 object-contain" />
               </div>
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
                 {isLogin ? "Welcome back" : "Create account"}
