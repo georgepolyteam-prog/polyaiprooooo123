@@ -252,7 +252,7 @@ serve(async (req) => {
               from: 1767010000000,
               to: 1767100000000
             },
-            limit: ${pageSize},
+            first: ${pageSize},
             ${after ? `after: "${after}",` : ''}
             order: DESC
           ) {
