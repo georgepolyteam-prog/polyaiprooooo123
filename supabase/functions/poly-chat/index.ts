@@ -3115,7 +3115,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, detailMode = "advanced", voiceMode = false, marketUrl: providedMarketUrl, currentMarket, explicitContext, conversationId, sidebarData, authToken, walletAddress, authType, deepResearch = false } = await req.json();
+    const { messages, detailMode = "advanced", voiceMode = false, marketUrl: providedMarketUrl, currentMarket, explicitContext, conversationId, sidebarData, authToken, walletAddress, authType, deepResearch = false, irysMode = false } = await req.json();
     
     // ============= AUTHENTICATION REQUIRED =============
     // Require either Supabase auth OR wallet connection
