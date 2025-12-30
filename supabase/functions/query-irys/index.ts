@@ -18,6 +18,45 @@ interface GraphQLEdge {
   };
 }
 
+// Infer category from user query
+function inferCategoryFromQuery(query: string): string | null {
+  const q = query.toLowerCase();
+  
+  if (q.includes('election') || q.includes('president') || q.includes('political') || 
+      q.includes('trump') || q.includes('biden') || q.includes('senate') || 
+      q.includes('congress') || q.includes('governor') || q.includes('vote')) {
+    return 'elections';
+  }
+  if (q.includes('crypto') || q.includes('bitcoin') || q.includes('eth') || 
+      q.includes('solana') || q.includes('btc') || q.includes('ethereum') ||
+      q.includes('token') || q.includes('blockchain')) {
+    return 'crypto';
+  }
+  if (q.includes('sport') || q.includes('nba') || q.includes('nfl') || 
+      q.includes('soccer') || q.includes('lakers') || q.includes('game') ||
+      q.includes('super bowl') || q.includes('world cup') || q.includes('championship') ||
+      q.includes('playoff') || q.includes('finals')) {
+    return 'sports';
+  }
+  if (q.includes('stock') || q.includes('market') || q.includes('finance') || 
+      q.includes('recession') || q.includes('fed') || q.includes('interest rate') ||
+      q.includes('inflation') || q.includes('gdp')) {
+    return 'finance';
+  }
+  if (q.includes('movie') || q.includes('oscar') || q.includes('grammy') || 
+      q.includes('entertainment') || q.includes('celebrity') || q.includes('tv show') ||
+      q.includes('netflix') || q.includes('award')) {
+    return 'entertainment';
+  }
+  if (q.includes('tech') || q.includes('ai') || q.includes('spacex') || 
+      q.includes('science') || q.includes('nasa') || q.includes('openai') ||
+      q.includes('apple') || q.includes('google') || q.includes('microsoft')) {
+    return 'science-tech';
+  }
+  
+  return null; // Return all categories
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -25,9 +64,12 @@ serve(async (req) => {
   }
 
   try {
-    const { category, limit = 20 } = await req.json();
+    const { query, category, limit = 20 } = await req.json();
     
-    console.log(`Querying Irys for category: ${category || 'all'}, limit: ${limit}`);
+    // Infer category from user query if not explicitly provided
+    const inferredCategory = category || (query ? inferCategoryFromQuery(query) : null);
+    
+    console.log(`[Irys] Query: "${query?.substring(0, 50)}...", Category: ${inferredCategory || 'all'}, Limit: ${limit}`);
 
     // Build GraphQL tags filter
     const tags: IrysTag[] = [
@@ -35,12 +77,12 @@ serve(async (req) => {
       { name: "status", values: ["resolved"] }
     ];
 
-    if (category && category !== 'all') {
-      tags.push({ name: "category", values: [category] });
+    if (inferredCategory && inferredCategory !== 'all') {
+      tags.push({ name: "category", values: [inferredCategory] });
     }
 
     // Build the GraphQL query
-    const query = `
+    const graphqlQuery = `
       query {
         transactions(
           tags: [
@@ -63,13 +105,13 @@ serve(async (req) => {
       }
     `;
 
-    console.log('GraphQL Query:', query);
+    console.log('[Irys] Executing GraphQL query...');
 
     // Query Irys GraphQL endpoint
     const graphqlRes = await fetch('https://uploader.irys.xyz/graphql', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query: graphqlQuery })
     });
 
     if (!graphqlRes.ok) {
@@ -79,11 +121,11 @@ serve(async (req) => {
     const graphqlData = await graphqlRes.json();
     const edges: GraphQLEdge[] = graphqlData.data?.transactions?.edges || [];
 
-    console.log(`Found ${edges.length} transactions on Irys`);
+    console.log(`[Irys] Found ${edges.length} transactions`);
 
-    // Fetch actual market data from each transaction
+    // Fetch actual market data from each transaction (batch with concurrency limit)
     const markets = await Promise.all(
-      edges.map(async (edge) => {
+      edges.slice(0, Math.min(edges.length, limit)).map(async (edge) => {
         try {
           const dataRes = await fetch(`https://gateway.irys.xyz/${edge.node.id}`);
           if (!dataRes.ok) return null;
@@ -105,7 +147,7 @@ serve(async (req) => {
             }
           };
         } catch (err) {
-          console.error(`Failed to fetch market ${edge.node.id}:`, err);
+          console.error(`[Irys] Failed to fetch market ${edge.node.id}:`, err);
           return null;
         }
       })
@@ -114,13 +156,19 @@ serve(async (req) => {
     // Filter out null results
     const validMarkets = markets.filter(Boolean);
 
-    console.log(`Successfully retrieved ${validMarkets.length} markets`);
+    console.log(`[Irys] Successfully retrieved ${validMarkets.length} markets`);
+
+    // Extract sample transaction ID for proof links
+    const sampleTxId = validMarkets.length > 0 ? validMarkets[0]?.irys?.txId : null;
 
     return new Response(
       JSON.stringify({ 
         success: true,
         markets: validMarkets,
         count: validMarkets.length,
+        totalAvailable: edges.length,
+        inferredCategory,
+        sampleTxId,
         source: 'irys'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -128,12 +176,13 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error querying Irys:', error);
+    console.error('[Irys] Error querying:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: errorMessage,
-        markets: []
+        markets: [],
+        count: 0
       }),
       { 
         status: 500,

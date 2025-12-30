@@ -59,6 +59,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
   const [isLoading, setIsLoading] = useState(false);
   const [detailMode, setDetailMode] = useState<"advanced" | "quick">("advanced");
   const [deepResearch, setDeepResearch] = useState(false);
+  const [irysMode, setIrysMode] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>({ isHighLoad: false });
   const [retryingIn, setRetryingIn] = useState(0);
   const [currentMarketContext, setCurrentMarketContext] = useState<CurrentMarketContext | null>(null);
@@ -271,7 +272,8 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
           authToken,
           walletAddress: effectiveWallet,
           authType,
-          deepResearch: effectiveDeepResearch
+          deepResearch: effectiveDeepResearch,
+          irysMode
         }),
       });
 
@@ -578,7 +580,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
       setAnalysisStep('idle');
       inFlightRef.current = false;
     }
-  }, [detailMode, deepResearch, clearRetryState, sidebarMarketData, startQueuePolling, conversationId, currentMarketContext, session, walletAddress]);
+  }, [detailMode, deepResearch, irysMode, clearRetryState, sidebarMarketData, startQueuePolling, conversationId, currentMarketContext, session, walletAddress]);
 
   const toggleDetailMode = useCallback(() => {
     setDetailMode((prev) => prev === "advanced" ? "quick" : "advanced");
@@ -591,6 +593,10 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
 
   const toggleDeepResearch = useCallback(() => {
     setDeepResearch((prev) => !prev);
+  }, []);
+
+  const toggleIrysMode = useCallback(() => {
+    setIrysMode((prev) => !prev);
   }, []);
 
   const clearMessages = useCallback(() => {
@@ -620,6 +626,8 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     toggleDetailMode,
     deepResearch,
     toggleDeepResearch,
+    irysMode,
+    toggleIrysMode,
     clearMessages,
     loadState,
     retryingIn,

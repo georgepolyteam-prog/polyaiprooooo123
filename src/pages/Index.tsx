@@ -171,7 +171,7 @@ const Index = () => {
   
   const effectiveWalletAddress = hasValidWallet ? walletAddress : null;
   
-  const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData, deepResearch, toggleDeepResearch } = usePolyChat(session, effectiveWalletAddress);
+  const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData, deepResearch, toggleDeepResearch, irysMode, toggleIrysMode } = usePolyChat(session, effectiveWalletAddress);
   const { toast } = useToast();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -632,6 +632,8 @@ const Index = () => {
                   disabled={isProcessing}
                   deepResearch={deepResearch}
                   onToggleDeepResearch={handleToggleDeepResearch}
+                  irysMode={irysMode}
+                  onToggleIrysMode={toggleIrysMode}
                   showPolyfactualHint={showPolyfactualHint}
                   onDismissHint={dismissPolyfactualHint}
                 />
