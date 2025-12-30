@@ -38,14 +38,14 @@ const modes = [
   },
   {
     id: 'historical' as const,
-    name: 'Historical',
+    name: 'Historical (IRYS)',
     description: '51K blockchain markets',
-    color: 'blue',
-    borderColor: 'border-blue-500/50',
-    bgColor: 'bg-blue-500/10',
-    textColor: 'text-blue-400',
-    activeTextColor: 'text-blue-400',
-    glowColor: 'shadow-blue-500/20',
+    color: 'green',
+    borderColor: 'border-green-500/50',
+    bgColor: 'bg-green-500/10',
+    textColor: 'text-green-400',
+    activeTextColor: 'text-green-400',
+    glowColor: 'shadow-green-500/20',
   },
 ];
 
@@ -104,8 +104,8 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
           mode === 'regular' 
             ? "border-white/10 hover:border-white/20" 
             : mode === 'polyfactual'
-              ? "border-emerald-500/50 shadow-lg shadow-emerald-500/20"
-              : "border-blue-500/50 shadow-lg shadow-blue-500/20",
+            ? "border-emerald-500/50 shadow-lg shadow-emerald-500/20"
+            : "border-green-500/50 shadow-lg shadow-green-500/20",
           disabled && "opacity-50 cursor-not-allowed"
         )}
       >
@@ -116,7 +116,7 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
             ? "bg-[#21262d]" 
             : mode === 'polyfactual'
               ? "bg-gradient-to-br from-emerald-600 to-cyan-600"
-              : "bg-gradient-to-br from-blue-600 to-indigo-600"
+              : "bg-gradient-to-br from-green-600 to-emerald-600"
         )}>
           <ModeIcon 
             mode={mode} 
@@ -186,7 +186,7 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
                         ? "bg-[#21262d]" 
                         : m.id === 'polyfactual'
                           ? "bg-gradient-to-br from-emerald-600 to-cyan-600"
-                          : "bg-gradient-to-br from-blue-600 to-indigo-600"
+                          : "bg-gradient-to-br from-green-600 to-emerald-600"
                     )}>
                       <ModeIcon 
                         mode={m.id} 
