@@ -1286,7 +1286,7 @@ NOTE: Only works when Irys mode is enabled (irysMode=true).`,
         keywords: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Keywords that MUST appear in market question (e.g., ["trump", "2024"]). Use for initial filtering - you will do intelligent filtering on results.'
+          description: 'Keywords using smart matching: entity words (trump, bitcoin, lakers) use OR logic, year words (2024, 2020, 2016) use OR logic. Example: ["trump", "election", "2024", "2020"] finds markets with (trump OR election) AND (2024 OR 2020).'
         },
         minVolume: {
           type: 'number',
