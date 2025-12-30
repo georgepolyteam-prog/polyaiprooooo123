@@ -428,9 +428,11 @@ serve(async (req) => {
     }
     
     const result: any = {
+      success: true,
       markets: topMarkets,
       count: topMarkets.length,
-      category,
+      totalAvailable: validMarkets.length,
+      inferredCategory: category,
       sampleTxId: topMarkets[0]?.txId,
       accuracyStats
     };
@@ -462,7 +464,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Irys Query] Error:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage, markets: [], count: 0 }),
+      JSON.stringify({ success: false, error: errorMessage, markets: [], count: 0 }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

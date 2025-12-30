@@ -5366,9 +5366,13 @@ EXAMPLE RESPONSE FORMAT:
       const userQuery = lastUserMessage?.content || '';
       const wantsAnalysis = isAnalyticalQuery(userQuery);
       
-      // For "trump and elections" type queries, treat as analytical (not market search)
+      // For election queries with "show" or "see" intent, treat as market search
       const hasElectionIntent = /election|presidential|vote|ballot|candidate/i.test(userQuery);
-      const wantsMarketSearch = isIrysMarketSearchQuery(userQuery) && !wantsAnalysis && !hasElectionIntent;
+      const wantsToSeeMarkets = /show|see|display|list|find|browse|what.*market|can you see/i.test(userQuery);
+      
+      // If user explicitly wants to see/show markets (even election ones), allow market search
+      const wantsMarketSearch = isIrysMarketSearchQuery(userQuery) && !wantsAnalysis && 
+        (!hasElectionIntent || wantsToSeeMarkets);
       
       console.log(`[Irys] Query: "${userQuery.substring(0, 50)}..." | Analytical: ${wantsAnalysis} | Market search: ${wantsMarketSearch}`);
       
