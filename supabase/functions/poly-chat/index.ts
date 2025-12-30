@@ -17,11 +17,11 @@ async function getDeepResearch(query: string): Promise<{ answer: string; citatio
   
   try {
     console.log(`[DeepResearch] Starting research for: ${query.substring(0, 100)}...`);
-    const response = await fetch('https://deep-research-api.thekid-solana.workers.dev/answer', {
+    const response = await fetch('https://deep-research-api.degodmode3-33.workers.dev/answer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': DEEP_RESEARCH_API_KEY
+        'Authorization': `Bearer ${DEEP_RESEARCH_API_KEY}`
       },
       body: JSON.stringify({
         query: query,
