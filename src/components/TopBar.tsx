@@ -82,7 +82,7 @@ export const TopBar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLEle
     <>
       <header
         ref={ref}
-        className="h-16 backdrop-blur-xl bg-black/20 sticky top-0 z-50 border-b border-white/10"
+        className="h-16 backdrop-blur-xl bg-black/20 sticky top-0 z-50 border-b border-white/10 md:hidden"
         {...props}
       >
         <div className="h-full max-w-7xl mx-auto px-4 flex items-center justify-between">
