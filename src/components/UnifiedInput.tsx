@@ -1,17 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PolyfactualToggle } from "@/components/chat/PolyfactualToggle";
+import { ModelSelector, ChatMode } from "@/components/chat/ModelSelector";
 import { PolyfactualHint } from "@/components/chat/PolyfactualHint";
-import { IrysToggle } from "@/components/chat/IrysToggle";
 
 interface UnifiedInputProps {
   onSubmit: (message: string, isVoice: boolean, audioBlob?: Blob) => void;
   disabled?: boolean;
-  deepResearch?: boolean;
-  onToggleDeepResearch?: () => void;
-  irysMode?: boolean;
-  onToggleIrysMode?: () => void;
+  mode: ChatMode;
+  onModeChange: (mode: ChatMode) => void;
   showPolyfactualHint?: boolean;
   onDismissHint?: () => void;
 }
@@ -19,10 +16,8 @@ interface UnifiedInputProps {
 export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(({ 
   onSubmit, 
   disabled,
-  deepResearch = false,
-  onToggleDeepResearch,
-  irysMode = false,
-  onToggleIrysMode,
+  mode,
+  onModeChange,
   showPolyfactualHint = false,
   onDismissHint
 }, ref) => {
@@ -59,34 +54,26 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
 
   const placeholder = isMobile 
     ? "Ask anything..." 
-    : irysMode
+    : mode === 'historical'
       ? "Query 51K historical markets..."
-      : deepResearch 
+      : mode === 'polyfactual'
         ? "Deep research mode - ask anything..." 
         : "Paste a market URL or ask anything...";
 
-  const polyfactualToggle = onToggleDeepResearch ? (
-    <PolyfactualToggle 
-      enabled={deepResearch} 
-      onToggle={onToggleDeepResearch}
-      disabled={disabled}
-    />
-  ) : null;
-
-  const irysToggle = onToggleIrysMode ? (
-    <IrysToggle 
-      enabled={irysMode} 
-      onToggle={onToggleIrysMode}
-      disabled={disabled}
-    />
-  ) : null;
-
   // Determine border color based on active mode
   const getBorderClass = () => {
-    if (irysMode) return "border-blue-500/50 shadow-lg shadow-blue-500/10";
-    if (deepResearch) return "border-accent/50 shadow-glow-cyan";
+    if (mode === 'historical') return "border-blue-500/50 shadow-lg shadow-blue-500/10";
+    if (mode === 'polyfactual') return "border-accent/50 shadow-glow-cyan";
     return "border-border/50 hover:border-primary/30 focus-within:border-primary/50";
   };
+
+  const modelSelector = (
+    <ModelSelector 
+      mode={mode} 
+      onModeChange={onModeChange}
+      disabled={disabled}
+    />
+  );
 
   return (
     <div 
@@ -101,22 +88,14 @@ export const UnifiedInput = React.forwardRef<HTMLDivElement, UnifiedInputProps>(
       {/* Gradient border effect */}
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none" />
       
-      {/* Toggles container */}
-      <div className="flex items-center gap-1 sm:gap-2">
-        {/* Polyfactual Toggle with optional hint */}
-        {polyfactualToggle && (
-          showPolyfactualHint && onDismissHint ? (
-            <PolyfactualHint show={showPolyfactualHint} onDismiss={onDismissHint}>
-              {polyfactualToggle}
-            </PolyfactualHint>
-          ) : (
-            polyfactualToggle
-          )
-        )}
-        
-        {/* Irys Toggle */}
-        {irysToggle}
-      </div>
+      {/* Model Selector with optional hint */}
+      {showPolyfactualHint && onDismissHint ? (
+        <PolyfactualHint show={showPolyfactualHint} onDismiss={onDismissHint}>
+          {modelSelector}
+        </PolyfactualHint>
+      ) : (
+        modelSelector
+      )}
       
       <input
         ref={inputRef}

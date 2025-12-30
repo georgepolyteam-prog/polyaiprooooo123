@@ -172,7 +172,7 @@ const Index = () => {
 
   const effectiveWalletAddress = hasValidWallet ? walletAddress : null;
   
-  const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData, deepResearch, toggleDeepResearch, irysMode, toggleIrysMode } = usePolyChat(session, effectiveWalletAddress);
+  const { messages, isLoading, sendMessage, currentMarketContext, setSidebarMarketData, mode, setMode, deepResearch } = usePolyChat(session, effectiveWalletAddress);
   const { toast } = useToast();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -208,11 +208,13 @@ const Index = () => {
     localStorage.setItem(POLYFACTUAL_HINT_KEY, "true");
   }, []);
 
-  // Wrap toggleDeepResearch to also dismiss hint
-  const handleToggleDeepResearch = useCallback(() => {
-    dismissPolyfactualHint();
-    toggleDeepResearch();
-  }, [toggleDeepResearch, dismissPolyfactualHint]);
+  // Wrap mode change to also dismiss hint when switching to polyfactual
+  const handleModeChange = useCallback((newMode: 'regular' | 'polyfactual' | 'historical') => {
+    if (newMode === 'polyfactual') {
+      dismissPolyfactualHint();
+    }
+    setMode(newMode);
+  }, [setMode, dismissPolyfactualHint]);
 
   // Fetch example markets data via server-side proxy (bypasses CORS)
   useEffect(() => {
@@ -437,9 +439,9 @@ const Index = () => {
       hasAskedRef.current = true;
       const { marketContext } = state;
       
-      // Enable deep research UI toggle if flag is set
-      if (state.deepResearch && !deepResearch) {
-        toggleDeepResearch();
+      // Enable deep research mode if flag is set
+      if (state.deepResearch && mode !== 'polyfactual') {
+        setMode('polyfactual');
       }
       
       // Build the message - for deep research, include the market question so backend has it for research query
@@ -457,7 +459,7 @@ const Index = () => {
       sendMessage(state.initialMessage);
       window.history.replaceState({}, document.title);
     }
-  }, [location.state, location.key, sendMessage, messages.length, deepResearch, toggleDeepResearch, authLoading, isAuthenticated]);
+  }, [location.state, location.key, sendMessage, messages.length, mode, setMode, authLoading, isAuthenticated]);
 
   useEffect(() => {
     const marketQuery = searchParams.get("market");
@@ -635,10 +637,8 @@ const Index = () => {
                 <UnifiedInput
                   onSubmit={handleSubmit}
                   disabled={isProcessing}
-                  deepResearch={deepResearch}
-                  onToggleDeepResearch={handleToggleDeepResearch}
-                  irysMode={irysMode}
-                  onToggleIrysMode={toggleIrysMode}
+                  mode={mode}
+                  onModeChange={handleModeChange}
                   showPolyfactualHint={showPolyfactualHint}
                   onDismissHint={dismissPolyfactualHint}
                 />

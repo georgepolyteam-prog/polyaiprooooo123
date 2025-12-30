@@ -65,12 +65,17 @@ const BASE_RETRY_DELAY = 5000;
 
 export type AnalysisStep = 'idle' | 'analyzing' | 'fetching' | 'news' | 'whales' | 'edge' | 'deep_research' | 'complete';
 
+export type ChatMode = 'regular' | 'polyfactual' | 'historical';
+
 export const usePolyChat = (session?: Session | null, walletAddress?: string | null) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [detailMode, setDetailMode] = useState<"advanced" | "quick">("advanced");
-  const [deepResearch, setDeepResearch] = useState(false);
-  const [irysMode, setIrysMode] = useState(false);
+  const [mode, setMode] = useState<ChatMode>('regular');
+  
+  // Derive boolean flags for API compatibility
+  const deepResearch = mode === 'polyfactual';
+  const irysMode = mode === 'historical';
   const [loadState, setLoadState] = useState<LoadState>({ isHighLoad: false });
   const [retryingIn, setRetryingIn] = useState(0);
   const [currentMarketContext, setCurrentMarketContext] = useState<CurrentMarketContext | null>(null);
@@ -616,14 +621,6 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     );
   }, [detailMode]);
 
-  const toggleDeepResearch = useCallback(() => {
-    setDeepResearch((prev) => !prev);
-  }, []);
-
-  const toggleIrysMode = useCallback(() => {
-    setIrysMode((prev) => !prev);
-  }, []);
-
   const clearMessages = useCallback(() => {
     setMessages([]);
     setCurrentMarketContext(null);
@@ -649,10 +646,10 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     sendMessage,
     detailMode,
     toggleDetailMode,
+    mode,
+    setMode,
     deepResearch,
-    toggleDeepResearch,
     irysMode,
-    toggleIrysMode,
     clearMessages,
     loadState,
     retryingIn,
