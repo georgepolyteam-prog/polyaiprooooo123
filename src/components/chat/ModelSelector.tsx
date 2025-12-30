@@ -49,14 +49,15 @@ const modes = [
   },
 ];
 
-const ModeIcon = ({ mode, className }: { mode: ChatMode; className?: string }) => {
+const ModeIcon = ({ mode, className, size = "small" }: { mode: ChatMode; className?: string; size?: "small" | "large" }) => {
+  const sizeClass = size === "large" ? "w-full h-full" : "w-4 h-4";
   if (mode === 'regular') {
-    return <img src={polyLogo} alt="" className={cn("w-4 h-4 object-contain", className)} />;
+    return <img src={polyLogo} alt="" className={cn(sizeClass, "object-contain", className)} />;
   }
   if (mode === 'polyfactual') {
-    return <img src={polyfactualLogo} alt="" className={cn("w-4 h-4 object-contain", className)} />;
+    return <img src={polyfactualLogo} alt="" className={cn(sizeClass, "object-contain", className)} />;
   }
-  return <img src={irysLogo} alt="" className={cn("w-4 h-4 object-contain", className)} />;
+  return <img src={irysLogo} alt="" className={cn(sizeClass, "object-cover rounded-lg", className)} />;
 };
 
 export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorProps) => {
@@ -111,15 +112,16 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
       >
         {/* Mode Icon */}
         <div className={cn(
-          "flex items-center justify-center w-6 h-6 rounded-lg transition-all duration-300",
+          "flex items-center justify-center w-6 h-6 rounded-lg transition-all duration-300 overflow-hidden",
           mode === 'regular' 
             ? "bg-[#21262d]" 
             : mode === 'polyfactual'
               ? "bg-gradient-to-br from-emerald-600 to-cyan-600"
-              : "bg-gradient-to-br from-green-600 to-emerald-600"
+              : ""
         )}>
           <ModeIcon 
-            mode={mode} 
+            mode={mode}
+            size={mode === 'historical' ? 'large' : 'small'}
             className={cn(
               mode === 'regular' ? "text-gray-400" : "text-white brightness-110"
             )} 
@@ -181,17 +183,18 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
                   >
                     {/* Icon container */}
                     <div className={cn(
-                      "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300",
+                      "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300 overflow-hidden",
                       m.id === 'regular' 
                         ? "bg-[#21262d]" 
                         : m.id === 'polyfactual'
                           ? "bg-gradient-to-br from-emerald-600 to-cyan-600"
-                          : "bg-gradient-to-br from-green-600 to-emerald-600"
+                          : ""
                     )}>
                       <ModeIcon 
-                        mode={m.id} 
+                        mode={m.id}
+                        size={m.id === 'historical' ? 'large' : 'small'}
                         className={cn(
-                          "w-5 h-5",
+                          m.id === 'historical' ? "w-full h-full" : "w-5 h-5",
                           m.id === 'regular' ? "text-gray-400" : "text-white brightness-110"
                         )} 
                       />
