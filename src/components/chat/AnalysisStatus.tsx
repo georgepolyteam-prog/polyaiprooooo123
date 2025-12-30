@@ -193,8 +193,8 @@ export function AnalysisStatus({ className, stats }: AnalysisStatusProps) {
     <div className={cn("flex gap-3 sm:gap-4 animate-fade-in", className)}>
       {/* Avatar */}
       <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full blur-lg opacity-50 animate-pulse" />
-        <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full flex items-center justify-center">
+        <div className="absolute inset-0 blur-xl bg-primary/30 rounded-full animate-pulse" />
+        <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-black rounded-full flex items-center justify-center ring-2 ring-primary/30">
           <img src={polyLogo} alt="Poly" className="w-5 h-5 sm:w-7 sm:h-7 object-contain" />
         </div>
       </div>
