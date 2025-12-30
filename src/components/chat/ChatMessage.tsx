@@ -844,16 +844,37 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
           </div>
         ) : (
           <>
-            {/* Irys Blockchain Verification Banner */}
+            {/* Irys Blockchain Verification Banner with Clickable Proof Link */}
             {(displayedContent.toLowerCase().includes('irys blockchain') || 
               displayedContent.toLowerCase().includes('blockchain-verified') ||
               displayedContent.includes('gateway.irys.xyz')) && (
-              <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center gap-2 backdrop-blur-sm">
-                <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                <span className="text-sm text-blue-400 font-medium">
-                  Analysis based on blockchain-verified historical data
-                </span>
-                <Link className="w-3 h-3 text-blue-400/60 ml-auto flex-shrink-0" />
+              <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl backdrop-blur-sm">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                  <span className="text-sm text-blue-400 font-medium">
+                    Analysis based on blockchain-verified historical data
+                  </span>
+                </div>
+                
+                {/* Extract and display clickable proof link */}
+                {(() => {
+                  const proofMatch = displayedContent.match(/https:\/\/gateway\.irys\.xyz\/([a-zA-Z0-9_-]+)/);
+                  if (proofMatch) {
+                    return (
+                      <a 
+                        href={proofMatch[0]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
+                      >
+                        <Link className="w-3 h-3" />
+                        View Blockchain Proof →
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
             
