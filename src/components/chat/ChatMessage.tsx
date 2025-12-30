@@ -14,6 +14,12 @@ interface MarketData {
   yesPrice: number;
   volume: number;
   url?: string;
+  // Irys blockchain verification fields
+  isBlockchainVerified?: boolean;
+  txId?: string;
+  proofUrl?: string;
+  resolvedOutcome?: string | null;
+  category?: string;
 }
 
 interface ChatMessageProps {
@@ -24,6 +30,11 @@ interface ChatMessageProps {
     title: string;
     slug?: string;
     markets: MarketData[];
+    // Irys-specific fields
+    source?: 'irys' | 'gamma' | string;
+    isBlockchainVerified?: boolean;
+    totalCount?: number;
+    sampleTxId?: string;
   };
   onSendMessage?: (message: string) => void;
   isLatest?: boolean;
@@ -759,7 +770,13 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
               market_slug: m.url?.split('/').pop() || '',
               question: m.question,
               yes_price: m.yesPrice / 100,
-              volume: m.volume
+              volume: m.volume,
+              // Pass through Irys fields
+              isBlockchainVerified: (m as any).isBlockchainVerified,
+              txId: (m as any).txId,
+              proofUrl: (m as any).proofUrl,
+              resolvedOutcome: (m as any).resolvedOutcome,
+              category: (m as any).category,
             }))}
             onSelect={(id) => {
               if (id === -1) {
@@ -768,6 +785,11 @@ export const ChatMessage = ({ role, content, type, event, onSendMessage, isLates
                 onSendMessage(id.toString());
               }
             }}
+            // Irys event-level fields
+            source={event.source}
+            isBlockchainVerified={event.isBlockchainVerified}
+            totalCount={event.totalCount}
+            sampleTxId={event.sampleTxId}
           />
         ) : marketSelector && marketSelector.markets.length > 0 && onSendMessage ? (
           <MarketSelector

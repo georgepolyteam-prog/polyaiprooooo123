@@ -8,6 +8,12 @@ interface MarketData {
   yesPrice: number;
   volume: number;
   url?: string;
+  // Irys blockchain verification fields
+  isBlockchainVerified?: boolean;
+  txId?: string;
+  proofUrl?: string;
+  resolvedOutcome?: string | null;
+  category?: string;
 }
 
 export interface Message {
@@ -18,6 +24,11 @@ export interface Message {
     title: string;
     slug?: string;
     markets: MarketData[];
+    // Irys-specific fields
+    source?: 'irys' | 'gamma' | string;
+    isBlockchainVerified?: boolean;
+    totalCount?: number;
+    sampleTxId?: string;
   };
   marketSlug?: string;
   eventSlug?: string;
@@ -461,7 +472,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
           return;
         }
 
-        // Handle multi-market chooser response
+        // Handle multi-market chooser response (both Gamma and Irys)
         if (jsonData.showChooser && jsonData.markets) {
           // Store event slug for follow-up market selections
           if (jsonData.eventSlug) {
@@ -471,6 +482,8 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
               eventSlug: jsonData.eventSlug
             }));
           }
+          
+          const isIrysSource = jsonData.source === 'irys' || jsonData.isBlockchainVerified;
           
           const marketSelectionMsg: Message = {
             role: "assistant",
@@ -484,13 +497,25 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
                 question: m.question,
                 yesPrice: parseFloat(m.yesPrice) || 0,
                 volume: m.volume || 0,
-                url: m.url
-              }))
+                url: m.url,
+                // Irys-specific fields
+                isBlockchainVerified: m.isBlockchainVerified || isIrysSource,
+                txId: m.txId,
+                proofUrl: m.proofUrl,
+                resolvedOutcome: m.resolvedOutcome,
+                category: m.category,
+              })),
+              // Irys event-level fields
+              source: jsonData.source,
+              isBlockchainVerified: isIrysSource,
+              totalCount: jsonData.totalCount,
+              sampleTxId: jsonData.sampleTxId,
             },
             eventSlug: jsonData.eventSlug
           };
           setMessages((prev) => [...prev, marketSelectionMsg]);
           setIsLoading(false);
+          setAnalysisStep('idle');
           return;
         }
         
