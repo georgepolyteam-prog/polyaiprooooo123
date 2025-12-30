@@ -20,12 +20,28 @@ const ANCHOR_TERMS = [
   'zuckerberg'
 ];
 
-// Election-specific keywords - NO EXCLUSIONS (Claude handles filtering via tool)
+// Election-specific keywords with smart exclusions
 const ELECTION_KEYWORDS = {
   high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'inaugurated', 'inauguration'],
-  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican']
-  // exclude list removed - Claude now decides what's relevant via query_irys_historical_markets tool
+  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican'],
+  // Smart exclusions - removed 'says', 'say', 'talk' as they appear in election markets
+  exclude: ['meeting', 'meet', 'zelensky', 'zelenskyy', 'pardon', 'turkey', 'speech', 'summit', 'diplomacy', 'visit', 'erdogan']
 };
+
+// Election whitelist patterns - auto-boost for actual election markets
+const ELECTION_WHITELIST = [
+  /president.*elect/i,
+  /presidential.*elect/i,
+  /win.*election/i,
+  /electoral.*vote/i,
+  /inaugurated.*president/i,
+  /(trump|biden|harris).*win.*202/i,
+  /(trump|biden|harris).*202\d.*election/i,
+  /senate.*race/i,
+  /house.*seat/i,
+  /win.*202\d.*presidential/i,
+  /202\d.*presidential.*election/i
+];
 
 function inferCategoryFromQuery(query: string): string | null {
   const q = query.toLowerCase();
@@ -88,6 +104,13 @@ function calculateRelevance(question: string, userQuery: string, anchorTerms: st
   const query = userQuery.toLowerCase();
   let score = 0;
   
+  // STEP 0: Election whitelist - MASSIVE boost for actual election markets
+  const isElectionMarket = ELECTION_WHITELIST.some(p => p.test(question));
+  if (category === 'elections' && isElectionMarket) {
+    score += 200; // MASSIVE boost for actual election markets
+    console.log(`[Relevance] ELECTION BOOST: "${question.slice(0, 60)}"`);
+  }
+  
   // STEP 1: Required keywords (from Claude's tool call) - MUST match
   if (requiredKeywords.length > 0) {
     const matchedKeywords = requiredKeywords.filter(kw => q.includes(kw.toLowerCase()));
@@ -105,20 +128,33 @@ function calculateRelevance(question: string, userQuery: string, anchorTerms: st
     }
   }
   
-  // STEP 2: ANCHOR TERM REQUIREMENT (most important for entity-based queries)
+  // STEP 2: ANCHOR TERM REQUIREMENT (context-aware)
   if (anchorTerms.length > 0) {
     const hasAnchor = anchorTerms.some(term => q.includes(term));
     
     if (!hasAnchor) {
-      // Market doesn't contain any anchor term - heavily penalize
-      score -= 100;
+      // If it's an election market (Biden 2020, Senate race), don't penalize too much
+      if (category === 'elections' && isElectionMarket) {
+        score -= 20; // Small penalty, not -100
+      } else {
+        score -= 100; // Heavy penalty for non-election markets
+      }
     } else {
       // Market contains anchor term - HUGE boost
       score += 100;
     }
   }
   
-  // STEP 3: Election keywords (only matters if anchor requirement is met)
+  // STEP 3: Exclusion filter (apply to non-election markets)
+  if (category === 'elections' && !isElectionMarket) {
+    for (const excludeTerm of ELECTION_KEYWORDS.exclude) {
+      if (q.includes(excludeTerm)) {
+        score -= 50; // Penalize excluded terms
+      }
+    }
+  }
+  
+  // STEP 4: Election keywords (only matters if anchor requirement is met)
   if (category === 'elections') {
     for (const term of ELECTION_KEYWORDS.high) {
       if (q.includes(term)) {
@@ -133,7 +169,7 @@ function calculateRelevance(question: string, userQuery: string, anchorTerms: st
     }
   }
   
-  // STEP 4: Query term matching
+  // STEP 5: Query term matching
   const queryTerms = query.split(' ').filter(t => t.length > 3);
   for (const term of queryTerms) {
     if (q.includes(term)) {
