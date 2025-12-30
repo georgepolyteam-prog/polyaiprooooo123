@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Check, Sparkles } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
+import polyLogo from "@/assets/poly-logo-new.png";
 import polyfactualLogo from "@/assets/polyfactual-logo.png";
 import irysLogo from "@/assets/irys-logo.png";
 
@@ -15,7 +16,7 @@ interface ModelSelectorProps {
 const modes = [
   {
     id: 'regular' as const,
-    name: 'Regular',
+    name: 'AI',
     description: 'Standard AI assistant',
     color: 'gray',
     borderColor: 'border-border/50',
@@ -50,7 +51,7 @@ const modes = [
 
 const ModeIcon = ({ mode, className }: { mode: ChatMode; className?: string }) => {
   if (mode === 'regular') {
-    return <Sparkles className={cn("w-4 h-4", className)} />;
+    return <img src={polyLogo} alt="" className={cn("w-4 h-4 object-contain", className)} />;
   }
   if (mode === 'polyfactual') {
     return <img src={polyfactualLogo} alt="" className={cn("w-4 h-4 object-contain", className)} />;
@@ -155,7 +156,7 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
             "z-50 bg-[#0d1117] border border-white/10 overflow-hidden",
             isMobile 
               ? "fixed bottom-0 left-0 right-0 rounded-t-2xl animate-in slide-in-from-bottom duration-300"
-              : "absolute top-full left-0 mt-2 min-w-[260px] rounded-xl shadow-xl animate-in fade-in slide-in-from-top-2 duration-200"
+              : "absolute bottom-full left-0 mb-2 min-w-[260px] rounded-xl shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200"
           )}>
             {/* Mobile handle */}
             {isMobile && (
