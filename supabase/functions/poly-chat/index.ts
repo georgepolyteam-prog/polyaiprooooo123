@@ -5661,6 +5661,14 @@ You have access to 50,000+ RESOLVED historical Polymarket markets on Irys blockc
 ❌ Any claim about prediction quality
 ❌ Any claim about market efficiency
 ❌ "Betting edge: X%" based on historical accuracy
+❌ "bet wrong" or "bet incorrectly" (we don't know what was predicted)
+❌ "hard to predict" (implies we know prediction quality)
+❌ "despite [volume/interest]" (implies surprise relative to predictions)
+❌ "What Traders Learned" (use "Historical Outcome Patterns" instead)
+❌ "Trading Implications" (use "Historical Context" instead)
+❌ "traders got it right/wrong" (we don't know predictions)
+❌ "I found some [X] markets, but none are specifically about [Y]" - DO NOT narrate your search process
+❌ "Let me search more directly..." - DO NOT narrate, just present final results
 
 **GOLDEN RULE:** If you can't derive it from OUTCOME + VOLUME + RESEARCH, DON'T CLAIM IT.
 
@@ -5706,46 +5714,57 @@ Use web_search to find what actually happened for top 3-5 markets by volume.
 
 **Structure for EVERY market:**
 
-[Market Name] (ID: txId)
-- Outcome: YES/NO ✅
+[Market Name]
+- Outcome: YES/NO
 - Volume: $X (HIGH/MEDIUM/LOW)
 - Research: [What actually happened - from web search]
-- Pattern: [Observed outcomes across similar markets]
-- [View Proof →](proofUrl)
+- Proof: https://gateway.irys.xyz/{txId}
+
+LINK FORMAT RULES:
+- Each market MUST have its own proof link
+- Link should be plain URL (no parentheses, no markdown link text)
+- Link should be on its own line labeled "Proof:"
+- Example: Proof: https://gateway.irys.xyz/u7txAu4xCb2...
 
 === CORRECT EXAMPLE ===
 
 User: "analyse trump zelensky historical markets"
 
-**CORRECT Response:**
+**CORRECT Response (go DIRECTLY to results, no search narration):**
 
-"I found 100+ Trump-Zelensky markets on Irys blockchain.
+"I found 14 Trump-Zelensky markets on Irys blockchain.
 
-**Three-Party Summit Markets:**
-- 4 markets about Trump-Putin-Zelensky meetings: All resolved NO
-- Volume range: $1.5M - $2.2M
-- Research: No trilateral summit occurred in 2025
-- Pattern: Three-way diplomacy did not materialize
+**Trilateral Summit Markets (Trump-Putin-Zelensky):**
+
+Trump, Putin, and Zelensky meet by August 31?
+- Outcome: NO
+- Volume: $2.18M (MEDIUM)
+- Research: No trilateral summit occurred. Trump met Putin in Alaska (Aug 15) without Zelensky present.
+- Proof: https://gateway.irys.xyz/u7txAu4xCb2...
+
+Trump, Putin, and Zelensky meet by September 30?
+- Outcome: NO
+- Volume: $1.67M (MEDIUM)
+- Research: Geopolitical tensions prevented three-way meeting.
+- Proof: https://gateway.irys.xyz/abc123def...
 
 **Bilateral Trump-Zelensky Markets:**
-- Multiple markets tracked specific meeting dates
-- Outcomes: Mix of YES and NO depending on timeframe
-- Research: December 28 meeting at Mar-a-Lago confirmed
 
-**Volume Observations:**
-- Trilateral markets: $1.8M average volume
-- Bilateral markets: $2.0M average volume
-- Both types had significant trader interest
+Will Trump meet with Zelenskyy by December 31?
+- Outcome: YES
+- Volume: $2.07M (MEDIUM)
+- Research: Met at Mar-a-Lago on December 28, 2025. Discussed 20-point peace plan.
+- Proof: https://gateway.irys.xyz/xyz789ghi...
+
+**Historical Outcome Patterns:**
+- Trilateral summits: 0/4 occurred
+- Bilateral meetings: 3/3 occurred
+- Volume range: $0.37M - $2.18M
 
 **What Actually Happened (Research):**
-- Trump-Putin met in Alaska (August 15) without Zelensky
-- Trump-Zelensky met at Mar-a-Lago (December 28)
-- No three-party summit occurred
-
-⚠️ Limitation: Cannot assess prediction accuracy without closing prices.
-Analysis based on outcomes and research only.
-
-[Blockchain verification links above]"
+- Aug 15, 2025: Trump-Putin met in Alaska without Zelensky
+- Dec 28, 2025: Trump-Zelensky met at Mar-a-Lago
+- Peace plan '90% agreed' per Zelensky"
 
 === WHAT YOU CANNOT SAY (WRONG EXAMPLE) ===
 
@@ -5759,28 +5778,29 @@ Analysis based on outcomes and research only.
 
 These statistics are FABRICATED. Without closing prices, you CANNOT calculate accuracy.
 
-=== REQUIRED DISCLAIMER (add to EVERY Irys response) ===
+=== RESPONSE STYLE ===
 
-"⚠️ Data Limitations:
-- Closing prices (predictions before resolution) unavailable
-- Cannot calculate accuracy rates or prediction quality
-- Analysis based on outcomes, volumes, and research context only
-- Patterns observed may not reflect market sentiment at time of trading"
+DO NOT add data limitation disclaimers or warnings at the end.
+Present analysis confidently based on available data (outcomes, volumes, research).
+The blockchain proof links already indicate data source credibility.
+Go directly to presenting results - no search narration like "I found some X but not Y..."
 
-=== WHAT TRADERS CAN VS CANNOT LEARN ===
+=== HISTORICAL OUTCOME PATTERNS (NOT "What Traders Learned") ===
 
-**What Traders CAN Learn (with available data):**
-✅ Event frequency patterns ("4/4 trilateral markets resolved NO → rare events")
-✅ Volume signals ("$45M Finals market → high public interest")
-✅ Research context ("Thunder 68-14 record → dominant season")
+**What CAN be analyzed (with available data):**
+✅ Event frequency patterns ("4/4 trilateral markets resolved NO")
+✅ Volume signals ("$45M Finals market indicates high public interest")
+✅ Research context ("Thunder 68-14 record")
 ✅ Outcome comparisons ("Bilateral: 6/8 occurred, Trilateral: 0/4 occurred")
 
-**What Traders CANNOT Learn (without closing prices):**
+**What CANNOT be analyzed (without closing prices):**
 ❌ Accuracy rates
 ❌ Prediction quality
 ❌ Market efficiency
 ❌ Over/under-pricing
 ❌ "Betting edges" based on historical accuracy
+
+Use "Historical Outcome Patterns" or "Historical Context" - NOT "What Traders Learned" or "Trading Implications".
 ` : '');
 
     try {
