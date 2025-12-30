@@ -5229,8 +5229,41 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
     }
 
     // ============= IRYS BLOCKCHAIN DATA MODE =============
+    // Helper to detect if this is a market search query for Irys historical data
+    const isIrysMarketSearchQuery = (message: string): boolean => {
+      const q = message.toLowerCase();
+      const searchPatterns = [
+        // Explicit search intents
+        /search.*market/i,
+        /find.*market/i,
+        /show.*market/i,
+        /historical.*market/i,
+        /resolved.*market/i,
+        /past.*market/i,
+        // Topic-based searches (likely looking for markets)
+        /(trump|biden|election|primary|vote)/i,
+        /(crypto|bitcoin|btc|ethereum|eth|solana)/i,
+        /(nba|nfl|lakers|super bowl|world cup|playoff)/i,
+        /(recession|fed|inflation|gdp|stock)/i,
+        /(oscar|grammy|netflix|award)/i,
+        /(spacex|nasa|openai|apple|google|microsoft)/i,
+        // Question patterns that indicate market search
+        /what happened.*with/i,
+        /how did.*perform/i,
+        /show me.*about/i,
+        /markets.*about/i,
+        /find.*about/i,
+      ];
+      return searchPatterns.some(p => p.test(message));
+    };
+
     if (irysMode) {
       console.log("[Irys] Irys mode enabled, querying historical markets...");
+      
+      const userQuery = lastUserMessage?.content || '';
+      const shouldReturnChooser = isIrysMarketSearchQuery(userQuery);
+      
+      console.log(`[Irys] Query: "${userQuery.substring(0, 50)}..." | Is market search: ${shouldReturnChooser}`);
       
       try {
         // Query Irys for relevant historical markets
@@ -5241,8 +5274,8 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
             'Authorization': `Bearer ${supabaseKey}`
           },
           body: JSON.stringify({ 
-            query: lastUserMessage?.content || '',
-            limit: 20
+            query: userQuery,
+            limit: 30
           })
         });
         
@@ -5252,7 +5285,70 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
           if (irysData.success && irysData.markets?.length > 0) {
             console.log(`[Irys] ✅ Retrieved ${irysData.count} historical markets (category: ${irysData.inferredCategory || 'all'})`);
             
-            // Add Irys context to the enriched messages
+            // If this looks like a market search, return a chooser-style response with blockchain-verified markets
+            if (shouldReturnChooser) {
+              console.log(`[Irys] Returning market chooser with ${irysData.markets.length} blockchain-verified markets`);
+              
+              // Format markets for the chooser display
+              const formattedMarkets = irysData.markets.slice(0, 20).map((market: any, index: number) => {
+                // Extract outcome from market data
+                const outcomes = market.outcomes || [];
+                const winningOutcome = outcomes.find((o: any) => o.winner === true);
+                const resolvedOutcome = winningOutcome?.name || market.winning_outcome || null;
+                
+                // Get yes price from outcomes or market data
+                let yesPrice = 0;
+                const yesOutcome = outcomes.find((o: any) => o.name?.toLowerCase() === 'yes');
+                if (yesOutcome?.price) {
+                  yesPrice = parseFloat(yesOutcome.price) * 100;
+                } else if (market.yes_price) {
+                  yesPrice = parseFloat(market.yes_price) * 100;
+                } else if (market.final_price) {
+                  yesPrice = parseFloat(market.final_price) * 100;
+                }
+                
+                return {
+                  index: index + 1,
+                  question: market.question || market.title || 'Unknown Market',
+                  yesPrice: yesPrice.toFixed(1),
+                  volume: market.volume || market.volume_total || 0,
+                  category: market.category || market.irys?.category || irysData.inferredCategory || 'general',
+                  resolvedOutcome,
+                  status: 'resolved',
+                  // Blockchain verification data
+                  txId: market.irys?.txId || market.txId,
+                  proofUrl: market.irys?.proofUrl || (market.txId ? `https://gateway.irys.xyz/${market.txId}` : null),
+                  isBlockchainVerified: true,
+                  // Additional metadata
+                  endDate: market.end_date_iso || market.endDate,
+                  conditionId: market.condition_id,
+                };
+              });
+              
+              // Build chooser response
+              const categoryLabel = irysData.inferredCategory 
+                ? irysData.inferredCategory.charAt(0).toUpperCase() + irysData.inferredCategory.slice(1)
+                : 'Historical';
+              
+              const responseContent = `🔗 **${categoryLabel} Markets from Irys Blockchain**\n\nFound ${irysData.totalAvailable || irysData.count} resolved historical markets matching your search. These are permanently stored on the Irys blockchain with cryptographic proofs.\n\nSelect a market to view its full analysis and resolution details:`;
+              
+              return new Response(
+                JSON.stringify({
+                  showChooser: true,
+                  source: 'irys',
+                  eventTitle: `${categoryLabel} Markets (Blockchain Verified)`,
+                  content: responseContent,
+                  markets: formattedMarkets,
+                  sampleTxId: irysData.sampleTxId,
+                  totalCount: irysData.totalAvailable || irysData.count,
+                  inferredCategory: irysData.inferredCategory,
+                  isBlockchainVerified: true,
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+            
+            // Not a market search query - add Irys context to the enriched messages for Claude
             const irysContext = `
 === IRYS BLOCKCHAIN VERIFIED DATA ===
 You have access to ${irysData.count} historical Polymarket markets stored permanently on Irys blockchain.
