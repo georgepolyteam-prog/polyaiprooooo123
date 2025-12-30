@@ -1248,22 +1248,31 @@ DO NOT give up after one search. Try at least 3 different phrasings.`,
       required: ['market_slug']
     }
   },
-  // === NEW: IRYS HISTORICAL DATA TOOL ===
+  // === IRYS HISTORICAL DATA TOOL - Claude queries dynamically ===
   {
     name: 'query_irys_historical_markets',
-    description: `Query 50,000+ historical RESOLVED Polymarket markets stored permanently on Irys blockchain. Use this when users ask about:
-- Historical prediction market data, accuracy, or past outcomes
-- How accurate prediction markets were for specific events (elections, sports, etc.)
-- Comparing predicted probabilities vs actual outcomes
-- Finding resolved markets on a topic (Trump, Biden, elections, crypto, etc.)
+    description: `Query 50,000+ historical RESOLVED Polymarket markets stored permanently on Irys blockchain.
 
-This tool lets you dynamically query with specific filters. Results include blockchain proof URLs.
+🎯 WHEN TO USE:
+- User asks about historical prediction market data or accuracy
+- User asks "how accurate were election/crypto/sports markets?"
+- User asks "show me Trump/Biden/election markets"
+- User asks "did markets predict X correctly?"
+- User wants to see resolved/past markets
 
-WHEN TO USE:
-- User asks "how accurate were election markets?" → query_irys_historical_markets
-- User asks "show me Trump election markets" → query_irys_historical_markets  
-- User asks "did markets predict X correctly?" → query_irys_historical_markets
-- User asks about "prediction accuracy" or "historical data" → query_irys_historical_markets
+📊 TOOL RETURNS RAW DATA - YOUR JOB IS TO FILTER:
+The tool returns markets sorted by volume (higher = better quality). YOU must intelligently filter based on user intent.
+
+FILTERING EXAMPLES:
+- "Trump election markets" → You receive 100 election markets → Filter to ONLY actual Trump election outcomes (win/lose), exclude diplomatic meetings, tariffs, praise
+- "2024 election accuracy" → Filter to markets about 2024 election outcomes specifically
+- "Show me unusual political markets" → Include the quirky ones (meetings, praise, unusual bets)
+
+ALWAYS:
+1. Call with broad category + keywords to get data
+2. Filter results based on user's ACTUAL intent
+3. Explain your filtering: "I found 85 markets but filtered to 12 actual election outcomes"
+4. Include blockchain proof links in responses
 
 NOTE: Only works when Irys mode is enabled (irysMode=true).`,
     input_schema: {
@@ -1277,7 +1286,7 @@ NOTE: Only works when Irys mode is enabled (irysMode=true).`,
         keywords: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Keywords that MUST appear in market question (e.g., ["trump", "2024", "presidential"]). Markets not matching these are filtered out.'
+          description: 'Keywords that MUST appear in market question (e.g., ["trump", "2024"]). Use for initial filtering - you will do intelligent filtering on results.'
         },
         minVolume: {
           type: 'number',
@@ -1285,7 +1294,7 @@ NOTE: Only works when Irys mode is enabled (irysMode=true).`,
         },
         limit: {
           type: 'number',
-          description: 'Number of markets to return (default: 30, max: 100)'
+          description: 'Number of markets to return (default: 100 to give you options to filter)'
         }
       },
       required: ['category']
@@ -2202,6 +2211,37 @@ If market resolved, just say: "This market resolved. [Winner] won."
 - User asks about whales/big money → get_whale_activity
 - User asks about "recent trades", "trade activity", "trading volume" → get_recent_trades
 - User asks about "buy pressure", "sell pressure", "trade flow" → get_trade_flow
+- User asks about HISTORICAL markets, accuracy, past predictions → query_irys_historical_markets (if Irys mode enabled)
+
+=== 🔗 IRYS HISTORICAL DATA TOOL (when Irys mode is enabled) ===
+You have access to 50,000+ RESOLVED historical Polymarket markets via query_irys_historical_markets.
+
+🎯 WORKFLOW:
+1. User asks a historical question (e.g., "Trump election markets accuracy")
+2. Call query_irys_historical_markets with category and keywords
+3. You receive 50-100 RAW markets sorted by volume
+4. YOU intelligently filter based on user's ACTUAL intent
+5. Present filtered results with analysis and blockchain proof links
+
+🧠 INTELLIGENT FILTERING (YOUR JOB):
+The tool returns RAW data - YOU must filter based on user intent.
+
+EXAMPLES:
+- "Trump election markets" → Filter to ONLY markets about Trump winning/losing elections
+  ❌ EXCLUDE: Tariff deals, diplomatic meetings, Google searches, praise/criticism
+  ✅ INCLUDE: "Trump wins 2024 election", "Trump wins 2016 election", "Biden beats Trump 2020"
+
+- "2024 election accuracy" → Filter to 2024 outcomes specifically
+  ❌ EXCLUDE: 2020 markets, 2016 markets, non-election markets
+  ✅ INCLUDE: All 2024 election outcome markets
+
+- "Show me unusual Trump markets" → User WANTS the quirky ones
+  ✅ INCLUDE: Meetings, tariffs, praise, pardons
+
+ALWAYS:
+- Explain your filtering: "I found 85 Trump-tagged markets but filtered to 12 actual elections"
+- Calculate accuracy ONLY from your filtered set
+- Include blockchain proof links: [View Proof →](https://gateway.irys.xyz/TX_ID)
 
 === 🚨 CRITICAL: ALWAYS USE WEB_SEARCH BEFORE MAKING CLAIMS ===
 BEFORE analyzing any market, you MUST use web_search to verify current information:
@@ -5370,285 +5410,12 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
     }
 
     // ============= IRYS BLOCKCHAIN DATA MODE =============
-    // Helper to detect if this is an ANALYTICAL query (wants Claude to analyze historical data)
-    const isAnalyticalQuery = (message: string): boolean => {
-      const analyticalPatterns = [
-        /how did.*perform/i,
-        /how accurate/i,
-        /were.*right/i,
-        /what happened.*with/i,
-        /prediction.*accuracy/i,
-        /track record/i,
-        /historical.*performance/i,
-        /past.*elections?.*how/i,
-        /previous.*elections?.*how/i,
-        /analyze.*history/i,
-        /compare.*predictions/i,
-        /outcomes?.*vs.*predictions?/i,
-        /win rate/i,
-        /accuracy rate/i,
-        /can you see previous/i,
-        /can you see past/i,
-        /how they did/i,
-        /were markets correct/i,
-        /market accuracy/i,
-        /prediction results/i,
-      ];
-      return analyticalPatterns.some(p => p.test(message));
-    };
-    
-    // Helper to detect if this is a market search/browse query for Irys historical data
-    const isIrysMarketSearchQuery = (message: string): boolean => {
-      const searchPatterns = [
-        // Explicit search intents
-        /search.*market/i,
-        /find.*market/i,
-        /show.*market/i,
-        /show me.*market/i,
-        /list.*market/i,
-        /browse.*market/i,
-        // Topic-based searches (without analytical context)
-        /^(trump|biden|election)/i, // Just topic name = searching
-        /^(crypto|bitcoin|btc|ethereum)/i,
-        /^(nba|nfl|lakers)/i,
-      ];
-      return searchPatterns.some(p => p.test(message));
-    };
-    
-    // Build rich analytical context for Claude when analyzing Irys data
-    const buildIrysAnalyticalContext = (irysData: any, userQuery: string): string => {
-      const markets = irysData.markets || [];
-      const totalCount = irysData.count || markets.length;
-      const sampleTxId = irysData.sampleTxId || markets[0]?.txId || 'unknown';
-      
-      // Build market summaries using PRECOMPUTED accuracy data
-      const marketSummaries = markets.slice(0, 15).map((m: any, idx: number) => {
-        const question = m.question || m.title || 'Unknown market';
-        const predicted = m.predictedOutcome || 'Unknown';
-        const predictedProb = m.predictedProbability ? `${m.predictedProbability}%` : 'N/A';
-        const actual = m.resolvedOutcome || 'Unknown';
-        const correct = m.isCorrectPrediction === true ? '✅ Correct' : (m.isCorrectPrediction === false ? '❌ Wrong' : '❓ Unknown');
-        const volume = m.volume ? `$${(parseFloat(m.volume) / 1000000).toFixed(1)}M` : 'N/A';
-        const proofUrl = m.proofUrl || `https://gateway.irys.xyz/${m.txId}`;
-        
-        return `
-**Market ${idx + 1}: ${question}**
-- Predicted: ${predicted} (${predictedProb})
-- Actual Outcome: ${actual}
-- Result: ${correct}
-- Volume: ${volume}
-- [Proof →](${proofUrl})
-`;
-      }).join('\n');
-
-      // Add precomputed accuracy summary
-      let accuracySummary = '';
-      if (irysData.accuracyStats) {
-        const { correct, total, percentage } = irysData.accuracyStats;
-        accuracySummary = `\n**Overall Accuracy: ${correct}/${total} = ${percentage}%**\n`;
-      }
-
-      return `
-=== IRYS BLOCKCHAIN HISTORICAL DATA ===
-
-You have access to ${totalCount} RESOLVED historical Polymarket markets.
-
-${accuracySummary}
-
-🚨 CRITICAL INSTRUCTIONS:
-
-1. **Start your response with:** "Based on ${totalCount} historical markets from Irys blockchain:"
-
-2. **Present the key markets** from the list below (focus on top 5-10)
-
-3. **Highlight patterns:**
-   - Which predictions were accurate vs wrong
-   - Any surprise upsets or unexpected outcomes
-   - Volume patterns (higher volume markets)
-
-4. **Include at least ONE clickable proof link** using this exact format:
-   \`[View Blockchain Proof →](https://gateway.irys.xyz/${sampleTxId})\`
-
-5. **Do NOT speculate** - only analyze the actual data provided
-
----
-
-USER QUERY: "${userQuery}"
-
----
-
-HISTORICAL MARKETS:
-
-${marketSummaries}
-
----
-
-EXAMPLE RESPONSE FORMAT:
-
-"Based on ${totalCount} historical markets from Irys blockchain:
-
-**Trump 2024 Presidential Election:**
-- Market predicted: 58% YES
-- Actual outcome: WON ✅ (accurate prediction)
-
-**Trump 2016 Presidential Election:**
-- Market predicted: 35% YES
-- Actual outcome: WON ❌ (surprise upset, market was wrong)
-
-**Overall Accuracy:** ${irysData.accuracyStats ? `${irysData.accuracyStats.percentage}%` : 'Various results'}
-
-[View Blockchain Proof →](https://gateway.irys.xyz/${sampleTxId})"
-`;
-    };
-
+    // Claude now queries Irys dynamically via tool - no hardcoded routing needed
+    // Just log that Irys mode is enabled, Claude will use query_irys_historical_markets tool
     if (irysMode) {
-      console.log("[Irys] Irys mode enabled, querying historical markets...");
-      
-      const userQuery = lastUserMessage?.content || '';
-      const wantsAnalysis = isAnalyticalQuery(userQuery);
-      
-      // For election queries with "show" or "see" intent, treat as market search
-      const hasElectionIntent = /election|presidential|vote|ballot|candidate/i.test(userQuery);
-      const wantsToSeeMarkets = /show|see|display|list|find|browse|what.*market|can you see/i.test(userQuery);
-      
-      // If user explicitly wants to see/show markets (even election ones), allow market search
-      const wantsMarketSearch = isIrysMarketSearchQuery(userQuery) && !wantsAnalysis && 
-        (!hasElectionIntent || wantsToSeeMarkets);
-      
-      console.log(`[Irys] Query: "${userQuery.substring(0, 50)}..." | Analytical: ${wantsAnalysis} | Market search: ${wantsMarketSearch}`);
-      
-      try {
-        // Query Irys for relevant historical markets
-        const irysResponse = await fetch(`${supabaseUrl}/functions/v1/query-irys`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`
-          },
-          body: JSON.stringify({ 
-            query: userQuery,
-            limit: wantsAnalysis ? 50 : 30 // Fetch more for analysis
-          })
-        });
-        
-        if (irysResponse.ok) {
-          const irysData = await irysResponse.json();
-          
-          if (irysData.success && irysData.markets?.length > 0) {
-            console.log(`[Irys] ✅ Retrieved ${irysData.count} historical markets (category: ${irysData.inferredCategory || 'all'})`);
-            
-            // ANALYTICAL QUERY - Send rich context to Claude for analysis
-            if (wantsAnalysis) {
-              console.log(`[Irys] 🔍 ANALYTICAL MODE - Sending ${irysData.markets.length} markets to Claude for analysis`);
-              
-              const analyticalContext = buildIrysAnalyticalContext(irysData, userQuery);
-              
-              // Prepend Irys analytical context to messages
-              enrichedMessages = [
-                { role: 'user', content: analyticalContext },
-                ...enrichedMessages
-              ];
-              
-              console.log(`[Irys] Added analytical context with ${irysData.count} historical markets to Claude`);
-              // Continue to Claude processing below - don't return early
-            }
-            // MARKET SEARCH QUERY - Return chooser with blockchain-verified markets
-            else if (wantsMarketSearch) {
-              console.log(`[Irys] Returning market chooser with ${irysData.markets.length} blockchain-verified markets`);
-              
-              // Format markets for the chooser display
-              const formattedMarkets = irysData.markets.slice(0, 20).map((market: any, index: number) => {
-                // Extract outcome from market data
-                const outcomes = market.outcomes || [];
-                const winningOutcome = outcomes.find((o: any) => o.winner === true);
-                const resolvedOutcome = winningOutcome?.name || market.winning_outcome || null;
-                
-                // Get yes price from outcomes or market data
-                let yesPrice = 0;
-                const yesOutcome = outcomes.find((o: any) => o.name?.toLowerCase() === 'yes');
-                if (yesOutcome?.price) {
-                  yesPrice = parseFloat(yesOutcome.price) * 100;
-                } else if (market.yes_price) {
-                  yesPrice = parseFloat(market.yes_price) * 100;
-                } else if (market.final_price) {
-                  yesPrice = parseFloat(market.final_price) * 100;
-                }
-                
-                return {
-                  index: index + 1,
-                  question: market.question || market.title || 'Unknown Market',
-                  yesPrice: yesPrice.toFixed(1),
-                  volume: market.volume || market.volume_total || 0,
-                  category: market.category || market.irys?.category || irysData.inferredCategory || 'general',
-                  resolvedOutcome,
-                  status: 'resolved',
-                  // Blockchain verification data
-                  txId: market.irys?.txId || market.txId,
-                  proofUrl: market.irys?.proofUrl || (market.txId ? `https://gateway.irys.xyz/${market.txId}` : null),
-                  isBlockchainVerified: true,
-                  // Additional metadata
-                  endDate: market.end_date_iso || market.endDate,
-                  conditionId: market.condition_id,
-                };
-              });
-              
-              // Build chooser response
-              const categoryLabel = irysData.inferredCategory 
-                ? irysData.inferredCategory.charAt(0).toUpperCase() + irysData.inferredCategory.slice(1)
-                : 'Historical';
-              
-              const responseContent = `🔗 **${categoryLabel} Markets from Irys Blockchain**\n\nFound ${irysData.totalAvailable || irysData.count} resolved historical markets matching your search. These are permanently stored on the Irys blockchain with cryptographic proofs.\n\nSelect a market to view its full analysis and resolution details:`;
-              
-              return new Response(
-                JSON.stringify({
-                  showChooser: true,
-                  source: 'irys',
-                  eventTitle: `${categoryLabel} Markets (Blockchain Verified)`,
-                  content: responseContent,
-                  markets: formattedMarkets,
-                  sampleTxId: irysData.sampleTxId,
-                  totalCount: irysData.totalAvailable || irysData.count,
-                  inferredCategory: irysData.inferredCategory,
-                  isBlockchainVerified: true,
-                }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
-            }
-            // DEFAULT - Add basic Irys context for other queries
-            else {
-              const irysContext = `
-=== IRYS BLOCKCHAIN VERIFIED DATA ===
-You have access to ${irysData.count} historical Polymarket markets stored permanently on Irys blockchain.
-Category: ${irysData.inferredCategory || 'all'}
-Sample Proof URL: https://gateway.irys.xyz/${irysData.sampleTxId}
-
-Historical Markets:
-${JSON.stringify(irysData.markets.slice(0, 10), null, 2)}
-
-Instructions for using this data:
-- If user asks about historical data, analyze patterns across these resolved markets
-- Compare accuracy rates and outcomes when relevant
-- Look for trends and insights
-- Calculate win rates when possible
-- IMPORTANT: Mention this data is blockchain-verified
-- Include proof links in your response: "View Blockchain Proof: https://gateway.irys.xyz/${irysData.sampleTxId}"
-`;
-              
-              // Prepend Irys context to the system prompt or add to messages
-              enrichedMessages = [
-                { role: 'user', content: `[IRYS DATA CONTEXT]\n${irysContext}` },
-                ...enrichedMessages
-              ];
-              
-              console.log(`[Irys] Added ${irysData.count} historical markets to context`);
-            }
-          } else {
-            console.log(`[Irys] No matching historical markets found`);
-          }
-        }
-      } catch (irysError) {
-        console.error('[Irys] Error querying Irys:', irysError);
-      }
+      console.log("[Irys] Irys mode enabled - Claude will query via query_irys_historical_markets tool");
+      console.log("[Irys] User query:", lastUserMessage?.content?.substring(0, 100));
+      // No pre-querying - Claude decides when and how to query via the tool
     }
 
     // ============= DEEP RESEARCH MODE =============

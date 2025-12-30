@@ -5,179 +5,36 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// High-signal entity terms (anchor terms)
-const ANCHOR_TERMS = [
-  'trump', 'donald trump',
-  'biden', 'joe biden',
-  'harris', 'kamala harris',
-  'jd vance', 'vance',
-  'obama', 'barack obama',
-  'clinton', 'hillary clinton',
-  'putin', 'vladimir putin',
-  'xi', 'xi jinping',
-  'elon', 'musk', 'elon musk',
-  'bezos', 'jeff bezos',
-  'zuckerberg'
-];
+// ============================================================================
+// SIMPLIFIED IRYS QUERY - Claude handles intelligent filtering
+// This function returns top markets by volume, Claude decides what's relevant
+// ============================================================================
 
-// Election-specific keywords with smart exclusions
-const ELECTION_KEYWORDS = {
-  high: ['election', 'presidential', 'president', 'senate', 'governor', 'vote', 'ballot', 'candidate', 'nominee', 'primary', 'wins', 'won', 'loses', 'lost', 'inaugurated', 'inauguration'],
-  medium: ['race', 'campaign', 'polling', 'voter', 'democrat', 'republican'],
-  // Smart exclusions - removed 'says', 'say', 'talk' as they appear in election markets
-  exclude: ['meeting', 'meet', 'zelensky', 'zelenskyy', 'pardon', 'turkey', 'speech', 'summit', 'diplomacy', 'visit', 'erdogan']
-};
-
-// Election whitelist patterns - auto-boost for actual election markets
-const ELECTION_WHITELIST = [
-  /president.*elect/i,
-  /presidential.*elect/i,
-  /win.*election/i,
-  /electoral.*vote/i,
-  /inaugurated.*president/i,
-  /(trump|biden|harris).*win.*202/i,
-  /(trump|biden|harris).*202\d.*election/i,
-  /senate.*race/i,
-  /house.*seat/i,
-  /win.*202\d.*presidential/i,
-  /202\d.*presidential.*election/i
-];
-
+// Simple category inference for GraphQL filtering (optional optimization)
 function inferCategoryFromQuery(query: string): string | null {
+  if (!query) return null;
   const q = query.toLowerCase();
   
-  if (
-    q.includes('election') || 
-    q.includes('president') || 
-    q.includes('presidential') ||
-    q.includes('political') || 
-    q.includes('trump') || 
-    q.includes('biden') ||
-    q.includes('senate') ||
-    q.includes('congress') ||
-    q.includes('vote') ||
-    q.includes('candidate')
-  ) {
+  if (/election|president|presidential|political|trump|biden|senate|congress|vote|candidate/.test(q)) {
     return 'elections';
   }
-  
-  if (q.includes('crypto') || q.includes('bitcoin') || q.includes('eth') || q.includes('ethereum') || q.includes('solana') || q.includes('btc')) {
+  if (/crypto|bitcoin|eth|ethereum|solana|btc/.test(q)) {
     return 'crypto';
   }
-  
-  if (q.includes('sport') || q.includes('nba') || q.includes('nfl') || q.includes('soccer') || q.includes('lakers') || q.includes('game') || q.includes('championship') || q.includes('playoffs')) {
+  if (/sport|nba|nfl|soccer|lakers|game|championship|playoffs/.test(q)) {
     return 'sports';
   }
-  
-  if (q.includes('stock') || q.includes('market') || q.includes('finance') || q.includes('recession') || q.includes('inflation') || q.includes('fed')) {
+  if (/stock|finance|recession|inflation|fed/.test(q)) {
     return 'finance';
   }
-  
-  if (q.includes('movie') || q.includes('oscar') || q.includes('grammy') || q.includes('entertainment') || q.includes('netflix') || q.includes('hollywood')) {
+  if (/movie|oscar|grammy|entertainment|netflix|hollywood/.test(q)) {
     return 'entertainment';
   }
-  
-  if (q.includes('tech') || q.includes('ai') || q.includes('spacex') || q.includes('science') || q.includes('elon') || q.includes('musk')) {
+  if (/tech|ai|spacex|science/.test(q)) {
     return 'science-tech';
   }
   
   return null;
-}
-
-// Extract anchor terms from user query
-function extractAnchorTerms(query: string): string[] {
-  const q = query.toLowerCase();
-  const found: string[] = [];
-  
-  for (const term of ANCHOR_TERMS) {
-    if (q.includes(term)) {
-      found.push(term);
-    }
-  }
-  
-  return found;
-}
-
-// Calculate relevance score with anchor term and keyword matching
-function calculateRelevance(question: string, userQuery: string, anchorTerms: string[], category: string, requiredKeywords: string[] = []): number {
-  const q = question.toLowerCase();
-  const query = userQuery.toLowerCase();
-  let score = 0;
-  
-  // STEP 0: Election whitelist - MASSIVE boost for actual election markets
-  const isElectionMarket = ELECTION_WHITELIST.some(p => p.test(question));
-  if (category === 'elections' && isElectionMarket) {
-    score += 200; // MASSIVE boost for actual election markets
-    console.log(`[Relevance] ELECTION BOOST: "${question.slice(0, 60)}"`);
-  }
-  
-  // STEP 1: Required keywords (from Claude's tool call) - MUST match
-  if (requiredKeywords.length > 0) {
-    const matchedKeywords = requiredKeywords.filter(kw => q.includes(kw.toLowerCase()));
-    const matchRatio = matchedKeywords.length / requiredKeywords.length;
-    
-    if (matchRatio === 0) {
-      // No keywords matched - heavily penalize
-      return -1000;
-    } else if (matchRatio < 0.5) {
-      // Less than half matched - penalize but don't disqualify
-      score -= 50;
-    } else {
-      // Good keyword match - boost based on match ratio
-      score += Math.round(matchRatio * 100);
-    }
-  }
-  
-  // STEP 2: ANCHOR TERM REQUIREMENT (context-aware)
-  if (anchorTerms.length > 0) {
-    const hasAnchor = anchorTerms.some(term => q.includes(term));
-    
-    if (!hasAnchor) {
-      // If it's an election market (Biden 2020, Senate race), don't penalize too much
-      if (category === 'elections' && isElectionMarket) {
-        score -= 20; // Small penalty, not -100
-      } else {
-        score -= 100; // Heavy penalty for non-election markets
-      }
-    } else {
-      // Market contains anchor term - HUGE boost
-      score += 100;
-    }
-  }
-  
-  // STEP 3: Exclusion filter (apply to non-election markets)
-  if (category === 'elections' && !isElectionMarket) {
-    for (const excludeTerm of ELECTION_KEYWORDS.exclude) {
-      if (q.includes(excludeTerm)) {
-        score -= 50; // Penalize excluded terms
-      }
-    }
-  }
-  
-  // STEP 4: Election keywords (only matters if anchor requirement is met)
-  if (category === 'elections') {
-    for (const term of ELECTION_KEYWORDS.high) {
-      if (q.includes(term)) {
-        score += 10;
-      }
-    }
-    
-    for (const term of ELECTION_KEYWORDS.medium) {
-      if (q.includes(term)) {
-        score += 5;
-      }
-    }
-  }
-  
-  // STEP 5: Query term matching
-  const queryTerms = query.split(' ').filter(t => t.length > 3);
-  for (const term of queryTerms) {
-    if (q.includes(term)) {
-      score += 3;
-    }
-  }
-  
-  return score;
 }
 
 // Normalize market data with accurate outcome detection
@@ -247,16 +104,24 @@ async function fetchWithConcurrency<T>(
   return results;
 }
 
+// Simple keyword matching - Claude specifies what keywords must be present
+function matchesKeywords(question: string, keywords: string[]): boolean {
+  if (keywords.length === 0) return true;
+  const q = question.toLowerCase();
+  // All keywords must be present
+  return keywords.every(kw => q.includes(kw.toLowerCase()));
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Accept new params from Claude's tool call
+    // Accept params from Claude's tool call
     const { 
-      query, 
-      limit = 30, 
+      query = '', 
+      limit = 100,  // Default higher since Claude will filter
       debug = false,
       category: providedCategory,  // Claude can specify category directly
       keywords = [],               // Claude can specify required keywords
@@ -264,6 +129,7 @@ serve(async (req) => {
     } = await req.json();
     
     console.log('[Irys Query] ========================================');
+    console.log('[Irys Query] SIMPLIFIED MODE - Claude handles filtering');
     console.log('[Irys Query] Query:', query);
     console.log('[Irys Query] Limit:', limit);
     console.log('[Irys Query] Provided category:', providedCategory);
@@ -274,17 +140,12 @@ serve(async (req) => {
     const category = providedCategory || inferCategoryFromQuery(query);
     console.log('[Irys Query] Final category:', category);
     
-    // Combine query terms with provided keywords for anchor extraction
-    const combinedQuery = keywords.length > 0 ? [...keywords, query].join(' ') : query;
-    const anchorTerms = extractAnchorTerms(combinedQuery);
-    console.log('[Irys Query] Anchor terms:', anchorTerms);
-    
     // Build GraphQL tags - filter by application-id AND category if detected
     const tags: Array<{ name: string; values: string[] }> = [
       { name: "application-id", values: ["polymarket"] }
     ];
     
-    // Add category filter if we detected one from the query
+    // Add category filter if we detected one
     if (category) {
       tags.push({ name: "category", values: [category] });
       console.log('[Irys Query] Adding category filter:', category);
@@ -292,15 +153,9 @@ serve(async (req) => {
     
     console.log('[Irys Query] GraphQL tags filter:', JSON.stringify(tags));
     
-    // PAGINATION: With category filter we can fetch more (narrower results)
-    // Without category: keep conservative limit
-    const targetCandidates = category 
-      ? Math.min(limit * 50, 2000)  // Category filtered: up to 2000
-      : anchorTerms.length > 0 
-        ? Math.min(limit * 20, 500)  // Anchor terms: 500
-        : Math.min(limit * 10, 200); // Generic: 200
-    
-    const pageSize = 100; // Irys GraphQL limit per page
+    // Fetch more candidates so Claude has options to filter from
+    const targetCandidates = Math.min(limit * 5, 500);
+    const pageSize = 100;
     const maxPages = Math.ceil(targetCandidates / pageSize);
     
     console.log('[Irys Query] Target candidates:', targetCandidates, 'Pages:', maxPages);
@@ -310,7 +165,6 @@ serve(async (req) => {
     
     // Paginate through results
     for (let page = 0; page < maxPages; page++) {
-      // Format tags for GraphQL (unquoted field names)
       const tagsGraphQL = tags.map((t: { name: string; values: string[] }) => 
         `{ name: "${t.name}", values: [${t.values.map(v => `"${v}"`).join(', ')}] }`
       ).join(', ');
@@ -336,7 +190,6 @@ serve(async (req) => {
       `;
       
       console.log(`[Irys Query] Fetching page ${page + 1}/${maxPages}`);
-      console.log('[Irys Query] GraphQL query:', graphqlQueryStr.replace(/\s+/g, ' ').trim());
       
       const response: Response = await fetch('https://uploader.irys.xyz/graphql', {
         method: 'POST',
@@ -344,9 +197,7 @@ serve(async (req) => {
         body: JSON.stringify({ query: graphqlQueryStr })
       });
       
-      console.log('[Irys Query] Response status:', response.status);
       const rawText: string = await response.text();
-      console.log('[Irys Query] Raw response (first 500 chars):', rawText.slice(0, 500));
       
       let data: any;
       try {
@@ -371,24 +222,13 @@ serve(async (req) => {
       after = edges[edges.length - 1]?.cursor;
       
       console.log(`[Irys Query] Page ${page + 1}: Retrieved ${edges.length} transactions (Total: ${allEdges.length})`);
-      
-      // If we have enough candidates with anchor terms, we can stop early
-      if (anchorTerms.length > 0 && allEdges.length >= limit * 10) {
-        console.log('[Irys Query] Sufficient candidates, stopping pagination early');
-        break;
-      }
     }
     
     console.log('[Irys Query] Total transactions fetched:', allEdges.length);
     
-    // DEBUG: Check for known TX ID
-    const knownTxId = '9KGFjwMRTMJRbMnrPQSan8Q4cgj3iELm3omeyC5KWJsT';
-    const hasKnownTx = allEdges.some((e: any) => e.node.id === knownTxId);
-    console.log('[Irys Query] Contains known TX', knownTxId, ':', hasKnownTx);
-    
     if (allEdges.length === 0) {
       return new Response(
-        JSON.stringify({ markets: [], count: 0, category }),
+        JSON.stringify({ success: true, markets: [], count: 0, category, note: 'No markets found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -406,40 +246,32 @@ serve(async (req) => {
           
           const normalized = normalizeMarket(marketData, txId);
           
-          // Filter for resolved markets in code instead of GraphQL
+          // Filter for resolved markets
           const isResolved = normalized.closed === true || normalized.closed === 'true';
           if (!isResolved) {
-            console.log('[Irys Query] Skipping non-resolved market:', (normalized.question || '').slice(0, 60));
             return null;
           }
           
-          // Calculate relevance score with required keywords from Claude
-          const relevanceScore = calculateRelevance(
-            normalized.question || '',
-            query,
-            anchorTerms,
-            category || '',
-            keywords // Pass Claude's required keywords
-          );
+          // Apply keyword filter if Claude specified keywords
+          if (keywords.length > 0 && !matchesKeywords(normalized.question || '', keywords)) {
+            return null;
+          }
           
-          return {
-            ...normalized,
-            relevanceScore
-          };
+          return normalized;
         } catch (err) {
           console.error('[Irys Query] Failed to fetch market:', err);
           return null;
         }
       },
-      20 // Concurrency limit
+      20
     );
     
-    // Filter out nulls and disqualified markets
-    let validMarkets = candidateMarkets.filter((m: any) => m !== null && m.relevanceScore >= 0);
+    // Filter out nulls
+    let validMarkets = candidateMarkets.filter((m: any) => m !== null);
     
-    console.log('[Irys Query] Valid markets after relevance filtering:', validMarkets.length);
+    console.log('[Irys Query] Valid markets after filtering:', validMarkets.length);
     
-    // Apply minVolume filter if specified by Claude
+    // Apply minVolume filter if specified
     if (minVolume > 0) {
       const beforeCount = validMarkets.length;
       validMarkets = validMarkets.filter((m: any) => {
@@ -449,27 +281,19 @@ serve(async (req) => {
       console.log(`[Irys Query] Volume filter ($${minVolume}+): ${beforeCount} → ${validMarkets.length} markets`);
     }
     
-    // DEBUG: Count Trump markets
-    const trumpQuestionCount = validMarkets.filter((m: any) => /trump/i.test(m.question || '')).length;
-    console.log('[Irys Query] Markets containing "trump":', trumpQuestionCount);
-    
-    // Sort by relevance score (highest first), then by volume (higher volume = better data quality)
+    // SIMPLE: Sort by volume (higher volume = better quality data)
+    // Claude will do intelligent filtering based on user intent
     validMarkets.sort((a: any, b: any) => {
-      // First sort by relevance score
-      const scoreDiff = (b.relevanceScore || 0) - (a.relevanceScore || 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      
-      // Then by volume (higher volume = better data quality)
       const volA = parseFloat(a.volume || '0');
       const volB = parseFloat(b.volume || '0');
       return volB - volA;
     });
     
-    // Log top 5 scores for debugging
-    console.log('[Irys Query] Top 5 market scores:');
+    // Log top 5 for debugging
+    console.log('[Irys Query] Top 5 markets by volume:');
     validMarkets.slice(0, 5).forEach((m: any, i: number) => {
       const vol = parseFloat(m.volume || '0');
-      console.log(`  ${i + 1}. Score ${m.relevanceScore} | Vol $${Math.round(vol/1000)}k: "${m.question?.slice(0, 50)}..."`);
+      console.log(`  ${i + 1}. Vol $${Math.round(vol/1000)}k: "${m.question?.slice(0, 60)}..."`);
     });
     
     // Take top N
@@ -477,19 +301,18 @@ serve(async (req) => {
     
     console.log('[Irys Query] Returning top', topMarkets.length, 'markets');
     
-    // Calculate accuracy stats (only for markets with explicit outcomes)
-    let accuracyStats: any = null;
-    if (category === 'elections') {
-      const marketsWithPrediction = topMarkets.filter((m: any) => m.isCorrectPrediction !== null);
-      const correctCount = marketsWithPrediction.filter((m: any) => m.isCorrectPrediction).length;
-      const totalCount = marketsWithPrediction.length;
-      
-      accuracyStats = {
-        correct: correctCount,
-        total: totalCount,
-        percentage: totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0
-      };
-      
+    // Calculate accuracy stats for markets with explicit outcomes
+    const marketsWithPrediction = topMarkets.filter((m: any) => m.isCorrectPrediction !== null);
+    const correctCount = marketsWithPrediction.filter((m: any) => m.isCorrectPrediction).length;
+    const totalCount = marketsWithPrediction.length;
+    
+    const accuracyStats = totalCount > 0 ? {
+      correct: correctCount,
+      total: totalCount,
+      percentage: Math.round((correctCount / totalCount) * 100)
+    } : null;
+    
+    if (accuracyStats) {
       console.log('[Irys Query] Accuracy stats:', accuracyStats);
     }
     
@@ -500,7 +323,12 @@ serve(async (req) => {
       totalAvailable: validMarkets.length,
       inferredCategory: category,
       sampleTxId: topMarkets[0]?.txId,
-      accuracyStats
+      accuracyStats,
+      // Remind Claude to filter intelligently
+      note: 'RAW results sorted by volume. Filter based on user intent before presenting.',
+      filteringHint: keywords.length > 0 
+        ? `Filtered to markets containing: ${keywords.join(', ')}`
+        : 'No keyword filter applied - apply intelligent filtering based on user query'
     };
     
     // Add debug info if requested
@@ -508,14 +336,8 @@ serve(async (req) => {
       result.debug = {
         candidatesRetrieved: allEdges.length,
         validAfterFilter: validMarkets.length,
-        trumpMarketCount: trumpQuestionCount,
-        hasKnownTx,
-        anchorTerms,
-        topScores: topMarkets.slice(0, 5).map((m: any) => ({
-          question: m.question?.slice(0, 80),
-          score: m.relevanceScore,
-          txId: m.txId
-        }))
+        keywordsApplied: keywords,
+        minVolumeApplied: minVolume
       };
     }
     
