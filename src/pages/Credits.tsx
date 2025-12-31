@@ -519,21 +519,78 @@ const Credits = () => {
           transition={{ delay: 0.3 }}
           className="mb-8"
         >
-          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-            <Button 
-              onClick={() => setIsDepositOpen(true)}
-              className={cn(
-                "w-full h-16 text-lg font-semibold rounded-2xl gap-3",
-                "bg-gradient-to-r from-primary to-primary/80",
-                "hover:from-primary/90 hover:to-primary/70",
-                "text-primary-foreground shadow-2xl shadow-primary/20",
-                "transition-all duration-300 hover:shadow-primary/40"
+          <div className="relative">
+            <motion.div whileHover={connected ? { scale: 1.01 } : {}} whileTap={connected ? { scale: 0.99 } : {}}>
+              <Button 
+                onClick={() => connected && setIsDepositOpen(true)}
+                disabled={!connected}
+                className={cn(
+                  "w-full h-16 text-lg font-semibold rounded-2xl gap-3 relative",
+                  connected 
+                    ? "bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-2xl shadow-primary/20 transition-all duration-300 hover:shadow-primary/40"
+                    : "bg-muted/50 text-muted-foreground cursor-not-allowed border border-border/50"
+                )}
+              >
+                <Plus className="w-5 h-5" />
+                Deposit POLY
+              </Button>
+            </motion.div>
+            
+            {/* Connect Wallet Prompt */}
+            <AnimatePresence>
+              {!connected && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="mt-3"
+                >
+                  <motion.div 
+                    className={cn(
+                      "relative p-4 rounded-2xl overflow-hidden",
+                      "bg-card/80 backdrop-blur-xl border border-border/50",
+                      "shadow-lg"
+                    )}
+                  >
+                    {/* Subtle animated gradient */}
+                    <motion.div
+                      animate={{ 
+                        opacity: [0.3, 0.5, 0.3],
+                        scale: [1, 1.02, 1]
+                      }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 pointer-events-none"
+                    />
+                    
+                    <div className="relative flex items-center gap-3">
+                      {/* Pulsing icon */}
+                      <motion.div
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                        className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0"
+                      >
+                        <Wallet className="w-5 h-5 text-primary" />
+                      </motion.div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground text-sm sm:text-base">Connect wallet first</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground">Use the button in the top right corner</p>
+                      </div>
+                      
+                      {/* Arrow pointing to top right */}
+                      <motion.div
+                        animate={{ x: [0, 4, 0], y: [0, -4, 0] }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                        className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10"
+                      >
+                        <ArrowUpRight className="w-4 h-4 text-primary" />
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                </motion.div>
               )}
-            >
-              <Plus className="w-5 h-5" />
-              Deposit POLY
-            </Button>
-          </motion.div>
+            </AnimatePresence>
+          </div>
         </motion.div>
 
         {/* Activity Section */}
