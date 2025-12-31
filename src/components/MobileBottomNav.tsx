@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info, Zap, Trophy, Hammer, LogIn, LogOut, User } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Wallet, Menu, X, Activity, HelpCircle, FileText, Star, Info, Zap, Trophy, Hammer, LogIn, LogOut, User, LineChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreditsDisplay } from "@/components/CreditsDisplay";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +16,7 @@ const navItems = [
 
 const menuItems = [
   { id: "markets", label: "Browse Markets", icon: BarChart3, path: "/markets" },
+  { id: "kalshi", label: "Kalshi Markets", icon: LineChart, path: "/kalshi" },
   { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
   { id: "chat", label: "Chat (Home)", icon: MessageSquare, path: "/" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
