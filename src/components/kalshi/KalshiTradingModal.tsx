@@ -41,11 +41,13 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
   const estimatedShares = amount ? (parseFloat(amount) / price * 100).toFixed(2) : '0.00';
 
   // Get the token mint for the selected side
+  // Prefer the USDC-settled account entry when available (prevents route-plan mismatches).
   const getOutputMint = (): string | null => {
-    const accountKeys = Object.keys(market.accounts || {});
-    if (accountKeys.length === 0) return null;
-    
-    const account = market.accounts[accountKeys[0]];
+    const accounts = market.accounts || {};
+    const settlementKey = accounts[USDC_MINT] ? USDC_MINT : Object.keys(accounts)[0];
+    if (!settlementKey) return null;
+
+    const account = accounts[settlementKey];
     return side === 'YES' ? account?.yesMint : account?.noMint;
   };
 
