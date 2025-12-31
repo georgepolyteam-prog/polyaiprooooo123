@@ -34,6 +34,7 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
   const [executing, setExecuting] = useState(false);
+  const [orderStatus, setOrderStatus] = useState('');
   const [trades, setTrades] = useState<any[]>([]);
 
   const price = side === 'YES' ? market.yesPrice : market.noPrice;
@@ -58,6 +59,8 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
     }
     
     setExecuting(true);
+    setOrderStatus('Getting quote from DFlow...');
+    
     try {
       // Convert amount to lamports (USDC has 6 decimals)
       const amountInLamports = Math.floor(parseFloat(amount) * 1_000_000);
@@ -70,21 +73,33 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
         publicKey.toBase58()
       );
       
-      console.log('Order received:', orderResponse);
+      // Log transaction details for debugging
+      console.group('🔍 DFlow Order Details');
+      console.log('Execution Mode:', orderResponse.executionMode);
+      console.log('Input:', { mint: USDC_MINT, amount: amountInLamports });
+      console.log('Output:', { mint: outputMint, amount: orderResponse.outAmount });
+      console.log('Order Response:', orderResponse);
+      console.groupEnd();
       
       // Deserialize as VersionedTransaction (DFlow returns versioned transactions)
       const txBuffer = Buffer.from(orderResponse.transaction, 'base64');
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txBuffer));
       
+      setOrderStatus('Sign the transaction in your wallet...');
+      
       // Sign the transaction
       const signedTx = await signTransaction(transaction);
       
-      // Send the transaction
+      setOrderStatus('Submitting to Solana...');
+      // Send the transaction with retry options
       const signature = await connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
+        maxRetries: 3,
       });
       
+      console.log('Transaction sent:', signature);
+      setOrderStatus('Confirming transaction...');
       toast.loading('Confirming transaction...', { id: 'trade' });
       
       // Handle based on execution mode
@@ -116,11 +131,24 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
         toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
         onClose();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Trade failed:', error);
-      toast.error('Trade failed. Please try again.', { id: 'trade' });
+      
+      // Parse the actual error from DFlow
+      const errorMsg = error?.message || error?.toString() || 'Unknown error';
+      
+      if (errorMsg.includes('SkippedLeg')) {
+        toast.error('Trade routing failed. Try a smaller amount.', { id: 'trade' });
+      } else if (errorMsg.includes('InsufficientFunds') || errorMsg.includes('insufficient')) {
+        toast.error('Insufficient USDC balance.', { id: 'trade' });
+      } else if (errorMsg.includes('Slippage') || errorMsg.includes('slippage')) {
+        toast.error('Price moved too much. Please try again.', { id: 'trade' });
+      } else {
+        toast.error(`Trade failed: ${errorMsg.slice(0, 80)}`, { id: 'trade' });
+      }
     } finally {
       setExecuting(false);
+      setOrderStatus('');
     }
   };
 
@@ -137,6 +165,18 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Status Overlay */}
+          {executing && orderStatus && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="p-4 rounded-2xl bg-primary/10 border border-primary/30 flex items-center gap-3"
+            >
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              <span className="text-sm font-medium text-foreground">{orderStatus}</span>
+            </motion.div>
+          )}
+
           {/* Market Title */}
           <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
             <p className="text-foreground font-medium leading-relaxed">

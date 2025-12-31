@@ -16,7 +16,6 @@ const navItems = [
 
 const menuItems = [
   { id: "markets", label: "Browse Markets", icon: BarChart3, path: "/markets" },
-  { id: "kalshi", label: "Kalshi Markets", icon: LineChart, path: "/kalshi" },
   { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
   { id: "chat", label: "Chat (Home)", icon: MessageSquare, path: "/" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
