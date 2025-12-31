@@ -5,12 +5,14 @@ import type { KalshiMarket } from '@/hooks/useDflowApi';
 
 interface KalshiMarketCardProps {
   market: KalshiMarket;
+  eventTitle?: string;
   onClick: () => void;
   index?: number;
 }
 
-export function KalshiMarketCard({ market, onClick, index = 0 }: KalshiMarketCardProps) {
+export function KalshiMarketCard({ market, eventTitle, onClick, index = 0 }: KalshiMarketCardProps) {
   const yesLeading = market.yesPrice > market.noPrice;
+  const displayTitle = market.title || eventTitle || 'Market';
   
   return (
     <motion.div
@@ -27,17 +29,29 @@ export function KalshiMarketCard({ market, onClick, index = 0 }: KalshiMarketCar
         'hover:-translate-y-1'
       )}
     >
-      {/* Category Badge */}
-      {market.category && (
-        <span className="inline-block px-3 py-1 mb-4 text-xs font-medium rounded-full bg-primary/10 text-primary border border-primary/20">
-          {market.category}
+      {/* Status Badge */}
+      {market.status && (
+        <span className={cn(
+          "inline-block px-3 py-1 mb-4 text-xs font-medium rounded-full border",
+          market.status === 'active' 
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+            : 'bg-muted/50 text-muted-foreground border-border/50'
+        )}>
+          {market.status.charAt(0).toUpperCase() + market.status.slice(1)}
         </span>
       )}
 
-      {/* Question */}
-      <h3 className="text-lg font-semibold text-foreground mb-6 line-clamp-2 group-hover:text-primary transition-colors">
-        {market.question}
+      {/* Title */}
+      <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+        {displayTitle}
       </h3>
+      
+      {/* Subtitle if available */}
+      {market.subtitle && (
+        <p className="text-sm text-muted-foreground mb-4 line-clamp-1">
+          {market.subtitle}
+        </p>
+      )}
       
       {/* Price Display */}
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -98,12 +112,12 @@ export function KalshiMarketCard({ market, onClick, index = 0 }: KalshiMarketCar
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <Users className="w-4 h-4" />
-          <span>${market.volume.toLocaleString()}</span>
+          <span>${(market.volume || 0).toLocaleString()}</span>
         </div>
-        {market.endDate && (
+        {market.closeTime && (
           <div className="flex items-center gap-1.5">
             <Clock className="w-4 h-4" />
-            <span>{new Date(market.endDate).toLocaleDateString()}</span>
+            <span>{new Date(market.closeTime).toLocaleDateString()}</span>
           </div>
         )}
       </div>
