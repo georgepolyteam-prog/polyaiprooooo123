@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { Transaction } from '@solana/web3.js';
+import { VersionedTransaction } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, Share2 } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -72,23 +72,50 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       
       console.log('Order received:', orderResponse);
       
-      // Deserialize the transaction
+      // Deserialize as VersionedTransaction (DFlow returns versioned transactions)
       const txBuffer = Buffer.from(orderResponse.transaction, 'base64');
-      const transaction = Transaction.from(txBuffer);
+      const transaction = VersionedTransaction.deserialize(new Uint8Array(txBuffer));
       
       // Sign the transaction
       const signedTx = await signTransaction(transaction);
       
       // Send the transaction
-      const signature = await connection.sendRawTransaction(signedTx.serialize());
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
       
       toast.loading('Confirming transaction...', { id: 'trade' });
       
-      // Confirm the transaction
-      await connection.confirmTransaction(signature, 'confirmed');
-      
-      toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
-      onClose();
+      // Handle based on execution mode
+      if (orderResponse.executionMode === 'async') {
+        // Poll for async trade completion
+        let attempts = 0;
+        const maxAttempts = 30;
+        
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          try {
+            const status = await getOrderStatus(signature);
+            if (status?.status === 'confirmed' || status?.status === 'finalized') {
+              toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+              onClose();
+              return;
+            } else if (status?.status === 'failed') {
+              throw new Error('Transaction failed');
+            }
+          } catch (e) {
+            // Continue polling
+          }
+          attempts++;
+        }
+        toast.error('Trade confirmation timed out. Check your wallet.', { id: 'trade' });
+      } else {
+        // Sync mode - use standard confirmation
+        await connection.confirmTransaction(signature, 'confirmed');
+        toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+        onClose();
+      }
     } catch (error) {
       console.error('Trade failed:', error);
       toast.error('Trade failed. Please try again.', { id: 'trade' });
