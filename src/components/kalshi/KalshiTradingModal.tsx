@@ -29,39 +29,100 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 // Public Helius RPC for confirmation (avoids WebSocket issues with edge function)
 const HELIUS_PUBLIC_RPC = 'https://mainnet.helius-rpc.com/?api-key=15319bf4-5b40-4958-ac8d-6313aa55eb92';
 
-// HTTP-based confirmation polling (no WebSocket needed)
-async function confirmTransactionViaHttp(
+// Supabase edge function URL
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+// Quick confirmation for the open transaction (fast, 5 attempts max)
+async function confirmOpenTransaction(
   signature: string,
-  maxAttempts = 30,
-  intervalMs = 2000
+  maxAttempts = 5,
+  intervalMs = 1000
 ): Promise<{ confirmed: boolean; error?: string }> {
-  // Use public Helius endpoint directly for confirmation to avoid WebSocket
   const heliusConnection = new Connection(HELIUS_PUBLIC_RPC, 'confirmed');
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const statuses = await heliusConnection.getSignatureStatuses([signature]);
-      const status = statuses.value[0];
+      const { value: statuses } = await heliusConnection.getSignatureStatuses([signature]);
       
-      if (status) {
+      if (statuses && statuses[0]) {
+        const status = statuses[0];
+        
         if (status.err) {
-          const errStr = JSON.stringify(status.err);
-          return { confirmed: false, error: errStr };
+          return { confirmed: false, error: JSON.stringify(status.err) };
         }
         if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          console.log(`✅ Open transaction confirmed (attempt ${attempt + 1})`);
           return { confirmed: true };
         }
       }
-      
-      // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
     } catch (err) {
-      console.log(`Confirmation poll attempt ${attempt + 1} failed, retrying...`);
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      console.log(`Confirmation attempt ${attempt + 1} failed:`, err);
     }
+    
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
   
-  return { confirmed: false, error: 'Confirmation timeout - check Solscan' };
+  // For async orders, don't fail - the tx might still be pending
+  console.log('⏳ Open transaction still pending after quick check');
+  return { confirmed: false, error: undefined };
+}
+
+// For async orders: use DFlow's /order-status endpoint to check fills
+async function checkAsyncOrderStatus(
+  signature: string,
+  maxAttempts = 30,
+  pollInterval = 2000
+): Promise<{ filled: boolean; status?: string; fills?: any[]; error?: string }> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/dflow-api`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            action: 'getOrderStatus',
+            params: { signature },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        // 404 might mean order not found yet, keep polling
+        if (response.status === 404) {
+          console.log(`📊 Order status (attempt ${attempt}): not found yet`);
+        } else {
+          console.log(`📊 Order status check failed: ${response.status}`);
+        }
+      } else {
+        const data = await response.json();
+        console.log(`📊 Order status (attempt ${attempt}):`, data.status || data);
+
+        if (data.status === 'closed' || data.status === 'filled') {
+          console.log('✅ Order filled successfully!');
+          console.log('Fills:', data.fills);
+          return { filled: true, status: data.status, fills: data.fills };
+        }
+
+        if (data.status === 'failed' || data.status === 'expired') {
+          return { filled: false, status: data.status, error: `Order ${data.status}` };
+        }
+
+        // Status is 'pending', 'open', or similar - continue polling
+      }
+    } catch (error) {
+      console.log(`Order status check attempt ${attempt} failed:`, error);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+
+  // Timeout - but order might still fill
+  return { filled: false, error: 'Order fill timeout - check Solscan to verify' };
 }
 
 export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
@@ -232,32 +293,49 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       console.log('✅ Transaction submitted:', signature);
       console.log('View on Solscan:', `https://solscan.io/tx/${signature}`);
       
-      // Use HTTP-based polling for confirmation (avoids WebSocket issues)
-      setOrderStatus('Confirming on Solana...');
+      // Confirm open transaction (fast, 5 attempts)
+      setOrderStatus('Confirming transaction...');
       toast.loading('Transaction submitted! Confirming...', { id: 'trade' });
       
-      const confirmation = await confirmTransactionViaHttp(signature, 30, 2000);
+      const openConfirmation = await confirmOpenTransaction(signature, 5, 1000);
       
-      if (!confirmation.confirmed) {
-        if (confirmation.error) {
-          console.error('Transaction failed on-chain:', confirmation.error);
-          
-          if (confirmation.error.includes('15020') || confirmation.error.includes('SkippedLeg')) {
-            throw new Error('Trade failed: Route no longer valid. Market conditions changed.');
-          }
-          
-          // If it's a timeout, show info instead of error
-          if (confirmation.error.includes('timeout')) {
-            toast.info('Transaction submitted! Check Solscan to verify.', { id: 'trade' });
-            setOrderStatus('Transaction sent - verify on Solscan');
-            return; // Don't close modal, let user see Solscan link
-          }
-          
-          throw new Error(`Transaction failed: ${confirmation.error}`);
+      if (openConfirmation.error) {
+        // Hard failure during open tx
+        console.error('Open transaction failed:', openConfirmation.error);
+        if (openConfirmation.error.includes('15020') || openConfirmation.error.includes('SkippedLeg')) {
+          throw new Error('Trade failed: Route no longer valid. Market conditions changed.');
+        }
+        throw new Error(`Transaction failed: ${openConfirmation.error}`);
+      }
+      
+      // For async orders (prediction markets), use DFlow's order-status endpoint
+      const isAsyncOrder = orderResponse.executionMode === 'async';
+      
+      if (isAsyncOrder) {
+        setOrderStatus('Waiting for fill...');
+        console.log('📊 Async order detected, polling DFlow order-status...');
+        
+        const orderResult = await checkAsyncOrderStatus(signature, 30, 2000);
+        
+        if (orderResult.filled) {
+          toast.success(`Trade filled! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+          onClose();
+        } else if (orderResult.error) {
+          // Timeout but tx might still fill
+          toast.info('Order submitted! Fill may still be processing - check Solscan.', { id: 'trade' });
+          setOrderStatus('Order pending - check Solscan to verify');
+          // Don't close modal, let user see Solscan link
         }
       } else {
-        toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
-        onClose();
+        // Sync order - open tx confirmation is enough
+        if (openConfirmation.confirmed) {
+          toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+          onClose();
+        } else {
+          // Pending but no error - likely still processing
+          toast.info('Transaction submitted! Check Solscan to verify.', { id: 'trade' });
+          setOrderStatus('Transaction sent - verify on Solscan');
+        }
       }
       
     } catch (error: any) {
