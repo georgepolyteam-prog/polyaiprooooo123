@@ -74,78 +74,112 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       );
       
       // Log transaction details for debugging
-      console.group('🔍 DFlow Order Details');
+      console.log('🔍 DFlow Order Details');
       console.log('Execution Mode:', orderResponse.executionMode);
       console.log('Input:', { mint: USDC_MINT, amount: amountInLamports });
       console.log('Output:', { mint: outputMint, amount: orderResponse.outAmount });
-      console.log('Order Response:', orderResponse);
-      console.groupEnd();
+      console.log('View on Solscan after submit');
+      
+      setOrderStatus('Sign the transaction in your wallet...');
       
       // Deserialize as VersionedTransaction (DFlow returns versioned transactions)
       const txBuffer = Buffer.from(orderResponse.transaction, 'base64');
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txBuffer));
       
-      setOrderStatus('Sign the transaction in your wallet...');
-      
       // Sign the transaction
       const signedTx = await signTransaction(transaction);
       
       setOrderStatus('Submitting to Solana...');
-      // Send the transaction with retry options
-      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      
+      // CRITICAL: Send with proper options for DFlow async execution
+      const txSignature = await connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
-        maxRetries: 3,
+        maxRetries: 2,
       });
       
-      console.log('Transaction sent:', signature);
-      setOrderStatus('Confirming transaction...');
-      toast.loading('Confirming transaction...', { id: 'trade' });
+      console.log('✅ Transaction submitted:', txSignature);
+      console.log('View on Solscan:', `https://solscan.io/tx/${txSignature}`);
       
       // Handle based on execution mode
       if (orderResponse.executionMode === 'async') {
-        // Poll for async trade completion
-        let attempts = 0;
-        const maxAttempts = 30;
+        setOrderStatus('Processing... This may take 10-30 seconds');
+        toast.loading('Order submitted! Processing...', { id: 'trade' });
         
-        while (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          try {
-            const status = await getOrderStatus(signature);
-            if (status?.status === 'confirmed' || status?.status === 'finalized') {
-              toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
-              onClose();
-              return;
-            } else if (status?.status === 'failed') {
-              throw new Error('Transaction failed');
+        // For async orders, poll DFlow's order-status endpoint
+        let attempts = 0;
+        const maxAttempts = 30; // 30 seconds max
+        
+        const pollForStatus = async () => {
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            attempts++;
+            
+            try {
+              const status = await getOrderStatus(txSignature);
+              
+              if (status?.status === 'confirmed' || status?.status === 'finalized') {
+                toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+                onClose();
+                return true;
+              } else if (status?.status === 'failed') {
+                throw new Error(status.error || 'Transaction failed on-chain');
+              }
+              
+              setOrderStatus(`Processing... ${attempts}s elapsed`);
+            } catch (err: any) {
+              // If it's a real error (not just "not found"), throw it
+              if (err?.message?.includes('failed')) throw err;
+              // Otherwise keep polling
+              console.log(`Polling attempt ${attempts}...`);
             }
-          } catch (e) {
-            // Continue polling
           }
-          attempts++;
-        }
-        toast.error('Trade confirmation timed out. Check your wallet.', { id: 'trade' });
+          
+          // Timeout - check if it confirmed anyway
+          toast.info('Order submitted. Check your wallet for confirmation.', { id: 'trade' });
+          onClose();
+          return false;
+        };
+        
+        await pollForStatus();
+        
       } else {
-        // Sync mode - use standard confirmation
-        await connection.confirmTransaction(signature, 'confirmed');
+        // Sync execution - wait for confirmation directly
+        setOrderStatus('Confirming transaction...');
+        toast.loading('Confirming transaction...', { id: 'trade' });
+        
+        await connection.confirmTransaction(txSignature, 'confirmed');
         toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
         onClose();
       }
+      
     } catch (error: any) {
-      console.error('Trade failed:', error);
+      console.error('❌ Trade failed:', error);
       
-      // Parse the actual error from DFlow
-      const errorMsg = error?.message || error?.toString() || 'Unknown error';
+      let errorMessage = 'Trade failed';
+      const errorMsg = error?.message || error?.toString() || '';
       
+      // Parse error messages for user-friendly feedback
       if (errorMsg.includes('SkippedLeg')) {
-        toast.error('Trade routing failed. Try a smaller amount.', { id: 'trade' });
-      } else if (errorMsg.includes('InsufficientFunds') || errorMsg.includes('insufficient')) {
-        toast.error('Insufficient USDC balance.', { id: 'trade' });
+        errorMessage = 'Routing failed. The market may have low liquidity. Try a smaller amount.';
+      } else if (errorMsg.includes('insufficient') || errorMsg.includes('InsufficientFunds')) {
+        errorMessage = 'Insufficient USDC balance. Add USDC to your Solana wallet.';
+      } else if (errorMsg.includes('User rejected') || errorMsg.includes('rejected')) {
+        errorMessage = 'Transaction cancelled by user.';
       } else if (errorMsg.includes('Slippage') || errorMsg.includes('slippage')) {
-        toast.error('Price moved too much. Please try again.', { id: 'trade' });
-      } else {
-        toast.error(`Trade failed: ${errorMsg.slice(0, 80)}`, { id: 'trade' });
+        errorMessage = 'Price moved too much. Try again with higher slippage.';
+      } else if (error.logs) {
+        // Extract meaningful error from logs
+        const logs = error.logs.join('\n');
+        console.log('Transaction logs:', logs);
+        if (logs.includes('permanent delegate')) {
+          errorMessage = 'Token account initialization required. This is a one-time setup.';
+        }
+      } else if (errorMsg.length > 0 && errorMsg.length < 100) {
+        errorMessage = `Trade failed: ${errorMsg}`;
       }
+      
+      toast.error(errorMessage, { id: 'trade' });
     } finally {
       setExecuting(false);
       setOrderStatus('');
