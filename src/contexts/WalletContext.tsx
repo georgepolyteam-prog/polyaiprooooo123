@@ -23,7 +23,7 @@ const wagmiConfig = defaultWagmiConfig({
   chains,
   projectId,
   metadata,
-  enableCoinbase: true,
+  enableCoinbase: false,
   enableInjected: true,
   enableWalletConnect: true,
 });
