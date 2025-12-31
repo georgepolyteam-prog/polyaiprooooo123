@@ -6,7 +6,7 @@ import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion"
 import { 
   ArrowLeft, Zap, ExternalLink, Loader2, History, Plus, 
   TrendingUp, RefreshCw, ArrowUpRight, Wallet, LogOut, ChevronDown,
-  HelpCircle, Flame, CheckCircle2
+  HelpCircle, Flame, CheckCircle2, Copy, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCredits } from "@/hooks/useCredits";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 
 const CREDITS_PER_POLY = 1;
+const POLY_CA = "982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump";
 
 interface Deposit {
   id: string;
@@ -66,6 +67,13 @@ const Credits = () => {
   const [linking, setLinking] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyCA = () => {
+    navigator.clipboard.writeText(POLY_CA);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Animated counter for balance
   const springValue = useSpring(0, { stiffness: 50, damping: 30 });
@@ -381,6 +389,33 @@ const Credits = () => {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+          
+          {/* $POLY CA Button */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={copyCA}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-2xl h-12",
+              "bg-gradient-to-r from-blue-600/20 via-primary/20 to-blue-600/20",
+              "border border-blue-500/30 hover:border-blue-400/50",
+              "shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20",
+              "transition-all duration-300 cursor-pointer group"
+            )}
+            title="Click to copy POLY token CA"
+          >
+            <span className="text-sm font-bold bg-gradient-to-r from-blue-400 to-primary bg-clip-text text-transparent">$POLY</span>
+            <span className="text-xs text-muted-foreground font-mono">
+              {POLY_CA.slice(0, 4)}...{POLY_CA.slice(-4)}
+            </span>
+            {copied ? (
+              <Check className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Copy className="w-4 h-4 text-muted-foreground group-hover:text-blue-400 transition-colors" />
+            )}
+          </motion.button>
         </motion.div>
 
         {/* Main Balance Card */}
