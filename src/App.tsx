@@ -31,6 +31,7 @@ import Capabilities from "./pages/Capabilities";
 import Documentation from "./pages/Documentation";
 import Credits from "./pages/Credits";
 import Pandora from "./pages/Pandora";
+import Kalshi from "./pages/Kalshi";
 
 const AppContent = () => {
   const { isHighTraffic } = useUserPresence();
@@ -70,6 +71,8 @@ const AppContent = () => {
               <Route path="/docs" element={<Documentation />} />
               <Route path="/credits" element={<Credits />} />
               <Route path="/pandora" element={<Pandora />} />
+              <Route path="/kalshi" element={<Kalshi />} />
+              <Route path="/adminpanel" element={<AdminPanel />} />
               <Route path="/adminpanel" element={<AdminPanel />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

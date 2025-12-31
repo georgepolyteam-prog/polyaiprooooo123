@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.upload-to-irys]
 verify_jwt = false
+
+[functions.dflow-api]
+verify_jwt = false
