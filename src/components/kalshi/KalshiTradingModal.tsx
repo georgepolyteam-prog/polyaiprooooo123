@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction, Connection } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -25,6 +25,44 @@ interface KalshiTradingModalProps {
 
 // USDC mint on Solana mainnet
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+// Public Helius RPC for confirmation (avoids WebSocket issues with edge function)
+const HELIUS_PUBLIC_RPC = 'https://mainnet.helius-rpc.com/?api-key=15319bf4-5b40-4958-ac8d-6313aa55eb92';
+
+// HTTP-based confirmation polling (no WebSocket needed)
+async function confirmTransactionViaHttp(
+  signature: string,
+  maxAttempts = 30,
+  intervalMs = 2000
+): Promise<{ confirmed: boolean; error?: string }> {
+  // Use public Helius endpoint directly for confirmation to avoid WebSocket
+  const heliusConnection = new Connection(HELIUS_PUBLIC_RPC, 'confirmed');
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const statuses = await heliusConnection.getSignatureStatuses([signature]);
+      const status = statuses.value[0];
+      
+      if (status) {
+        if (status.err) {
+          const errStr = JSON.stringify(status.err);
+          return { confirmed: false, error: errStr };
+        }
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          return { confirmed: true };
+        }
+      }
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    } catch (err) {
+      console.log(`Confirmation poll attempt ${attempt + 1} failed, retrying...`);
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  }
+  
+  return { confirmed: false, error: 'Confirmation timeout - check Solscan' };
+}
 
 export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
@@ -136,9 +174,6 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       
       setOrderStatus('Submitting to Solana...');
       
-      // Get latest blockhash for confirmation
-      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
-      
       // Send with proper options
       const signature = await connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: false,
@@ -150,39 +185,32 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       console.log('✅ Transaction submitted:', signature);
       console.log('View on Solscan:', `https://solscan.io/tx/${signature}`);
       
-      // Use Solana RPC confirmation (more reliable than DFlow order-status)
+      // Use HTTP-based polling for confirmation (avoids WebSocket issues)
       setOrderStatus('Confirming on Solana...');
       toast.loading('Transaction submitted! Confirming...', { id: 'trade' });
       
-      try {
-        const confirmation = await connection.confirmTransaction({
-          signature,
-          blockhash: latestBlockhash.blockhash,
-          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-        }, 'confirmed');
-        
-        if (confirmation.value.err) {
-          const errStr = JSON.stringify(confirmation.value.err);
-          console.error('Transaction failed on-chain:', errStr);
+      const confirmation = await confirmTransactionViaHttp(signature, 30, 2000);
+      
+      if (!confirmation.confirmed) {
+        if (confirmation.error) {
+          console.error('Transaction failed on-chain:', confirmation.error);
           
-          if (errStr.includes('15020') || errStr.includes('SkippedLeg')) {
+          if (confirmation.error.includes('15020') || confirmation.error.includes('SkippedLeg')) {
             throw new Error('Trade failed: Route no longer valid. Market conditions changed.');
           }
-          throw new Error(`Transaction failed: ${errStr}`);
+          
+          // If it's a timeout, show info instead of error
+          if (confirmation.error.includes('timeout')) {
+            toast.info('Transaction submitted! Check Solscan to verify.', { id: 'trade' });
+            setOrderStatus('Transaction sent - verify on Solscan');
+            return; // Don't close modal, let user see Solscan link
+          }
+          
+          throw new Error(`Transaction failed: ${confirmation.error}`);
         }
-        
+      } else {
         toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
         onClose();
-        
-      } catch (confirmErr: any) {
-        // If RPC confirmation times out, still show success since tx was sent
-        if (confirmErr.message?.includes('was not confirmed') || confirmErr.message?.includes('timeout')) {
-          toast.info('Transaction submitted! Check Solscan to verify.', { id: 'trade' });
-          // Keep modal open to show Solscan link
-          setOrderStatus('Transaction sent - verify on Solscan');
-        } else {
-          throw confirmErr;
-        }
       }
       
     } catch (error: any) {
