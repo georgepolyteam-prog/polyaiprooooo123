@@ -26,7 +26,10 @@ import {
   Lightbulb,
   ArrowUp,
   Menu,
-  X
+  X,
+  Flame,
+  Wrench,
+  ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -192,6 +195,84 @@ const Documentation = () => {
             />
           </div>
         </div>
+
+        {/* $POLY Token Hero Banner */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+          className="mb-12"
+        >
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-background to-secondary/10 border border-primary/20 p-6 md:p-10">
+            {/* Animated background orb */}
+            <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-secondary/10 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1s' }} />
+            
+            {/* Content Grid */}
+            <div className="relative grid md:grid-cols-2 gap-8 items-center">
+              {/* Left Side - Token Introduction */}
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 mb-4">
+                  <Coins className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-semibold text-primary uppercase tracking-wider">Powered by $POLY</span>
+                </div>
+                <h3 className="text-2xl md:text-3xl font-bold text-foreground mb-4">
+                  The $POLY token powers everything on this platform
+                </h3>
+                <p className="text-muted-foreground mb-6 leading-relaxed">
+                  Every AI analysis, market insight, and trading feature runs on $POLY credits. 
+                  <span className="text-foreground font-medium"> 1 POLY = 1 Credit.</span> Simple, transparent, deflationary.
+                </p>
+                <Link 
+                  to="/about" 
+                  className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium transition-colors group"
+                >
+                  Learn more about $POLY
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+              
+              {/* Right Side - Tokenomics Split Cards */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* 70% Burned Card */}
+                <div className="relative p-5 md:p-6 rounded-2xl bg-background/80 backdrop-blur border border-destructive/20 text-center overflow-hidden group hover:border-destructive/40 transition-all hover:scale-[1.02]">
+                  <div className="absolute inset-0 bg-gradient-to-b from-destructive/10 to-transparent opacity-50" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-destructive/5 to-transparent" />
+                  <Flame className="w-7 h-7 text-destructive mx-auto mb-3 relative z-10 group-hover:scale-110 transition-transform" />
+                  <div className="text-3xl md:text-4xl font-bold text-foreground mb-1 relative z-10">70%</div>
+                  <p className="text-sm text-muted-foreground relative z-10 font-medium">Burned Forever</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1 relative z-10">Deflationary mechanism</p>
+                </div>
+                
+                {/* 30% Development Card */}
+                <div className="relative p-5 md:p-6 rounded-2xl bg-background/80 backdrop-blur border border-primary/20 text-center overflow-hidden group hover:border-primary/40 transition-all hover:scale-[1.02]">
+                  <div className="absolute inset-0 bg-gradient-to-b from-primary/10 to-transparent opacity-50" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/5 to-transparent" />
+                  <Wrench className="w-7 h-7 text-primary mx-auto mb-3 relative z-10 group-hover:scale-110 transition-transform" />
+                  <div className="text-3xl md:text-4xl font-bold text-foreground mb-1 relative z-10">30%</div>
+                  <p className="text-sm text-muted-foreground relative z-10 font-medium">Development</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1 relative z-10">Platform improvements</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Info bar at bottom */}
+            <div className="relative mt-8 pt-6 border-t border-border/30 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-destructive" />
+                <span>Deflationary tokenomics</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-primary" />
+                <span className="font-medium text-foreground">1 POLY = 1 Credit</span>
+              </span>
+              <span className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-primary" />
+                <span>No hidden fees</span>
+              </span>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Mobile Nav Toggle */}
         <div className="lg:hidden mb-6">
@@ -701,59 +782,95 @@ const Documentation = () => {
                 $POLY Token
               </h2>
 
+              {/* Token Overview Card */}
+              <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-primary/5 via-background to-secondary/5 border border-primary/20">
+                <p className="text-muted-foreground leading-relaxed">
+                  $POLY is the payment token for accessing Poly platform features. Users deposit $POLY to their account and spend it to use AI chat, trading tools, and market data. The token features deflationary tokenomics where <span className="text-foreground font-medium">70% of spent tokens are permanently burned</span>.
+                </p>
+                <Link 
+                  to="/about" 
+                  className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-medium transition-colors mt-4 group"
+                >
+                  View full token details
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+
               <div id="token-utility" className="mb-8">
                 <h3 className="text-xl font-semibold mb-4">Token Utility</h3>
                 <div className="bg-muted/30 rounded-xl border border-border/50 p-6">
                   <p className="text-muted-foreground mb-4">
-                    $POLY is the native token of the Poly platform with the following utilities:
+                    $POLY is the native token of the Poly platform. It powers:
                   </p>
                   <ul className="space-y-2 text-muted-foreground">
                     <li className="flex gap-2">
                       <ChevronRight className="w-4 h-4 text-primary flex-shrink-0 mt-1" />
-                      <span>Payment for premium AI features and analysis</span>
+                      <span><strong className="text-foreground">AI Chat & Analysis</strong> - Every AI-powered market analysis costs 1 credit</span>
                     </li>
                     <li className="flex gap-2">
                       <ChevronRight className="w-4 h-4 text-primary flex-shrink-0 mt-1" />
-                      <span>Access to advanced trading tools and signals</span>
+                      <span><strong className="text-foreground">Trading Tools</strong> - Access to orderbook, limit orders, and position tracking</span>
                     </li>
                     <li className="flex gap-2">
                       <ChevronRight className="w-4 h-4 text-primary flex-shrink-0 mt-1" />
-                      <span>Priority support and feature access</span>
+                      <span><strong className="text-foreground">Premium Features</strong> - Whale tracking, wallet analytics, and advanced data</span>
                     </li>
                   </ul>
                 </div>
               </div>
 
               <div id="payment-system" className="mb-8">
-                <h3 className="text-xl font-semibold mb-4">Payment System</h3>
-                <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl border border-primary/30 p-6">
-                  <p className="text-muted-foreground mb-4">
-                    The $POLY payment integration launches <strong>January 6, 2026 at 00:00 UTC</strong>. Until then, all platform features are free during the beta period.
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    After launch, users will deposit $POLY tokens to their account and spend them to access features. No subscription required - pay only for what you use.
-                  </p>
+                <h3 className="text-xl font-semibold mb-4">Credits System</h3>
+                <div className="bg-muted/30 rounded-xl border border-border/50 p-6">
+                  <div className="grid md:grid-cols-3 gap-4 mb-6">
+                    {[
+                      { step: "01", title: "Acquire", desc: "Buy POLY on Jupiter, Pump.fun, or OKX Wallet" },
+                      { step: "02", title: "Deposit", desc: "Connect your Solana wallet and deposit tokens" },
+                      { step: "03", title: "Analyze", desc: "Use credits for AI-powered market insights" },
+                    ].map((item, i) => (
+                      <div key={i} className="p-4 rounded-xl bg-background/50 border border-border/30">
+                        <span className="text-xs font-mono text-primary">{item.step}</span>
+                        <h4 className="font-semibold text-foreground mt-1 mb-2">{item.title}</h4>
+                        <p className="text-sm text-muted-foreground">{item.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                    <Target className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">1 POLY = 1 Credit</span>
+                    <span className="text-sm text-muted-foreground">• No subscription required</span>
+                  </div>
                 </div>
               </div>
 
               <div id="tokenomics" className="mb-8">
                 <h3 className="text-xl font-semibold mb-4">Tokenomics</h3>
                 <div className="bg-muted/30 rounded-xl border border-border/50 p-6">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/30">
-                      <p className="text-4xl font-bold text-red-400 mb-2">70%</p>
-                      <p className="text-sm text-muted-foreground">Permanently Burned</p>
-                      <p className="text-xs text-muted-foreground mt-1">Deflationary mechanism</p>
+                  <p className="text-muted-foreground mb-6">
+                    When users spend $POLY on the platform, tokens are split between burn and development:
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    <div className="relative text-center p-6 bg-background/50 rounded-2xl border border-destructive/30 overflow-hidden group hover:border-destructive/50 transition-colors">
+                      <div className="absolute inset-0 bg-gradient-to-b from-destructive/10 to-transparent opacity-50" />
+                      <Flame className="w-8 h-8 text-destructive mx-auto mb-3 relative z-10" />
+                      <p className="text-4xl font-bold text-foreground mb-2 relative z-10">70%</p>
+                      <p className="text-sm font-medium text-foreground relative z-10">Permanently Burned</p>
+                      <p className="text-xs text-muted-foreground mt-1 relative z-10">Removed from circulation forever, creating deflationary pressure</p>
                     </div>
-                    <div className="text-center p-4 bg-primary/10 rounded-lg border border-primary/30">
-                      <p className="text-4xl font-bold text-primary mb-2">30%</p>
-                      <p className="text-sm text-muted-foreground">Development Fund</p>
-                      <p className="text-xs text-muted-foreground mt-1">Platform improvements</p>
+                    <div className="relative text-center p-6 bg-background/50 rounded-2xl border border-primary/30 overflow-hidden group hover:border-primary/50 transition-colors">
+                      <div className="absolute inset-0 bg-gradient-to-b from-primary/10 to-transparent opacity-50" />
+                      <Wrench className="w-8 h-8 text-primary mx-auto mb-3 relative z-10" />
+                      <p className="text-4xl font-bold text-foreground mb-2 relative z-10">30%</p>
+                      <p className="text-sm font-medium text-foreground relative z-10">Development Fund</p>
+                      <p className="text-xs text-muted-foreground mt-1 relative z-10">Platform improvements, infrastructure, and operational expenses</p>
                     </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-4 text-center">
-                    Contract Address: <code className="bg-muted px-2 py-0.5 rounded text-xs">982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump</code>
-                  </p>
+                  <div className="p-4 rounded-xl bg-muted/50 border border-border/30">
+                    <p className="text-sm text-muted-foreground text-center">
+                      <span className="text-foreground font-medium">Contract Address:</span>{' '}
+                      <code className="bg-background px-2 py-1 rounded text-xs font-mono">982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump</code>
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>
