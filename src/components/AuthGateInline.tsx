@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
-import { Mail, Wallet, ArrowRight, Coins } from "lucide-react";
+import { Mail, Wallet, ArrowRight, Coins, Zap, Sparkles } from "lucide-react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface AuthGateInlineProps {
   variant?: 'compact' | 'full';
@@ -20,72 +22,102 @@ export const AuthGateInline = ({ variant = 'full' }: AuthGateInlineProps) => {
     );
   }
 
-  // Full variant for desktop
+  // Full variant - sleek centered design
   return (
-    <div className="w-full max-w-md mx-auto">
-      {/* Clean white card */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-        {/* Header */}
-        <div className="text-center mb-5">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Sign in to chat
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">
-            Email required to access AI-powered analysis
-          </p>
-        </div>
+    <div className="flex items-center justify-center px-4 py-6">
+      <motion.div 
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="w-full max-w-sm"
+      >
+        {/* Main Card */}
+        <div className={cn(
+          "relative overflow-hidden rounded-2xl",
+          "bg-card/80 backdrop-blur-2xl",
+          "border border-border/50",
+          "shadow-2xl shadow-primary/5"
+        )}>
+          {/* Animated gradient orb */}
+          <div className="absolute -top-16 -right-16 w-32 h-32 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-secondary/20 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="relative p-5 sm:p-6">
+            {/* Header - Compact */}
+            <div className="text-center mb-4">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.1, type: "spring", stiffness: 200 }}
+                className="w-10 h-10 mx-auto mb-3 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/20"
+              >
+                <Sparkles className="w-5 h-5 text-primary" />
+              </motion.div>
+              <h3 className="text-base sm:text-lg font-semibold text-foreground">
+                Sign in to chat
+              </h3>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                Email required for AI analysis
+              </p>
+            </div>
 
-        {/* Email Sign In Button */}
-        <Link 
-          to="/auth?step=email"
-          className="flex items-center justify-center gap-2 w-full h-12 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
-        >
-          <Mail className="w-4 h-4" />
-          <span>Continue with Email</span>
-          <ArrowRight className="w-4 h-4 ml-1" />
-        </Link>
+            {/* Email Sign In Button */}
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Link 
+                to="/auth?step=email"
+                className={cn(
+                  "flex items-center justify-center gap-2 w-full h-11 px-4 rounded-xl",
+                  "bg-gradient-to-r from-primary to-primary/80",
+                  "hover:from-primary/90 hover:to-primary/70",
+                  "text-primary-foreground font-medium text-sm",
+                  "shadow-lg shadow-primary/25",
+                  "transition-all duration-200"
+                )}
+              >
+                <Mail className="w-4 h-4" />
+                <span>Continue with Email</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </motion.div>
 
-        {/* Why email explanation */}
-        <div className="mt-5 pt-5 border-t border-gray-100 dark:border-gray-700">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide">
-            How it works
-          </p>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Mail className="w-3 h-3 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Email to Chat</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Required for AI analysis & credits</p>
+            {/* How it works - Horizontal on desktop, stacked on mobile */}
+            <div className="mt-4 pt-4 border-t border-border/30">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { icon: Mail, label: "Email", desc: "Chat & Credits", color: "text-primary", bg: "bg-primary/10" },
+                  { icon: Coins, label: "Phantom", desc: "Deposit POLY", color: "text-purple-400", bg: "bg-purple-500/10" },
+                  { icon: Wallet, label: "Polygon", desc: "Trade", color: "text-emerald-400", bg: "bg-emerald-500/10" },
+                ].map((item, i) => (
+                  <motion.div
+                    key={item.label}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.1 }}
+                    className="text-center p-2 rounded-xl bg-muted/30 border border-border/20"
+                  >
+                    <div className={cn("w-7 h-7 mx-auto mb-1.5 rounded-lg flex items-center justify-center", item.bg)}>
+                      <item.icon className={cn("w-3.5 h-3.5", item.color)} />
+                    </div>
+                    <p className="text-[10px] sm:text-xs font-medium text-foreground">{item.label}</p>
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-tight">{item.desc}</p>
+                  </motion.div>
+                ))}
               </div>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Coins className="w-3 h-3 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Phantom for Deposits</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Send POLY tokens to add credits</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Wallet className="w-3 h-3 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Polygon Wallet to Trade</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Connect any wallet on Polygon</p>
-              </div>
+
+            {/* Subtle footer */}
+            <div className="flex items-center justify-center gap-1.5 mt-3">
+              <Zap className="w-3 h-3 text-primary/60" />
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                Powered by <span className="font-medium text-primary/80">$POLY</span>
+              </p>
             </div>
           </div>
         </div>
-
-        {/* Subtle footer */}
-        <p className="text-gray-400 text-xs mt-4 text-center">
-          Powered by POLY tokens
-        </p>
-      </div>
+      </motion.div>
     </div>
   );
 };
