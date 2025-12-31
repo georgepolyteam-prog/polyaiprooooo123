@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
-import { TrendingUp, Zap, Shield, ArrowRight, Wallet, RefreshCw, Search } from 'lucide-react';
+import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useDflowApi, type KalshiMarket } from '@/hooks/useDflowApi';
+import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
 import { KalshiTradingModal } from '@/components/kalshi/KalshiTradingModal';
 import { KalshiFeatureCard } from '@/components/kalshi/KalshiFeatureCard';
@@ -16,64 +16,76 @@ import { toast } from 'sonner';
 // Demo markets for when API is unavailable
 const DEMO_MARKETS: KalshiMarket[] = [
   {
-    id: 'demo-1',
-    question: 'Will Bitcoin exceed $100,000 by end of 2025?',
-    category: 'Crypto',
+    ticker: 'BTCUSD-25DEC31',
+    title: 'Will Bitcoin exceed $100,000 by end of 2025?',
+    subtitle: 'BTC Price Prediction',
+    status: 'active',
     yesPrice: 67,
     noPrice: 33,
     volume: 1250000,
-    endDate: '2025-12-31',
+    closeTime: '2025-12-31T00:00:00Z',
+    accounts: {},
   },
   {
-    id: 'demo-2',
-    question: 'Will the Fed cut rates in January 2025?',
-    category: 'Economics',
+    ticker: 'FEDRATE-25JAN',
+    title: 'Will the Fed cut rates in January 2025?',
+    subtitle: 'Federal Reserve Policy',
+    status: 'active',
     yesPrice: 23,
     noPrice: 77,
     volume: 890000,
-    endDate: '2025-01-31',
+    closeTime: '2025-01-31T00:00:00Z',
+    accounts: {},
   },
   {
-    id: 'demo-3',
-    question: 'Will SpaceX Starship reach orbit in Q1 2025?',
-    category: 'Technology',
+    ticker: 'STARSHIP-25Q1',
+    title: 'Will SpaceX Starship reach orbit in Q1 2025?',
+    subtitle: 'Space Technology',
+    status: 'active',
     yesPrice: 82,
     noPrice: 18,
     volume: 567000,
-    endDate: '2025-03-31',
+    closeTime: '2025-03-31T00:00:00Z',
+    accounts: {},
   },
   {
-    id: 'demo-4',
-    question: 'Will there be a TikTok ban in the US by March 2025?',
-    category: 'Politics',
+    ticker: 'TIKTOK-25MAR',
+    title: 'Will there be a TikTok ban in the US by March 2025?',
+    subtitle: 'Tech Policy',
+    status: 'active',
     yesPrice: 45,
     noPrice: 55,
     volume: 2100000,
-    endDate: '2025-03-31',
+    closeTime: '2025-03-31T00:00:00Z',
+    accounts: {},
   },
   {
-    id: 'demo-5',
-    question: 'Will the S&P 500 close above 6,000 in January?',
-    category: 'Markets',
+    ticker: 'SPX-25JAN6K',
+    title: 'Will the S&P 500 close above 6,000 in January?',
+    subtitle: 'Stock Market',
+    status: 'active',
     yesPrice: 58,
     noPrice: 42,
     volume: 1780000,
-    endDate: '2025-01-31',
+    closeTime: '2025-01-31T00:00:00Z',
+    accounts: {},
   },
   {
-    id: 'demo-6',
-    question: 'Will OpenAI release GPT-5 in Q1 2025?',
-    category: 'AI',
+    ticker: 'GPT5-25Q1',
+    title: 'Will OpenAI release GPT-5 in Q1 2025?',
+    subtitle: 'AI & Technology',
+    status: 'active',
     yesPrice: 31,
     noPrice: 69,
     volume: 920000,
-    endDate: '2025-03-31',
+    closeTime: '2025-03-31T00:00:00Z',
+    accounts: {},
   },
 ];
 
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
-  const { discoverMarkets, loading, error } = useDflowApi();
+  const { getEvents, getMarkets, loading, error } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,8 +98,30 @@ export default function Kalshi() {
   const fetchMarkets = async () => {
     setIsLoading(true);
     try {
-      const data = await discoverMarkets();
-      setMarkets(data.length > 0 ? data : DEMO_MARKETS);
+      // Try to get events with nested markets first
+      const events = await getEvents('active');
+      
+      // Flatten events into markets
+      const allMarkets: KalshiMarket[] = [];
+      events.forEach((event: KalshiEvent) => {
+        if (event.markets && event.markets.length > 0) {
+          event.markets.forEach(market => {
+            // Add event info to market if title is missing
+            if (!market.title && event.title) {
+              market.title = event.title;
+            }
+            allMarkets.push(market);
+          });
+        }
+      });
+      
+      if (allMarkets.length > 0) {
+        setMarkets(allMarkets);
+      } else {
+        // Fallback to direct markets endpoint
+        const directMarkets = await getMarkets();
+        setMarkets(directMarkets.length > 0 ? directMarkets : DEMO_MARKETS);
+      }
     } catch (err) {
       console.error('Failed to fetch markets:', err);
       // Use demo markets as fallback
@@ -99,8 +133,9 @@ export default function Kalshi() {
   };
 
   const filteredMarkets = markets.filter(market =>
-    market.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    market.category?.toLowerCase().includes(searchQuery.toLowerCase())
+    (market.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (market.subtitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (market.ticker || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -245,7 +280,7 @@ export default function Kalshi() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredMarkets.map((market, index) => (
               <KalshiMarketCard
-                key={market.id}
+                key={market.ticker}
                 market={market}
                 onClick={() => setSelectedMarket(market)}
                 index={index}

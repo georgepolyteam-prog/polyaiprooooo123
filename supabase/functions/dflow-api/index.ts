@@ -6,7 +6,8 @@ const corsHeaders = {
 };
 
 const DFLOW_API_KEY = Deno.env.get('DFLOW_API_KEY')!;
-const DFLOW_PREDICTION_API = 'https://c.prediction-markets-api.dflow.net';
+// Production endpoints (use c. prefix for production, dev- prefix for development)
+const DFLOW_METADATA_API = 'https://c.prediction-markets-api.dflow.net';
 const DFLOW_QUOTE_API = 'https://c.quote-api.dflow.net';
 
 serve(async (req) => {
@@ -20,49 +21,76 @@ serve(async (req) => {
     
     console.log(`DFlow API action: ${action}`, params);
     
-    let endpoint = '';
+    let url = '';
     let method = 'GET';
     let body = null;
-    let baseUrl = DFLOW_PREDICTION_API;
     
     switch (action) {
-      case 'discoverMarkets':
-        endpoint = '/markets';
+      // Prediction Market Metadata API endpoints
+      case 'getEvents':
+        // Get events with nested markets - main discovery endpoint
+        const status = params?.status || 'active';
+        const limit = params?.limit || 100;
+        url = `${DFLOW_METADATA_API}/api/v1/events?withNestedMarkets=true&status=${status}&limit=${limit}`;
         break;
       
-      case 'getMarketDetails':
-        endpoint = `/markets/${params.marketId}`;
+      case 'getMarkets':
+        // Get all markets
+        url = `${DFLOW_METADATA_API}/api/v1/markets`;
         break;
       
-      case 'getUserPositions':
-        endpoint = `/positions/${params.walletAddress}`;
+      case 'getMarketByTicker':
+        // Get single market by ticker
+        url = `${DFLOW_METADATA_API}/api/v1/markets/${params.ticker}`;
         break;
       
+      case 'getOrderbook':
+        // Get orderbook for a market
+        url = `${DFLOW_METADATA_API}/api/v1/orderbook/${params.ticker}`;
+        break;
+      
+      case 'getTrades':
+        // Get trades for a market
+        const tradesLimit = params?.limit || 50;
+        url = `${DFLOW_METADATA_API}/api/v1/trades/${params.ticker}?limit=${tradesLimit}`;
+        break;
+      
+      case 'getSeries':
+        // Get all series (market groups)
+        url = `${DFLOW_METADATA_API}/api/v1/series`;
+        break;
+      
+      case 'getTagsByCategories':
+        // Get tags organized by categories
+        url = `${DFLOW_METADATA_API}/api/v1/tags/categories`;
+        break;
+      
+      // Quote API endpoints (for trading)
       case 'getQuote':
-        baseUrl = DFLOW_QUOTE_API;
-        endpoint = '/quote';
+        url = `${DFLOW_QUOTE_API}/quote`;
         method = 'POST';
-        body = JSON.stringify(params);
+        body = JSON.stringify({
+          inputMint: params.inputMint,
+          outputMint: params.outputMint,
+          amount: params.amount,
+          slippageBps: params.slippageBps || 50,
+          userPublicKey: params.userWallet,
+        });
         break;
       
-      case 'executeSwap':
-        baseUrl = DFLOW_QUOTE_API;
-        endpoint = '/swap';
+      case 'getSwapTransaction':
+        url = `${DFLOW_QUOTE_API}/swap`;
         method = 'POST';
-        body = JSON.stringify(params);
-        break;
-      
-      case 'settlePosition':
-        endpoint = '/settle';
-        method = 'POST';
-        body = JSON.stringify(params);
+        body = JSON.stringify({
+          quoteResponse: params.quoteResponse,
+          userPublicKey: params.userWallet,
+        });
         break;
       
       default:
         throw new Error(`Unknown action: ${action}`);
     }
     
-    const url = `${baseUrl}${endpoint}`;
     console.log(`Fetching: ${method} ${url}`);
     
     const response = await fetch(url, {
@@ -77,11 +105,11 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`DFlow API error: ${response.status} ${errorText}`);
-      throw new Error(`DFlow API error: ${response.status}`);
+      throw new Error(`DFlow API error: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
-    console.log(`DFlow API response:`, data);
+    console.log(`DFlow API success, response keys:`, Object.keys(data));
     
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,24 +1,51 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+// Market account info containing token mints
+export interface MarketAccounts {
+  yesMint: string;
+  noMint: string;
+  yesReserve?: string;
+  noReserve?: string;
+}
+
+// Individual market within an event
 export interface KalshiMarket {
-  id: string;
-  question: string;
-  category?: string;
-  yesPrice: number;
-  noPrice: number;
+  ticker: string;
+  title: string;
+  subtitle?: string;
+  status: string;
+  yesPrice: number; // in cents (0-100)
+  noPrice: number;  // in cents (0-100)
   volume: number;
-  endDate?: string;
-  imageUrl?: string;
-  description?: string;
+  openInterest?: number;
+  closeTime?: string;
+  expirationTime?: string;
+  result?: string;
+  accounts: Record<string, MarketAccounts>;
+  yesBid?: number;
+  yesAsk?: number;
+  noBid?: number;
+  noAsk?: number;
+}
+
+// Event containing markets
+export interface KalshiEvent {
+  ticker: string;
+  title: string;
+  subtitle?: string;
+  category?: string;
+  seriesTicker?: string;
+  markets: KalshiMarket[];
 }
 
 export interface Quote {
-  price: number;
-  shares: number;
-  fee: number;
-  total: number;
-  transaction?: string;
+  inputMint: string;
+  outputMint: string;
+  inAmount: string;
+  outAmount: string;
+  priceImpactPct: number;
+  slippageBps: number;
 }
 
 export function useDflowApi() {
@@ -47,88 +74,127 @@ export function useDflowApi() {
     }
   }, []);
 
-  const discoverMarkets = useCallback(async (): Promise<KalshiMarket[]> => {
-    const data = await callDflowApi('discoverMarkets');
+  // Get events with nested markets - main discovery endpoint
+  const getEvents = useCallback(async (status: 'active' | 'closed' | 'settled' = 'active'): Promise<KalshiEvent[]> => {
+    const data = await callDflowApi('getEvents', { status, limit: 100 });
+    
     // Transform API response to our format
-    return (data.markets || data || []).map((m: any) => ({
-      id: m.id || m.marketId,
-      question: m.question || m.title || m.name,
-      category: m.category,
-      yesPrice: Math.round((m.yesPrice || m.yes_price || 0.5) * 100),
-      noPrice: Math.round((m.noPrice || m.no_price || 0.5) * 100),
-      volume: m.volume || m.totalVolume || 0,
-      endDate: m.endDate || m.end_date,
-      imageUrl: m.imageUrl || m.image_url,
-      description: m.description,
+    return (data.events || []).map((event: any) => ({
+      ticker: event.ticker,
+      title: event.title,
+      subtitle: event.subtitle,
+      category: event.category || event.seriesTicker,
+      seriesTicker: event.seriesTicker,
+      markets: (event.markets || []).map((market: any) => transformMarket(market)),
     }));
   }, [callDflowApi]);
 
-  const getMarketDetails = useCallback(async (marketId: string): Promise<KalshiMarket | null> => {
-    const data = await callDflowApi('getMarketDetails', { marketId });
+  // Get all markets directly
+  const getMarkets = useCallback(async (): Promise<KalshiMarket[]> => {
+    const data = await callDflowApi('getMarkets');
+    return (data.markets || []).map((market: any) => transformMarket(market));
+  }, [callDflowApi]);
+
+  // Get single market by ticker
+  const getMarketByTicker = useCallback(async (ticker: string): Promise<KalshiMarket | null> => {
+    const data = await callDflowApi('getMarketByTicker', { ticker });
     if (!data) return null;
-    return {
-      id: data.id || data.marketId,
-      question: data.question || data.title || data.name,
-      category: data.category,
-      yesPrice: Math.round((data.yesPrice || data.yes_price || 0.5) * 100),
-      noPrice: Math.round((data.noPrice || data.no_price || 0.5) * 100),
-      volume: data.volume || data.totalVolume || 0,
-      endDate: data.endDate || data.end_date,
-      imageUrl: data.imageUrl || data.image_url,
-      description: data.description,
-    };
+    return transformMarket(data);
   }, [callDflowApi]);
 
-  const getUserPositions = useCallback(async (walletAddress: string) => {
-    return callDflowApi('getUserPositions', { walletAddress });
+  // Get orderbook for a market
+  const getOrderbook = useCallback(async (ticker: string) => {
+    return callDflowApi('getOrderbook', { ticker });
   }, [callDflowApi]);
 
+  // Get trade history for a market
+  const getTrades = useCallback(async (ticker: string, limit = 50) => {
+    return callDflowApi('getTrades', { ticker, limit });
+  }, [callDflowApi]);
+
+  // Get all series (categories of markets)
+  const getSeries = useCallback(async () => {
+    return callDflowApi('getSeries');
+  }, [callDflowApi]);
+
+  // Get tags by categories for filtering
+  const getTagsByCategories = useCallback(async () => {
+    return callDflowApi('getTagsByCategories');
+  }, [callDflowApi]);
+
+  // Get quote for swapping tokens
   const getQuote = useCallback(async (
-    marketId: string,
-    side: 'YES' | 'NO',
+    inputMint: string,
+    outputMint: string,
     amount: number,
-    userWallet: string
+    userWallet: string,
+    slippageBps = 50
   ): Promise<Quote> => {
-    const data = await callDflowApi('getQuote', {
-      marketId,
-      side,
+    return callDflowApi('getQuote', {
+      inputMint,
+      outputMint,
       amount,
       userWallet,
+      slippageBps,
     });
-    return {
-      price: data.price || 0,
-      shares: data.shares || 0,
-      fee: data.fee || 0,
-      total: data.total || amount,
-      transaction: data.transaction,
-    };
   }, [callDflowApi]);
 
-  const executeSwap = useCallback(async (params: {
-    marketId: string;
-    side: 'YES' | 'NO';
-    amount: number;
-    userWallet: string;
-    signedTransaction: string;
-  }) => {
-    return callDflowApi('executeSwap', params);
-  }, [callDflowApi]);
-
-  const settlePosition = useCallback(async (params: {
-    marketId: string;
-    userWallet: string;
-  }) => {
-    return callDflowApi('settlePosition', params);
+  // Get swap transaction
+  const getSwapTransaction = useCallback(async (
+    quoteResponse: Quote,
+    userWallet: string
+  ) => {
+    return callDflowApi('getSwapTransaction', {
+      quoteResponse,
+      userWallet,
+    });
   }, [callDflowApi]);
 
   return {
     loading,
     error,
-    discoverMarkets,
-    getMarketDetails,
-    getUserPositions,
+    getEvents,
+    getMarkets,
+    getMarketByTicker,
+    getOrderbook,
+    getTrades,
+    getSeries,
+    getTagsByCategories,
     getQuote,
-    executeSwap,
-    settlePosition,
+    getSwapTransaction,
+  };
+}
+
+// Helper function to transform API market response
+function transformMarket(market: any): KalshiMarket {
+  // Parse prices - they come as decimal (0-1) or cents (0-100) depending on endpoint
+  const parsePrice = (value: any): number => {
+    if (value === undefined || value === null) return 50;
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    // If it's a decimal (0-1), convert to cents
+    return num <= 1 ? Math.round(num * 100) : Math.round(num);
+  };
+
+  // Use bid/ask if available, otherwise use 50/50
+  const yesPrice = parsePrice(market.yesBid || market.yesAsk) || 50;
+  const noPrice = parsePrice(market.noBid || market.noAsk) || (100 - yesPrice);
+
+  return {
+    ticker: market.ticker,
+    title: market.title,
+    subtitle: market.subtitle,
+    status: market.status,
+    yesPrice,
+    noPrice,
+    volume: market.volume || 0,
+    openInterest: market.openInterest,
+    closeTime: market.closeTime ? new Date(market.closeTime * 1000).toISOString() : undefined,
+    expirationTime: market.expirationTime ? new Date(market.expirationTime * 1000).toISOString() : undefined,
+    result: market.result,
+    accounts: market.accounts || {},
+    yesBid: parsePrice(market.yesBid),
+    yesAsk: parsePrice(market.yesAsk),
+    noBid: parsePrice(market.noBid),
+    noAsk: parsePrice(market.noAsk),
   };
 }

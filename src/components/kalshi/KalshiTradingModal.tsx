@@ -20,66 +20,65 @@ interface KalshiTradingModalProps {
   onClose: () => void;
 }
 
+// USDC mint on Solana mainnet
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
 export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
-  const { getQuote, executeSwap, loading } = useDflowApi();
+  const { getQuote, getSwapTransaction, loading } = useDflowApi();
   
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
-  const [quote, setQuote] = useState<{ shares: number; fee: number; total: number } | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
 
   const price = side === 'YES' ? market.yesPrice : market.noPrice;
   const estimatedShares = amount ? (parseFloat(amount) / price * 100).toFixed(2) : '0.00';
 
-  const handleGetQuote = async () => {
-    if (!publicKey || !amount) return;
+  // Get the token mint for the selected side
+  const getOutputMint = (): string | null => {
+    const accountKeys = Object.keys(market.accounts || {});
+    if (accountKeys.length === 0) return null;
     
-    setQuoteLoading(true);
-    try {
-      const quoteData = await getQuote(
-        market.id,
-        side,
-        parseFloat(amount),
-        publicKey.toBase58()
-      );
-      setQuote({
-        shares: quoteData.shares,
-        fee: quoteData.fee,
-        total: quoteData.total,
-      });
-    } catch (error) {
-      toast.error('Failed to get quote');
-    } finally {
-      setQuoteLoading(false);
-    }
+    const account = market.accounts[accountKeys[0]];
+    return side === 'YES' ? account?.yesMint : account?.noMint;
   };
 
   const executeTrade = async () => {
     if (!publicKey || !signTransaction || !amount) return;
     
+    const outputMint = getOutputMint();
+    if (!outputMint) {
+      toast.error('Market token not available for trading');
+      return;
+    }
+    
     setExecuting(true);
     try {
-      // Get fresh quote with transaction
-      const quoteData = await getQuote(
-        market.id,
-        side,
-        parseFloat(amount),
+      // Convert amount to lamports (USDC has 6 decimals)
+      const amountInLamports = Math.floor(parseFloat(amount) * 1_000_000);
+      
+      // Get quote from DFlow
+      const quote = await getQuote(
+        USDC_MINT,
+        outputMint,
+        amountInLamports,
         publicKey.toBase58()
       );
       
-      if (!quoteData.transaction) {
-        throw new Error('No transaction received from API');
-      }
+      console.log('Quote received:', quote);
       
-      // In a real implementation, you would:
-      // 1. Deserialize the transaction from the API
+      // Get swap transaction
+      const swapResult = await getSwapTransaction(quote, publicKey.toBase58());
+      
+      console.log('Swap transaction received:', swapResult);
+      
+      // In production, you would:
+      // 1. Deserialize the transaction
       // 2. Sign it with the wallet
-      // 3. Send the signed transaction back to execute
+      // 3. Send and confirm
       
-      toast.success(`Order placed for ${estimatedShares} ${side} shares!`);
+      toast.success(`Order placed for ~${estimatedShares} ${side} shares!`);
       onClose();
     } catch (error) {
       console.error('Trade failed:', error);
@@ -89,6 +88,8 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
     }
   };
 
+  const displayTitle = market.title || market.ticker;
+
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-2xl border-border/50">
@@ -97,11 +98,14 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Market Question */}
+          {/* Market Title */}
           <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
             <p className="text-foreground font-medium leading-relaxed">
-              {market.question}
+              {displayTitle}
             </p>
+            {market.subtitle && (
+              <p className="text-sm text-muted-foreground mt-1">{market.subtitle}</p>
+            )}
           </div>
 
           {/* Wallet Connection */}
