@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,24 +27,20 @@ interface KalshiTradingModalProps {
 // USDC mint on Solana mainnet
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Public Helius RPC for confirmation (avoids WebSocket issues with edge function)
-const HELIUS_PUBLIC_RPC = 'https://mainnet.helius-rpc.com/?api-key=15319bf4-5b40-4958-ac8d-6313aa55eb92';
-
 // Supabase edge function URL
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Quick confirmation for the open transaction (fast, 5 attempts max)
+// Quick confirmation for the open transaction using proxied RPC (3 attempts max, non-blocking)
 async function confirmOpenTransaction(
   signature: string,
-  maxAttempts = 5,
-  intervalMs = 1000
+  connection: Connection,
+  maxAttempts = 3,
+  intervalMs = 1500
 ): Promise<{ confirmed: boolean; error?: string }> {
-  const heliusConnection = new Connection(HELIUS_PUBLIC_RPC, 'confirmed');
-  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const { value: statuses } = await heliusConnection.getSignatureStatuses([signature]);
+      const { value: statuses } = await connection.getSignatureStatuses([signature]);
       
       if (statuses && statuses[0]) {
         const status = statuses[0];
@@ -56,11 +53,17 @@ async function confirmOpenTransaction(
           return { confirmed: true };
         }
       }
-    } catch (err) {
+    } catch (err: any) {
+      // On rate limit, stop trying - don't spam the RPC
+      if (err?.message?.includes('429') || err?.message?.includes('rate limit')) {
+        console.log('⚠️ RPC rate limited, skipping confirmation check');
+        return { confirmed: false, error: undefined };
+      }
       console.log(`Confirmation attempt ${attempt + 1} failed:`, err);
     }
     
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
+    // Exponential backoff
+    await new Promise(resolve => setTimeout(resolve, intervalMs * (attempt + 1)));
   }
   
   // For async orders, don't fail - the tx might still be pending
@@ -293,11 +296,11 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       console.log('✅ Transaction submitted:', signature);
       console.log('View on Solscan:', `https://solscan.io/tx/${signature}`);
       
-      // Confirm open transaction (fast, 5 attempts)
+      // Confirm open transaction using proxied RPC (3 attempts, non-blocking)
       setOrderStatus('Confirming transaction...');
       toast.loading('Transaction submitted! Confirming...', { id: 'trade' });
       
-      const openConfirmation = await confirmOpenTransaction(signature, 5, 1000);
+      const openConfirmation = await confirmOpenTransaction(signature, connection, 3, 1500);
       
       if (openConfirmation.error) {
         // Hard failure during open tx
@@ -378,6 +381,9 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
             <DialogTitle className="text-xl font-bold">Trade Market</DialogTitle>
             <KalshiShareButton market={market} />
           </div>
+          <DialogDescription className="sr-only">
+            Trade YES or NO shares on this prediction market
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">

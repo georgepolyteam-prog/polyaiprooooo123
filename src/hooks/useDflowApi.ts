@@ -116,9 +116,17 @@ export function useDflowApi() {
     return callDflowApi('getOrderbook', { ticker });
   }, [callDflowApi]);
 
-  // Get trade history for a market
+  // Get trade history for a market (returns empty array on 404)
   const getTrades = useCallback(async (ticker: string, limit = 50) => {
-    return callDflowApi('getTrades', { ticker, limit });
+    try {
+      return await callDflowApi('getTrades', { ticker, limit });
+    } catch (err: any) {
+      // 404 means no trades yet - return empty gracefully
+      if (err?.message?.includes('404') || err?.message?.includes('Not found')) {
+        return { trades: [] };
+      }
+      throw err;
+    }
   }, [callDflowApi]);
 
   // Get all series (categories of markets)
