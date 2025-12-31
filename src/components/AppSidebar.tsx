@@ -37,7 +37,6 @@ const mainNav = [
 
 const exploreNav = [
   { title: 'Browse Markets', url: '/markets', icon: LayoutGrid },
-  { title: 'Kalshi Markets', url: '/kalshi', icon: LineChart },
   { title: 'Live Trades', url: '/trades', icon: Activity },
   { title: 'Dashboard', url: '/dashboard', icon: BarChart3 },
   { title: 'My Trades', url: '/my-trades', icon: Receipt },

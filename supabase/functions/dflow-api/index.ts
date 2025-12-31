@@ -73,6 +73,8 @@ serve(async (req) => {
           amount: params.amount.toString(),
           slippageBps: (params.slippageBps || 50).toString(),
           userPublicKey: params.userWallet,
+          // For prediction markets
+          predictionMarketSlippageBps: '50',
         });
         url = `${DFLOW_QUOTE_API}/order?${orderParams.toString()}`;
         method = 'GET';
