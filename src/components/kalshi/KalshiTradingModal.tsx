@@ -74,19 +74,51 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
   const [executing, setExecuting] = useState(false);
   const [orderStatus, setOrderStatus] = useState('');
   const [trades, setTrades] = useState<any[]>([]);
+  const [tradesLoading, setTradesLoading] = useState(true);
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [simulationError, setSimulationError] = useState<string | null>(null);
+  const [liquidityError, setLiquidityError] = useState<string | null>(null);
 
   const price = side === 'YES' ? market.yesPrice : market.noPrice;
   const estimatedShares = amount ? (parseFloat(amount) / price * 100).toFixed(2) : '0.00';
 
-  // Load trades for price chart
+  // Check if market has valid token mints for trading
+  const hasValidAccounts = (): boolean => {
+    const accounts = market.accounts || {};
+    const settlementKey = accounts[USDC_MINT] ? USDC_MINT : Object.keys(accounts)[0];
+    if (!settlementKey) return false;
+    const account = accounts[settlementKey];
+    return !!(account?.yesMint && account?.noMint);
+  };
+
+  // Load trades for price chart (non-blocking)
   useEffect(() => {
-    if (market.ticker) {
-      getTrades(market.ticker, 50).then(data => {
-        if (data?.trades) setTrades(data.trades);
-      }).catch(console.error);
+    let mounted = true;
+    setTradesLoading(true);
+    
+    const fetchTrades = async () => {
+      try {
+        const data = await getTrades(market.ticker, 50);
+        if (mounted && data?.trades) {
+          setTrades(data.trades);
+        }
+      } catch (err) {
+        // Don't block UI - trades are optional for chart
+        console.log('Trades fetch failed (non-critical):', err);
+      } finally {
+        if (mounted) setTradesLoading(false);
+      }
+    };
+    
+    // Fire and forget - don't await
+    fetchTrades();
+    
+    // Check for liquidity issues
+    if (!hasValidAccounts()) {
+      setLiquidityError('This market may have limited liquidity');
     }
+    
+    return () => { mounted = false; };
   }, [market.ticker, getTrades]);
 
   // Get the token mint for the selected side
@@ -113,18 +145,33 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
     setOrderStatus('Getting quote from DFlow...');
     setTxSignature(null);
     setSimulationError(null);
+    setLiquidityError(null);
     
     try {
       // Convert amount to lamports (USDC has 6 decimals)
       const amountInLamports = Math.floor(parseFloat(amount) * 1_000_000);
       
       // Get order from DFlow
-      const orderResponse = await getOrder(
-        USDC_MINT,
-        outputMint,
-        amountInLamports,
-        publicKey.toBase58()
-      );
+      let orderResponse;
+      try {
+        orderResponse = await getOrder(
+          USDC_MINT,
+          outputMint,
+          amountInLamports,
+          publicKey.toBase58()
+        );
+      } catch (orderErr: any) {
+        // Handle specific DFlow API errors
+        const errMsg = orderErr?.message || orderErr?.toString() || '';
+        if (errMsg.includes('route_not_found') || errMsg.includes('Route not found')) {
+          setLiquidityError('No liquidity available for this market. Try a smaller amount or different side.');
+          throw new Error('Route not found - market has insufficient liquidity');
+        }
+        if (errMsg.includes('not_found') || errMsg.includes('Not found')) {
+          throw new Error('Market data unavailable. Please try again.');
+        }
+        throw orderErr;
+      }
       
       // Log transaction details for debugging
       console.log('🔍 DFlow Order Details');
@@ -286,15 +333,15 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
             </motion.div>
           )}
 
-          {/* Simulation Error Warning */}
-          {simulationError && (
+          {/* Simulation/Liquidity Error Warning */}
+          {(simulationError || liquidityError) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 flex items-center gap-2"
+              className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2"
             >
-              <AlertTriangle className="w-4 h-4 text-destructive" />
-              <span className="text-sm text-destructive">{simulationError}</span>
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <span className="text-sm text-amber-400">{simulationError || liquidityError}</span>
             </motion.div>
           )}
 
@@ -312,7 +359,8 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
           <KalshiPriceChart 
             trades={trades} 
             yesPrice={market.yesPrice} 
-            noPrice={market.noPrice} 
+            noPrice={market.noPrice}
+            loading={tradesLoading}
           />
 
           {/* Wallet Connection */}
