@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { VersionedTransaction } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, Share2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket } from '@/hooks/useDflowApi';
@@ -29,19 +29,30 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
-  const { getOrder, getOrderStatus, getTrades, loading } = useDflowApi();
+  const { getOrder, getTrades, loading } = useDflowApi();
   
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
   const [executing, setExecuting] = useState(false);
   const [orderStatus, setOrderStatus] = useState('');
   const [trades, setTrades] = useState<any[]>([]);
+  const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [simulationError, setSimulationError] = useState<string | null>(null);
 
   const price = side === 'YES' ? market.yesPrice : market.noPrice;
   const estimatedShares = amount ? (parseFloat(amount) / price * 100).toFixed(2) : '0.00';
 
+  // Load trades for price chart
+  useEffect(() => {
+    if (market.ticker) {
+      getTrades(market.ticker, 50).then(data => {
+        if (data?.trades) setTrades(data.trades);
+      }).catch(console.error);
+    }
+  }, [market.ticker, getTrades]);
+
   // Get the token mint for the selected side
-  // Prefer the USDC-settled account entry when available (prevents route-plan mismatches).
+  // Prefer the USDC-settled account entry when available
   const getOutputMint = (): string | null => {
     const accounts = market.accounts || {};
     const settlementKey = accounts[USDC_MINT] ? USDC_MINT : Object.keys(accounts)[0];
@@ -62,6 +73,8 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
     
     setExecuting(true);
     setOrderStatus('Getting quote from DFlow...');
+    setTxSignature(null);
+    setSimulationError(null);
     
     try {
       // Convert amount to lamports (USDC has 6 decimals)
@@ -80,79 +93,96 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       console.log('Execution Mode:', orderResponse.executionMode);
       console.log('Input:', { mint: USDC_MINT, amount: amountInLamports });
       console.log('Output:', { mint: outputMint, amount: orderResponse.outAmount });
-      console.log('View on Solscan after submit');
       
-      setOrderStatus('Sign the transaction in your wallet...');
-      
-      // Deserialize as VersionedTransaction (DFlow returns versioned transactions)
+      // Deserialize as VersionedTransaction
       const txBuffer = Buffer.from(orderResponse.transaction, 'base64');
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txBuffer));
+      
+      // Pre-flight simulation to catch errors early
+      setOrderStatus('Simulating transaction...');
+      try {
+        const simulation = await connection.simulateTransaction(transaction, {
+          commitment: 'confirmed',
+        });
+        
+        if (simulation.value.err) {
+          const errStr = JSON.stringify(simulation.value.err);
+          console.error('Simulation failed:', errStr, simulation.value.logs);
+          
+          // Parse specific errors
+          if (errStr.includes('15020') || errStr.includes('SkippedLeg')) {
+            setSimulationError('Low liquidity - try a smaller amount');
+            throw new Error('Routing failed due to low liquidity. Try a smaller amount or different side.');
+          } else if (errStr.includes('InsufficientFunds') || errStr.includes('0x1')) {
+            setSimulationError('Insufficient USDC balance');
+            throw new Error('Insufficient USDC balance. Add more USDC to your wallet.');
+          }
+          
+          throw new Error(`Simulation failed: ${errStr}`);
+        }
+        console.log('✅ Simulation passed');
+      } catch (simErr: any) {
+        // Only throw if it's a real error, not just unsupported simulation
+        if (simErr.message?.includes('failed') || simErr.message?.includes('Insufficient')) {
+          throw simErr;
+        }
+        console.log('Simulation skipped (may not be supported), proceeding...');
+      }
+      
+      setOrderStatus('Sign the transaction in your wallet...');
       
       // Sign the transaction
       const signedTx = await signTransaction(transaction);
       
       setOrderStatus('Submitting to Solana...');
       
-      // CRITICAL: Send with proper options for DFlow async execution
-      const txSignature = await connection.sendRawTransaction(signedTx.serialize(), {
+      // Get latest blockhash for confirmation
+      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+      
+      // Send with proper options
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
-        maxRetries: 2,
+        maxRetries: 3,
       });
       
-      console.log('✅ Transaction submitted:', txSignature);
-      console.log('View on Solscan:', `https://solscan.io/tx/${txSignature}`);
+      setTxSignature(signature);
+      console.log('✅ Transaction submitted:', signature);
+      console.log('View on Solscan:', `https://solscan.io/tx/${signature}`);
       
-      // Handle based on execution mode
-      if (orderResponse.executionMode === 'async') {
-        setOrderStatus('Processing... This may take 10-30 seconds');
-        toast.loading('Order submitted! Processing...', { id: 'trade' });
+      // Use Solana RPC confirmation (more reliable than DFlow order-status)
+      setOrderStatus('Confirming on Solana...');
+      toast.loading('Transaction submitted! Confirming...', { id: 'trade' });
+      
+      try {
+        const confirmation = await connection.confirmTransaction({
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        }, 'confirmed');
         
-        // For async orders, poll DFlow's order-status endpoint
-        let attempts = 0;
-        const maxAttempts = 30; // 30 seconds max
-        
-        const pollForStatus = async () => {
-          while (attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            attempts++;
-            
-            try {
-              const status = await getOrderStatus(txSignature);
-              
-              if (status?.status === 'confirmed' || status?.status === 'finalized') {
-                toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
-                onClose();
-                return true;
-              } else if (status?.status === 'failed') {
-                throw new Error(status.error || 'Transaction failed on-chain');
-              }
-              
-              setOrderStatus(`Processing... ${attempts}s elapsed`);
-            } catch (err: any) {
-              // If it's a real error (not just "not found"), throw it
-              if (err?.message?.includes('failed')) throw err;
-              // Otherwise keep polling
-              console.log(`Polling attempt ${attempts}...`);
-            }
-          }
+        if (confirmation.value.err) {
+          const errStr = JSON.stringify(confirmation.value.err);
+          console.error('Transaction failed on-chain:', errStr);
           
-          // Timeout - check if it confirmed anyway
-          toast.info('Order submitted. Check your wallet for confirmation.', { id: 'trade' });
-          onClose();
-          return false;
-        };
+          if (errStr.includes('15020') || errStr.includes('SkippedLeg')) {
+            throw new Error('Trade failed: Route no longer valid. Market conditions changed.');
+          }
+          throw new Error(`Transaction failed: ${errStr}`);
+        }
         
-        await pollForStatus();
-        
-      } else {
-        // Sync execution - wait for confirmation directly
-        setOrderStatus('Confirming transaction...');
-        toast.loading('Confirming transaction...', { id: 'trade' });
-        
-        await connection.confirmTransaction(txSignature, 'confirmed');
         toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
         onClose();
+        
+      } catch (confirmErr: any) {
+        // If RPC confirmation times out, still show success since tx was sent
+        if (confirmErr.message?.includes('was not confirmed') || confirmErr.message?.includes('timeout')) {
+          toast.info('Transaction submitted! Check Solscan to verify.', { id: 'trade' });
+          // Keep modal open to show Solscan link
+          setOrderStatus('Transaction sent - verify on Solscan');
+        } else {
+          throw confirmErr;
+        }
       }
       
     } catch (error: any) {
@@ -162,29 +192,26 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       const errorMsg = error?.message || error?.toString() || '';
       
       // Parse error messages for user-friendly feedback
-      if (errorMsg.includes('SkippedLeg')) {
+      if (errorMsg.includes('SkippedLeg') || errorMsg.includes('15020')) {
         errorMessage = 'Routing failed. The market may have low liquidity. Try a smaller amount.';
-      } else if (errorMsg.includes('insufficient') || errorMsg.includes('InsufficientFunds')) {
+      } else if (errorMsg.includes('insufficient') || errorMsg.includes('InsufficientFunds') || errorMsg.includes('0x1')) {
         errorMessage = 'Insufficient USDC balance. Add USDC to your Solana wallet.';
       } else if (errorMsg.includes('User rejected') || errorMsg.includes('rejected')) {
         errorMessage = 'Transaction cancelled by user.';
       } else if (errorMsg.includes('Slippage') || errorMsg.includes('slippage')) {
         errorMessage = 'Price moved too much. Try again with higher slippage.';
+      } else if (errorMsg.includes('Simulation failed')) {
+        errorMessage = errorMsg;
       } else if (error.logs) {
-        // Extract meaningful error from logs
-        const logs = error.logs.join('\n');
-        console.log('Transaction logs:', logs);
-        if (logs.includes('permanent delegate')) {
-          errorMessage = 'Token account initialization required. This is a one-time setup.';
-        }
-      } else if (errorMsg.length > 0 && errorMsg.length < 100) {
+        console.log('Transaction logs:', error.logs.join('\n'));
+      } else if (errorMsg.length > 0 && errorMsg.length < 120) {
         errorMessage = `Trade failed: ${errorMsg}`;
       }
       
       toast.error(errorMessage, { id: 'trade' });
     } finally {
       setExecuting(false);
-      setOrderStatus('');
+      if (!txSignature) setOrderStatus('');
     }
   };
 
@@ -202,14 +229,44 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
 
         <div className="space-y-6 py-4">
           {/* Status Overlay */}
-          {executing && orderStatus && (
+          {(executing || txSignature) && orderStatus && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="p-4 rounded-2xl bg-primary/10 border border-primary/30 flex items-center gap-3"
+              className="p-4 rounded-2xl bg-primary/10 border border-primary/30 space-y-2"
             >
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-              <span className="text-sm font-medium text-foreground">{orderStatus}</span>
+              <div className="flex items-center gap-3">
+                {executing ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                ) : (
+                  <Sparkles className="w-5 h-5 text-primary" />
+                )}
+                <span className="text-sm font-medium text-foreground">{orderStatus}</span>
+              </div>
+              
+              {txSignature && (
+                <a
+                  href={`https://solscan.io/tx/${txSignature}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  View on Solscan
+                </a>
+              )}
+            </motion.div>
+          )}
+
+          {/* Simulation Error Warning */}
+          {simulationError && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 flex items-center gap-2"
+            >
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              <span className="text-sm text-destructive">{simulationError}</span>
             </motion.div>
           )}
 

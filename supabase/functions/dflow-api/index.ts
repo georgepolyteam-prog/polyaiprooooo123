@@ -85,6 +85,36 @@ serve(async (req) => {
         method = 'GET';
         break;
       
+      // Search events
+      case 'searchEvents':
+        const query = encodeURIComponent(params.query || '');
+        url = `${DFLOW_METADATA_API}/api/v1/search?q=${query}`;
+        break;
+      
+      // Get candlestick data for charts
+      case 'getCandlesticks':
+        const now = Math.floor(Date.now() / 1000);
+        const startTs = params.startTs || (now - 7 * 24 * 60 * 60); // Default 7 days
+        const endTs = params.endTs || now;
+        const interval = params.interval || 60; // 1=1min, 60=1hr, 1440=1day
+        url = `${DFLOW_METADATA_API}/api/v1/market/${params.ticker}/candlesticks?startTs=${startTs}&endTs=${endTs}&periodInterval=${interval}`;
+        break;
+      
+      // Get market by mint
+      case 'getMarketByMint':
+        url = `${DFLOW_METADATA_API}/api/v1/market/by-mint/${params.mint}`;
+        break;
+      
+      // Get live sports data
+      case 'getLiveData':
+        url = `${DFLOW_METADATA_API}/api/v1/live_data/by-event/${params.ticker}`;
+        break;
+      
+      // Get event forecast history
+      case 'getForecastHistory':
+        url = `${DFLOW_METADATA_API}/api/v1/event/${params.eventId}/forecast-history`;
+        break;
+      
       default:
         throw new Error(`Unknown action: ${action}`);
     }
