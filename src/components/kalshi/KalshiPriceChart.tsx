@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Trade {
@@ -15,9 +16,18 @@ interface KalshiPriceChartProps {
   yesPrice: number;
   noPrice: number;
   compact?: boolean;
+  loading?: boolean;
 }
 
-export function KalshiPriceChart({ trades, yesPrice, compact = false }: KalshiPriceChartProps) {
+export function KalshiPriceChart({ trades, yesPrice, compact = false, loading = false }: KalshiPriceChartProps) {
+  // Show loading skeleton
+  if (loading) {
+    return (
+      <div className={cn("w-full flex items-center justify-center bg-muted/20 rounded-xl", compact ? "h-12" : "h-48")}>
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
   const chartData = useMemo(() => {
     if (!trades || trades.length === 0) {
       // Generate mock data if no trades

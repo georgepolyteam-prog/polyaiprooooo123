@@ -138,7 +138,25 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`DFlow API error: ${response.status} ${errorText}`);
-      throw new Error(`DFlow API error: ${response.status} - ${errorText}`);
+      
+      // Parse DFlow error response for better error messages
+      let errorData: { error: string; code: string; status: number } = { error: errorText, code: 'unknown', status: response.status };
+      try {
+        const parsed = JSON.parse(errorText);
+        errorData = {
+          error: parsed.msg || errorText,
+          code: parsed.code || 'unknown',
+          status: response.status
+        };
+      } catch {
+        // Keep original error text if not JSON
+      }
+      
+      // Return structured error with original status code (not 500)
+      return new Response(JSON.stringify(errorData), {
+        status: response.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
     
     const data = await response.json();
@@ -150,7 +168,11 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('DFlow API error:', errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ 
+      error: errorMessage,
+      code: 'internal_error',
+      status: 500 
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
