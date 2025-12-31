@@ -2,15 +2,18 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
-import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search } from 'lucide-react';
+import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
 import { KalshiTradingModal } from '@/components/kalshi/KalshiTradingModal';
 import { KalshiFeatureCard } from '@/components/kalshi/KalshiFeatureCard';
 import { KalshiLoadingSkeleton } from '@/components/kalshi/KalshiLoadingSkeleton';
+import { KalshiPortfolio } from '@/components/kalshi/KalshiPortfolio';
+import { KalshiAIInsight } from '@/components/kalshi/KalshiAIInsight';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 // Demo markets for when API is unavailable
@@ -88,8 +91,11 @@ export default function Kalshi() {
   const { getEvents, getMarkets, loading, error } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
+  const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('markets');
+  const [positions, setPositions] = useState<any[]>([]);
 
   useEffect(() => {
     fetchMarkets();
@@ -233,77 +239,95 @@ export default function Kalshi() {
 
       {/* Markets Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-32">
-        {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h2 className="text-3xl font-bold text-foreground mb-2">
-              Trending Markets
-            </h2>
-            <p className="text-muted-foreground">
-              Trade predictions on real-world events
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search markets..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-full sm:w-64 h-11 rounded-xl bg-muted/30 border-border/50"
-              />
-            </div>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <TabsList className="bg-muted/30 p-1 rounded-2xl">
+              <TabsTrigger 
+                value="markets" 
+                className="rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Markets
+              </TabsTrigger>
+              <TabsTrigger 
+                value="portfolio" 
+                className="rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                disabled={!connected}
+              >
+                <Wallet className="w-4 h-4 mr-2" />
+                Portfolio
+              </TabsTrigger>
+            </TabsList>
             
-            {/* Refresh Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={fetchMarkets}
-              disabled={isLoading}
-              className="h-11 w-11 rounded-xl border-border/50"
+            <div className="flex items-center gap-3">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search markets..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-full sm:w-64 h-11 rounded-xl bg-muted/30 border-border/50"
+                />
+              </div>
+              
+              {/* Refresh Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={fetchMarkets}
+                disabled={isLoading}
+                className="h-11 w-11 rounded-xl border-border/50"
+              >
+                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+              </Button>
+            </div>
+          </div>
+
+          <TabsContent value="markets" className="mt-0">
+            {/* Markets Grid */}
+            {isLoading ? (
+              <KalshiLoadingSkeleton />
+            ) : filteredMarkets.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-muted-foreground text-lg">No markets found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredMarkets.map((market, index) => (
+                  <KalshiMarketCard
+                    key={market.ticker}
+                    market={market}
+                    onClick={() => setSelectedMarket(market)}
+                    onAIAnalysis={() => setAiMarket(market)}
+                    index={index}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* View All Link */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-12 text-center"
             >
-              <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-            </Button>
-          </div>
-        </div>
+              <Button
+                variant="outline"
+                className="h-12 px-8 rounded-2xl border-border/50 hover:border-primary/50 group"
+              >
+                View All Markets
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </motion.div>
+          </TabsContent>
 
-        {/* Markets Grid */}
-        {isLoading ? (
-          <KalshiLoadingSkeleton />
-        ) : filteredMarkets.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-muted-foreground text-lg">No markets found</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredMarkets.map((market, index) => (
-              <KalshiMarketCard
-                key={market.ticker}
-                market={market}
-                onClick={() => setSelectedMarket(market)}
-                index={index}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* View All Link */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-12 text-center"
-        >
-          <Button
-            variant="outline"
-            className="h-12 px-8 rounded-2xl border-border/50 hover:border-primary/50 group"
-          >
-            View All Markets
-            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-          </Button>
-        </motion.div>
+          <TabsContent value="portfolio" className="mt-0">
+            <KalshiPortfolio positions={positions} isLoading={isLoading} />
+          </TabsContent>
+        </Tabs>
       </section>
 
       {/* Trading Modal */}
@@ -311,6 +335,14 @@ export default function Kalshi() {
         <KalshiTradingModal
           market={selectedMarket}
           onClose={() => setSelectedMarket(null)}
+        />
+      )}
+
+      {/* AI Analysis Modal */}
+      {aiMarket && (
+        <KalshiAIInsight
+          market={aiMarket}
+          onClose={() => setAiMarket(null)}
         />
       )}
     </div>

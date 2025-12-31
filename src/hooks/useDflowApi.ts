@@ -39,13 +39,13 @@ export interface KalshiEvent {
   markets: KalshiMarket[];
 }
 
-export interface Quote {
-  inputMint: string;
-  outputMint: string;
+export interface OrderResponse {
+  transaction: string; // Base64 encoded transaction
+  executionMode: 'sync' | 'async';
+  signature?: string;
   inAmount: string;
   outAmount: string;
-  priceImpactPct: number;
-  slippageBps: number;
+  priceImpactPct?: number;
 }
 
 export function useDflowApi() {
@@ -122,15 +122,15 @@ export function useDflowApi() {
     return callDflowApi('getTagsByCategories');
   }, [callDflowApi]);
 
-  // Get quote for swapping tokens
-  const getQuote = useCallback(async (
+  // Get order for buying/selling outcome tokens (replaces getQuote)
+  const getOrder = useCallback(async (
     inputMint: string,
     outputMint: string,
     amount: number,
     userWallet: string,
     slippageBps = 50
-  ): Promise<Quote> => {
-    return callDflowApi('getQuote', {
+  ): Promise<OrderResponse> => {
+    return callDflowApi('getOrder', {
       inputMint,
       outputMint,
       amount,
@@ -139,15 +139,9 @@ export function useDflowApi() {
     });
   }, [callDflowApi]);
 
-  // Get swap transaction
-  const getSwapTransaction = useCallback(async (
-    quoteResponse: Quote,
-    userWallet: string
-  ) => {
-    return callDflowApi('getSwapTransaction', {
-      quoteResponse,
-      userWallet,
-    });
+  // Check order status (for async trades)
+  const getOrderStatus = useCallback(async (signature: string) => {
+    return callDflowApi('getOrderStatus', { signature });
   }, [callDflowApi]);
 
   return {
@@ -160,8 +154,8 @@ export function useDflowApi() {
     getTrades,
     getSeries,
     getTagsByCategories,
-    getQuote,
-    getSwapTransaction,
+    getOrder,
+    getOrderStatus,
   };
 }
 

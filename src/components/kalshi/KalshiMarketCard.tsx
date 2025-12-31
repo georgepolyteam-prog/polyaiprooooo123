@@ -1,19 +1,26 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Clock, Users } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Users, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { KalshiShareButton } from './KalshiShareButton';
 import type { KalshiMarket } from '@/hooks/useDflowApi';
 
 interface KalshiMarketCardProps {
   market: KalshiMarket;
   eventTitle?: string;
   onClick: () => void;
+  onAIAnalysis?: () => void;
   index?: number;
 }
 
-export function KalshiMarketCard({ market, eventTitle, onClick, index = 0 }: KalshiMarketCardProps) {
+export function KalshiMarketCard({ market, eventTitle, onClick, onAIAnalysis, index = 0 }: KalshiMarketCardProps) {
   const yesLeading = market.yesPrice > market.noPrice;
   const displayTitle = market.title || eventTitle || 'Market';
   
+  const handleAIClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAIAnalysis?.();
+  };
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -109,7 +116,7 @@ export function KalshiMarketCard({ market, eventTitle, onClick, index = 0 }: Kal
       </div>
       
       {/* Stats */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
         <div className="flex items-center gap-1.5">
           <Users className="w-4 h-4" />
           <span>${(market.volume || 0).toLocaleString()}</span>
@@ -120,6 +127,22 @@ export function KalshiMarketCard({ market, eventTitle, onClick, index = 0 }: Kal
             <span>{new Date(market.closeTime).toLocaleDateString()}</span>
           </div>
         )}
+      </div>
+      
+      {/* Action Buttons */}
+      <div className="flex items-center gap-2">
+        {onAIAnalysis && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAIClick}
+            className="flex-1 rounded-xl border-border/50 hover:bg-primary/10 hover:border-primary/30 hover:text-primary"
+          >
+            <Sparkles className="w-4 h-4 mr-1.5" />
+            AI Analysis
+          </Button>
+        )}
+        <KalshiShareButton market={market} compact />
       </div>
     </motion.div>
   );

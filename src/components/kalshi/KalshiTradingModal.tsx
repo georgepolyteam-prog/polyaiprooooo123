@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { Transaction } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, TrendingUp, TrendingDown, Loader2, Wallet, AlertCircle, Sparkles } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, Share2 } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket } from '@/hooks/useDflowApi';
@@ -14,6 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { KalshiPriceChart } from './KalshiPriceChart';
+import { KalshiShareButton } from './KalshiShareButton';
 
 interface KalshiTradingModalProps {
   market: KalshiMarket;
@@ -26,11 +29,12 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
-  const { getQuote, getSwapTransaction, loading } = useDflowApi();
+  const { getOrder, getOrderStatus, getTrades, loading } = useDflowApi();
   
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
   const [executing, setExecuting] = useState(false);
+  const [trades, setTrades] = useState<any[]>([]);
 
   const price = side === 'YES' ? market.yesPrice : market.noPrice;
   const estimatedShares = amount ? (parseFloat(amount) / price * 100).toFixed(2) : '0.00';
@@ -58,31 +62,36 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       // Convert amount to lamports (USDC has 6 decimals)
       const amountInLamports = Math.floor(parseFloat(amount) * 1_000_000);
       
-      // Get quote from DFlow
-      const quote = await getQuote(
+      // Get order from DFlow
+      const orderResponse = await getOrder(
         USDC_MINT,
         outputMint,
         amountInLamports,
         publicKey.toBase58()
       );
       
-      console.log('Quote received:', quote);
+      console.log('Order received:', orderResponse);
       
-      // Get swap transaction
-      const swapResult = await getSwapTransaction(quote, publicKey.toBase58());
+      // Deserialize the transaction
+      const txBuffer = Buffer.from(orderResponse.transaction, 'base64');
+      const transaction = Transaction.from(txBuffer);
       
-      console.log('Swap transaction received:', swapResult);
+      // Sign the transaction
+      const signedTx = await signTransaction(transaction);
       
-      // In production, you would:
-      // 1. Deserialize the transaction
-      // 2. Sign it with the wallet
-      // 3. Send and confirm
+      // Send the transaction
+      const signature = await connection.sendRawTransaction(signedTx.serialize());
       
-      toast.success(`Order placed for ~${estimatedShares} ${side} shares!`);
+      toast.loading('Confirming transaction...', { id: 'trade' });
+      
+      // Confirm the transaction
+      await connection.confirmTransaction(signature, 'confirmed');
+      
+      toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
       onClose();
     } catch (error) {
       console.error('Trade failed:', error);
-      toast.error('Trade failed. Please try again.');
+      toast.error('Trade failed. Please try again.', { id: 'trade' });
     } finally {
       setExecuting(false);
     }
@@ -92,9 +101,12 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-background/95 backdrop-blur-2xl border-border/50">
+      <DialogContent className="sm:max-w-lg bg-background/95 backdrop-blur-2xl border-border/50 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Trade Market</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-xl font-bold">Trade Market</DialogTitle>
+            <KalshiShareButton market={market} />
+          </div>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -107,6 +119,13 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
               <p className="text-sm text-muted-foreground mt-1">{market.subtitle}</p>
             )}
           </div>
+
+          {/* Price Chart */}
+          <KalshiPriceChart 
+            trades={trades} 
+            yesPrice={market.yesPrice} 
+            noPrice={market.noPrice} 
+          />
 
           {/* Wallet Connection */}
           {!connected && (
