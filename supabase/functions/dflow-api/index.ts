@@ -65,26 +65,22 @@ serve(async (req) => {
         url = `${DFLOW_METADATA_API}/api/v1/tags/categories`;
         break;
       
-      // Quote API endpoints (for trading)
-      case 'getQuote':
-        url = `${DFLOW_QUOTE_API}/quote`;
-        method = 'POST';
-        body = JSON.stringify({
+      // Quote API endpoints (for trading) - uses GET /order
+      case 'getOrder':
+        const orderParams = new URLSearchParams({
           inputMint: params.inputMint,
           outputMint: params.outputMint,
-          amount: params.amount,
-          slippageBps: params.slippageBps || 50,
+          amount: params.amount.toString(),
+          slippageBps: (params.slippageBps || 50).toString(),
           userPublicKey: params.userWallet,
         });
+        url = `${DFLOW_QUOTE_API}/order?${orderParams.toString()}`;
+        method = 'GET';
         break;
       
-      case 'getSwapTransaction':
-        url = `${DFLOW_QUOTE_API}/swap`;
-        method = 'POST';
-        body = JSON.stringify({
-          quoteResponse: params.quoteResponse,
-          userPublicKey: params.userWallet,
-        });
+      case 'getOrderStatus':
+        url = `${DFLOW_QUOTE_API}/order-status?signature=${params.signature}`;
+        method = 'GET';
         break;
       
       default:
@@ -93,14 +89,19 @@ serve(async (req) => {
     
     console.log(`Fetching: ${method} ${url}`);
     
-    const response = await fetch(url, {
+    const fetchOptions: RequestInit = {
       method,
       headers: {
         'x-api-key': DFLOW_API_KEY,
         'Content-Type': 'application/json',
       },
-      ...(body && { body }),
-    });
+    };
+    
+    if (body) {
+      fetchOptions.body = body;
+    }
+    
+    const response = await fetch(url, fetchOptions);
     
     if (!response.ok) {
       const errorText = await response.text();
