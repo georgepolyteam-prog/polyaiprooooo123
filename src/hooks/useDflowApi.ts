@@ -48,6 +48,15 @@ export interface OrderResponse {
   priceImpactPct?: number;
 }
 
+export interface Candlestick {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
 export function useDflowApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +153,54 @@ export function useDflowApi() {
     return callDflowApi('getOrderStatus', { signature });
   }, [callDflowApi]);
 
+  // Search events/markets
+  const searchEvents = useCallback(async (query: string): Promise<KalshiEvent[]> => {
+    const data = await callDflowApi('searchEvents', { query });
+    return (data.events || data.results || []).map((event: any) => ({
+      ticker: event.ticker,
+      title: event.title,
+      subtitle: event.subtitle,
+      category: event.category || event.seriesTicker,
+      seriesTicker: event.seriesTicker,
+      markets: (event.markets || []).map((market: any) => transformMarket(market)),
+    }));
+  }, [callDflowApi]);
+
+  // Get candlestick data for charts
+  const getCandlesticks = useCallback(async (
+    ticker: string,
+    startTs?: number,
+    endTs?: number,
+    interval: 1 | 60 | 1440 = 60
+  ): Promise<Candlestick[]> => {
+    const data = await callDflowApi('getCandlesticks', { ticker, startTs, endTs, interval });
+    return (data.candlesticks || data || []).map((c: any) => ({
+      timestamp: c.timestamp || c.t,
+      open: parseFloat(c.open || c.o) * 100,
+      high: parseFloat(c.high || c.h) * 100,
+      low: parseFloat(c.low || c.l) * 100,
+      close: parseFloat(c.close || c.c) * 100,
+      volume: parseFloat(c.volume || c.v || 0),
+    }));
+  }, [callDflowApi]);
+
+  // Get market by outcome token mint
+  const getMarketByMint = useCallback(async (mint: string): Promise<KalshiMarket | null> => {
+    const data = await callDflowApi('getMarketByMint', { mint });
+    if (!data) return null;
+    return transformMarket(data);
+  }, [callDflowApi]);
+
+  // Get live sports data for an event
+  const getLiveData = useCallback(async (ticker: string) => {
+    return callDflowApi('getLiveData', { ticker });
+  }, [callDflowApi]);
+
+  // Get forecast history for an event
+  const getForecastHistory = useCallback(async (eventId: string) => {
+    return callDflowApi('getForecastHistory', { eventId });
+  }, [callDflowApi]);
+
   return {
     loading,
     error,
@@ -156,6 +213,11 @@ export function useDflowApi() {
     getTagsByCategories,
     getOrder,
     getOrderStatus,
+    searchEvents,
+    getCandlesticks,
+    getMarketByMint,
+    getLiveData,
+    getForecastHistory,
   };
 }
 
