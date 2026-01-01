@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useState, useEffect, useCallback } from 'react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
 import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3 } from 'lucide-react';
@@ -88,7 +88,8 @@ const DEMO_MARKETS: KalshiMarket[] = [
 
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
-  const { getEvents, getMarkets, loading, error } = useDflowApi();
+  const { connection } = useConnection();
+  const { getEvents, getMarkets, getMarketByMint, loading, error } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
@@ -96,10 +97,87 @@ export default function Kalshi() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('markets');
   const [positions, setPositions] = useState<any[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
 
   useEffect(() => {
     fetchMarkets();
   }, []);
+
+  // Fetch positions when portfolio tab is selected or wallet connects
+  useEffect(() => {
+    if (activeTab === 'portfolio' && connected && publicKey) {
+      fetchPositions();
+    }
+  }, [activeTab, connected, publicKey]);
+
+  const fetchPositions = useCallback(async () => {
+    if (!publicKey || !connection) return;
+    
+    setPositionsLoading(true);
+    try {
+      // Get all token accounts for this wallet
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+        publicKey,
+        { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
+      );
+      
+      // Filter for non-zero balances
+      const nonZeroAccounts = tokenAccounts.value.filter(account => {
+        const amount = account.account.data.parsed?.info?.tokenAmount?.uiAmount || 0;
+        return amount > 0;
+      });
+      
+      if (nonZeroAccounts.length === 0) {
+        setPositions([]);
+        setPositionsLoading(false);
+        return;
+      }
+      
+      // Try to find markets for each token mint
+      const positionsList: any[] = [];
+      
+      for (const account of nonZeroAccounts) {
+        const mint = account.account.data.parsed?.info?.mint;
+        const amount = account.account.data.parsed?.info?.tokenAmount?.uiAmount || 0;
+        
+        if (!mint) continue;
+        
+        try {
+          const marketData = await getMarketByMint(mint);
+          if (marketData) {
+            // Determine if this is YES or NO position based on the mint
+            const accounts = marketData.accounts || {};
+            const firstAccountKey = Object.keys(accounts)[0];
+            const accountInfo = firstAccountKey ? accounts[firstAccountKey] : null;
+            
+            const isYes = accountInfo?.yesMint === mint;
+            const currentPrice = isYes ? marketData.yesPrice : marketData.noPrice;
+            
+            positionsList.push({
+              marketTicker: marketData.ticker,
+              marketTitle: marketData.title,
+              side: isYes ? 'yes' : 'no',
+              quantity: amount,
+              avgPrice: currentPrice, // We don't have avg price, use current
+              currentPrice: currentPrice,
+              pnl: 0, // Would need historical data
+              pnlPercent: 0,
+            });
+          }
+        } catch (err) {
+          // Skip tokens that aren't prediction market tokens
+          console.log(`Token ${mint} is not a prediction market token`);
+        }
+      }
+      
+      setPositions(positionsList);
+    } catch (err) {
+      console.error('Failed to fetch positions:', err);
+      toast.error('Failed to load portfolio');
+    } finally {
+      setPositionsLoading(false);
+    }
+  }, [publicKey, connection, getMarketByMint]);
 
   const fetchMarkets = async () => {
     setIsLoading(true);
@@ -325,7 +403,7 @@ export default function Kalshi() {
           </TabsContent>
 
           <TabsContent value="portfolio" className="mt-0">
-            <KalshiPortfolio positions={positions} isLoading={isLoading} />
+            <KalshiPortfolio positions={positions} isLoading={positionsLoading} />
           </TabsContent>
         </Tabs>
       </section>

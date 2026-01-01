@@ -129,6 +129,21 @@ export function useDflowApi() {
     }
   }, [callDflowApi]);
 
+  // Get multiple markets by mint addresses (for portfolio)
+
+  // Get multiple markets by mint addresses (for portfolio)
+  const getMarketsByMints = useCallback(async (mints: string[]) => {
+    try {
+      return await callDflowApi('getMarketsByMints', { mints });
+    } catch (err: any) {
+      // Return empty if not found
+      if (err?.message?.includes('404')) {
+        return { markets: [] };
+      }
+      throw err;
+    }
+  }, [callDflowApi]);
+
   // Get all series (categories of markets)
   const getSeries = useCallback(async () => {
     return callDflowApi('getSeries');
@@ -217,6 +232,7 @@ export function useDflowApi() {
     getMarketByTicker,
     getOrderbook,
     getTrades,
+    getMarketsByMints,
     getSeries,
     getTagsByCategories,
     getOrder,
