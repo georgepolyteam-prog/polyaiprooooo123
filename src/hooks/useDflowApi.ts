@@ -237,6 +237,7 @@ export function useDflowApi() {
   return {
     loading,
     error,
+    callDflowApi,
     getEvents,
     getMarkets,
     getMarketByTicker,

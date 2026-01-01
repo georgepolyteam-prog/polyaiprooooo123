@@ -86,10 +86,38 @@ const DEMO_MARKETS: KalshiMarket[] = [
   },
 ];
 
+// Types for debug state and recent orders
+interface DebugInfo {
+  tokenkegCount: number;
+  token2022Count: number;
+  eligibleCount: number;
+  excludedHits: string[];
+  sampleMints: { mint: string; amount: string }[];
+  outcomeMints: string[];
+  error?: string;
+}
+
+interface RecentOrder {
+  signature: string;
+  ticker: string;
+  side: 'YES' | 'NO';
+  amountUSDC: number;
+  estimatedShares: string;
+  timestamp: number;
+  status?: 'pending' | 'open' | 'closed' | 'failed' | 'expired' | 'unknown';
+}
+
+// Token program IDs
+const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+
+// LocalStorage key for recent orders
+const RECENT_ORDERS_KEY = 'kalshi_recent_orders';
+
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
-  const { getEvents, getMarkets, filterOutcomeMints, getMarketsByMints, loading, error } = useDflowApi();
+  const { getEvents, getMarkets, filterOutcomeMints, getMarketsByMints, loading, error, callDflowApi } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
@@ -98,6 +126,22 @@ export default function Kalshi() {
   const [activeTab, setActiveTab] = useState('markets');
   const [positions, setPositions] = useState<any[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+
+  // Load recent orders from localStorage
+  useEffect(() => {
+    if (publicKey) {
+      try {
+        const stored = localStorage.getItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`);
+        if (stored) {
+          setRecentOrders(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.log('[Portfolio] Failed to load recent orders');
+      }
+    }
+  }, [publicKey]);
 
   useEffect(() => {
     fetchMarkets();
@@ -123,42 +167,93 @@ export default function Kalshi() {
       return;
     }
     
-    console.log('[Portfolio] Starting fetch for wallet:', publicKey.toBase58());
+    const walletAddress = publicKey.toBase58();
+    console.log('[Portfolio] Starting fetch for wallet:', walletAddress);
     setPositionsLoading(true);
+    setDebugInfo(null);
+    
+    const debug: DebugInfo = {
+      tokenkegCount: 0,
+      token2022Count: 0,
+      eligibleCount: 0,
+      excludedHits: [],
+      sampleMints: [],
+      outcomeMints: [],
+    };
     
     try {
-      // Step 1: Get all token accounts for this wallet
-      console.log('[Portfolio] Step 1: Fetching token accounts...');
-      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-        publicKey,
-        { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
-      );
-      console.log(`[Portfolio] Found ${tokenAccounts.value.length} total token accounts`);
+      const { PublicKey } = await import('@solana/web3.js');
       
-      // Filter for non-zero balances and exclude known non-market mints
-      const nonZeroAccounts = tokenAccounts.value.filter(account => {
-        const amount = account.account.data.parsed?.info?.tokenAmount?.uiAmount || 0;
-        const mint = account.account.data.parsed?.info?.mint;
-        return amount > 0 && mint && !EXCLUDED_MINTS.includes(mint);
+      // Step 1: Get token accounts from BOTH programs
+      console.log('[Portfolio] Step 1: Fetching token accounts from Tokenkeg + Token-2022...');
+      
+      const [tokenkegAccounts, token2022Accounts] = await Promise.all([
+        connection.getParsedTokenAccountsByOwner(
+          publicKey,
+          { programId: new PublicKey(TOKEN_PROGRAM_ID) }
+        ).catch(err => {
+          console.log('[Portfolio] Tokenkeg fetch error:', err);
+          return { value: [] };
+        }),
+        connection.getParsedTokenAccountsByOwner(
+          publicKey,
+          { programId: new PublicKey(TOKEN_2022_PROGRAM_ID) }
+        ).catch(err => {
+          console.log('[Portfolio] Token-2022 fetch error:', err);
+          return { value: [] };
+        }),
+      ]);
+      
+      debug.tokenkegCount = tokenkegAccounts.value.length;
+      debug.token2022Count = token2022Accounts.value.length;
+      console.log(`[Portfolio] Found ${debug.tokenkegCount} Tokenkeg + ${debug.token2022Count} Token-2022 accounts`);
+      
+      // Merge all accounts
+      const allTokenAccounts = [...tokenkegAccounts.value, ...token2022Accounts.value];
+      
+      // Filter for non-zero balances using raw amount (string !== "0")
+      const mintToAmount: Record<string, number> = {};
+      const excludedHitSet = new Set<string>();
+      
+      allTokenAccounts.forEach(account => {
+        const info = account.account.data.parsed?.info;
+        const rawAmount = info?.tokenAmount?.amount || "0";
+        const uiAmount = info?.tokenAmount?.uiAmount || 0;
+        const mint = info?.mint;
+        
+        if (!mint) return;
+        
+        // Check if non-zero using raw string comparison
+        if (rawAmount === "0") return;
+        
+        // Track excluded mints
+        if (EXCLUDED_MINTS.includes(mint)) {
+          excludedHitSet.add(mint);
+          return;
+        }
+        
+        mintToAmount[mint] = uiAmount;
       });
-      console.log(`[Portfolio] ${nonZeroAccounts.length} accounts after filtering (non-zero, excluding USDC/SOL/USDT)`);
       
-      if (nonZeroAccounts.length === 0) {
+      debug.excludedHits = Array.from(excludedHitSet);
+      debug.eligibleCount = Object.keys(mintToAmount).length;
+      
+      // Sample mints for debugging
+      debug.sampleMints = Object.entries(mintToAmount).slice(0, 5).map(([mint, amount]) => ({
+        mint: mint.slice(0, 8) + '...' + mint.slice(-4),
+        amount: amount.toString(),
+      }));
+      
+      console.log(`[Portfolio] ${debug.eligibleCount} eligible accounts (non-zero, after exclusions)`);
+      console.log('[Portfolio] Excluded mints hit:', debug.excludedHits);
+      
+      if (debug.eligibleCount === 0) {
         console.log('[Portfolio] No eligible token accounts found');
+        setDebugInfo(debug);
         setPositions([]);
         setPositionsLoading(false);
         return;
       }
-      
-      // Collect all mints and their amounts
-      const mintToAmount: Record<string, number> = {};
-      nonZeroAccounts.forEach(account => {
-        const mint = account.account.data.parsed?.info?.mint;
-        const amount = account.account.data.parsed?.info?.tokenAmount?.uiAmount || 0;
-        if (mint) {
-          mintToAmount[mint] = amount;
-        }
-      });
       
       const allMints = Object.keys(mintToAmount);
       console.log(`[Portfolio] Step 2: Calling filterOutcomeMints with ${allMints.length} mints...`);
@@ -166,10 +261,12 @@ export default function Kalshi() {
       
       // Step 2: Filter to only prediction market outcome mints using DFlow API
       const outcomeMints = await filterOutcomeMints(allMints);
+      debug.outcomeMints = outcomeMints;
       console.log(`[Portfolio] filterOutcomeMints returned ${outcomeMints.length} prediction market mints`);
       
       if (outcomeMints.length === 0) {
         console.log('[Portfolio] No prediction market tokens found in wallet');
+        setDebugInfo(debug);
         setPositions([]);
         setPositionsLoading(false);
         return;
@@ -222,14 +319,47 @@ export default function Kalshi() {
       }
       
       console.log(`[Portfolio] Built ${positionsList.length} positions from ${marketsData.length} markets`);
+      setDebugInfo(debug);
       setPositions(positionsList);
     } catch (err) {
       console.error('[Portfolio] Error fetching positions:', err);
+      debug.error = err instanceof Error ? err.message : 'Unknown error';
+      setDebugInfo(debug);
       toast.error(`Failed to load portfolio: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setPositionsLoading(false);
     }
   }, [publicKey, connection, filterOutcomeMints, getMarketsByMints]);
+
+  // Send debug report to backend for server-visible logging
+  const sendDebugReport = useCallback(async () => {
+    if (!publicKey || !debugInfo) return;
+    
+    try {
+      await callDflowApi('clientLog', {
+        wallet: publicKey.toBase58(),
+        tokenkegCount: debugInfo.tokenkegCount,
+        token2022Count: debugInfo.token2022Count,
+        eligibleCount: debugInfo.eligibleCount,
+        excludedHits: debugInfo.excludedHits,
+        sampleMints: debugInfo.sampleMints,
+        outcomeMints: debugInfo.outcomeMints,
+        recentOrderSignatures: recentOrders.slice(0, 5).map(o => o.signature),
+        error: debugInfo.error,
+      });
+      toast.success('Debug report sent');
+    } catch (err) {
+      toast.error('Failed to send debug report');
+    }
+  }, [publicKey, debugInfo, recentOrders, callDflowApi]);
+
+  // Clear completed orders
+  const clearCompletedOrders = useCallback(() => {
+    if (!publicKey) return;
+    const pending = recentOrders.filter(o => o.status === 'pending' || o.status === 'open' || !o.status);
+    setRecentOrders(pending);
+    localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(pending));
+  }, [publicKey, recentOrders]);
 
   const fetchMarkets = async () => {
     setIsLoading(true);
@@ -455,7 +585,15 @@ export default function Kalshi() {
           </TabsContent>
 
           <TabsContent value="portfolio" className="mt-0">
-            <KalshiPortfolio positions={positions} isLoading={positionsLoading} />
+            <KalshiPortfolio 
+              positions={positions} 
+              isLoading={positionsLoading}
+              debugInfo={debugInfo}
+              recentOrders={recentOrders}
+              onSendDebugReport={sendDebugReport}
+              onClearCompletedOrders={clearCompletedOrders}
+              onRefreshPositions={fetchPositions}
+            />
           </TabsContent>
         </Tabs>
       </section>
@@ -465,6 +603,13 @@ export default function Kalshi() {
         <KalshiTradingModal
           market={selectedMarket}
           onClose={() => setSelectedMarket(null)}
+          onOrderSubmitted={(order) => {
+            const newOrders = [order, ...recentOrders].slice(0, 20);
+            setRecentOrders(newOrders);
+            if (publicKey) {
+              localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
+            }
+          }}
         />
       )}
 
