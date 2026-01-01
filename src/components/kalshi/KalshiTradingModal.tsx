@@ -19,9 +19,20 @@ import { Input } from '@/components/ui/input';
 import { KalshiPriceChart } from './KalshiPriceChart';
 import { KalshiShareButton } from './KalshiShareButton';
 
+interface RecentOrder {
+  signature: string;
+  ticker: string;
+  side: 'YES' | 'NO';
+  amountUSDC: number;
+  estimatedShares: string;
+  timestamp: number;
+  status?: 'pending' | 'open' | 'closed' | 'failed' | 'expired' | 'unknown';
+}
+
 interface KalshiTradingModalProps {
   market: KalshiMarket;
   onClose: () => void;
+  onOrderSubmitted?: (order: RecentOrder) => void;
 }
 
 // USDC mint on Solana mainnet
@@ -136,7 +147,7 @@ async function checkAsyncOrderStatus(
   return { filled: false, status: 'pending', error: undefined };
 }
 
-export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
+export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
   const { getOrder, getTrades, loading } = useDflowApi();
@@ -303,6 +314,19 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       setTxSignature(signature);
       console.log('✅ Transaction submitted:', signature);
       console.log('View on Solscan:', `https://solscan.io/tx/${signature}`);
+      
+      // Save order to recent orders
+      if (onOrderSubmitted) {
+        onOrderSubmitted({
+          signature,
+          ticker: market.ticker,
+          side,
+          amountUSDC: parseFloat(amount),
+          estimatedShares,
+          timestamp: Date.now(),
+          status: 'pending',
+        });
+      }
       
       // Confirm open transaction using proxied RPC (3 attempts, non-blocking)
       setOrderStatus('Confirming transaction...');

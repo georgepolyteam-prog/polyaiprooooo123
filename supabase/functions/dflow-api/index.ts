@@ -173,6 +173,25 @@ serve(async (req) => {
         url = `${DFLOW_METADATA_API}/api/v1/event/${params.eventId}/forecast-history`;
         break;
       
+      // Client debug log - for server-visible diagnostics
+      case 'clientLog':
+        console.log('[KALSHI_DEBUG_REPORT] ========================================');
+        console.log('[KALSHI_DEBUG_REPORT] Wallet:', params.wallet);
+        console.log('[KALSHI_DEBUG_REPORT] Tokenkeg accounts:', params.tokenkegCount);
+        console.log('[KALSHI_DEBUG_REPORT] Token-2022 accounts:', params.token2022Count);
+        console.log('[KALSHI_DEBUG_REPORT] Eligible accounts:', params.eligibleCount);
+        console.log('[KALSHI_DEBUG_REPORT] Excluded mints hit:', params.excludedHits);
+        console.log('[KALSHI_DEBUG_REPORT] Sample mints:', JSON.stringify(params.sampleMints));
+        console.log('[KALSHI_DEBUG_REPORT] Outcome mints found:', params.outcomeMints?.length || 0);
+        console.log('[KALSHI_DEBUG_REPORT] Recent order sigs:', params.recentOrderSignatures);
+        if (params.error) {
+          console.log('[KALSHI_DEBUG_REPORT] Error:', params.error);
+        }
+        console.log('[KALSHI_DEBUG_REPORT] ========================================');
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      
       default:
         throw new Error(`Unknown action: ${action}`);
     }
