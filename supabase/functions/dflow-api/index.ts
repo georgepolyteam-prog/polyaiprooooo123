@@ -50,9 +50,15 @@ serve(async (req) => {
         break;
       
       case 'getTrades':
-        // Get trades for a market
+        // Get trades for a market - handled specially below for 404 graceful fallback
         const tradesLimit = params?.limit || 50;
         url = `${DFLOW_METADATA_API}/api/v1/trades/${params.ticker}?limit=${tradesLimit}`;
+        break;
+      
+      case 'getMarketsByMints':
+        // Batch lookup markets by mint addresses
+        const mintsParam = (params.mints || []).join(',');
+        url = `${DFLOW_METADATA_API}/api/v1/markets?mints=${encodeURIComponent(mintsParam)}`;
         break;
       
       case 'getSeries':
@@ -138,6 +144,23 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`DFlow API error: ${response.status} ${errorText}`);
+      
+      // For getTrades 404, return empty array gracefully (no trades yet)
+      if (action === 'getTrades' && response.status === 404) {
+        console.log(`No trades found for ticker, returning empty array`);
+        return new Response(JSON.stringify({ trades: [] }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // For getMarketsByMints 404, return empty array
+      if (action === 'getMarketsByMints' && response.status === 404) {
+        return new Response(JSON.stringify({ markets: [] }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       
       // Parse DFlow error response for better error messages
       let errorData: { error: string; code: string; status: number } = { error: errorText, code: 'unknown', status: response.status };

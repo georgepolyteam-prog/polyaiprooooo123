@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Trade {
@@ -20,11 +19,27 @@ interface KalshiPriceChartProps {
 }
 
 export function KalshiPriceChart({ trades, yesPrice, compact = false, loading = false }: KalshiPriceChartProps) {
-  // Show loading skeleton
+  // Show loading skeleton with shimmer effect
   if (loading) {
     return (
-      <div className={cn("w-full flex items-center justify-center bg-muted/20 rounded-xl", compact ? "h-12" : "h-48")}>
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      <div className={cn("w-full rounded-xl overflow-hidden", compact ? "h-12" : "")}>
+        {!compact && (
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="h-4 w-24 bg-muted/50 rounded animate-pulse mb-2" />
+              <div className="h-8 w-16 bg-muted/50 rounded animate-pulse" />
+            </div>
+            <div className="flex gap-1">
+              {['1H', '1D', '1W', '1M'].map((period) => (
+                <div key={period} className="h-7 w-10 bg-muted/30 rounded-lg animate-pulse" />
+              ))}
+            </div>
+          </div>
+        )}
+        <div className={cn(
+          "w-full bg-muted/30 rounded-xl shimmer",
+          compact ? "h-12" : "h-48"
+        )} />
       </div>
     );
   }
