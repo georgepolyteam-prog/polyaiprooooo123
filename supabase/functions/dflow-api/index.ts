@@ -162,6 +162,23 @@ serve(async (req) => {
         });
       }
       
+      // For getOrderStatus 404, return "not_found_yet" status gracefully (order not indexed yet)
+      if (action === 'getOrderStatus' && response.status === 404) {
+        console.log(`Order not indexed yet, returning not_found_yet status`);
+        return new Response(JSON.stringify({ status: 'not_found_yet' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // For getMarketByMint 404, return null gracefully (not a market token)
+      if (action === 'getMarketByMint' && response.status === 404) {
+        return new Response(JSON.stringify({ market: null }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
       // Parse DFlow error response for better error messages
       let errorData: { error: string; code: string; status: number } = { error: errorText, code: 'unknown', status: response.status };
       try {
