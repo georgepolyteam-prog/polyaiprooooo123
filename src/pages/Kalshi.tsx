@@ -89,7 +89,7 @@ const DEMO_MARKETS: KalshiMarket[] = [
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
-  const { getEvents, getMarkets, getMarketsByMints, loading, error } = useDflowApi();
+  const { getEvents, getMarkets, filterOutcomeMints, getMarketsByMints, loading, error } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
@@ -122,7 +122,7 @@ export default function Kalshi() {
     
     setPositionsLoading(true);
     try {
-      // Get all token accounts for this wallet
+      // Step 1: Get all token accounts for this wallet
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
         publicKey,
         { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
@@ -141,7 +141,7 @@ export default function Kalshi() {
         return;
       }
       
-      // Collect all mints to batch query
+      // Collect all mints and their amounts
       const mintToAmount: Record<string, number> = {};
       nonZeroAccounts.forEach(account => {
         const mint = account.account.data.parsed?.info?.mint;
@@ -151,10 +151,22 @@ export default function Kalshi() {
         }
       });
       
-      const mints = Object.keys(mintToAmount);
+      const allMints = Object.keys(mintToAmount);
+      console.log(`Found ${allMints.length} non-zero token accounts`);
       
-      // Batch fetch markets by mints
-      const marketsData = await getMarketsByMints(mints);
+      // Step 2: Filter to only prediction market outcome mints using DFlow API
+      const outcomeMints = await filterOutcomeMints(allMints);
+      console.log(`Filtered to ${outcomeMints.length} prediction market mints`);
+      
+      if (outcomeMints.length === 0) {
+        setPositions([]);
+        setPositionsLoading(false);
+        return;
+      }
+      
+      // Step 3: Batch fetch market data for outcome mints using POST batch endpoint
+      const marketsData = await getMarketsByMints(outcomeMints);
+      console.log(`Fetched ${marketsData.length} markets from batch endpoint`);
       
       // Build positions from matched markets
       const positionsList: any[] = [];
@@ -197,6 +209,7 @@ export default function Kalshi() {
         }
       }
       
+      console.log(`Built ${positionsList.length} positions`);
       setPositions(positionsList);
     } catch (err) {
       console.error('Failed to fetch positions:', err);
@@ -204,7 +217,7 @@ export default function Kalshi() {
     } finally {
       setPositionsLoading(false);
     }
-  }, [publicKey, connection, getMarketsByMints]);
+  }, [publicKey, connection, filterOutcomeMints, getMarketsByMints]);
 
   const fetchMarkets = async () => {
     setIsLoading(true);
