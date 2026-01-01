@@ -57,9 +57,12 @@ serve(async (req) => {
       
       case 'filterOutcomeMints':
         // Filter user's token mints to only prediction market outcome mints
+        // IMPORTANT: DFlow API expects 'addresses' field, not 'mints'!
+        const addressesToFilter = params.mints || [];
+        console.log(`[filterOutcomeMints] Filtering ${addressesToFilter.length} addresses`);
         url = `${DFLOW_METADATA_API}/api/v1/filter_outcome_mints`;
         method = 'POST';
-        body = JSON.stringify({ mints: params.mints || [] });
+        body = JSON.stringify({ addresses: addressesToFilter });
         break;
       
       case 'getMarketsByMints':
@@ -249,7 +252,15 @@ serve(async (req) => {
     }
     
     const data = await response.json();
-    console.log(`DFlow API success, response keys:`, Object.keys(data));
+    console.log(`DFlow API success for ${action}, response keys:`, Object.keys(data));
+    
+    // Log specific data for debugging portfolio issues
+    if (action === 'filterOutcomeMints') {
+      console.log(`[filterOutcomeMints] Found ${(data.outcomeMints || []).length} outcome mints`);
+    }
+    if (action === 'getMarketsByMints') {
+      console.log(`[getMarketsByMints] Found ${(data.markets || []).length} markets`);
+    }
     
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
