@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
@@ -128,7 +128,9 @@ export default function Kalshi() {
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-
+  const [sellPosition, setSellPosition] = useState<any | null>(null);
+  
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   // Load recent orders from localStorage
   useEffect(() => {
     if (publicKey) {
@@ -212,13 +214,15 @@ export default function Kalshi() {
       const allTokenAccounts = [...tokenkegAccounts.value, ...token2022Accounts.value];
       
       // Filter for non-zero balances using raw amount (string !== "0")
-      const mintToAmount: Record<string, number> = {};
+      // Store full info for each mint: { uiAmount, rawAmount, decimals }
+      const mintToInfo: Record<string, { uiAmount: number; rawAmount: string; decimals: number }> = {};
       const excludedHitSet = new Set<string>();
       
       allTokenAccounts.forEach(account => {
         const info = account.account.data.parsed?.info;
-        const rawAmount = info?.tokenAmount?.amount || "0";
-        const uiAmount = info?.tokenAmount?.uiAmount || 0;
+        const tokenAmount = info?.tokenAmount;
+        const rawAmount = tokenAmount?.amount || "0";
+        const decimals = tokenAmount?.decimals ?? 0;
         const mint = info?.mint;
         
         if (!mint) return;
@@ -232,16 +236,23 @@ export default function Kalshi() {
           return;
         }
         
-        mintToAmount[mint] = uiAmount;
+        // Compute uiAmount robustly - fallback if uiAmount is null
+        let uiAmount = tokenAmount?.uiAmount;
+        if (uiAmount == null || isNaN(uiAmount)) {
+          // Compute from raw amount and decimals
+          uiAmount = Number(rawAmount) / Math.pow(10, decimals);
+        }
+        
+        mintToInfo[mint] = { uiAmount, rawAmount, decimals };
       });
       
       debug.excludedHits = Array.from(excludedHitSet);
-      debug.eligibleCount = Object.keys(mintToAmount).length;
+      debug.eligibleCount = Object.keys(mintToInfo).length;
       
       // Sample mints for debugging
-      debug.sampleMints = Object.entries(mintToAmount).slice(0, 5).map(([mint, amount]) => ({
+      debug.sampleMints = Object.entries(mintToInfo).slice(0, 5).map(([mint, info]) => ({
         mint: mint.slice(0, 8) + '...' + mint.slice(-4),
-        amount: amount.toString(),
+        amount: info.uiAmount.toString(),
       }));
       
       console.log(`[Portfolio] ${debug.eligibleCount} eligible accounts (non-zero, after exclusions)`);
@@ -255,7 +266,7 @@ export default function Kalshi() {
         return;
       }
       
-      const allMints = Object.keys(mintToAmount);
+      const allMints = Object.keys(mintToInfo);
       console.log(`[Portfolio] Step 2: Calling filterOutcomeMints with ${allMints.length} mints...`);
       console.log('[Portfolio] Sample mints:', allMints.slice(0, 3));
       
@@ -289,30 +300,42 @@ export default function Kalshi() {
           if (!accountInfo) continue;
           
           // Check if user holds YES token
-          if (accountInfo.yesMint && mintToAmount[accountInfo.yesMint]) {
+          const yesMint = accountInfo.yesMint;
+          if (yesMint && mintToInfo[yesMint]) {
+            const info = mintToInfo[yesMint];
             positionsList.push({
               marketTicker: market.ticker,
               marketTitle: market.title,
               side: 'yes',
-              quantity: mintToAmount[accountInfo.yesMint],
+              quantity: info.uiAmount,
               avgPrice: market.yesPrice,
               currentPrice: market.yesPrice,
               pnl: 0,
               pnlPercent: 0,
+              // For selling
+              sideMint: yesMint,
+              decimals: info.decimals,
+              rawAmount: info.rawAmount,
             });
           }
           
           // Check if user holds NO token
-          if (accountInfo.noMint && mintToAmount[accountInfo.noMint]) {
+          const noMint = accountInfo.noMint;
+          if (noMint && mintToInfo[noMint]) {
+            const info = mintToInfo[noMint];
             positionsList.push({
               marketTicker: market.ticker,
               marketTitle: market.title,
               side: 'no',
-              quantity: mintToAmount[accountInfo.noMint],
+              quantity: info.uiAmount,
               avgPrice: market.noPrice,
               currentPrice: market.noPrice,
               pnl: 0,
               pnlPercent: 0,
+              // For selling
+              sideMint: noMint,
+              decimals: info.decimals,
+              rawAmount: info.rawAmount,
             });
           }
         }
@@ -398,11 +421,11 @@ export default function Kalshi() {
     }
   };
 
-  const filteredMarkets = markets.filter(market =>
-    (market.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (market.subtitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (market.ticker || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredMarkets = useMemo(() => markets.filter(market =>
+    (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+    (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+    (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+  ), [markets, deferredSearchQuery]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -593,6 +616,7 @@ export default function Kalshi() {
               onSendDebugReport={sendDebugReport}
               onClearCompletedOrders={clearCompletedOrders}
               onRefreshPositions={fetchPositions}
+              onSellPosition={(pos) => setSellPosition(pos)}
             />
           </TabsContent>
         </Tabs>
@@ -618,6 +642,33 @@ export default function Kalshi() {
         <KalshiAIInsight
           market={aiMarket}
           onClose={() => setAiMarket(null)}
+        />
+      )}
+
+      {/* Sell Modal */}
+      {sellPosition && (
+        <KalshiTradingModal
+          market={{
+            ticker: sellPosition.marketTicker,
+            title: sellPosition.marketTitle,
+            yesPrice: sellPosition.side === 'yes' ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
+            noPrice: sellPosition.side === 'no' ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
+            accounts: {},
+          } as any}
+          onClose={() => setSellPosition(null)}
+          mode="sell"
+          initialSide={sellPosition.side.toUpperCase() as 'YES' | 'NO'}
+          sellMint={sellPosition.sideMint}
+          sellDecimals={sellPosition.decimals}
+          maxShares={sellPosition.quantity}
+          onOrderSubmitted={(order) => {
+            const newOrders = [order, ...recentOrders].slice(0, 20);
+            setRecentOrders(newOrders);
+            if (publicKey) {
+              localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
+            }
+            fetchPositions();
+          }}
         />
       )}
     </div>
