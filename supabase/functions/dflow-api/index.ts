@@ -55,39 +55,57 @@ serve(async (req) => {
         url = `${DFLOW_METADATA_API}/api/v1/trades/${params.ticker}?limit=${tradesLimit}`;
         break;
       
+      case 'filterOutcomeMints':
+        // Filter user's token mints to only prediction market outcome mints
+        url = `${DFLOW_METADATA_API}/api/v1/filter_outcome_mints`;
+        method = 'POST';
+        body = JSON.stringify({ mints: params.mints || [] });
+        break;
+      
       case 'getMarketsByMints':
-        // Batch lookup markets by mint addresses - fetch each individually
-        const mints = params.mints || [];
-        console.log(`Fetching markets for ${mints.length} mints...`);
+        // Batch lookup markets by mint addresses using POST /api/v1/markets/batch
+        const batchMints = params.mints || [];
+        console.log(`Fetching markets batch for ${batchMints.length} mints...`);
         
-        const marketPromises = mints.map(async (mint: string) => {
-          try {
-            const resp = await fetch(
-              `${DFLOW_METADATA_API}/api/v1/market/by-mint/${mint}`,
-              {
-                headers: {
-                  'x-api-key': DFLOW_API_KEY,
-                  'Content-Type': 'application/json',
-                },
-              }
-            );
-            if (!resp.ok) {
-              console.log(`Mint ${mint} not found (${resp.status})`);
-              return null;
-            }
-            const data = await resp.json();
-            return { ...data, holdingMint: mint }; // Include which mint this is for
-          } catch (err) {
-            console.log(`Error fetching mint ${mint}:`, err);
-            return null;
+        if (batchMints.length === 0) {
+          return new Response(JSON.stringify({ markets: [] }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        // Use the correct POST batch endpoint
+        const batchResponse = await fetch(
+          `${DFLOW_METADATA_API}/api/v1/markets/batch`,
+          {
+            method: 'POST',
+            headers: {
+              'x-api-key': DFLOW_API_KEY,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ mints: batchMints }),
           }
-        });
+        );
         
-        const marketResults = await Promise.all(marketPromises);
-        const validMarkets = marketResults.filter(m => m !== null);
-        console.log(`Found ${validMarkets.length}/${mints.length} valid markets`);
+        if (!batchResponse.ok) {
+          const errorText = await batchResponse.text();
+          console.error(`Batch markets error: ${batchResponse.status} ${errorText}`);
+          
+          if (batchResponse.status === 404 || batchResponse.status === 400) {
+            return new Response(JSON.stringify({ markets: [] }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          
+          return new Response(JSON.stringify({ error: errorText }), {
+            status: batchResponse.status,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         
-        return new Response(JSON.stringify({ markets: validMarkets }), {
+        const batchData = await batchResponse.json();
+        console.log(`Batch found ${(batchData.markets || []).length} markets`);
+        
+        return new Response(JSON.stringify(batchData), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       

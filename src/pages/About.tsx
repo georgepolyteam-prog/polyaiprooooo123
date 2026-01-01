@@ -4,6 +4,8 @@ import { motion, useInView } from 'framer-motion';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
 import { LaunchModal } from '@/components/LaunchModal';
+import okxLogo from "@/assets/okx-logo.png";
+import binanceLogo from "@/assets/binance-logo.png";
 import { 
   Brain, 
   BarChart3, 
@@ -25,7 +27,9 @@ import {
   Globe,
   Search,
   LineChart,
-  ArrowRight
+  ArrowRight,
+  ExternalLink,
+  Coins
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePolyPrice } from '@/hooks/usePolyPrice';
@@ -64,6 +68,45 @@ const faqItems: FAQItem[] = [
 ];
 
 const CONTRACT_ADDRESS = "982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump";
+
+const buyOptions = [
+  {
+    id: "binance",
+    name: "Binance Web3",
+    description: "World's largest exchange",
+    tagline: "Instant access",
+    gradient: "from-[#F0B90B] via-[#F8D12F] to-[#C99400]",
+    bgGlow: "bg-[#F0B90B]/20",
+    borderHover: "hover:border-[#F0B90B]/50",
+    shadowGlow: "group-hover:shadow-[0_0_80px_-20px_rgba(240,185,11,0.6)]",
+    url: `https://web3.binance.com/sv/token/sol/${CONTRACT_ADDRESS}`,
+    logo: binanceLogo,
+  },
+  {
+    id: "pumpfun",
+    name: "Pump.fun",
+    description: "Community favorite",
+    tagline: "Trade direct",
+    gradient: "from-emerald-400 via-teal-500 to-cyan-600",
+    bgGlow: "bg-emerald-500/20",
+    borderHover: "hover:border-emerald-500/50",
+    shadowGlow: "group-hover:shadow-[0_0_80px_-20px_rgba(16,185,129,0.6)]",
+    url: `https://pump.fun/coin/${CONTRACT_ADDRESS}`,
+    logo: "https://pump.fun/icon.png",
+  },
+  {
+    id: "okx",
+    name: "OKX Wallet",
+    description: "50M+ users worldwide",
+    tagline: "Swap instantly",
+    gradient: "from-zinc-300 via-zinc-400 to-zinc-600",
+    bgGlow: "bg-zinc-400/20",
+    borderHover: "hover:border-zinc-400/50",
+    shadowGlow: "group-hover:shadow-[0_0_80px_-20px_rgba(161,161,170,0.6)]",
+    url: `https://www.okx.com/web3/dex-swap#inputChain=501&inputCurrency=So11111111111111111111111111111111111111112&outputChain=501&outputCurrency=${CONTRACT_ADDRESS}`,
+    logo: okxLogo,
+  },
+];
 
 const About = () => {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
@@ -250,6 +293,109 @@ const About = () => {
               />
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Buy POLY Section */}
+      <section className="py-24 px-6 relative overflow-hidden">
+        {/* Animated background orbs */}
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-radial from-primary/8 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-gradient-radial from-emerald-500/6 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="max-w-5xl mx-auto relative">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
+          >
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6">
+              <Coins className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-medium text-primary">How to Buy</span>
+            </div>
+            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-6">
+              Get{' '}
+              <span className="bg-gradient-to-r from-primary via-purple-400 to-primary bg-clip-text text-transparent">
+                POLY
+              </span>
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Purchase POLY tokens through any of these trusted platforms.
+              <br />
+              Then deposit to start analyzing markets.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            {buyOptions.map((option, i) => (
+              <motion.a
+                key={option.id}
+                href={option.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                whileHover={{ y: -8, scale: 1.02 }}
+                className={`group relative block cursor-pointer transition-all duration-500 ${option.shadowGlow}`}
+              >
+                {/* Glow effect on hover */}
+                <div className={`absolute -inset-[1px] rounded-[28px] ${option.bgGlow} blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                
+                {/* Card */}
+                <div className={`relative p-8 rounded-3xl bg-card/80 backdrop-blur-xl border border-border/50 ${option.borderHover} transition-all duration-300 h-full`}>
+                  {/* Logo container with gradient */}
+                  <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${option.gradient} flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow duration-300`}>
+                    <img 
+                      src={option.logo} 
+                      alt={option.name}
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  
+                  {/* Tagline chip */}
+                  <div className="flex justify-center mb-4">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground px-3 py-1 rounded-full bg-muted/50">
+                      {option.tagline}
+                    </span>
+                  </div>
+                  
+                  {/* Text */}
+                  <h4 className="text-xl font-semibold text-foreground text-center mb-2">
+                    {option.name}
+                  </h4>
+                  <p className="text-muted-foreground text-center text-sm mb-6">
+                    {option.description}
+                  </p>
+                  
+                  {/* CTA */}
+                  <div className="flex items-center justify-center gap-2 text-primary font-medium group-hover:gap-3 transition-all duration-300">
+                    <span>Buy Now</span>
+                    <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
+                  </div>
+                </div>
+              </motion.a>
+            ))}
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="text-center text-sm text-muted-foreground"
+          >
+            After purchasing, visit the{' '}
+            <Link to="/credits" className="text-primary hover:underline font-medium">
+              Credits page
+            </Link>
+            {' '}to deposit and start using AI analysis.
+          </motion.p>
         </div>
       </section>
 

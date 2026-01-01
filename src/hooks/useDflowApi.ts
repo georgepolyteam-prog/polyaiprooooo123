@@ -129,16 +129,26 @@ export function useDflowApi() {
     }
   }, [callDflowApi]);
 
-  // Get multiple markets by mint addresses (for portfolio)
-
-  // Get multiple markets by mint addresses (for portfolio)
-  const getMarketsByMints = useCallback(async (mints: string[]) => {
+  // Filter token mints to only prediction market outcome mints
+  const filterOutcomeMints = useCallback(async (mints: string[]): Promise<string[]> => {
     try {
-      return await callDflowApi('getMarketsByMints', { mints });
+      const data = await callDflowApi('filterOutcomeMints', { mints });
+      return data.outcomeMints || data.mints || [];
+    } catch (err: any) {
+      console.error('Failed to filter outcome mints:', err);
+      return [];
+    }
+  }, [callDflowApi]);
+
+  // Get multiple markets by mint addresses (for portfolio) - uses POST batch endpoint
+  const getMarketsByMints = useCallback(async (mints: string[]): Promise<KalshiMarket[]> => {
+    try {
+      const data = await callDflowApi('getMarketsByMints', { mints });
+      return (data.markets || []).map((market: any) => transformMarket(market));
     } catch (err: any) {
       // Return empty if not found
       if (err?.message?.includes('404')) {
-        return { markets: [] };
+        return [];
       }
       throw err;
     }
@@ -232,6 +242,7 @@ export function useDflowApi() {
     getMarketByTicker,
     getOrderbook,
     getTrades,
+    filterOutcomeMints,
     getMarketsByMints,
     getSeries,
     getTagsByCategories,
