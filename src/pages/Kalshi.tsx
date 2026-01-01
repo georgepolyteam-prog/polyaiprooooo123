@@ -118,15 +118,22 @@ export default function Kalshi() {
   ];
 
   const fetchPositions = useCallback(async () => {
-    if (!publicKey || !connection) return;
+    if (!publicKey || !connection) {
+      console.log('[Portfolio] No wallet connected, skipping fetch');
+      return;
+    }
     
+    console.log('[Portfolio] Starting fetch for wallet:', publicKey.toBase58());
     setPositionsLoading(true);
+    
     try {
       // Step 1: Get all token accounts for this wallet
+      console.log('[Portfolio] Step 1: Fetching token accounts...');
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
         publicKey,
         { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
       );
+      console.log(`[Portfolio] Found ${tokenAccounts.value.length} total token accounts`);
       
       // Filter for non-zero balances and exclude known non-market mints
       const nonZeroAccounts = tokenAccounts.value.filter(account => {
@@ -134,8 +141,10 @@ export default function Kalshi() {
         const mint = account.account.data.parsed?.info?.mint;
         return amount > 0 && mint && !EXCLUDED_MINTS.includes(mint);
       });
+      console.log(`[Portfolio] ${nonZeroAccounts.length} accounts after filtering (non-zero, excluding USDC/SOL/USDT)`);
       
       if (nonZeroAccounts.length === 0) {
+        console.log('[Portfolio] No eligible token accounts found');
         setPositions([]);
         setPositionsLoading(false);
         return;
@@ -152,21 +161,24 @@ export default function Kalshi() {
       });
       
       const allMints = Object.keys(mintToAmount);
-      console.log(`Found ${allMints.length} non-zero token accounts`);
+      console.log(`[Portfolio] Step 2: Calling filterOutcomeMints with ${allMints.length} mints...`);
+      console.log('[Portfolio] Sample mints:', allMints.slice(0, 3));
       
       // Step 2: Filter to only prediction market outcome mints using DFlow API
       const outcomeMints = await filterOutcomeMints(allMints);
-      console.log(`Filtered to ${outcomeMints.length} prediction market mints`);
+      console.log(`[Portfolio] filterOutcomeMints returned ${outcomeMints.length} prediction market mints`);
       
       if (outcomeMints.length === 0) {
+        console.log('[Portfolio] No prediction market tokens found in wallet');
         setPositions([]);
         setPositionsLoading(false);
         return;
       }
       
       // Step 3: Batch fetch market data for outcome mints using POST batch endpoint
+      console.log(`[Portfolio] Step 3: Fetching market data for ${outcomeMints.length} mints...`);
       const marketsData = await getMarketsByMints(outcomeMints);
-      console.log(`Fetched ${marketsData.length} markets from batch endpoint`);
+      console.log(`[Portfolio] getMarketsByMints returned ${marketsData.length} markets`);
       
       // Build positions from matched markets
       const positionsList: any[] = [];
@@ -209,11 +221,11 @@ export default function Kalshi() {
         }
       }
       
-      console.log(`Built ${positionsList.length} positions`);
+      console.log(`[Portfolio] Built ${positionsList.length} positions from ${marketsData.length} markets`);
       setPositions(positionsList);
     } catch (err) {
-      console.error('Failed to fetch positions:', err);
-      toast.error('Failed to load portfolio');
+      console.error('[Portfolio] Error fetching positions:', err);
+      toast.error(`Failed to load portfolio: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setPositionsLoading(false);
     }
