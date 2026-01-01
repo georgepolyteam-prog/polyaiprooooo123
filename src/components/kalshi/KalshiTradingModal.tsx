@@ -72,11 +72,15 @@ async function confirmOpenTransaction(
 }
 
 // For async orders: use DFlow's /order-status endpoint to check fills
+// Now handles graceful "not_found_yet" responses from backend (no 404 errors)
 async function checkAsyncOrderStatus(
   signature: string,
-  maxAttempts = 30,
-  pollInterval = 2000
+  maxAttempts = 20,
+  pollInterval = 2500
 ): Promise<{ filled: boolean; status?: string; fills?: any[]; error?: string }> {
+  let notFoundCount = 0;
+  const maxNotFound = 8; // Stop after 8 consecutive not_found_yet (20 seconds)
+  
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await fetch(
@@ -94,29 +98,33 @@ async function checkAsyncOrderStatus(
         }
       );
 
-      if (!response.ok) {
-        // 404 might mean order not found yet, keep polling
-        if (response.status === 404) {
-          console.log(`📊 Order status (attempt ${attempt}): not found yet`);
-        } else {
-          console.log(`📊 Order status check failed: ${response.status}`);
+      const data = await response.json();
+      const status = data.status || 'unknown';
+      
+      console.log(`📊 Order status (attempt ${attempt}):`, status);
+
+      if (status === 'closed' || status === 'filled') {
+        console.log('✅ Order filled successfully!');
+        console.log('Fills:', data.fills);
+        return { filled: true, status: status, fills: data.fills };
+      }
+
+      if (status === 'failed' || status === 'expired') {
+        return { filled: false, status: status, error: `Order ${status}` };
+      }
+
+      // Handle "not_found_yet" gracefully (backend now returns 200 with this status)
+      if (status === 'not_found_yet') {
+        notFoundCount++;
+        if (notFoundCount >= maxNotFound) {
+          console.log('⏳ Order not indexed after multiple attempts, may still be processing');
+          return { filled: false, status: 'pending', error: undefined };
         }
       } else {
-        const data = await response.json();
-        console.log(`📊 Order status (attempt ${attempt}):`, data.status || data);
-
-        if (data.status === 'closed' || data.status === 'filled') {
-          console.log('✅ Order filled successfully!');
-          console.log('Fills:', data.fills);
-          return { filled: true, status: data.status, fills: data.fills };
-        }
-
-        if (data.status === 'failed' || data.status === 'expired') {
-          return { filled: false, status: data.status, error: `Order ${data.status}` };
-        }
-
-        // Status is 'pending', 'open', or similar - continue polling
+        notFoundCount = 0; // Reset if we got a different status
       }
+
+      // Status is 'pending', 'open', 'not_found_yet' - continue polling
     } catch (error) {
       console.log(`Order status check attempt ${attempt} failed:`, error);
     }
@@ -125,7 +133,7 @@ async function checkAsyncOrderStatus(
   }
 
   // Timeout - but order might still fill
-  return { filled: false, error: 'Order fill timeout - check Solscan to verify' };
+  return { filled: false, status: 'pending', error: undefined };
 }
 
 export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps) {
@@ -315,19 +323,23 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       const isAsyncOrder = orderResponse.executionMode === 'async';
       
       if (isAsyncOrder) {
-        setOrderStatus('Waiting for fill...');
+        setOrderStatus('Waiting for fill (this may take a moment)...');
         console.log('📊 Async order detected, polling DFlow order-status...');
         
-        const orderResult = await checkAsyncOrderStatus(signature, 30, 2000);
+        const orderResult = await checkAsyncOrderStatus(signature, 20, 2500);
         
         if (orderResult.filled) {
           toast.success(`Trade filled! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
           onClose();
-        } else if (orderResult.error) {
-          // Timeout but tx might still fill
-          toast.info('Order submitted! Fill may still be processing - check Solscan.', { id: 'trade' });
-          setOrderStatus('Order pending - check Solscan to verify');
-          // Don't close modal, let user see Solscan link
+        } else if (orderResult.status === 'pending' || !orderResult.error) {
+          // Pending but no error - order likely processing, don't show as error
+          toast.success('Order submitted! Check your portfolio in a moment.', { id: 'trade' });
+          setOrderStatus('Order processing - refresh portfolio shortly');
+          // Auto-close after showing success
+          setTimeout(() => onClose(), 2000);
+        } else {
+          // Actual error
+          toast.error(orderResult.error || 'Trade failed', { id: 'trade' });
         }
       } else {
         // Sync order - open tx confirmation is enough
@@ -336,8 +348,9 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
           onClose();
         } else {
           // Pending but no error - likely still processing
-          toast.info('Transaction submitted! Check Solscan to verify.', { id: 'trade' });
-          setOrderStatus('Transaction sent - verify on Solscan');
+          toast.success('Transaction submitted! Check your portfolio shortly.', { id: 'trade' });
+          setOrderStatus('Transaction sent - refresh portfolio shortly');
+          setTimeout(() => onClose(), 2000);
         }
       }
       

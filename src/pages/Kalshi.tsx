@@ -89,7 +89,7 @@ const DEMO_MARKETS: KalshiMarket[] = [
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
-  const { getEvents, getMarkets, getMarketByMint, loading, error } = useDflowApi();
+  const { getEvents, getMarkets, getMarketsByMints, loading, error } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
@@ -110,6 +110,13 @@ export default function Kalshi() {
     }
   }, [activeTab, connected, publicKey]);
 
+  // Known non-market mints to exclude from portfolio scan
+  const EXCLUDED_MINTS = [
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+    'So11111111111111111111111111111111111111112', // wSOL
+    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+  ];
+
   const fetchPositions = useCallback(async () => {
     if (!publicKey || !connection) return;
     
@@ -121,10 +128,11 @@ export default function Kalshi() {
         { programId: new (await import('@solana/web3.js')).PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
       );
       
-      // Filter for non-zero balances
+      // Filter for non-zero balances and exclude known non-market mints
       const nonZeroAccounts = tokenAccounts.value.filter(account => {
         const amount = account.account.data.parsed?.info?.tokenAmount?.uiAmount || 0;
-        return amount > 0;
+        const mint = account.account.data.parsed?.info?.mint;
+        return amount > 0 && mint && !EXCLUDED_MINTS.includes(mint);
       });
       
       if (nonZeroAccounts.length === 0) {
@@ -133,40 +141,59 @@ export default function Kalshi() {
         return;
       }
       
-      // Try to find markets for each token mint
-      const positionsList: any[] = [];
-      
-      for (const account of nonZeroAccounts) {
+      // Collect all mints to batch query
+      const mintToAmount: Record<string, number> = {};
+      nonZeroAccounts.forEach(account => {
         const mint = account.account.data.parsed?.info?.mint;
         const amount = account.account.data.parsed?.info?.tokenAmount?.uiAmount || 0;
+        if (mint) {
+          mintToAmount[mint] = amount;
+        }
+      });
+      
+      const mints = Object.keys(mintToAmount);
+      
+      // Batch fetch markets by mints
+      const marketsData = await getMarketsByMints(mints);
+      
+      // Build positions from matched markets
+      const positionsList: any[] = [];
+      
+      for (const market of marketsData) {
+        if (!market.accounts) continue;
         
-        if (!mint) continue;
-        
-        try {
-          const marketData = await getMarketByMint(mint);
-          if (marketData) {
-            // Determine if this is YES or NO position based on the mint
-            const accounts = marketData.accounts || {};
-            const firstAccountKey = Object.keys(accounts)[0];
-            const accountInfo = firstAccountKey ? accounts[firstAccountKey] : null;
-            
-            const isYes = accountInfo?.yesMint === mint;
-            const currentPrice = isYes ? marketData.yesPrice : marketData.noPrice;
-            
+        // Check all account entries for matching mints
+        for (const settlementKey of Object.keys(market.accounts)) {
+          const accountInfo = market.accounts[settlementKey];
+          if (!accountInfo) continue;
+          
+          // Check if user holds YES token
+          if (accountInfo.yesMint && mintToAmount[accountInfo.yesMint]) {
             positionsList.push({
-              marketTicker: marketData.ticker,
-              marketTitle: marketData.title,
-              side: isYes ? 'yes' : 'no',
-              quantity: amount,
-              avgPrice: currentPrice, // We don't have avg price, use current
-              currentPrice: currentPrice,
-              pnl: 0, // Would need historical data
+              marketTicker: market.ticker,
+              marketTitle: market.title,
+              side: 'yes',
+              quantity: mintToAmount[accountInfo.yesMint],
+              avgPrice: market.yesPrice,
+              currentPrice: market.yesPrice,
+              pnl: 0,
               pnlPercent: 0,
             });
           }
-        } catch (err) {
-          // Skip tokens that aren't prediction market tokens
-          console.log(`Token ${mint} is not a prediction market token`);
+          
+          // Check if user holds NO token
+          if (accountInfo.noMint && mintToAmount[accountInfo.noMint]) {
+            positionsList.push({
+              marketTicker: market.ticker,
+              marketTitle: market.title,
+              side: 'no',
+              quantity: mintToAmount[accountInfo.noMint],
+              avgPrice: market.noPrice,
+              currentPrice: market.noPrice,
+              pnl: 0,
+              pnlPercent: 0,
+            });
+          }
         }
       }
       
@@ -177,7 +204,7 @@ export default function Kalshi() {
     } finally {
       setPositionsLoading(false);
     }
-  }, [publicKey, connection, getMarketByMint]);
+  }, [publicKey, connection, getMarketsByMints]);
 
   const fetchMarkets = async () => {
     setIsLoading(true);
