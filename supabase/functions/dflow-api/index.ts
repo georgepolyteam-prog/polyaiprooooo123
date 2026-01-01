@@ -56,10 +56,41 @@ serve(async (req) => {
         break;
       
       case 'getMarketsByMints':
-        // Batch lookup markets by mint addresses
-        const mintsParam = (params.mints || []).join(',');
-        url = `${DFLOW_METADATA_API}/api/v1/markets?mints=${encodeURIComponent(mintsParam)}`;
-        break;
+        // Batch lookup markets by mint addresses - fetch each individually
+        const mints = params.mints || [];
+        console.log(`Fetching markets for ${mints.length} mints...`);
+        
+        const marketPromises = mints.map(async (mint: string) => {
+          try {
+            const resp = await fetch(
+              `${DFLOW_METADATA_API}/api/v1/market/by-mint/${mint}`,
+              {
+                headers: {
+                  'x-api-key': DFLOW_API_KEY,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+            if (!resp.ok) {
+              console.log(`Mint ${mint} not found (${resp.status})`);
+              return null;
+            }
+            const data = await resp.json();
+            return { ...data, holdingMint: mint }; // Include which mint this is for
+          } catch (err) {
+            console.log(`Error fetching mint ${mint}:`, err);
+            return null;
+          }
+        });
+        
+        const marketResults = await Promise.all(marketPromises);
+        const validMarkets = marketResults.filter(m => m !== null);
+        console.log(`Found ${validMarkets.length}/${mints.length} valid markets`);
+        
+        return new Response(JSON.stringify({ markets: validMarkets }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      
       
       case 'getSeries':
         // Get all series (market groups)
