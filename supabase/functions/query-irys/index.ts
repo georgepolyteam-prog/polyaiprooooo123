@@ -127,7 +127,7 @@ async function fetchWithConcurrency<T>(
   return results;
 }
 
-// Smart keyword matching - OR logic for years, AND logic for entities
+// Smart keyword matching - flexible OR logic for multi-entity queries
 function matchesKeywords(question: string, keywords: string[]): boolean {
   if (keywords.length === 0) return true;
   const q = question.toLowerCase();
@@ -137,13 +137,18 @@ function matchesKeywords(question: string, keywords: string[]): boolean {
   const entities = keywords.filter(kw => !yearPattern.test(kw));
   const years = keywords.filter(kw => yearPattern.test(kw));
   
-  // At least ONE entity must match (OR logic within entities)
-  const hasEntity = entities.length === 0 || entities.some(kw => q.includes(kw.toLowerCase()));
+  // For multi-entity queries (e.g., "trump zelensky"), match if ANY entity appears
+  // This is more flexible for finding related markets
+  const entityMatchCount = entities.filter(kw => q.includes(kw.toLowerCase())).length;
+  
+  // If we have multiple entities, require at least ONE match (OR logic)
+  // This helps with queries like "trump zelensky" finding markets about either
+  const hasEntity = entities.length === 0 || entityMatchCount >= 1;
   
   // At least ONE year must match (OR logic within years)
   const hasYear = years.length === 0 || years.some(kw => q.includes(kw.toLowerCase()));
   
-  // Both conditions must be satisfied (entity match AND year match)
+  // Both conditions must be satisfied (entity match AND year match if specified)
   return hasEntity && hasYear;
 }
 

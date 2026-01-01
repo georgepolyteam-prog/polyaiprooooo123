@@ -67,6 +67,20 @@ export type AnalysisStep = 'idle' | 'analyzing' | 'fetching' | 'news' | 'whales'
 
 export type ChatMode = 'regular' | 'polyfactual' | 'historical';
 
+// Keywords that auto-trigger historical/Irys mode
+const HISTORICAL_KEYWORDS = [
+  'historical', 'history', 'past', 'resolved', 'accuracy',
+  'how did', 'how accurate', 'track record', 'performance',
+  'previous', 'old markets', 'archived', 'what happened',
+  'how well did', 'calibration', 'backtesting', 'past predictions'
+];
+
+// Check if a message should trigger historical mode
+const isHistoricalQuery = (message: string): boolean => {
+  const lower = message.toLowerCase();
+  return HISTORICAL_KEYWORDS.some(kw => lower.includes(kw));
+};
+
 export const usePolyChat = (session?: Session | null, walletAddress?: string | null) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -208,6 +222,12 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
 
     // Use forceDeepResearch if provided, otherwise fall back to state
     const effectiveDeepResearch = forceDeepResearch ?? deepResearch;
+    
+    // Auto-detect historical queries and enable irysMode
+    const effectiveIrysMode = irysMode || isHistoricalQuery(userMessage);
+    if (effectiveIrysMode && !irysMode) {
+      console.log('[Chat] Auto-detected historical query, enabling Irys mode');
+    }
 
     setIsLoading(true);
     if (effectiveDeepResearch) {
@@ -289,7 +309,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
           walletAddress: effectiveWallet,
           authType,
           deepResearch: effectiveDeepResearch,
-          irysMode
+          irysMode: effectiveIrysMode
         }),
       });
 

@@ -5886,9 +5886,17 @@ Do NOT use tools for general explanatory questions like "what is a prediction ma
     }
 
     // ============= IRYS BLOCKCHAIN DATA MODE =============
-    // Claude now queries Irys dynamically via tool - no hardcoded routing needed
-    // Just log that Irys mode is enabled, Claude will use query_irys_historical_markets tool
-    if (irysMode) {
+    // Auto-detect historical queries even if irysMode not explicitly set
+    const lowerUserMsg = (lastUserMessage?.content || '').toLowerCase();
+    const historicalKeywords = ['historical', 'history', 'past', 'resolved', 'accuracy', 'how accurate', 'track record', 'what happened', 'previous', 'old markets'];
+    const autoDetectedHistorical = historicalKeywords.some(kw => lowerUserMsg.includes(kw));
+    const effectiveIrysMode = irysMode || autoDetectedHistorical;
+    
+    if (autoDetectedHistorical && !irysMode) {
+      console.log("[Irys] Auto-detected historical query from keywords, enabling Irys mode");
+    }
+    
+    if (effectiveIrysMode) {
       console.log("[Irys] Irys mode enabled - Claude will query via query_irys_historical_markets tool");
       console.log("[Irys] User query:", lastUserMessage?.content?.substring(0, 100));
       // No pre-querying - Claude decides when and how to query via the tool
@@ -6095,8 +6103,31 @@ Use this sidebar whale data to enhance your analysis:
 - Note whale buy/sell ratios for market sentiment
 - Highlight if whales are accumulating or distributing
 ` +
-      (irysMode
+      (effectiveIrysMode
         ? `
+
+=== 🔥 CRITICAL: HISTORICAL QUERY DETECTED - USE IRYS IMMEDIATELY ===
+
+The user is asking about HISTORICAL/PAST/RESOLVED markets. You MUST:
+1. IMMEDIATELY call query_irys_historical_markets - do NOT search active markets first
+2. Extract keywords from the user's query (e.g., "trump zelensky" → keywords: ["trump", "zelensky"])
+3. Present results directly - NO "I couldn't find" or "Let me search" preamble
+
+=== RESPONSE QUALITY RULES ===
+
+🚫 NEVER START WITH NEGATIVE FRAMING:
+- ❌ "I couldn't find..."
+- ❌ "Unfortunately..."
+- ❌ "I wasn't able to..."
+- ❌ "I searched but..."
+- ❌ "Let me search for..."
+
+✅ ALWAYS LEAD WITH WHAT YOU FOUND:
+- ✅ "Here are X Trump-Zelensky historical markets..."
+- ✅ "I found Y resolved markets about..."
+- ✅ "From the blockchain-verified data..."
+
+If truly nothing found, explain WHY briefly and suggest alternatives.
 
 === 🔗 IRYS HISTORICAL DATA MODE - STRICT ANALYSIS RULES ===
 
