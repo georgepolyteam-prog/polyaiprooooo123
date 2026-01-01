@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { VersionedTransaction, Connection } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket } from '@/hooks/useDflowApi';
@@ -40,6 +40,9 @@ interface KalshiTradingModalProps {
   sellDecimals?: number;
   maxShares?: number;
 }
+
+// Order step types for progress UI
+type OrderStep = 'idle' | 'quote' | 'simulate' | 'sign' | 'submit' | 'confirm' | 'done' | 'error';
 
 // USDC mint on Solana mainnet
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -153,6 +156,33 @@ async function checkAsyncOrderStatus(
   return { filled: false, status: 'pending', error: undefined };
 }
 
+// Step progress helpers
+const getStepLabel = (step: OrderStep, isSell: boolean) => {
+  switch (step) {
+    case 'quote': return isSell ? 'Getting sell quote...' : 'Getting best price...';
+    case 'simulate': return 'Simulating transaction...';
+    case 'sign': return 'Waiting for wallet signature...';
+    case 'submit': return 'Submitting to Solana...';
+    case 'confirm': return 'Confirming on-chain...';
+    case 'done': return 'Trade complete!';
+    case 'error': return 'Trade failed';
+    default: return '';
+  }
+};
+
+const getStepProgress = (step: OrderStep) => {
+  switch (step) {
+    case 'quote': return 15;
+    case 'simulate': return 30;
+    case 'sign': return 50;
+    case 'submit': return 70;
+    case 'confirm': return 85;
+    case 'done': return 100;
+    case 'error': return 100;
+    default: return 0;
+  }
+};
+
 export function KalshiTradingModal({ 
   market, 
   onClose, 
@@ -170,7 +200,7 @@ export function KalshiTradingModal({
   const [side, setSide] = useState<'YES' | 'NO'>(initialSide || 'YES');
   const [amount, setAmount] = useState('');
   const [executing, setExecuting] = useState(false);
-  const [orderStatus, setOrderStatus] = useState('');
+  const [orderStep, setOrderStep] = useState<OrderStep>('idle');
   const [trades, setTrades] = useState<any[]>([]);
   const [tradesLoading, setTradesLoading] = useState(true);
   const [txSignature, setTxSignature] = useState<string | null>(null);
@@ -270,7 +300,7 @@ export function KalshiTradingModal({
     }
     
     setExecuting(true);
-    setOrderStatus(isSellMode ? 'Getting sell quote from DFlow...' : 'Getting quote from DFlow...');
+    setOrderStep('quote');
     setTxSignature(null);
     setSimulationError(null);
     setLiquidityError(null);
@@ -310,7 +340,7 @@ export function KalshiTradingModal({
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txBuffer));
       
       // Pre-flight simulation to catch errors early
-      setOrderStatus('Simulating transaction...');
+      setOrderStep('simulate');
       try {
         const simulation = await connection.simulateTransaction(transaction, {
           commitment: 'confirmed',
@@ -340,12 +370,12 @@ export function KalshiTradingModal({
         console.log('Simulation skipped (may not be supported), proceeding...');
       }
       
-      setOrderStatus('Sign the transaction in your wallet...');
+      setOrderStep('sign');
       
       // Sign the transaction
       const signedTx = await signTransaction(transaction);
       
-      setOrderStatus('Submitting to Solana...');
+      setOrderStep('submit');
       
       // Send with proper options
       const signature = await connection.sendRawTransaction(signedTx.serialize(), {
@@ -372,7 +402,7 @@ export function KalshiTradingModal({
       }
       
       // Confirm open transaction using proxied RPC (3 attempts, non-blocking)
-      setOrderStatus('Confirming transaction...');
+      setOrderStep('confirm');
       toast.loading('Transaction submitted! Confirming...', { id: 'trade' });
       
       const openConfirmation = await confirmOpenTransaction(signature, connection, 3, 1500);
@@ -390,47 +420,49 @@ export function KalshiTradingModal({
       const isAsyncOrder = orderResponse.executionMode === 'async';
       
       if (isAsyncOrder) {
-        setOrderStatus('Waiting for fill (this may take a moment)...');
         console.log('📊 Async order detected, polling DFlow order-status...');
         
         const orderResult = await checkAsyncOrderStatus(signature, 20, 2500);
         
         if (orderResult.filled) {
+          setOrderStep('done');
           if (isSellMode) {
             toast.success(`Sold ${amount} ${side} shares for ~$${estimatedUSDC}`, { id: 'trade' });
           } else {
             toast.success(`Trade filled! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
           }
-          onClose();
+          setTimeout(() => onClose(), 1500);
         } else if (orderResult.status === 'pending' || !orderResult.error) {
           // Pending but no error - order likely processing, don't show as error
+          setOrderStep('done');
           toast.success('Order submitted! Check your portfolio in a moment.', { id: 'trade' });
-          setOrderStatus('Order processing - refresh portfolio shortly');
-          // Auto-close after showing success
           setTimeout(() => onClose(), 2000);
         } else {
           // Actual error
+          setOrderStep('error');
           toast.error(orderResult.error || 'Trade failed', { id: 'trade' });
         }
       } else {
         // Sync order - open tx confirmation is enough
         if (openConfirmation.confirmed) {
+          setOrderStep('done');
           if (isSellMode) {
             toast.success(`Sold ${amount} ${side} shares for ~$${estimatedUSDC}`, { id: 'trade' });
           } else {
             toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
           }
-          onClose();
+          setTimeout(() => onClose(), 1500);
         } else {
           // Pending but no error - likely still processing
+          setOrderStep('done');
           toast.success('Transaction submitted! Check your portfolio shortly.', { id: 'trade' });
-          setOrderStatus('Transaction sent - refresh portfolio shortly');
           setTimeout(() => onClose(), 2000);
         }
       }
       
     } catch (error: any) {
       console.error('❌ Trade failed:', error);
+      setOrderStep('error');
       
       let errorMessage = 'Trade failed';
       const errorMsg = error?.message || error?.toString() || '';
@@ -459,15 +491,15 @@ export function KalshiTradingModal({
       toast.error(errorMessage, { id: 'trade' });
     } finally {
       setExecuting(false);
-      if (!txSignature) setOrderStatus('');
     }
   };
 
   const displayTitle = market.title || market.ticker;
   const modalTitle = isSellMode ? 'Sell Position' : 'Trade Market';
+  
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg bg-background/95 backdrop-blur-2xl border-border/50 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg bg-background border border-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl font-bold">{modalTitle}</DialogTitle>
@@ -479,20 +511,39 @@ export function KalshiTradingModal({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Status Overlay */}
-          {(executing || txSignature) && orderStatus && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-4 rounded-2xl bg-primary/10 border border-primary/30 space-y-2"
-            >
+          {/* Step Progress UI */}
+          {orderStep !== 'idle' && (
+            <div className="p-4 rounded-2xl bg-muted/50 border border-border space-y-3">
               <div className="flex items-center gap-3">
-                {executing ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                {orderStep === 'error' ? (
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                ) : orderStep === 'done' ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-500" />
                 ) : (
-                  <Sparkles className="w-5 h-5 text-primary" />
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
                 )}
-                <span className="text-sm font-medium text-foreground">{orderStatus}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {getStepLabel(orderStep, isSellMode)}
+                </span>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div 
+                  className={cn(
+                    "h-full transition-all duration-300",
+                    orderStep === 'error' ? 'bg-red-500' : orderStep === 'done' ? 'bg-emerald-500' : 'bg-primary'
+                  )}
+                  style={{ width: `${getStepProgress(orderStep)}%` }}
+                />
+              </div>
+              
+              {/* Step indicators */}
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span className={getStepProgress(orderStep) >= 15 ? 'text-primary' : ''}>Quote</span>
+                <span className={getStepProgress(orderStep) >= 50 ? 'text-primary' : ''}>Sign</span>
+                <span className={getStepProgress(orderStep) >= 70 ? 'text-primary' : ''}>Submit</span>
+                <span className={getStepProgress(orderStep) >= 85 ? 'text-primary' : ''}>Confirm</span>
               </div>
               
               {txSignature && (
@@ -506,19 +557,15 @@ export function KalshiTradingModal({
                   View on Solscan
                 </a>
               )}
-            </motion.div>
+            </div>
           )}
 
           {/* Simulation/Liquidity Error Warning */}
-          {(simulationError || liquidityError) && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2"
-            >
+          {(simulationError || liquidityError) && orderStep === 'idle' && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
               <span className="text-sm text-amber-400">{simulationError || liquidityError}</span>
-            </motion.div>
+            </div>
           )}
 
           {/* Market Title */}
@@ -532,12 +579,16 @@ export function KalshiTradingModal({
           </div>
 
           {/* Price Chart */}
-          <KalshiPriceChart 
-            trades={trades} 
-            yesPrice={market.yesPrice} 
-            noPrice={market.noPrice}
-            loading={tradesLoading}
-          />
+          {tradesLoading ? (
+            <div className="h-32 rounded-xl bg-muted/30 animate-pulse" />
+          ) : (
+            <KalshiPriceChart 
+              trades={trades} 
+              yesPrice={market.yesPrice} 
+              noPrice={market.noPrice}
+              loading={tradesLoading}
+            />
+          )}
 
           {/* Wallet Connection */}
           {!connected && (
@@ -554,13 +605,13 @@ export function KalshiTradingModal({
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setSide('YES')}
-              disabled={!connected}
+              disabled={!connected || executing}
               className={cn(
-                'p-4 rounded-2xl border-2 transition-all',
+                'p-4 rounded-2xl border-2 transition-colors',
                 side === 'YES'
-                  ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_20px_hsl(142,76%,36%,0.2)]'
+                  ? 'border-emerald-500 bg-emerald-500/10'
                   : 'border-border/50 bg-muted/30 hover:bg-muted/50',
-                !connected && 'opacity-50 cursor-not-allowed'
+                (!connected || executing) && 'opacity-50 cursor-not-allowed'
               )}
             >
               <TrendingUp className={cn(
@@ -583,13 +634,13 @@ export function KalshiTradingModal({
 
             <button
               onClick={() => setSide('NO')}
-              disabled={!connected}
+              disabled={!connected || executing}
               className={cn(
-                'p-4 rounded-2xl border-2 transition-all',
+                'p-4 rounded-2xl border-2 transition-colors',
                 side === 'NO'
-                  ? 'border-red-500 bg-red-500/10 shadow-[0_0_20px_hsl(0,84%,60%,0.2)]'
+                  ? 'border-red-500 bg-red-500/10'
                   : 'border-border/50 bg-muted/30 hover:bg-muted/50',
-                !connected && 'opacity-50 cursor-not-allowed'
+                (!connected || executing) && 'opacity-50 cursor-not-allowed'
               )}
             >
               <TrendingDown className={cn(
@@ -620,7 +671,8 @@ export function KalshiTradingModal({
               {isSellMode && maxShares && (
                 <button
                   onClick={() => setAmount(maxShares.toString())}
-                  className="text-xs text-primary hover:underline"
+                  disabled={executing}
+                  className="text-xs text-primary hover:underline disabled:opacity-50"
                 >
                   Max: {maxShares < 1 ? maxShares.toFixed(4) : maxShares.toFixed(2)}
                 </button>
@@ -631,7 +683,7 @@ export function KalshiTradingModal({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              disabled={!connected}
+              disabled={!connected || executing}
               className="h-12 text-lg bg-muted/30 border-border/50 rounded-xl"
             />
           </div>
@@ -640,10 +692,10 @@ export function KalshiTradingModal({
           <AnimatePresence>
             {amount && parseFloat(amount) > 0 && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1 }}
               >
                 <div className="p-4 rounded-2xl bg-muted/20 border border-border/30 space-y-3">
                   {isSellMode ? (
@@ -696,14 +748,14 @@ export function KalshiTradingModal({
             disabled={!connected || !amount || parseFloat(amount) <= 0 || executing}
             className={cn(
               'w-full h-14 text-lg font-semibold rounded-2xl',
-              'transition-all duration-300',
+              'transition-colors duration-200',
               isSellMode
                 ? 'bg-red-500 hover:bg-red-600 text-white'
                 : side === 'YES' 
                   ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
                   : 'bg-red-500 hover:bg-red-600 text-white',
               'disabled:opacity-50 disabled:cursor-not-allowed',
-              'shadow-lg hover:shadow-xl'
+              'shadow-lg'
             )}
           >
             {executing ? (
