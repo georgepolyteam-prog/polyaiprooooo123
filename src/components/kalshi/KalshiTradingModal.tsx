@@ -361,8 +361,9 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
       const errorMsg = error?.message || error?.toString() || '';
       
       // Parse error messages for user-friendly feedback
-      if (errorMsg.includes('SkippedLeg') || errorMsg.includes('15020')) {
-        errorMessage = 'Routing failed. The market may have low liquidity. Try a smaller amount.';
+      if (errorMsg.includes('SkippedLeg') || errorMsg.includes('15020') || errorMsg.includes('0x3aac')) {
+        errorMessage = 'Not enough liquidity for this trade size. Try a smaller amount or the opposite side.';
+        setLiquidityError('Low liquidity detected');
       } else if (errorMsg.includes('insufficient') || errorMsg.includes('InsufficientFunds') || errorMsg.includes('0x1')) {
         errorMessage = 'Insufficient USDC balance. Add USDC to your Solana wallet.';
       } else if (errorMsg.includes('User rejected') || errorMsg.includes('rejected')) {
@@ -371,6 +372,9 @@ export function KalshiTradingModal({ market, onClose }: KalshiTradingModalProps)
         errorMessage = 'Price moved too much. Try again with higher slippage.';
       } else if (errorMsg.includes('Simulation failed')) {
         errorMessage = errorMsg;
+      } else if (errorMsg.includes('route_not_found') || errorMsg.includes('Route not found')) {
+        errorMessage = 'No liquidity route available. Try a smaller amount.';
+        setLiquidityError('No liquidity available');
       } else if (error.logs) {
         console.log('Transaction logs:', error.logs.join('\n'));
       } else if (errorMsg.length > 0 && errorMsg.length < 120) {
