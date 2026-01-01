@@ -33,6 +33,12 @@ interface KalshiTradingModalProps {
   market: KalshiMarket;
   onClose: () => void;
   onOrderSubmitted?: (order: RecentOrder) => void;
+  // For sell mode
+  mode?: 'buy' | 'sell';
+  initialSide?: 'YES' | 'NO';
+  sellMint?: string;
+  sellDecimals?: number;
+  maxShares?: number;
 }
 
 // USDC mint on Solana mainnet
@@ -147,12 +153,21 @@ async function checkAsyncOrderStatus(
   return { filled: false, status: 'pending', error: undefined };
 }
 
-export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: KalshiTradingModalProps) {
+export function KalshiTradingModal({ 
+  market, 
+  onClose, 
+  onOrderSubmitted,
+  mode = 'buy',
+  initialSide,
+  sellMint,
+  sellDecimals = 6,
+  maxShares,
+}: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
   const { getOrder, getTrades, loading } = useDflowApi();
   
-  const [side, setSide] = useState<'YES' | 'NO'>('YES');
+  const [side, setSide] = useState<'YES' | 'NO'>(initialSide || 'YES');
   const [amount, setAmount] = useState('');
   const [executing, setExecuting] = useState(false);
   const [orderStatus, setOrderStatus] = useState('');
@@ -162,8 +177,17 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
   const [simulationError, setSimulationError] = useState<string | null>(null);
   const [liquidityError, setLiquidityError] = useState<string | null>(null);
 
+  const isSellMode = mode === 'sell';
   const price = side === 'YES' ? market.yesPrice : market.noPrice;
-  const estimatedShares = amount ? (parseFloat(amount) / price * 100).toFixed(2) : '0.00';
+  
+  // For buy: amount is USDC, estimate shares
+  // For sell: amount is shares, estimate USDC out
+  const estimatedShares = !isSellMode && amount 
+    ? (parseFloat(amount) / price * 100).toFixed(2) 
+    : '0.00';
+  const estimatedUSDC = isSellMode && amount
+    ? (parseFloat(amount) * price / 100).toFixed(2)
+    : '0.00';
 
   // Check if market has valid token mints for trading
   const hasValidAccounts = (): boolean => {
@@ -218,27 +242,45 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
   const executeTrade = async () => {
     if (!publicKey || !signTransaction || !amount) return;
     
-    const outputMint = getOutputMint();
-    if (!outputMint) {
-      toast.error('Market token not available for trading');
-      return;
+    // For sell mode, we need the sellMint
+    // For buy mode, we need the output mint from market accounts
+    let inputMint: string;
+    let outputMint: string;
+    let amountInLamports: number;
+    
+    if (isSellMode) {
+      if (!sellMint) {
+        toast.error('Sell mint not available');
+        return;
+      }
+      inputMint = sellMint;
+      outputMint = USDC_MINT;
+      // Amount is in shares, convert to lamports using decimals
+      amountInLamports = Math.floor(parseFloat(amount) * Math.pow(10, sellDecimals));
+    } else {
+      const outputMintResult = getOutputMint();
+      if (!outputMintResult) {
+        toast.error('Market token not available for trading');
+        return;
+      }
+      inputMint = USDC_MINT;
+      outputMint = outputMintResult;
+      // Amount is in USDC (6 decimals)
+      amountInLamports = Math.floor(parseFloat(amount) * 1_000_000);
     }
     
     setExecuting(true);
-    setOrderStatus('Getting quote from DFlow...');
+    setOrderStatus(isSellMode ? 'Getting sell quote from DFlow...' : 'Getting quote from DFlow...');
     setTxSignature(null);
     setSimulationError(null);
     setLiquidityError(null);
     
     try {
-      // Convert amount to lamports (USDC has 6 decimals)
-      const amountInLamports = Math.floor(parseFloat(amount) * 1_000_000);
-      
       // Get order from DFlow
       let orderResponse;
       try {
         orderResponse = await getOrder(
-          USDC_MINT,
+          inputMint,
           outputMint,
           amountInLamports,
           publicKey.toBase58()
@@ -258,8 +300,9 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
       
       // Log transaction details for debugging
       console.log('🔍 DFlow Order Details');
+      console.log('Mode:', isSellMode ? 'SELL' : 'BUY');
       console.log('Execution Mode:', orderResponse.executionMode);
-      console.log('Input:', { mint: USDC_MINT, amount: amountInLamports });
+      console.log('Input:', { mint: inputMint, amount: amountInLamports });
       console.log('Output:', { mint: outputMint, amount: orderResponse.outAmount });
       
       // Deserialize as VersionedTransaction
@@ -321,8 +364,8 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
           signature,
           ticker: market.ticker,
           side,
-          amountUSDC: parseFloat(amount),
-          estimatedShares,
+          amountUSDC: isSellMode ? parseFloat(estimatedUSDC) : parseFloat(amount),
+          estimatedShares: isSellMode ? amount : estimatedShares,
           timestamp: Date.now(),
           status: 'pending',
         });
@@ -353,7 +396,11 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
         const orderResult = await checkAsyncOrderStatus(signature, 20, 2500);
         
         if (orderResult.filled) {
-          toast.success(`Trade filled! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+          if (isSellMode) {
+            toast.success(`Sold ${amount} ${side} shares for ~$${estimatedUSDC}`, { id: 'trade' });
+          } else {
+            toast.success(`Trade filled! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+          }
           onClose();
         } else if (orderResult.status === 'pending' || !orderResult.error) {
           // Pending but no error - order likely processing, don't show as error
@@ -368,7 +415,11 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
       } else {
         // Sync order - open tx confirmation is enough
         if (openConfirmation.confirmed) {
-          toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+          if (isSellMode) {
+            toast.success(`Sold ${amount} ${side} shares for ~$${estimatedUSDC}`, { id: 'trade' });
+          } else {
+            toast.success(`Trade confirmed! You bought ~${estimatedShares} ${side} shares`, { id: 'trade' });
+          }
           onClose();
         } else {
           // Pending but no error - likely still processing
@@ -413,13 +464,13 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
   };
 
   const displayTitle = market.title || market.ticker;
-
+  const modalTitle = isSellMode ? 'Sell Position' : 'Trade Market';
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg bg-background/95 backdrop-blur-2xl border-border/50 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-bold">Trade Market</DialogTitle>
+            <DialogTitle className="text-xl font-bold">{modalTitle}</DialogTitle>
             <KalshiShareButton market={market} />
           </div>
           <DialogDescription className="sr-only">
@@ -562,9 +613,19 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
 
           {/* Amount Input */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">
-              Amount (USDC)
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-muted-foreground">
+                {isSellMode ? 'Shares to Sell' : 'Amount (USDC)'}
+              </label>
+              {isSellMode && maxShares && (
+                <button
+                  onClick={() => setAmount(maxShares.toString())}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Max: {maxShares < 1 ? maxShares.toFixed(4) : maxShares.toFixed(2)}
+                </button>
+              )}
+            </div>
             <Input
               type="number"
               value={amount}
@@ -585,25 +646,45 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
                 className="overflow-hidden"
               >
                 <div className="p-4 rounded-2xl bg-muted/20 border border-border/30 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">You pay</span>
-                    <span className="font-medium text-foreground">${amount} USDC</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Est. shares</span>
-                    <span className={cn(
-                      'font-medium',
-                      side === 'YES' ? 'text-emerald-400' : 'text-red-400'
-                    )}>
-                      ~{estimatedShares} {side}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Max payout</span>
-                    <span className="font-medium text-foreground">
-                      ${(parseFloat(estimatedShares) || 0).toFixed(2)}
-                    </span>
-                  </div>
+                  {isSellMode ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">You sell</span>
+                        <span className={cn(
+                          'font-medium',
+                          side === 'YES' ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          {amount} {side} shares
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Est. receive</span>
+                        <span className="font-medium text-foreground">~${estimatedUSDC} USDC</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">You pay</span>
+                        <span className="font-medium text-foreground">${amount} USDC</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Est. shares</span>
+                        <span className={cn(
+                          'font-medium',
+                          side === 'YES' ? 'text-emerald-400' : 'text-red-400'
+                        )}>
+                          ~{estimatedShares} {side}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Max payout</span>
+                        <span className="font-medium text-foreground">
+                          ${(parseFloat(estimatedShares) || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -616,9 +697,11 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
             className={cn(
               'w-full h-14 text-lg font-semibold rounded-2xl',
               'transition-all duration-300',
-              side === 'YES' 
-                ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
-                : 'bg-red-500 hover:bg-red-600 text-white',
+              isSellMode
+                ? 'bg-red-500 hover:bg-red-600 text-white'
+                : side === 'YES' 
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
+                  : 'bg-red-500 hover:bg-red-600 text-white',
               'disabled:opacity-50 disabled:cursor-not-allowed',
               'shadow-lg hover:shadow-xl'
             )}
@@ -631,7 +714,7 @@ export function KalshiTradingModal({ market, onClose, onOrderSubmitted }: Kalshi
             ) : (
               <>
                 <Sparkles className="w-5 h-5 mr-2" />
-                Buy {side}
+                {isSellMode ? `Sell ${side}` : `Buy ${side}`}
               </>
             )}
           </Button>
