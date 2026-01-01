@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Wallet, DollarSign, ChevronDown, Bug, Clock, RefreshCw, Trash2, ExternalLink, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,6 +51,89 @@ interface KalshiPortfolioProps {
   onSellPosition?: (position: Position) => void;
 }
 
+// Memoized position row for performance
+const PositionRow = memo(function PositionRow({ 
+  position, 
+  onSell 
+}: { 
+  position: Position; 
+  onSell?: (pos: Position) => void;
+}) {
+  const isProfit = position.pnl >= 0;
+  const positionValue = position.quantity * position.currentPrice / 100;
+  const formattedQuantity = position.quantity < 1 
+    ? position.quantity.toFixed(4) 
+    : position.quantity < 100 
+      ? position.quantity.toFixed(2) 
+      : Math.round(position.quantity);
+  
+  return (
+    <div
+      className="p-5 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/30 transition-colors"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold text-foreground line-clamp-1">
+            {position.marketTitle}
+          </h4>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className={cn(
+              "px-2 py-0.5 rounded-full text-xs font-medium",
+              position.side === 'yes' 
+                ? "bg-emerald-500/20 text-emerald-400" 
+                : "bg-red-500/20 text-red-400"
+            )}>
+              {position.side.toUpperCase()}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {formattedQuantity} shares @ {position.currentPrice}¢
+            </span>
+          </div>
+        </div>
+        
+        <div className="text-right flex-shrink-0 ml-3">
+          <p className="font-semibold text-foreground">
+            ${positionValue.toFixed(2)}
+          </p>
+          <p className={cn(
+            "text-sm font-medium",
+            isProfit ? "text-emerald-400" : "text-red-400"
+          )}>
+            {position.pnl !== 0 
+              ? `${isProfit ? '+' : ''}$${position.pnl.toFixed(2)} (${position.pnlPercent.toFixed(1)}%)`
+              : '—'
+            }
+          </p>
+        </div>
+      </div>
+      
+      {/* Price bar + Sell button */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
+          <div 
+            className={cn(
+              "h-full rounded-full transition-all",
+              position.side === 'yes' ? "bg-emerald-500" : "bg-red-500"
+            )}
+            style={{ width: `${Math.min(position.currentPrice, 100)}%` }}
+          />
+        </div>
+        
+        {onSell && position.sideMint && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onSell(position)}
+            className="h-7 px-3 text-xs rounded-lg border-border/50 hover:border-red-500/50 hover:text-red-400"
+          >
+            Sell
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export function KalshiPortfolio({ 
   positions, 
   isLoading,
@@ -102,11 +185,7 @@ export function KalshiPortfolio({
     <div className="space-y-6">
       {/* Recent Orders Section - Always show if there are any */}
       {recentOrders.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-3"
-        >
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -131,7 +210,7 @@ export function KalshiPortfolio({
             {recentOrders.slice(0, 5).map((order) => (
               <div
                 key={order.signature}
-                className="p-3 rounded-xl bg-card/50 border border-border/50 flex items-center justify-between"
+                className="p-3 rounded-xl bg-card/80 border border-border/50 flex items-center justify-between"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -167,16 +246,12 @@ export function KalshiPortfolio({
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Empty State with Explanation */}
       {positions.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center justify-center py-12 text-center"
-        >
+        <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
             <Wallet className="w-8 h-8 text-muted-foreground" />
           </div>
@@ -221,18 +296,14 @@ export function KalshiPortfolio({
           <p className="text-muted-foreground text-sm mt-4">
             Trade prediction markets to see your positions here.
           </p>
-        </motion.div>
+        </div>
       )}
 
       {/* Portfolio Summary - Only show if positions exist */}
       {positions.length > 0 && (
         <>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-2 gap-4"
-          >
-            <div className="p-6 rounded-3xl bg-card/50 backdrop-blur-xl border border-border/50">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-6 rounded-3xl bg-card/80 border border-border/50">
               <div className="flex items-center gap-2 text-muted-foreground mb-2">
                 <DollarSign className="w-4 h-4" />
                 <span className="text-sm font-medium">Total Value</span>
@@ -243,7 +314,7 @@ export function KalshiPortfolio({
             </div>
             
             <div className={cn(
-              "p-6 rounded-3xl backdrop-blur-xl border",
+              "p-6 rounded-3xl border",
               isProfitable 
                 ? "bg-emerald-500/10 border-emerald-500/30" 
                 : "bg-red-500/10 border-red-500/30"
@@ -265,89 +336,20 @@ export function KalshiPortfolio({
                 "text-3xl font-bold",
                 isProfitable ? "text-emerald-400" : "text-red-400"
               )}>
-                {isProfitable ? '+' : ''}{totalPnl.toFixed(2)}
+                {isProfitable ? '+' : ''}${Math.abs(totalPnl).toFixed(2)}
               </p>
             </div>
-          </motion.div>
+          </div>
 
           {/* Positions List */}
           <div className="space-y-3">
-            {positions.map((position) => {
-              const isProfit = position.pnl >= 0;
-              const positionValue = position.quantity * position.currentPrice / 100;
-              const formattedQuantity = position.quantity < 1 
-                ? position.quantity.toFixed(4) 
-                : position.quantity < 100 
-                  ? position.quantity.toFixed(2) 
-                  : Math.round(position.quantity);
-              
-              return (
-                <div
-                  key={`${position.marketTicker}-${position.side}`}
-                  className="p-5 rounded-2xl bg-card/50 border border-border/50 hover:border-primary/30 transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-foreground line-clamp-1">
-                        {position.marketTitle}
-                      </h4>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded-full text-xs font-medium",
-                          position.side === 'yes' 
-                            ? "bg-emerald-500/20 text-emerald-400" 
-                            : "bg-red-500/20 text-red-400"
-                        )}>
-                          {position.side.toUpperCase()}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {formattedQuantity} shares @ {position.currentPrice}¢
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="text-right flex-shrink-0 ml-3">
-                      <p className="font-semibold text-foreground">
-                        ${positionValue.toFixed(2)}
-                      </p>
-                      <p className={cn(
-                        "text-sm font-medium",
-                        isProfit ? "text-emerald-400" : "text-red-400"
-                      )}>
-                        {position.pnl !== 0 
-                          ? `${isProfit ? '+' : ''}$${position.pnl.toFixed(2)} (${position.pnlPercent.toFixed(1)}%)`
-                          : '—'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Price bar + Sell button */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                      <div 
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          position.side === 'yes' ? "bg-emerald-500" : "bg-red-500"
-                        )}
-                        style={{ width: `${Math.min(position.currentPrice, 100)}%` }}
-                      />
-                    </div>
-                    
-                    {onSellPosition && position.sideMint && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onSellPosition(position)}
-                        className="h-7 px-3 text-xs rounded-lg border-border/50 hover:border-red-500/50 hover:text-red-400"
-                      >
-                        Sell
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {positions.map((position) => (
+              <PositionRow 
+                key={`${position.marketTicker}-${position.side}`}
+                position={position}
+                onSell={onSellPosition}
+              />
+            ))}
           </div>
         </>
       )}
@@ -372,11 +374,7 @@ export function KalshiPortfolio({
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-3 p-4 rounded-xl bg-muted/30 border border-border/50 space-y-3 text-sm"
-            >
+            <div className="mt-3 p-4 rounded-xl bg-muted/30 border border-border/50 space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-muted-foreground">Tokenkeg Accounts</p>
@@ -436,7 +434,7 @@ export function KalshiPortfolio({
                   Send Debug Report
                 </Button>
               )}
-            </motion.div>
+            </div>
           </CollapsibleContent>
         </Collapsible>
       )}

@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { memo } from 'react';
 import { TrendingUp, TrendingDown, Clock, Users, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ interface KalshiMarketCardProps {
   index?: number;
 }
 
-export function KalshiMarketCard({ market, eventTitle, onClick, onAIAnalysis, index = 0 }: KalshiMarketCardProps) {
+function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis }: KalshiMarketCardProps) {
   const yesLeading = market.yesPrice > market.noPrice;
   const displayTitle = market.title || eventTitle || 'Market';
   
@@ -21,19 +21,15 @@ export function KalshiMarketCard({ market, eventTitle, onClick, onAIAnalysis, in
     e.stopPropagation();
     onAIAnalysis?.();
   };
+  
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
+    <div
       onClick={onClick}
       className={cn(
         'group cursor-pointer rounded-3xl p-6',
-        'bg-card/50 backdrop-blur-xl',
-        'border border-border/50 hover:border-primary/30',
-        'transition-all duration-300',
-        'hover:shadow-[0_8px_40px_hsl(var(--primary)/0.15)]',
-        'hover:-translate-y-1'
+        'bg-card/80 border border-border/50',
+        'hover:border-primary/30 transition-colors duration-200',
+        'hover:shadow-lg hover:-translate-y-0.5'
       )}
     >
       {/* Status Badge */}
@@ -63,7 +59,7 @@ export function KalshiMarketCard({ market, eventTitle, onClick, onAIAnalysis, in
       {/* Price Display */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className={cn(
-          'p-4 rounded-2xl border transition-all',
+          'p-4 rounded-2xl border transition-colors',
           yesLeading 
             ? 'bg-emerald-500/10 border-emerald-500/30' 
             : 'bg-muted/50 border-border/50'
@@ -89,7 +85,7 @@ export function KalshiMarketCard({ market, eventTitle, onClick, onAIAnalysis, in
         </div>
 
         <div className={cn(
-          'p-4 rounded-2xl border transition-all',
+          'p-4 rounded-2xl border transition-colors',
           !yesLeading 
             ? 'bg-red-500/10 border-red-500/30' 
             : 'bg-muted/50 border-border/50'
@@ -144,6 +140,8 @@ export function KalshiMarketCard({ market, eventTitle, onClick, onAIAnalysis, in
         )}
         <KalshiShareButton market={market} compact />
       </div>
-    </motion.div>
+    </div>
   );
 }
+
+export const KalshiMarketCard = memo(KalshiMarketCardComponent);

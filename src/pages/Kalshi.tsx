@@ -1,7 +1,16 @@
-import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useRef, startTransition } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
+
+// Debounce utility for localStorage writes
+function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return ((...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
 import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
@@ -152,7 +161,9 @@ export default function Kalshi() {
   // Fetch positions when portfolio tab is selected or wallet connects
   useEffect(() => {
     if (activeTab === 'portfolio' && connected && publicKey) {
-      fetchPositions();
+      startTransition(() => {
+        fetchPositions();
+      });
     }
   }, [activeTab, connected, publicKey]);
 
@@ -434,9 +445,9 @@ export default function Kalshi() {
         {/* Gradient Background */}
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-background" />
         
-        {/* Animated Orbs */}
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-40 right-1/4 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        {/* Lightweight decorative elements (no blur for performance) */}
+        <div className="absolute top-20 left-1/4 w-64 h-64 bg-primary/5 rounded-full" />
+        <div className="absolute top-40 right-1/4 w-48 h-48 bg-secondary/5 rounded-full" />
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
           <motion.div
@@ -631,7 +642,10 @@ export default function Kalshi() {
             const newOrders = [order, ...recentOrders].slice(0, 20);
             setRecentOrders(newOrders);
             if (publicKey) {
-              localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
+              // Debounce localStorage write
+              setTimeout(() => {
+                localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
+              }, 100);
             }
           }}
         />
