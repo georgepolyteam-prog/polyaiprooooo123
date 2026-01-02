@@ -65,16 +65,29 @@ export function useDflowApi() {
     setLoading(true);
     setError(null);
     
+    const startTime = performance.now();
+    console.log(`[DFlow API] Starting: ${action}`);
+    
     try {
       const { data, error: fnError } = await supabase.functions.invoke('dflow-api', {
         body: { action, params },
       });
+      
+      const elapsed = Math.round(performance.now() - startTime);
+      console.log(`[DFlow API] ${action} completed in ${elapsed}ms`);
+      
+      // Warn on slow calls
+      if (elapsed > 1000) {
+        console.warn(`[DFlow API] SLOW CALL: ${action} took ${elapsed}ms`);
+      }
       
       if (fnError) throw fnError;
       if (data?.error) throw new Error(data.error);
       
       return data;
     } catch (err) {
+      const elapsed = Math.round(performance.now() - startTime);
+      console.error(`[DFlow API] ${action} failed after ${elapsed}ms:`, err);
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);
       throw err;

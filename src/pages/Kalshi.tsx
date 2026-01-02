@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useR
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 
 // Debounce utility for localStorage writes
 function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
@@ -123,6 +124,10 @@ const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 // LocalStorage key for recent orders
 const RECENT_ORDERS_KEY = 'kalshi_recent_orders';
 
+// Cache key and TTL
+const MARKETS_CACHE_KEY = 'kalshi_markets_cache';
+const CACHE_TTL_MS = 120000; // 2 minutes
+
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
@@ -140,6 +145,33 @@ export default function Kalshi() {
   const [sellPosition, setSellPosition] = useState<any | null>(null);
   
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  
+  // Warm up edge function on mount to eliminate cold start
+  useEffect(() => {
+    supabase.functions.invoke('dflow-api', { 
+      body: { action: 'ping', params: {} }
+    }).catch(() => {}); // Silent warm-up
+  }, []);
+  
+  // Load cached markets immediately on mount
+  useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem(MARKETS_CACHE_KEY);
+      if (cached) {
+        const { markets: cachedMarkets, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_TTL_MS && cachedMarkets?.length > 0) {
+          console.log('[Kalshi] Loading from cache:', cachedMarkets.length, 'markets');
+          setMarkets(cachedMarkets);
+          setIsLoading(false);
+        }
+      }
+    } catch (e) {
+      console.log('[Kalshi] Cache read failed');
+    }
+    // Always fetch fresh data in background
+    fetchMarkets();
+  }, []);
+  
   // Load recent orders from localStorage
   useEffect(() => {
     if (publicKey) {
@@ -153,10 +185,6 @@ export default function Kalshi() {
       }
     }
   }, [publicKey]);
-
-  useEffect(() => {
-    fetchMarkets();
-  }, []);
 
   // Fetch positions when portfolio tab is selected or wallet connects
   useEffect(() => {
@@ -396,7 +424,11 @@ export default function Kalshi() {
   }, [publicKey, recentOrders]);
 
   const fetchMarkets = async () => {
-    setIsLoading(true);
+    const fetchStart = performance.now();
+    // Only show loading if we don't have cached data
+    if (markets.length === 0) {
+      setIsLoading(true);
+    }
     try {
       // Try to get events with nested markets first
       const events = await getEvents('active');
@@ -415,22 +447,47 @@ export default function Kalshi() {
         }
       });
       
-      if (allMarkets.length > 0) {
-        setMarkets(allMarkets);
-      } else {
-        // Fallback to direct markets endpoint
-        const directMarkets = await getMarkets();
-        setMarkets(directMarkets.length > 0 ? directMarkets : DEMO_MARKETS);
+      const fetchedMarkets = allMarkets.length > 0 
+        ? allMarkets 
+        : (await getMarkets()).length > 0 
+          ? await getMarkets() 
+          : DEMO_MARKETS;
+      
+      setMarkets(fetchedMarkets);
+      
+      // Cache the fresh data
+      try {
+        sessionStorage.setItem(MARKETS_CACHE_KEY, JSON.stringify({
+          markets: fetchedMarkets,
+          timestamp: Date.now()
+        }));
+      } catch (e) {
+        console.log('[Kalshi] Cache write failed');
       }
+      
+      console.log(`[Kalshi] Fetched ${fetchedMarkets.length} markets in ${Math.round(performance.now() - fetchStart)}ms`);
     } catch (err) {
       console.error('Failed to fetch markets:', err);
-      // Use demo markets as fallback
-      setMarkets(DEMO_MARKETS);
-      toast.info('Showing demo markets');
+      // Use demo markets as fallback only if we have nothing
+      if (markets.length === 0) {
+        setMarkets(DEMO_MARKETS);
+        toast.info('Showing demo markets');
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Prefetch cache to avoid duplicate requests
+  const prefetchedRef = useRef<Set<string>>(new Set());
+  
+  // Prefetch trades on hover for faster modal open
+  const handlePrefetch = useCallback((ticker: string) => {
+    if (prefetchedRef.current.has(ticker)) return;
+    prefetchedRef.current.add(ticker);
+    // Silent prefetch - don't await
+    callDflowApi('getTrades', { ticker, limit: 20 }).catch(() => {});
+  }, [callDflowApi]);
 
   const filteredMarkets = useMemo(() => markets.filter(market =>
     (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
@@ -595,6 +652,7 @@ export default function Kalshi() {
                     market={market}
                     onClick={() => setSelectedMarket(market)}
                     onAIAnalysis={() => setAiMarket(market)}
+                    onPrefetch={handlePrefetch}
                     index={index}
                   />
                 ))}
