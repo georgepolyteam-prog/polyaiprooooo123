@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Clock, Users, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,11 @@ interface KalshiMarketCardProps {
   eventTitle?: string;
   onClick: () => void;
   onAIAnalysis?: () => void;
+  onPrefetch?: (ticker: string) => void;
   index?: number;
 }
 
-function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis }: KalshiMarketCardProps) {
+function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, onPrefetch }: KalshiMarketCardProps) {
   const yesLeading = market.yesPrice > market.noPrice;
   const displayTitle = market.title || eventTitle || 'Market';
   
@@ -22,9 +23,15 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis }
     onAIAnalysis?.();
   };
   
+  // Prefetch trades data on hover for faster modal open
+  const handleMouseEnter = useCallback(() => {
+    onPrefetch?.(market.ticker);
+  }, [market.ticker, onPrefetch]);
+  
   return (
     <div
       onClick={onClick}
+      onMouseEnter={handleMouseEnter}
       className={cn(
         'group cursor-pointer rounded-3xl p-6',
         'bg-card/80 border border-border/50',

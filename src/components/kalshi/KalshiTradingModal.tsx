@@ -228,14 +228,17 @@ export function KalshiTradingModal({
     return !!(account?.yesMint && account?.noMint);
   };
 
-  // Load trades for price chart (non-blocking)
+  // Load trades for price chart (deferred for instant modal open)
   useEffect(() => {
     let mounted = true;
     setTradesLoading(true);
     
-    const fetchTrades = async () => {
+    // Delay trade fetch to let modal render first - makes modal feel instant
+    const timer = setTimeout(async () => {
       try {
+        const fetchStart = performance.now();
         const data = await getTrades(market.ticker, 50);
+        console.log(`[Modal] Trades fetched in ${Math.round(performance.now() - fetchStart)}ms`);
         if (mounted && data?.trades) {
           setTrades(data.trades);
         }
@@ -245,17 +248,17 @@ export function KalshiTradingModal({
       } finally {
         if (mounted) setTradesLoading(false);
       }
-    };
-    
-    // Fire and forget - don't await
-    fetchTrades();
+    }, 300); // 300ms delay - modal appears instantly
     
     // Check for liquidity issues
     if (!hasValidAccounts()) {
       setLiquidityError('This market may have limited liquidity');
     }
     
-    return () => { mounted = false; };
+    return () => { 
+      mounted = false; 
+      clearTimeout(timer);
+    };
   }, [market.ticker, getTrades]);
 
   // Get the token mint for the selected side

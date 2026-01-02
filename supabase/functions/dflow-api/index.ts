@@ -11,6 +11,8 @@ const DFLOW_METADATA_API = 'https://c.prediction-markets-api.dflow.net';
 const DFLOW_QUOTE_API = 'https://c.quote-api.dflow.net';
 
 serve(async (req) => {
+  const requestStart = Date.now();
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -19,7 +21,15 @@ serve(async (req) => {
   try {
     const { action, params } = await req.json();
     
-    console.log(`DFlow API action: ${action}`, params);
+    console.log(`[DFlow] Action: ${action}`, params ? JSON.stringify(params).slice(0, 100) : '');
+    
+    // Fast ping handler for warm-up
+    if (action === 'ping') {
+      console.log(`[DFlow] Ping response in ${Date.now() - requestStart}ms`);
+      return new Response(JSON.stringify({ ok: true, ts: Date.now() }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     let url = '';
     let method = 'GET';
@@ -196,7 +206,7 @@ serve(async (req) => {
         throw new Error(`Unknown action: ${action}`);
     }
     
-    console.log(`Fetching: ${method} ${url}`);
+    console.log(`[DFlow] Fetching: ${method} ${url}`);
     
     const fetchOptions: RequestInit = {
       method,
@@ -210,7 +220,14 @@ serve(async (req) => {
       fetchOptions.body = body;
     }
     
+    const fetchStart = Date.now();
     const response = await fetch(url, fetchOptions);
+    const fetchElapsed = Date.now() - fetchStart;
+    
+    console.log(`[DFlow] External API responded in ${fetchElapsed}ms (status: ${response.status})`);
+    if (fetchElapsed > 800) {
+      console.warn(`[DFlow] SLOW EXTERNAL API: ${action} took ${fetchElapsed}ms`);
+    }
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -271,7 +288,8 @@ serve(async (req) => {
     }
     
     const data = await response.json();
-    console.log(`DFlow API success for ${action}, response keys:`, Object.keys(data));
+    const totalElapsed = Date.now() - requestStart;
+    console.log(`[DFlow] ${action} success in ${totalElapsed}ms total, keys:`, Object.keys(data));
     
     // Log specific data for debugging portfolio issues
     if (action === 'filterOutcomeMints') {
