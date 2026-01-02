@@ -1,6 +1,23 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+// Client-side cache for API responses
+const API_CACHE = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 seconds
+
+function getCached(key: string): any | null {
+  const cached = API_CACHE.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`[DFlow API] Cache HIT: ${key}`);
+    return cached.data;
+  }
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  API_CACHE.set(key, { data, timestamp: Date.now() });
+}
+
 // Market account info containing token mints
 export interface MarketAccounts {
   yesMint: string;
@@ -124,19 +141,33 @@ export function useDflowApi() {
     return transformMarket(data);
   }, [callDflowApi]);
 
-  // Get orderbook for a market
+  // Get orderbook for a market - CACHED
   const getOrderbook = useCallback(async (ticker: string) => {
-    return callDflowApi('getOrderbook', { ticker });
+    const cacheKey = `orderbook-${ticker}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+    
+    const data = await callDflowApi('getOrderbook', { ticker });
+    setCache(cacheKey, data);
+    return data;
   }, [callDflowApi]);
 
-  // Get trade history for a market (returns empty array on 404)
+  // Get trade history for a market (returns empty array on 404) - CACHED
   const getTrades = useCallback(async (ticker: string, limit = 50) => {
+    const cacheKey = `trades-${ticker}-${limit}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+    
     try {
-      return await callDflowApi('getTrades', { ticker, limit });
+      const data = await callDflowApi('getTrades', { ticker, limit });
+      setCache(cacheKey, data);
+      return data;
     } catch (err: any) {
       // 404 means no trades yet - return empty gracefully
       if (err?.message?.includes('404') || err?.message?.includes('Not found')) {
-        return { trades: [] };
+        const emptyData = { trades: [] };
+        setCache(cacheKey, emptyData);
+        return emptyData;
       }
       throw err;
     }
