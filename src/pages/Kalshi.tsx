@@ -481,19 +481,24 @@ export default function Kalshi() {
   // Prefetch cache to avoid duplicate requests
   const prefetchedRef = useRef<Set<string>>(new Set());
   
-  // Prefetch trades on hover for faster modal open
+  // Prefetch trades on hover for faster modal open - uses cached getTrades
+  const { getTrades } = useDflowApi();
   const handlePrefetch = useCallback((ticker: string) => {
     if (prefetchedRef.current.has(ticker)) return;
     prefetchedRef.current.add(ticker);
-    // Silent prefetch - don't await
-    callDflowApi('getTrades', { ticker, limit: 20 }).catch(() => {});
-  }, [callDflowApi]);
+    // Silent prefetch - populates the client-side cache
+    getTrades(ticker, 50).catch(() => {});
+  }, [getTrades]);
 
-  const filteredMarkets = useMemo(() => markets.filter(market =>
-    (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-    (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-    (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
-  ), [markets, deferredSearchQuery]);
+  // Limit to 60 markets for initial render performance
+  const filteredMarkets = useMemo(() => {
+    const filtered = markets.filter(market =>
+      (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+      (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+    );
+    return filtered.slice(0, 60);
+  }, [markets, deferredSearchQuery]);
 
   return (
     <div className="min-h-screen bg-background">

@@ -135,17 +135,28 @@ serve(async (req) => {
       
       // Quote API endpoints (for trading) - uses GET /order
       case 'getOrder':
+        // CRITICAL: Prediction market parameters for CLP routing
+        const slippageBps = params.slippageBps || 50;
+        const predictionMarketSlippageBps = Math.max(
+          params.predictionMarketSlippageBps || 200, // 2% default for prediction markets
+          slippageBps
+        );
+        
         const orderParams = new URLSearchParams({
           inputMint: params.inputMint,
           outputMint: params.outputMint,
           amount: params.amount.toString(),
-          slippageBps: (params.slippageBps || 50).toString(),
+          slippageBps: slippageBps.toString(),
           userPublicKey: params.userWallet,
-          // For prediction markets
-          predictionMarketSlippageBps: '50',
+          // CRITICAL: Prediction market parameters
+          predictionMarketSlippageBps: predictionMarketSlippageBps.toString(),
+          allowAsyncExec: 'true',  // Required for prediction markets with CLP
+          allowSyncExec: 'true',   // Allow both modes
+          wrapAndUnwrapSol: 'true',
         });
         url = `${DFLOW_QUOTE_API}/order?${orderParams.toString()}`;
         method = 'GET';
+        console.log(`[DFlow] Order params: slippage=${slippageBps}, pmSlippage=${predictionMarketSlippageBps}, asyncExec=true`);
         break;
       
       case 'getOrderStatus':
@@ -214,6 +225,7 @@ serve(async (req) => {
         'x-api-key': DFLOW_API_KEY,
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(8000), // 8 second timeout to prevent hanging
     };
     
     if (body) {
@@ -221,7 +233,19 @@ serve(async (req) => {
     }
     
     const fetchStart = Date.now();
-    const response = await fetch(url, fetchOptions);
+    let response: Response;
+    try {
+      response = await fetch(url, fetchOptions);
+    } catch (err: any) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        console.error(`[DFlow] Request timeout after 8s for ${action}`);
+        return new Response(JSON.stringify({ error: 'Request timeout', code: 'timeout', status: 504 }), {
+          status: 504,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw err;
+    }
     const fetchElapsed = Date.now() - fetchStart;
     
     console.log(`[DFlow] External API responded in ${fetchElapsed}ms (status: ${response.status})`);
