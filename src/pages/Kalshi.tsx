@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useR
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 // Debounce utility for localStorage writes
@@ -13,7 +12,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
-import { TrendingUp, TrendingDown, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3, Filter, X, LayoutGrid, List } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, Shield, ArrowRight, RefreshCw, Search, Wallet, X, LayoutGrid, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
@@ -22,6 +21,8 @@ import { KalshiFeatureCard } from '@/components/kalshi/KalshiFeatureCard';
 import { KalshiLoadingSkeleton } from '@/components/kalshi/KalshiLoadingSkeleton';
 import { KalshiPortfolio } from '@/components/kalshi/KalshiPortfolio';
 import { KalshiAIInsight } from '@/components/kalshi/KalshiAIInsight';
+import { KalshiConnectWallet } from '@/components/kalshi/KalshiConnectWallet';
+import { KalshiAIButton } from '@/components/kalshi/KalshiAIButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -735,22 +736,6 @@ export default function Kalshi() {
               </motion.div>
             )}
             
-            {/* Terminal Link */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="mt-4"
-            >
-              <Link 
-                to="/terminal"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-all font-medium"
-              >
-                <BarChart3 className="w-4 h-4" />
-                Open Trading Terminal
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </motion.div>
           </motion.div>
 
           {/* Feature Cards */}
@@ -792,8 +777,7 @@ export default function Kalshi() {
               </TabsTrigger>
               <TabsTrigger 
                 value="portfolio" 
-                className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all disabled:opacity-50"
-                disabled={!connected}
+                className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all"
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 Portfolio
@@ -851,39 +835,51 @@ export default function Kalshi() {
           </div>
 
           <TabsContent value="markets" className="mt-0">
-            {/* Category Filters */}
+            {/* Category Filters - Sticky with glassmorphism */}
             {categories.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-6">
-                <Button
-                  variant={selectedCategory === null ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedCategory(null)}
-                  className="rounded-full h-9 px-5 font-medium transition-all hover:scale-105"
-                >
-                  All
-                </Button>
-                {categories.map(cat => (
+              <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-4 bg-background/80 backdrop-blur-xl border-b border-border/30">
+                <div className="flex flex-wrap gap-2 overflow-x-auto scrollbar-hide pb-1">
                   <Button
-                    key={cat}
-                    variant={selectedCategory === cat ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCategory(cat)}
-                    className="rounded-full h-9 px-5 font-medium transition-all hover:scale-105"
-                  >
-                    {cat}
-                  </Button>
-                ))}
-                {selectedCategory && (
-                  <Button
-                    variant="ghost"
+                    variant={selectedCategory === null ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedCategory(null)}
-                    className="rounded-full h-9 px-4 font-medium transition-all hover:scale-105"
+                    className={cn(
+                      "rounded-full h-8 px-4 text-xs font-medium transition-all shrink-0",
+                      selectedCategory === null 
+                        ? "shadow-md" 
+                        : "border-border/40 hover:border-border/60"
+                    )}
                   >
-                    <X className="w-3 h-3 mr-1" />
-                    Clear
+                    All Markets
                   </Button>
-                )}
+                  {categories.map(cat => (
+                    <Button
+                      key={cat}
+                      variant={selectedCategory === cat ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={cn(
+                        "rounded-full h-8 px-4 text-xs font-medium transition-all shrink-0",
+                        selectedCategory === cat 
+                          ? "shadow-md" 
+                          : "border-border/40 hover:border-border/60"
+                      )}
+                    >
+                      {cat}
+                    </Button>
+                  ))}
+                  {selectedCategory && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedCategory(null)}
+                      className="rounded-full h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -982,69 +978,73 @@ export default function Kalshi() {
                     </div>
                     
                     {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
+                    <div className="shrink-0">
+                      <KalshiAIButton 
                         onClick={(e) => {
                           e.stopPropagation();
                           setAiMarket(market);
                         }}
-                        className={cn(
-                          "flex items-center justify-center gap-1.5 h-9 px-4",
-                          "rounded-full text-sm font-medium",
-                          "bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10",
-                          "border border-primary/20 hover:border-primary/40",
-                          "text-primary",
-                          "transition-all duration-300",
-                          "hover:shadow-lg hover:shadow-primary/20",
-                          "hover:scale-[1.02] active:scale-[0.98]"
-                        )}
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        <span className="hidden sm:inline">AI</span>
-                      </button>
+                        compact 
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* View All Button - now functional */}
-            {markets.filter(m => {
-              const status = (m.status || '').toLowerCase();
-              return status === 'active' || status === 'initialized' || status === '' || !status;
-            }).length > 60 && (
+            {/* View All Button - works for both search and browse */}
+            {(filteredMarkets.length >= 60 || (deferredSearchQuery && filteredMarkets.length > 20)) && !showAll && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="mt-12 text-center"
+                transition={{ delay: 0.3 }}
+                className="mt-10 text-center"
               >
                 <Button
                   variant="outline"
-                  onClick={() => setShowAll(!showAll)}
+                  onClick={() => setShowAll(true)}
                   className="h-12 px-10 rounded-2xl border-border/50 hover:border-primary/50 hover:bg-primary/5 group transition-all shadow-lg hover:shadow-xl"
                 >
-                  {showAll ? 'Show Less' : `View All ${markets.length} Markets`}
-                  <ArrowRight className={cn(
-                    "w-4 h-4 ml-2 transition-transform",
-                    showAll ? "rotate-90" : "group-hover:translate-x-1"
-                  )} />
+                  {deferredSearchQuery 
+                    ? `Show All ${filteredMarkets.length} Results` 
+                    : `View All ${allMarkets.length} Markets`}
+                  <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </motion.div>
+            )}
+            
+            {showAll && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-10 text-center"
+              >
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowAll(false)}
+                  className="h-10 px-6 rounded-xl text-muted-foreground hover:text-foreground"
+                >
+                  Show Less
                 </Button>
               </motion.div>
             )}
           </TabsContent>
 
           <TabsContent value="portfolio" className="mt-0">
-            <KalshiPortfolio 
-              positions={positions} 
-              isLoading={positionsLoading}
-              debugInfo={debugInfo}
-              recentOrders={recentOrders}
-              onSendDebugReport={sendDebugReport}
-              onClearCompletedOrders={clearCompletedOrders}
-              onRefreshPositions={fetchPositions}
-              onSellPosition={(pos) => setSellPosition(pos)}
-            />
+            {connected ? (
+              <KalshiPortfolio 
+                positions={positions} 
+                isLoading={positionsLoading}
+                debugInfo={debugInfo}
+                recentOrders={recentOrders}
+                onSendDebugReport={sendDebugReport}
+                onClearCompletedOrders={clearCompletedOrders}
+                onRefreshPositions={fetchPositions}
+                onSellPosition={(pos) => setSellPosition(pos)}
+              />
+            ) : (
+              <KalshiConnectWallet />
+            )}
           </TabsContent>
         </Tabs>
       </section>

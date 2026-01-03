@@ -506,7 +506,7 @@ export function KalshiTradingModal({
   
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-background border border-border p-0 max-h-[90vh] overflow-y-auto"  onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-md bg-background border border-border p-0 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border/50 hover:scrollbar-thumb-border"  onOpenAutoFocus={(e) => e.preventDefault()}>
         {/* Header with gradient */}
         <div className={cn(
           "p-6 pb-4 rounded-t-lg",
