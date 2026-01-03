@@ -41,26 +41,36 @@ export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProp
     },
   });
 
+  // Safe array parser
+  const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
+  
+  const parseLevel = (level: any): OrderbookLevel => ({
+    price: Math.round((parseFloat(level?.price) || 0) * 100),
+    size: parseFloat(level?.size || level?.quantity || 0),
+  });
+
   // Initial fetch
   useEffect(() => {
     const fetchOrderbook = async () => {
       try {
         const data = await getOrderbook(ticker);
         if (data) {
-          const parseLevel = (level: any): OrderbookLevel => ({
-            price: Math.round((parseFloat(level.price) || 0) * 100),
-            size: parseFloat(level.size || level.quantity || 0),
-          });
-          
           setOrderbook({
-            yesBids: (data.yesBids || data.yes_bids || []).map(parseLevel).slice(0, 10),
-            yesAsks: (data.yesAsks || data.yes_asks || []).map(parseLevel).slice(0, 10),
-            noBids: (data.noBids || data.no_bids || []).map(parseLevel).slice(0, 10),
-            noAsks: (data.noAsks || data.no_asks || []).map(parseLevel).slice(0, 10),
+            yesBids: safeArray(data.yesBids || data.yes_bids).map(parseLevel).slice(0, 10),
+            yesAsks: safeArray(data.yesAsks || data.yes_asks).map(parseLevel).slice(0, 10),
+            noBids: safeArray(data.noBids || data.no_bids).map(parseLevel).slice(0, 10),
+            noAsks: safeArray(data.noAsks || data.no_asks).map(parseLevel).slice(0, 10),
           });
         }
       } catch (err) {
         console.error('Failed to fetch orderbook:', err);
+        // Set empty on error
+        setOrderbook({
+          yesBids: [],
+          yesAsks: [],
+          noBids: [],
+          noAsks: [],
+        });
       }
     };
 
@@ -72,20 +82,21 @@ export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProp
     try {
       const data = await getOrderbook(ticker);
       if (data) {
-        const parseLevel = (level: any): OrderbookLevel => ({
-          price: Math.round((parseFloat(level.price) || 0) * 100),
-          size: parseFloat(level.size || level.quantity || 0),
-        });
-        
         setOrderbook({
-          yesBids: (data.yesBids || data.yes_bids || []).map(parseLevel).slice(0, 10),
-          yesAsks: (data.yesAsks || data.yes_asks || []).map(parseLevel).slice(0, 10),
-          noBids: (data.noBids || data.no_bids || []).map(parseLevel).slice(0, 10),
-          noAsks: (data.noAsks || data.no_asks || []).map(parseLevel).slice(0, 10),
+          yesBids: safeArray(data.yesBids || data.yes_bids).map(parseLevel).slice(0, 10),
+          yesAsks: safeArray(data.yesAsks || data.yes_asks).map(parseLevel).slice(0, 10),
+          noBids: safeArray(data.noBids || data.no_bids).map(parseLevel).slice(0, 10),
+          noAsks: safeArray(data.noAsks || data.no_asks).map(parseLevel).slice(0, 10),
         });
       }
     } catch (err) {
       console.error('Failed to refresh orderbook:', err);
+      setOrderbook({
+        yesBids: [],
+        yesAsks: [],
+        noBids: [],
+        noAsks: [],
+      });
     }
     setRefreshing(false);
   };

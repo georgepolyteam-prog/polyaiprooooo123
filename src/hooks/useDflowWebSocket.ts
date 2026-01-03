@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-// DFlow WebSocket URL for real-time price updates
+// DFlow WebSocket URL for real-time price updates (without c. prefix)
 const WS_URL = 'wss://prediction-markets-api.dflow.net/api/v1/ws';
 
 export interface PriceUpdate {
@@ -37,6 +37,8 @@ interface UseDflowWebSocketOptions {
   autoReconnect?: boolean;
 }
 
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 export function useDflowWebSocket({
   tickers = [],
   channels = ['prices'],
@@ -50,12 +52,26 @@ export function useDflowWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const isConnectingRef = useRef(false);
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // Prevent duplicate connections
+    if (wsRef.current?.readyState === WebSocket.OPEN || 
+        wsRef.current?.readyState === WebSocket.CONNECTING ||
+        isConnectingRef.current) {
+      return;
+    }
+
+    // Stop after max attempts
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.log('❌ Max WebSocket reconnection attempts reached, giving up');
+      setError('Connection failed after max retries');
+      return;
+    }
 
     try {
-      console.log('🔌 Connecting to DFlow WebSocket...');
+      isConnectingRef.current = true;
+      console.log(`🔌 Connecting to DFlow WebSocket... (attempt ${reconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
       const ws = new WebSocket(WS_URL);
       wsRef.current = ws;
 
@@ -64,6 +80,7 @@ export function useDflowWebSocket({
         setIsConnected(true);
         setError(null);
         reconnectAttemptsRef.current = 0;
+        isConnectingRef.current = false;
 
         // Subscribe to channels for specified tickers
         if (tickers.length > 0) {
@@ -120,12 +137,15 @@ export function useDflowWebSocket({
                   size: parseFloat(level.size || level.quantity || 0),
                 });
                 
+                // Safely parse arrays
+                const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
+                
                 const update: OrderbookUpdate = {
                   ticker: data.ticker,
-                  yesBids: (data.yesBids || data.yes_bids || []).map(parseLevel),
-                  yesAsks: (data.yesAsks || data.yes_asks || []).map(parseLevel),
-                  noBids: (data.noBids || data.no_bids || []).map(parseLevel),
-                  noAsks: (data.noAsks || data.no_asks || []).map(parseLevel),
+                  yesBids: safeArray(data.yesBids || data.yes_bids).map(parseLevel),
+                  yesAsks: safeArray(data.yesAsks || data.yes_asks).map(parseLevel),
+                  noBids: safeArray(data.noBids || data.no_bids).map(parseLevel),
+                  noAsks: safeArray(data.noAsks || data.no_asks).map(parseLevel),
                 };
                 onOrderbookUpdate(update);
               }
@@ -141,27 +161,32 @@ export function useDflowWebSocket({
               break;
               
             default:
-              console.log('📩 WebSocket message:', data);
+              // Silently ignore unknown messages
+              break;
           }
         } catch (parseErr) {
           console.error('Failed to parse WebSocket message:', parseErr);
         }
       };
 
-      ws.onerror = (event) => {
-        console.error('❌ DFlow WebSocket error:', event);
+      ws.onerror = () => {
+        console.error('❌ DFlow WebSocket error');
         setError('WebSocket connection error');
+        isConnectingRef.current = false;
       };
 
       ws.onclose = (event) => {
-        console.log('🔌 DFlow WebSocket closed:', event.code, event.reason);
+        console.log('🔌 DFlow WebSocket closed:', event.code);
         setIsConnected(false);
         wsRef.current = null;
+        isConnectingRef.current = false;
 
-        // Auto-reconnect with exponential backoff
-        if (autoReconnect && reconnectAttemptsRef.current < 5) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-          console.log(`🔄 Reconnecting in ${delay}ms...`);
+        // Only auto-reconnect if under max attempts, not a normal closure, and autoReconnect enabled
+        if (autoReconnect && 
+            reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS && 
+            event.code !== 1000) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 16000);
+          console.log(`🔄 Reconnecting in ${delay}ms... (${reconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;
@@ -172,6 +197,7 @@ export function useDflowWebSocket({
     } catch (err) {
       console.error('Failed to create WebSocket:', err);
       setError('Failed to connect to real-time updates');
+      isConnectingRef.current = false;
     }
   }, [tickers, channels, onPriceUpdate, onTradeUpdate, onOrderbookUpdate, autoReconnect]);
 
@@ -182,11 +208,12 @@ export function useDflowWebSocket({
     }
     
     if (wsRef.current) {
-      wsRef.current.close();
+      wsRef.current.close(1000); // Normal closure
       wsRef.current = null;
     }
     
     setIsConnected(false);
+    isConnectingRef.current = false;
   }, []);
 
   const subscribe = useCallback((channel: string, newTickers: string[]) => {
