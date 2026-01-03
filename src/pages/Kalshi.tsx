@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
 import { KalshiTradingModal } from '@/components/kalshi/KalshiTradingModal';
-import { KalshiLoadingSkeleton } from '@/components/kalshi/KalshiLoadingSkeleton';
+import { KalshiLoadingSkeleton, KalshiSearchLoadingSkeleton } from '@/components/kalshi/KalshiLoadingSkeleton';
 import { KalshiPortfolio } from '@/components/kalshi/KalshiPortfolio';
 import { KalshiAIInsight } from '@/components/kalshi/KalshiAIInsight';
 import { KalshiConnectWallet } from '@/components/kalshi/KalshiConnectWallet';
@@ -782,14 +782,6 @@ export default function Kalshi() {
               </div>
             )}
 
-            {/* Search indicator */}
-            {isSearching && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Searching all 5,000+ markets...
-              </div>
-            )}
-            
             {/* Search results count */}
             {deferredSearchQuery && searchResults.length > 0 && !isSearching && (
               <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400">
@@ -801,6 +793,8 @@ export default function Kalshi() {
             {/* Markets Grid/List */}
             {isLoading ? (
               <KalshiLoadingSkeleton />
+            ) : isSearching ? (
+              <KalshiSearchLoadingSkeleton />
             ) : filteredMarkets.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-muted-foreground text-lg">No markets found</p>
