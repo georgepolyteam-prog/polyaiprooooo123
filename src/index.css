@@ -1021,15 +1021,47 @@
   transform: translateY(-1px);
 }
 
-/* ===== SOLANA WALLET ADAPTER Z-INDEX FIX ===== */
+/* ===== SOLANA WALLET ADAPTER FIXES ===== */
 .wallet-adapter-modal-wrapper {
   z-index: 9999 !important;
+  position: fixed !important;
 }
 
 .wallet-adapter-modal-overlay {
   z-index: 9998 !important;
+  position: fixed !important;
+  background-color: rgba(0, 0, 0, 0.7) !important;
 }
 
 .wallet-adapter-modal {
   z-index: 9999 !important;
+}
+
+.wallet-adapter-modal-container {
+  z-index: 9999 !important;
+}
+
+/* Ensure wallet buttons are clickable */
+.wallet-adapter-button {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.wallet-adapter-button-trigger {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+/* Fix wallet list items */
+.wallet-adapter-modal-list {
+  pointer-events: auto !important;
+}
+
+.wallet-adapter-modal-list li {
+  pointer-events: auto !important;
+}
+
+.wallet-adapter-modal-list-more {
+  pointer-events: auto !important;
+  cursor: pointer !important;
 }

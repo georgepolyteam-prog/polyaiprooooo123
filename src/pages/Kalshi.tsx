@@ -150,6 +150,7 @@ export default function Kalshi() {
   const [categories, setCategories] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [allMarkets, setAllMarkets] = useState<KalshiMarket[]>([]);
   
   const deferredSearchQuery = useDeferredValue(searchQuery);
   
@@ -450,7 +451,7 @@ export default function Kalshi() {
       const events = await getEvents('active');
       
       // Flatten events into markets
-      const allMarkets: KalshiMarket[] = [];
+      const allMarketsData: KalshiMarket[] = [];
       events.forEach((event: KalshiEvent) => {
         if (event.markets && event.markets.length > 0) {
           event.markets.forEach(market => {
@@ -458,18 +459,19 @@ export default function Kalshi() {
             if (!market.title && event.title) {
               market.title = event.title;
             }
-            allMarkets.push(market);
+            allMarketsData.push(market);
           });
         }
       });
       
-      const fetchedMarkets = allMarkets.length > 0 
-        ? allMarkets 
+      const fetchedMarkets = allMarketsData.length > 0 
+        ? allMarketsData 
         : (await getMarkets()).length > 0 
           ? await getMarkets() 
           : DEMO_MARKETS;
       
       setMarkets(fetchedMarkets);
+      setAllMarkets(fetchedMarkets);
       
       // Cache the fresh data
       try {
@@ -487,6 +489,7 @@ export default function Kalshi() {
       // Use demo markets as fallback only if we have nothing
       if (markets.length === 0) {
         setMarkets(DEMO_MARKETS);
+        setAllMarkets(DEMO_MARKETS);
         toast.info('Showing demo markets');
       }
     } finally {
@@ -512,26 +515,37 @@ export default function Kalshi() {
   useEffect(() => {
     if (!deferredSearchQuery || deferredSearchQuery.length < 2) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
     
+    setIsSearching(true);
+    
     const doSearch = async () => {
-      setIsSearching(true);
       try {
         const results = await searchEvents(deferredSearchQuery);
         const searchMarkets = results.flatMap(e => e.markets || []);
         setSearchResults(searchMarkets);
-      } catch {}
-      setIsSearching(false);
+      } catch {
+        // Fallback to local search of ALL markets
+        const localResults = allMarkets.filter(market =>
+          (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+          (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+          (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+        );
+        setSearchResults(localResults);
+      } finally {
+        setIsSearching(false);
+      }
     };
     
     const timer = setTimeout(doSearch, 400);
     return () => clearTimeout(timer);
-  }, [deferredSearchQuery, searchEvents]);
+  }, [deferredSearchQuery, searchEvents, allMarkets]);
 
   // Use search results when searching, otherwise filter local markets
   const filteredMarkets = useMemo(() => {
-    // If we have search results from API, use those
+    // If actively searching, use search results
     if (deferredSearchQuery && searchResults.length > 0) {
       return searchResults.filter(market => {
         const status = (market.status || '').toLowerCase();
@@ -539,7 +553,20 @@ export default function Kalshi() {
       });
     }
     
-    // Otherwise filter local markets
+    // If searching but no results yet, show all markets with local filter
+    if (deferredSearchQuery && isSearching) {
+      const localResults = allMarkets.filter(market =>
+        (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+      );
+      return localResults.filter(market => {
+        const status = (market.status || '').toLowerCase();
+        return status === 'active' || status === 'initialized' || status === '' || !status;
+      });
+    }
+    
+    // Otherwise use displayed markets with filters
     let result = markets.filter(market => {
       const status = (market.status || '').toLowerCase();
       return status === 'active' || status === 'initialized' || status === '' || !status;
@@ -553,46 +580,65 @@ export default function Kalshi() {
       );
     }
     
-    // Local search filter (if no API results yet)
-    if (deferredSearchQuery && searchResults.length === 0 && !isSearching) {
-      result = result.filter(market =>
-        (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
-      );
-    }
-    
     return showAll ? result : result.slice(0, 60);
-  }, [markets, deferredSearchQuery, selectedCategory, showAll, searchResults, isSearching]);
+  }, [markets, allMarkets, deferredSearchQuery, selectedCategory, showAll, searchResults, isSearching]);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section - Redesigned with Kalshi/Solana branding */}
+      {/* NEW PREMIUM HERO SECTION */}
       <section className="relative overflow-hidden">
-        {/* Gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 via-primary/5 to-background" />
+        {/* Animated gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-primary/5 to-purple-500/10" />
         
-        {/* Subtle grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
+        {/* Premium grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:48px_48px]" />
         
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16 pb-20 sm:pb-24">
-          {/* Logo Bubbles */}
-          <div className="flex justify-center gap-6 mb-8">
+        {/* Floating orbs */}
+        <div className="absolute top-20 left-10 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '700ms' }} />
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16 pb-20 sm:pb-28">
+          {/* Premium Logo Bubbles with animations */}
+          <div className="flex justify-center gap-4 sm:gap-8 mb-10">
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              initial={{ opacity: 0, scale: 0.5, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.1, type: 'spring' }}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#00D395]/10 border border-[#00D395]/30 flex items-center justify-center shadow-lg shadow-[#00D395]/20"
+              transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+              whileHover={{ scale: 1.1, rotate: 5 }}
+              className="relative group"
             >
-              <img src={kalshiLogo} alt="Kalshi" className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-br from-[#00D395] to-emerald-600 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#00D395]/20 border-2 border-[#00D395]/40 flex items-center justify-center shadow-2xl backdrop-blur-sm">
+                <img src={kalshiLogo} alt="Kalshi" className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover" />
+              </div>
             </motion.div>
+            
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              initial={{ opacity: 0, scale: 0.5, y: -30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.2, type: 'spring' }}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-purple-500/10 to-cyan-500/10 border border-purple-500/30 flex items-center justify-center shadow-lg shadow-purple-500/20"
+              transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
+              className="flex items-center justify-center"
             >
-              <img src={solanaLogo} alt="Solana" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
+              <motion.div
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-400 via-primary to-purple-400 bg-clip-text text-transparent"
+              >
+                ✕
+              </motion.div>
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+              whileHover={{ scale: 1.1, rotate: -5 }}
+              className="relative group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20 border-2 border-purple-500/40 flex items-center justify-center shadow-2xl backdrop-blur-sm">
+                <img src={solanaLogo} alt="Solana" className="w-12 h-12 sm:w-14 sm:h-14 object-contain" />
+              </div>
             </motion.div>
           </div>
 
@@ -624,25 +670,44 @@ export default function Kalshi() {
               Trade prediction markets on Solana
             </p>
             
-            {/* Buy/Sell Pills */}
-            <div className="flex items-center justify-center gap-3 mb-8">
+            {/* Premium Buy/Sell Pills */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
               <motion.div
-                initial={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, x: -30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/30"
+                transition={{ delay: 0.4, type: 'spring' }}
+                whileHover={{ scale: 1.05 }}
+                className="relative group w-full sm:w-auto"
               >
-                <TrendingUp className="w-5 h-5 text-emerald-400" />
-                <span className="text-emerald-400 font-semibold">BUY YES</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
+                <div className="relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 border-2 border-emerald-500/40 backdrop-blur-sm shadow-xl">
+                  <div className="p-2 rounded-full bg-emerald-500/20">
+                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs text-emerald-400/80 font-medium">Buy</p>
+                    <p className="text-lg text-emerald-400 font-bold">YES</p>
+                  </div>
+                </div>
               </motion.div>
+              
               <motion.div
-                initial={{ opacity: 0, x: 20 }}
+                initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-500/10 border border-red-500/30"
+                transition={{ delay: 0.4, type: 'spring' }}
+                whileHover={{ scale: 1.05 }}
+                className="relative group w-full sm:w-auto"
               >
-                <TrendingDown className="w-5 h-5 text-red-400" />
-                <span className="text-red-400 font-semibold">BUY NO</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
+                <div className="relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-500/40 backdrop-blur-sm shadow-xl">
+                  <div className="p-2 rounded-full bg-red-500/20">
+                    <TrendingDown className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs text-red-400/80 font-medium">Buy</p>
+                    <p className="text-lg text-red-400 font-bold">NO</p>
+                  </div>
+                </div>
               </motion.div>
             </div>
             
@@ -699,24 +764,18 @@ export default function Kalshi() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <TabsList className="bg-muted/30 p-1 rounded-2xl">
+            <TabsList className="bg-muted/40 p-1.5 rounded-2xl backdrop-blur-sm border border-border/50">
               <TabsTrigger 
                 value="markets" 
-                className="rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all"
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Markets
               </TabsTrigger>
               <TabsTrigger 
                 value="portfolio" 
-                className="rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all disabled:opacity-50"
                 disabled={!connected}
-                onClick={(e) => {
-                  if (!connected) {
-                    e.preventDefault();
-                    toast.info('Connect your wallet to view portfolio');
-                  }
-                }}
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 Portfolio
@@ -725,12 +784,12 @@ export default function Kalshi() {
             
             <div className="flex items-center gap-3">
               {/* View Mode Toggle */}
-              <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/30">
+              <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border/50 backdrop-blur-sm">
                 <Button
                   variant={viewMode === 'grid' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('grid')}
-                  className="h-8 px-3 rounded-lg"
+                  className="h-9 px-3 rounded-lg transition-all"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </Button>
@@ -738,7 +797,7 @@ export default function Kalshi() {
                   variant={viewMode === 'list' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('list')}
-                  className="h-8 px-3 rounded-lg"
+                  className="h-9 px-3 rounded-lg transition-all"
                 >
                   <List className="w-4 h-4" />
                 </Button>
@@ -751,7 +810,7 @@ export default function Kalshi() {
                   placeholder="Search all markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 w-full sm:w-64 h-11 rounded-xl bg-muted/30 border-border/50"
+                  className="pl-11 pr-4 w-full sm:w-72 h-11 rounded-xl bg-muted/40 border-border/50 backdrop-blur-sm focus:border-primary/50 transition-all"
                 />
               </div>
               
@@ -766,7 +825,7 @@ export default function Kalshi() {
                   });
                 }}
                 disabled={isLoading}
-                className="h-11 w-11 rounded-xl border-border/50"
+                className="h-11 w-11 rounded-xl border-border/50 bg-muted/40 backdrop-blur-sm hover:bg-muted/60 hover:border-primary/50 transition-all"
               >
                 <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
               </Button>
@@ -781,7 +840,7 @@ export default function Kalshi() {
                   variant={selectedCategory === null ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setSelectedCategory(null)}
-                  className="rounded-full h-8 px-4"
+                  className="rounded-full h-9 px-5 font-medium transition-all hover:scale-105"
                 >
                   All
                 </Button>
@@ -791,7 +850,7 @@ export default function Kalshi() {
                     variant={selectedCategory === cat ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedCategory(cat)}
-                    className="rounded-full h-8 px-4"
+                    className="rounded-full h-9 px-5 font-medium transition-all hover:scale-105"
                   >
                     {cat}
                   </Button>
@@ -801,7 +860,7 @@ export default function Kalshi() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedCategory(null)}
-                    className="rounded-full h-8 px-3"
+                    className="rounded-full h-9 px-4 font-medium transition-all hover:scale-105"
                   >
                     <X className="w-3 h-3 mr-1" />
                     Clear
@@ -906,17 +965,25 @@ export default function Kalshi() {
                     
                     {/* Actions */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setAiMarket(market);
                         }}
-                        className="h-8 w-8 p-0 rounded-lg"
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 h-9 px-4",
+                          "rounded-full text-sm font-medium",
+                          "bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10",
+                          "border border-primary/20 hover:border-primary/40",
+                          "text-primary",
+                          "transition-all duration-300",
+                          "hover:shadow-lg hover:shadow-primary/20",
+                          "hover:scale-[1.02] active:scale-[0.98]"
+                        )}
                       >
                         <Sparkles className="w-4 h-4" />
-                      </Button>
+                        <span className="hidden sm:inline">AI</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -937,7 +1004,7 @@ export default function Kalshi() {
                 <Button
                   variant="outline"
                   onClick={() => setShowAll(!showAll)}
-                  className="h-12 px-8 rounded-2xl border-border/50 hover:border-primary/50 group"
+                  className="h-12 px-10 rounded-2xl border-border/50 hover:border-primary/50 hover:bg-primary/5 group transition-all shadow-lg hover:shadow-xl"
                 >
                   {showAll ? 'Show Less' : `View All ${markets.length} Markets`}
                   <ArrowRight className={cn(
