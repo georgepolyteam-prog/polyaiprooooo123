@@ -132,7 +132,7 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
         )}
       </div>
       
-      {/* Action Buttons - Apple/Kalshi style */}
+      {/* Action Buttons - Apple/Kalshi premium style */}
       <div className="flex items-center gap-2">
         {onAIAnalysis && (
           <button
@@ -149,7 +149,7 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
             )}
           >
             <Sparkles className="w-4 h-4" />
-            <span>AI</span>
+            <span>AI Analysis</span>
           </button>
         )}
         <KalshiShareButton market={market} compact />
