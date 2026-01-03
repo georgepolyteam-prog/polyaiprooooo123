@@ -127,96 +127,122 @@ export function KalshiCandlestickChart({
   useEffect(() => {
     if (!chartContainerRef.current || candles.length === 0) return;
 
-    // Create chart
-    if (!chartRef.current) {
-      chartRef.current = createChart(chartContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#94a3b8', // slate-400 hex
-          fontFamily: 'JetBrains Mono, monospace',
-        },
-        grid: {
-          vertLines: { color: 'rgba(100, 100, 100, 0.1)' },
-          horzLines: { color: 'rgba(100, 100, 100, 0.1)' },
-        },
-        crosshair: {
-          mode: 1,
-          vertLine: {
-            color: 'rgba(100, 200, 200, 0.5)',
-            labelBackgroundColor: '#06b6d4', // cyan-500 hex
+    try {
+      // Create chart
+      if (!chartRef.current) {
+        chartRef.current = createChart(chartContainerRef.current, {
+          layout: {
+            background: { type: ColorType.Solid, color: 'transparent' },
+            textColor: '#94a3b8',
+            fontFamily: 'JetBrains Mono, monospace',
           },
-          horzLine: {
-            color: 'rgba(100, 200, 200, 0.5)',
-            labelBackgroundColor: '#06b6d4', // cyan-500 hex
+          grid: {
+            vertLines: { color: 'rgba(100, 100, 100, 0.1)' },
+            horzLines: { color: 'rgba(100, 100, 100, 0.1)' },
           },
-        },
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          borderColor: 'rgba(100, 100, 100, 0.2)',
-        },
-        rightPriceScale: {
-          borderColor: 'rgba(100, 100, 100, 0.2)',
-          scaleMargins: { top: 0.1, bottom: 0.2 },
-        },
-        handleScroll: { mouseWheel: true, pressedMouseMove: true },
-        handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
-      });
+          crosshair: {
+            mode: 1,
+            vertLine: {
+              color: 'rgba(100, 200, 200, 0.5)',
+              labelBackgroundColor: '#06b6d4',
+            },
+            horzLine: {
+              color: 'rgba(100, 200, 200, 0.5)',
+              labelBackgroundColor: '#06b6d4',
+            },
+          },
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            borderColor: 'rgba(100, 100, 100, 0.2)',
+          },
+          rightPriceScale: {
+            borderColor: 'rgba(100, 100, 100, 0.2)',
+            scaleMargins: { top: 0.1, bottom: 0.2 },
+          },
+          handleScroll: { mouseWheel: true, pressedMouseMove: true },
+          handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+        });
 
-      // Add candlestick series
-      candlestickSeriesRef.current = chartRef.current.addCandlestickSeries({
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderVisible: false,
-        wickUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
-      });
+        // Add candlestick series
+        candlestickSeriesRef.current = chartRef.current.addCandlestickSeries({
+          upColor: '#22c55e',
+          downColor: '#ef4444',
+          borderVisible: false,
+          wickUpColor: '#22c55e',
+          wickDownColor: '#ef4444',
+        });
 
-      // Add volume series
-      volumeSeriesRef.current = chartRef.current.addHistogramSeries({
-        color: 'rgba(100, 200, 200, 0.3)',
-        priceFormat: { type: 'volume' },
-        priceScaleId: '',
-      });
-      
-      volumeSeriesRef.current.priceScale().applyOptions({
-        scaleMargins: { top: 0.85, bottom: 0 },
-      });
+        // Add volume series
+        volumeSeriesRef.current = chartRef.current.addHistogramSeries({
+          color: 'rgba(100, 200, 200, 0.3)',
+          priceFormat: { type: 'volume' },
+          priceScaleId: '',
+        });
+        
+        volumeSeriesRef.current.priceScale().applyOptions({
+          scaleMargins: { top: 0.85, bottom: 0 },
+        });
+      }
+
+      // Filter out invalid candles and validate timestamps
+      const validCandles = candles.filter(c => 
+        c && 
+        typeof c.timestamp === 'number' && 
+        c.timestamp > 0 &&
+        !isNaN(c.open) && 
+        !isNaN(c.high) && 
+        !isNaN(c.low) && 
+        !isNaN(c.close)
+      );
+
+      if (validCandles.length === 0) {
+        console.warn('[Chart] No valid candles to display');
+        return;
+      }
+
+      // Update chart data
+      const chartData = validCandles.map(c => ({
+        time: c.timestamp as Time,
+        open: c.open / 100,
+        high: c.high / 100,
+        low: c.low / 100,
+        close: c.close / 100,
+      }));
+
+      const volumeData = validCandles.map(c => ({
+        time: c.timestamp as Time,
+        value: c.volume || 0,
+        color: c.close >= c.open 
+          ? 'rgba(34, 197, 94, 0.4)' 
+          : 'rgba(239, 68, 68, 0.4)',
+      }));
+
+      candlestickSeriesRef.current?.setData(chartData);
+      volumeSeriesRef.current?.setData(volumeData);
+      chartRef.current?.timeScale().fitContent();
+    } catch (err) {
+      console.error('[Chart] Failed to initialize or update chart:', err);
     }
-
-    // Update chart data
-    const chartData = candles.map(c => ({
-      time: c.timestamp as Time,
-      open: c.open / 100,
-      high: c.high / 100,
-      low: c.low / 100,
-      close: c.close / 100,
-    }));
-
-    const volumeData = candles.map(c => ({
-      time: c.timestamp as Time,
-      value: c.volume || 0,
-      color: c.close >= c.open 
-        ? 'rgba(34, 197, 94, 0.4)' 
-        : 'rgba(239, 68, 68, 0.4)',
-    }));
-
-    candlestickSeriesRef.current?.setData(chartData);
-    volumeSeriesRef.current?.setData(volumeData);
-    chartRef.current?.timeScale().fitContent();
 
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
+        try {
+          chartRef.current.applyOptions({
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight,
+          });
+        } catch (e) {
+          // Ignore resize errors
+        }
       }
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(chartContainerRef.current);
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
 
     return () => {
       resizeObserver.disconnect();
