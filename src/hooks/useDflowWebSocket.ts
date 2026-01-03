@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 // DFlow WebSocket URL for real-time price updates
-const WS_URL = 'wss://c.prediction-markets-api.dflow.net/api/v1/ws';
+const WS_URL = 'wss://prediction-markets-api.dflow.net/api/v1/ws';
 
 export interface PriceUpdate {
   ticker: string;

@@ -147,9 +147,20 @@ export function useDflowApi() {
     const cached = getCached(cacheKey);
     if (cached) return cached;
     
-    const data = await callDflowApi('getOrderbook', { ticker });
-    setCache(cacheKey, data);
-    return data;
+    try {
+      const data = await callDflowApi('getOrderbook', { ticker });
+      setCache(cacheKey, data);
+      return data;
+    } catch (err: any) {
+      // 404 means market doesn't have orderbook data yet - return empty
+      if (err?.message?.includes('404') || err?.message?.includes('non-2xx')) {
+        console.log(`[DFlow] No orderbook available for ${ticker}`);
+        const emptyOrderbook = { yes_bids: {}, no_bids: {}, yes_asks: {}, no_asks: {} };
+        setCache(cacheKey, emptyOrderbook);
+        return emptyOrderbook;
+      }
+      throw err;
+    }
   }, [callDflowApi]);
 
   // Get trade history for a market (returns empty array on 404) - CACHED
@@ -250,15 +261,34 @@ export function useDflowApi() {
     endTs?: number,
     interval: 1 | 60 | 1440 = 60
   ): Promise<Candlestick[]> => {
-    const data = await callDflowApi('getCandlesticks', { ticker, startTs, endTs, interval });
-    return (data.candlesticks || data || []).map((c: any) => ({
-      timestamp: c.timestamp || c.t,
-      open: parseFloat(c.open || c.o) * 100,
-      high: parseFloat(c.high || c.h) * 100,
-      low: parseFloat(c.low || c.l) * 100,
-      close: parseFloat(c.close || c.c) * 100,
-      volume: parseFloat(c.volume || c.v || 0),
-    }));
+    try {
+      const data = await callDflowApi('getCandlesticks', { ticker, startTs, endTs, interval });
+      const candlesArray = data?.candlesticks || data || [];
+      
+      if (!Array.isArray(candlesArray)) {
+        console.warn('[DFlow] getCandlesticks: unexpected response format', data);
+        return [];
+      }
+      
+      return candlesArray
+        .filter((c: any) => c && (c.timestamp !== undefined || c.t !== undefined))
+        .map((c: any) => {
+          const timestamp = c.timestamp ?? c.t;
+          return {
+            timestamp: typeof timestamp === 'number' ? timestamp : parseInt(timestamp, 10),
+            open: parseFloat(c.open ?? c.o ?? 0) * 100,
+            high: parseFloat(c.high ?? c.h ?? 0) * 100,
+            low: parseFloat(c.low ?? c.l ?? 0) * 100,
+            close: parseFloat(c.close ?? c.c ?? 0) * 100,
+            volume: parseFloat(c.volume ?? c.v ?? 0),
+          };
+        })
+        .filter((c: Candlestick) => !isNaN(c.timestamp) && c.timestamp > 0)
+        .sort((a: Candlestick, b: Candlestick) => a.timestamp - b.timestamp);
+    } catch (err: any) {
+      console.error('[DFlow] getCandlesticks failed:', err);
+      return [];
+    }
   }, [callDflowApi]);
 
   // Get market by outcome token mint
