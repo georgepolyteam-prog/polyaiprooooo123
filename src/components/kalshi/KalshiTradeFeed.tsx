@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useDflowApi } from '@/hooks/useDflowApi';
-import { useDflowWebSocket, type TradeUpdate } from '@/hooks/useDflowWebSocket';
+import { useLiveKalshiData } from '@/hooks/useLiveKalshiData';
 
 interface Trade {
   id: string;
@@ -19,50 +17,8 @@ interface KalshiTradeFeedProps {
 }
 
 export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps) {
-  const { getTrades, loading } = useDflowApi();
-  const [trades, setTrades] = useState<Trade[]>([]);
-
-  // WebSocket for real-time trade updates
-  useDflowWebSocket({
-    tickers: [ticker],
-    channels: ['trades'],
-    onTradeUpdate: (update: TradeUpdate) => {
-      if (update.ticker === ticker) {
-        const newTrade: Trade = {
-          id: `${update.timestamp}-${Math.random()}`,
-          side: update.side,
-          price: update.price,
-          size: update.size,
-          timestamp: update.timestamp,
-        };
-        
-        setTrades(prev => [newTrade, ...prev].slice(0, maxTrades));
-      }
-    },
-  });
-
-  // Initial fetch
-  useEffect(() => {
-    const fetchTrades = async () => {
-      try {
-        const data = await getTrades(ticker, maxTrades);
-        if (data?.trades) {
-          const parsedTrades: Trade[] = data.trades.map((t: any, idx: number) => ({
-            id: `${t.timestamp || idx}-${idx}`,
-            side: (t.side || t.taker_side || 'yes').toLowerCase() as 'yes' | 'no',
-            price: Math.round((parseFloat(t.price) || 0.5) * 100),
-            size: parseFloat(t.size || t.amount || t.count || 1),
-            timestamp: t.timestamp || Date.now() - idx * 60000,
-          }));
-          setTrades(parsedTrades);
-        }
-      } catch (err) {
-        console.error('Failed to fetch trades:', err);
-      }
-    };
-
-    fetchTrades();
-  }, [ticker, maxTrades, getTrades]);
+  const { trades, isPolling } = useLiveKalshiData(ticker, true);
+  const displayTrades = trades.slice(0, maxTrades);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -76,18 +32,7 @@ export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps
     return date.toLocaleDateString();
   };
 
-  if (loading && trades.length === 0) {
-    return (
-      <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-        <div className="flex items-center gap-2 mb-3">
-          <Activity className="w-4 h-4 text-primary animate-pulse" />
-          <span className="text-sm font-medium text-foreground">Loading trades...</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (trades.length === 0) {
+  if (displayTrades.length === 0) {
     return null;
   }
 
@@ -96,15 +41,17 @@ export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps
       <div className="flex items-center gap-2 mb-3">
         <Activity className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium text-foreground">Recent Trades</span>
-        <div className="ml-auto flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs text-muted-foreground">Live</span>
-        </div>
+        {isPolling && (
+          <div className="ml-auto flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] text-muted-foreground">LIVE</span>
+          </div>
+        )}
       </div>
 
       <div className="space-y-1.5 max-h-64 overflow-y-auto">
         <AnimatePresence mode="popLayout">
-          {trades.map((trade, idx) => (
+          {displayTrades.map((trade, idx) => (
             <motion.div
               key={trade.id}
               initial={{ opacity: 0, x: -20, height: 0 }}

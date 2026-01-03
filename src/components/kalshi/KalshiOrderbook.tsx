@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, RefreshCw, Loader2 } from 'lucide-react';
+import { BarChart3, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useDflowApi } from '@/hooks/useDflowApi';
-import { useDflowWebSocket, type OrderbookUpdate } from '@/hooks/useDflowWebSocket';
+import { useLiveKalshiData } from '@/hooks/useLiveKalshiData';
 
 interface OrderbookLevel {
   price: number;
@@ -16,90 +15,15 @@ interface KalshiOrderbookProps {
 }
 
 export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProps) {
-  const { getOrderbook, loading } = useDflowApi();
-  const [orderbook, setOrderbook] = useState<{
-    yesBids: OrderbookLevel[];
-    yesAsks: OrderbookLevel[];
-    noBids: OrderbookLevel[];
-    noAsks: OrderbookLevel[];
-  } | null>(null);
+  const { orderbook, isPolling, refetch } = useLiveKalshiData(ticker, true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // WebSocket for real-time updates
-  useDflowWebSocket({
-    tickers: [ticker],
-    channels: ['orderbook'],
-    onOrderbookUpdate: (update: OrderbookUpdate) => {
-      if (update.ticker === ticker) {
-        setOrderbook({
-          yesBids: update.yesBids,
-          yesAsks: update.yesAsks,
-          noBids: update.noBids,
-          noAsks: update.noAsks,
-        });
-      }
-    },
-  });
-
-  // Safe array parser
-  const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
-  
-  const parseLevel = (level: any): OrderbookLevel => ({
-    price: Math.round((parseFloat(level?.price) || 0) * 100),
-    size: parseFloat(level?.size || level?.quantity || 0),
-  });
-
-  // Initial fetch
-  useEffect(() => {
-    const fetchOrderbook = async () => {
-      try {
-        const data = await getOrderbook(ticker);
-        if (data) {
-          setOrderbook({
-            yesBids: safeArray(data.yesBids || data.yes_bids).map(parseLevel).slice(0, 10),
-            yesAsks: safeArray(data.yesAsks || data.yes_asks).map(parseLevel).slice(0, 10),
-            noBids: safeArray(data.noBids || data.no_bids).map(parseLevel).slice(0, 10),
-            noAsks: safeArray(data.noAsks || data.no_asks).map(parseLevel).slice(0, 10),
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch orderbook:', err);
-        // Set empty on error
-        setOrderbook({
-          yesBids: [],
-          yesAsks: [],
-          noBids: [],
-          noAsks: [],
-        });
-      }
-    };
-
-    fetchOrderbook();
-  }, [ticker, getOrderbook]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    try {
-      const data = await getOrderbook(ticker);
-      if (data) {
-        setOrderbook({
-          yesBids: safeArray(data.yesBids || data.yes_bids).map(parseLevel).slice(0, 10),
-          yesAsks: safeArray(data.yesAsks || data.yes_asks).map(parseLevel).slice(0, 10),
-          noBids: safeArray(data.noBids || data.no_bids).map(parseLevel).slice(0, 10),
-          noAsks: safeArray(data.noAsks || data.no_asks).map(parseLevel).slice(0, 10),
-        });
-      }
-    } catch (err) {
-      console.error('Failed to refresh orderbook:', err);
-      setOrderbook({
-        yesBids: [],
-        yesAsks: [],
-        noBids: [],
-        noAsks: [],
-      });
-    }
+    await refetch();
     setRefreshing(false);
   };
+
 
   // Calculate max size for bar widths
   const maxSize = useMemo(() => {
@@ -110,14 +34,6 @@ export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProp
     ];
     return Math.max(...allSizes, 1);
   }, [orderbook]);
-
-  if (loading && !orderbook) {
-    return (
-      <div className="p-4 rounded-2xl bg-muted/30 border border-border/50 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   if (!orderbook) {
     return null;
@@ -135,6 +51,12 @@ export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProp
         <div className="flex items-center gap-2">
           <BarChart3 className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">Order Book</span>
+          {isPolling && (
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] text-muted-foreground">LIVE</span>
+            </div>
+          )}
         </div>
         <button
           onClick={handleRefresh}
