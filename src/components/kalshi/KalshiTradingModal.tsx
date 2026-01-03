@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { VersionedTransaction, Connection } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle, CheckCircle, DollarSign, Zap, ArrowRight } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket } from '@/hooks/useDflowApi';
@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { KalshiPriceChart } from './KalshiPriceChart';
 import { KalshiShareButton } from './KalshiShareButton';
+import { Slider } from '@/components/ui/slider';
 
 interface RecentOrder {
   signature: string;
@@ -498,93 +499,144 @@ export function KalshiTradingModal({
   };
 
   const displayTitle = market.title || market.ticker;
-  const modalTitle = isSellMode ? 'Sell Position' : 'Trade Market';
+  const modalTitle = isSellMode ? 'Sell Position' : 'Trade';
+  
+  // Quick amount buttons
+  const quickAmounts = isSellMode ? [] : [5, 10, 25, 50, 100];
   
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg bg-background border border-border max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-bold">{modalTitle}</DialogTitle>
-            <KalshiShareButton market={market} />
-          </div>
-          <DialogDescription className="sr-only">
-            Trade YES or NO shares on this prediction market
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 py-4">
-          {/* Step Progress UI */}
-          {orderStep !== 'idle' && (
-            <div className="p-4 rounded-2xl bg-muted/50 border border-border space-y-3">
-              <div className="flex items-center gap-3">
-                {orderStep === 'error' ? (
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
-                ) : orderStep === 'done' ? (
-                  <CheckCircle className="w-5 h-5 text-emerald-500" />
-                ) : (
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                )}
-                <span className="text-sm font-medium text-foreground">
-                  {getStepLabel(orderStep, isSellMode)}
-                </span>
+      <DialogContent className="sm:max-w-md bg-background border border-border max-h-[90vh] overflow-y-auto p-0">
+        {/* Header with gradient */}
+        <div className={cn(
+          "p-6 pb-4 rounded-t-lg",
+          side === 'YES' 
+            ? "bg-gradient-to-b from-emerald-500/10 to-transparent" 
+            : "bg-gradient-to-b from-red-500/10 to-transparent"
+        )}>
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "p-2 rounded-xl",
+                  side === 'YES' ? "bg-emerald-500/20" : "bg-red-500/20"
+                )}>
+                  <Zap className={cn(
+                    "w-5 h-5",
+                    side === 'YES' ? "text-emerald-400" : "text-red-400"
+                  )} />
+                </div>
+                <DialogTitle className="text-xl font-bold">{modalTitle}</DialogTitle>
               </div>
-              
-              {/* Progress bar */}
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div 
-                  className={cn(
-                    "h-full transition-all duration-300",
-                    orderStep === 'error' ? 'bg-red-500' : orderStep === 'done' ? 'bg-emerald-500' : 'bg-primary'
-                  )}
-                  style={{ width: `${getStepProgress(orderStep)}%` }}
-                />
-              </div>
-              
-              {/* Step indicators */}
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span className={getStepProgress(orderStep) >= 15 ? 'text-primary' : ''}>Quote</span>
-                <span className={getStepProgress(orderStep) >= 50 ? 'text-primary' : ''}>Sign</span>
-                <span className={getStepProgress(orderStep) >= 70 ? 'text-primary' : ''}>Submit</span>
-                <span className={getStepProgress(orderStep) >= 85 ? 'text-primary' : ''}>Confirm</span>
-              </div>
-              
-              {txSignature && (
-                <a
-                  href={`https://solscan.io/tx/${txSignature}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-xs text-primary hover:underline"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  View on Solscan
-                </a>
-              )}
+              <KalshiShareButton market={market} />
             </div>
-          )}
+            <DialogDescription className="sr-only">
+              Trade YES or NO shares on this prediction market
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-          {/* Simulation/Liquidity Error Warning */}
+        <div className="px-6 pb-6 space-y-5">
+          {/* Step Progress UI - Enhanced */}
+          <AnimatePresence>
+            {orderStep !== 'idle' && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className={cn(
+                  "p-4 rounded-2xl border space-y-3",
+                  orderStep === 'error' 
+                    ? "bg-red-500/10 border-red-500/30" 
+                    : orderStep === 'done'
+                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      : "bg-primary/5 border-primary/20"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  {orderStep === 'error' ? (
+                    <div className="p-2 rounded-full bg-red-500/20">
+                      <AlertTriangle className="w-5 h-5 text-red-500" />
+                    </div>
+                  ) : orderStep === 'done' ? (
+                    <motion.div 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="p-2 rounded-full bg-emerald-500/20"
+                    >
+                      <CheckCircle className="w-5 h-5 text-emerald-500" />
+                    </motion.div>
+                  ) : (
+                    <div className="p-2 rounded-full bg-primary/20">
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-foreground">
+                    {getStepLabel(orderStep, isSellMode)}
+                  </span>
+                </div>
+                
+                {/* Progress steps */}
+                <div className="flex items-center gap-1">
+                  {['Quote', 'Sign', 'Submit', 'Confirm'].map((step, i) => {
+                    const stepProgress = getStepProgress(orderStep);
+                    const stepThresholds = [15, 50, 70, 85];
+                    const isActive = stepProgress >= stepThresholds[i];
+                    const isCurrent = stepProgress >= stepThresholds[i] && (i === 3 || stepProgress < stepThresholds[i + 1]);
+                    
+                    return (
+                      <div key={step} className="flex-1 flex items-center gap-1">
+                        <div className={cn(
+                          "flex-1 h-1.5 rounded-full transition-all duration-300",
+                          isActive 
+                            ? orderStep === 'error' 
+                              ? 'bg-red-500' 
+                              : orderStep === 'done' 
+                                ? 'bg-emerald-500' 
+                                : 'bg-primary'
+                            : 'bg-muted'
+                        )} />
+                        {i < 3 && <ArrowRight className={cn(
+                          "w-3 h-3 shrink-0",
+                          isActive ? "text-primary" : "text-muted-foreground/30"
+                        )} />}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {txSignature && (
+                  <a
+                    href={`https://solscan.io/tx/${txSignature}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs text-primary hover:underline"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View on Solscan
+                  </a>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Error Warning */}
           {(simulationError || liquidityError) && orderStep === 'idle' && (
             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
               <span className="text-sm text-amber-400">{simulationError || liquidityError}</span>
             </div>
           )}
 
-          {/* Market Title */}
-          <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-            <p className="text-foreground font-medium leading-relaxed">
+          {/* Market Title - Compact */}
+          <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
+            <p className="text-foreground font-medium text-sm leading-relaxed line-clamp-2">
               {displayTitle}
             </p>
-            {market.subtitle && (
-              <p className="text-sm text-muted-foreground mt-1">{market.subtitle}</p>
-            )}
           </div>
 
-          {/* Price Chart */}
-          {tradesLoading ? (
-            <div className="h-32 rounded-xl bg-muted/30 animate-pulse" />
-          ) : (
+          {/* Price Chart - Optional, collapsible */}
+          {!tradesLoading && trades.length > 0 && (
             <KalshiPriceChart 
               trades={trades} 
               yesPrice={market.yesPrice} 
@@ -598,143 +650,198 @@ export function KalshiTradingModal({
             <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20">
               <div className="flex items-center gap-3 mb-3">
                 <Wallet className="w-5 h-5 text-primary" />
-                <span className="text-sm font-medium text-foreground">Connect your Solana wallet to trade</span>
+                <span className="text-sm font-medium text-foreground">Connect wallet to trade</span>
               </div>
               <WalletMultiButton className="!w-full !h-12 !rounded-xl !bg-primary !text-primary-foreground hover:!bg-primary/90 !font-medium !justify-center" />
             </div>
           )}
 
-          {/* Side Selector */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
+          {/* Side Selector - More compact and punchy */}
+          <div className="grid grid-cols-2 gap-2">
+            <motion.button
+              whileTap={{ scale: 0.98 }}
               onClick={() => setSide('YES')}
               disabled={!connected || executing}
               className={cn(
-                'p-4 rounded-2xl border-2 transition-colors',
+                'relative p-4 rounded-xl border-2 transition-all duration-200',
                 side === 'YES'
-                  ? 'border-emerald-500 bg-emerald-500/10'
-                  : 'border-border/50 bg-muted/30 hover:bg-muted/50',
+                  ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
+                  : 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border',
                 (!connected || executing) && 'opacity-50 cursor-not-allowed'
               )}
             >
-              <TrendingUp className={cn(
-                'w-6 h-6 mb-2 mx-auto',
-                side === 'YES' ? 'text-emerald-400' : 'text-muted-foreground'
-              )} />
-              <p className={cn(
-                'text-sm font-semibold uppercase tracking-wide',
-                side === 'YES' ? 'text-emerald-400' : 'text-muted-foreground'
-              )}>
-                Yes
-              </p>
-              <p className={cn(
-                'text-2xl font-bold mt-1',
-                side === 'YES' ? 'text-emerald-400' : 'text-foreground'
-              )}>
-                {market.yesPrice}¢
-              </p>
-            </button>
+              {side === 'YES' && (
+                <motion.div
+                  layoutId="sideIndicator"
+                  className="absolute inset-0 rounded-xl border-2 border-emerald-500"
+                />
+              )}
+              <div className="relative">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <TrendingUp className={cn(
+                    'w-5 h-5',
+                    side === 'YES' ? 'text-emerald-400' : 'text-muted-foreground'
+                  )} />
+                  <span className={cn(
+                    'font-bold text-lg',
+                    side === 'YES' ? 'text-emerald-400' : 'text-foreground'
+                  )}>
+                    YES
+                  </span>
+                </div>
+                <p className={cn(
+                  'text-2xl font-bold',
+                  side === 'YES' ? 'text-emerald-400' : 'text-foreground'
+                )}>
+                  {market.yesPrice}¢
+                </p>
+              </div>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.98 }}
               onClick={() => setSide('NO')}
               disabled={!connected || executing}
               className={cn(
-                'p-4 rounded-2xl border-2 transition-colors',
+                'relative p-4 rounded-xl border-2 transition-all duration-200',
                 side === 'NO'
-                  ? 'border-red-500 bg-red-500/10'
-                  : 'border-border/50 bg-muted/30 hover:bg-muted/50',
+                  ? 'border-red-500 bg-red-500/10 shadow-lg shadow-red-500/10'
+                  : 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border',
                 (!connected || executing) && 'opacity-50 cursor-not-allowed'
               )}
             >
-              <TrendingDown className={cn(
-                'w-6 h-6 mb-2 mx-auto',
-                side === 'NO' ? 'text-red-400' : 'text-muted-foreground'
-              )} />
-              <p className={cn(
-                'text-sm font-semibold uppercase tracking-wide',
-                side === 'NO' ? 'text-red-400' : 'text-muted-foreground'
-              )}>
-                No
-              </p>
-              <p className={cn(
-                'text-2xl font-bold mt-1',
-                side === 'NO' ? 'text-red-400' : 'text-foreground'
-              )}>
-                {market.noPrice}¢
-              </p>
-            </button>
+              {side === 'NO' && (
+                <motion.div
+                  layoutId="sideIndicator"
+                  className="absolute inset-0 rounded-xl border-2 border-red-500"
+                />
+              )}
+              <div className="relative">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <TrendingDown className={cn(
+                    'w-5 h-5',
+                    side === 'NO' ? 'text-red-400' : 'text-muted-foreground'
+                  )} />
+                  <span className={cn(
+                    'font-bold text-lg',
+                    side === 'NO' ? 'text-red-400' : 'text-foreground'
+                  )}>
+                    NO
+                  </span>
+                </div>
+                <p className={cn(
+                  'text-2xl font-bold',
+                  side === 'NO' ? 'text-red-400' : 'text-foreground'
+                )}>
+                  {market.noPrice}¢
+                </p>
+              </div>
+            </motion.button>
           </div>
 
-          {/* Amount Input */}
-          <div className="space-y-2">
+          {/* Amount Input - Enhanced */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-muted-foreground">
+              <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
                 {isSellMode ? 'Shares to Sell' : 'Amount (USDC)'}
               </label>
               {isSellMode && maxShares && (
                 <button
                   onClick={() => setAmount(maxShares.toString())}
                   disabled={executing}
-                  className="text-xs text-primary hover:underline disabled:opacity-50"
+                  className="text-xs text-primary hover:underline disabled:opacity-50 font-medium"
                 >
                   Max: {maxShares < 1 ? maxShares.toFixed(4) : maxShares.toFixed(2)}
                 </button>
               )}
             </div>
-            <Input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              disabled={!connected || executing}
-              className="h-12 text-lg bg-muted/30 border-border/50 rounded-xl"
-            />
+            
+            <div className="relative">
+              <Input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                disabled={!connected || executing}
+                className="h-14 text-2xl font-bold bg-muted/30 border-border/50 rounded-xl text-center pr-16"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                {isSellMode ? 'shares' : 'USDC'}
+              </span>
+            </div>
+
+            {/* Quick amount buttons */}
+            {!isSellMode && connected && (
+              <div className="flex gap-2">
+                {quickAmounts.map(amt => (
+                  <Button
+                    key={amt}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAmount(amt.toString())}
+                    disabled={executing}
+                    className={cn(
+                      "flex-1 rounded-lg h-9 text-xs font-medium",
+                      amount === amt.toString() && "border-primary bg-primary/10"
+                    )}
+                  >
+                    ${amt}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Trade Summary */}
+          {/* Trade Summary - Enhanced */}
           <AnimatePresence>
             {amount && parseFloat(amount) > 0 && (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.15 }}
               >
-                <div className="p-4 rounded-2xl bg-muted/20 border border-border/30 space-y-3">
+                <div className={cn(
+                  "p-4 rounded-xl border space-y-2",
+                  side === 'YES' 
+                    ? "bg-emerald-500/5 border-emerald-500/20" 
+                    : "bg-red-500/5 border-red-500/20"
+                )}>
                   {isSellMode ? (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">You sell</span>
+                        <span className="text-muted-foreground">Selling</span>
                         <span className={cn(
-                          'font-medium',
+                          'font-semibold',
                           side === 'YES' ? 'text-emerald-400' : 'text-red-400'
                         )}>
-                          {amount} {side} shares
+                          {amount} {side}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Est. receive</span>
-                        <span className="font-medium text-foreground">~${estimatedUSDC} USDC</span>
+                        <span className="text-muted-foreground">You receive</span>
+                        <span className="font-bold text-foreground text-lg">~${estimatedUSDC}</span>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">You pay</span>
-                        <span className="font-medium text-foreground">${amount} USDC</span>
+                        <span className="font-semibold text-foreground">${amount}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Est. shares</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground text-sm">You get</span>
                         <span className={cn(
-                          'font-medium',
+                          'font-bold text-xl',
                           side === 'YES' ? 'text-emerald-400' : 'text-red-400'
                         )}>
                           ~{estimatedShares} {side}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Max payout</span>
-                        <span className="font-medium text-foreground">
+                      <div className="pt-2 border-t border-border/30 flex justify-between text-sm">
+                        <span className="text-muted-foreground">Max payout if {side} wins</span>
+                        <span className="font-bold text-foreground">
                           ${(parseFloat(estimatedShares) || 0).toFixed(2)}
                         </span>
                       </div>
@@ -745,37 +852,38 @@ export function KalshiTradingModal({
             )}
           </AnimatePresence>
 
-          {/* Trade Button */}
-          <Button
-            onClick={executeTrade}
-            disabled={!connected || !amount || parseFloat(amount) <= 0 || executing}
-            className={cn(
-              'w-full h-14 text-lg font-semibold rounded-2xl',
-              'transition-colors duration-200',
-              isSellMode
-                ? 'bg-red-500 hover:bg-red-600 text-white'
-                : side === 'YES' 
-                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
-                  : 'bg-red-500 hover:bg-red-600 text-white',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-              'shadow-lg'
-            )}
-          >
-            {executing ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                {isSellMode ? `Sell ${side}` : `Buy ${side}`}
-              </>
-            )}
-          </Button>
+          {/* Trade Button - Enhanced */}
+          <motion.div whileTap={{ scale: 0.98 }}>
+            <Button
+              onClick={executeTrade}
+              disabled={!connected || !amount || parseFloat(amount) <= 0 || executing}
+              className={cn(
+                'w-full h-14 text-lg font-bold rounded-xl',
+                'transition-all duration-200',
+                isSellMode
+                  ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
+                  : side === 'YES' 
+                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
+                    : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20',
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none'
+              )}
+            >
+              {executing ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  {isSellMode ? `Sell ${side}` : `Buy ${side} @ ${price}¢`}
+                </>
+              )}
+            </Button>
+          </motion.div>
 
           {/* Disclaimer */}
-          <p className="text-xs text-center text-muted-foreground">
+          <p className="text-xs text-center text-muted-foreground/60">
             Trading involves risk. Only trade what you can afford to lose.
           </p>
         </div>

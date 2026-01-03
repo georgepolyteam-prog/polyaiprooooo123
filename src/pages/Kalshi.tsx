@@ -12,7 +12,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
-import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3 } from 'lucide-react';
+import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3, Filter, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
@@ -131,7 +131,7 @@ const CACHE_TTL_MS = 120000; // 2 minutes
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
-  const { getEvents, getMarkets, filterOutcomeMints, getMarketsByMints, loading, error, callDflowApi } = useDflowApi();
+  const { getEvents, getMarkets, filterOutcomeMints, getMarketsByMints, loading, error, callDflowApi, searchEvents, getTagsByCategories } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
@@ -143,6 +143,10 @@ export default function Kalshi() {
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [sellPosition, setSellPosition] = useState<any | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   
   const deferredSearchQuery = useDeferredValue(searchQuery);
   
@@ -170,6 +174,12 @@ export default function Kalshi() {
     }
     // Always fetch fresh data in background
     fetchMarkets();
+    // Fetch categories
+    getTagsByCategories().then(data => {
+      if (data?.tagsByCategories) {
+        setCategories(Object.keys(data.tagsByCategories).slice(0, 8));
+      }
+    }).catch(() => {});
   }, []);
   
   // Load recent orders from localStorage
@@ -490,26 +500,68 @@ export default function Kalshi() {
     getTrades(ticker, 50).catch(() => {});
   }, [getTrades]);
 
-  // Limit to 60 markets for initial render performance
+  // Server-side search for comprehensive results
+  const { searchEvents: searchEventsApi } = useDflowApi();
+  
+  useEffect(() => {
+    if (deferredSearchQuery.length < 3) return;
+    
+    const doSearch = async () => {
+      setIsSearching(true);
+      try {
+        const results = await searchEventsApi(deferredSearchQuery);
+        const searchMarkets = results.flatMap(e => e.markets || []);
+        // Add unique markets not already in list
+        const existing = new Set(markets.map(m => m.ticker));
+        const newMarkets = searchMarkets.filter(m => !existing.has(m.ticker));
+        if (newMarkets.length > 0) {
+          setMarkets(prev => [...prev, ...newMarkets]);
+        }
+      } catch {}
+      setIsSearching(false);
+    };
+    
+    const timer = setTimeout(doSearch, 500);
+    return () => clearTimeout(timer);
+  }, [deferredSearchQuery]);
+
+  // Filter markets: active only, category, search, limit
   const filteredMarkets = useMemo(() => {
-    const filtered = markets.filter(market =>
-      (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-      (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-      (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
-    );
-    return filtered.slice(0, 60);
-  }, [markets, deferredSearchQuery]);
+    // Filter out finalized/determined/closed markets
+    let result = markets.filter(market => {
+      const status = (market.status || '').toLowerCase();
+      return status === 'active' || status === 'initialized' || status === '' || !status;
+    });
+    
+    // Category filter
+    if (selectedCategory) {
+      result = result.filter(market =>
+        (market.subtitle || '').toLowerCase().includes(selectedCategory.toLowerCase()) ||
+        (market.ticker || '').toLowerCase().includes(selectedCategory.toLowerCase())
+      );
+    }
+    
+    // Search filter
+    if (deferredSearchQuery) {
+      result = result.filter(market =>
+        (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+      );
+    }
+    
+    return showAll ? result : result.slice(0, 60);
+  }, [markets, deferredSearchQuery, selectedCategory, showAll]);
 
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        {/* Gradient Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-background" />
+        {/* Clean gradient background - no bubbles */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-background" />
         
-        {/* Lightweight decorative elements (no blur for performance) */}
-        <div className="absolute top-20 left-1/4 w-64 h-64 bg-primary/5 rounded-full" />
-        <div className="absolute top-40 right-1/4 w-48 h-48 bg-secondary/5 rounded-full" />
+        {/* Subtle grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
           <motion.div
@@ -642,12 +694,61 @@ export default function Kalshi() {
           </div>
 
           <TabsContent value="markets" className="mt-0">
+            {/* Category Filters */}
+            {categories.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                <Button
+                  variant={selectedCategory === null ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedCategory(null)}
+                  className="rounded-full h-8 px-4"
+                >
+                  All
+                </Button>
+                {categories.map(cat => (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSelectedCategory(cat)}
+                    className="rounded-full h-8 px-4"
+                  >
+                    {cat}
+                  </Button>
+                ))}
+                {selectedCategory && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedCategory(null)}
+                    className="rounded-full h-8 px-3"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Search indicator */}
+            {isSearching && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Searching all markets...
+              </div>
+            )}
+
             {/* Markets Grid */}
             {isLoading ? (
               <KalshiLoadingSkeleton />
             ) : filteredMarkets.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-muted-foreground text-lg">No markets found</p>
+                {selectedCategory && (
+                  <Button variant="link" onClick={() => setSelectedCategory(null)} className="mt-2">
+                    Clear filters
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -664,21 +765,30 @@ export default function Kalshi() {
               </div>
             )}
 
-            {/* View All Link */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="mt-12 text-center"
-            >
-              <Button
-                variant="outline"
-                className="h-12 px-8 rounded-2xl border-border/50 hover:border-primary/50 group"
+            {/* View All Button - now functional */}
+            {markets.filter(m => {
+              const status = (m.status || '').toLowerCase();
+              return status === 'active' || status === 'initialized' || status === '' || !status;
+            }).length > 60 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="mt-12 text-center"
               >
-                View All Markets
-                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </motion.div>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAll(!showAll)}
+                  className="h-12 px-8 rounded-2xl border-border/50 hover:border-primary/50 group"
+                >
+                  {showAll ? 'Show Less' : `View All ${markets.length} Markets`}
+                  <ArrowRight className={cn(
+                    "w-4 h-4 ml-2 transition-transform",
+                    showAll ? "rotate-90" : "group-hover:translate-x-1"
+                  )} />
+                </Button>
+              </motion.div>
+            )}
           </TabsContent>
 
           <TabsContent value="portfolio" className="mt-0">
