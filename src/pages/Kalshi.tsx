@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useRef, startTransition } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 
 // Debounce utility for localStorage writes
@@ -12,6 +12,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
+
 import {
   TrendingUp,
   TrendingDown,
@@ -25,6 +26,8 @@ import {
   Sparkles,
   Shield,
   X,
+  Menu,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from "@/hooks/useDflowApi";
@@ -177,8 +180,25 @@ export default function Kalshi() {
   const [isSearching, setIsSearching] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [allMarkets, setAllMarkets] = useState<KalshiMarket[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  // Click outside handler for modals
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      // Check if click is on modal backdrop
+      if (target.closest("[data-modal-backdrop]")) {
+        if (selectedMarket) setSelectedMarket(null);
+        if (aiMarket) setAiMarket(null);
+        if (sellPosition) setSellPosition(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [selectedMarket, aiMarket, sellPosition]);
 
   // Warm up edge function on mount to eliminate cold start
   useEffect(() => {
@@ -634,67 +654,122 @@ export default function Kalshi() {
     return activeMarkets.reduce((a, b) => ((a.volume || 0) > (b.volume || 0) ? a : b));
   }, [markets]);
 
+  // Professional color palette
+  const colors = {
+    primary: "#0D9488", // Teal-600
+    primaryLight: "#5EEAD4", // Teal-300
+    primaryDark: "#0F766E", // Teal-700
+    secondary: "#475569", // Slate-600
+    accent: "#8B5CF6", // Violet-500
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* CLEAN KALSHI-STYLE HERO */}
-      <section className="relative overflow-hidden border-b border-border/30">
-        {/* Subtle gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 via-transparent to-transparent" />
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      {/* Mobile menu overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              className="absolute right-0 top-0 h-full w-64 bg-white shadow-xl p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-semibold text-slate-900">Menu</h3>
+                <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="space-y-4">
+                <Button variant="outline" className="w-full justify-start">
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Markets
+                </Button>
+                <Button variant="outline" className="w-full justify-start">
+                  <Wallet className="mr-2 h-4 w-4" />
+                  Portfolio
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
+      {/* Professional Header */}
+      <section className="relative overflow-hidden border-b border-slate-200">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-100/50 via-transparent to-transparent" />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-10">
-            {/* Logo & Title */}
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+          {/* Mobile header */}
+          <div className="lg:hidden flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-500/20 to-teal-600/10 border border-teal-500/30 flex items-center justify-center">
+                <img src={kalshiLogo} alt="Kalshi" className="w-7 h-7 rounded-lg object-cover" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">Kalshi Markets</h1>
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-teal-500" />
+                  Powered by DFlow
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="lg:hidden">
+                <Menu className="h-5 w-5" />
+              </Button>
+              {!connected && (
+                <WalletMultiButton className="!h-9 !px-4 !rounded-lg !bg-gradient-to-r !from-teal-600 !to-teal-700 hover:!opacity-90 !text-white !font-medium !text-sm" />
+              )}
+            </div>
+          </div>
+
+          {/* Desktop header */}
+          <div className="hidden lg:flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="relative">
-                <div className="absolute inset-0 bg-emerald-500/30 rounded-2xl blur-xl" />
-                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 flex items-center justify-center overflow-hidden">
-                  <img src={kalshiLogo} alt="Kalshi" className="w-10 h-10 rounded-xl object-cover" />
+                <div className="absolute inset-0 bg-teal-500/20 rounded-xl blur-md" />
+                <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-teal-500/20 to-teal-600/10 border border-teal-500/30 flex items-center justify-center overflow-hidden">
+                  <img src={kalshiLogo} alt="Kalshi" className="w-10 h-10 rounded-lg object-cover" />
                 </div>
               </motion.div>
               <div>
                 <motion.h1
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="text-2xl sm:text-3xl font-bold text-foreground"
+                  className="text-2xl font-bold text-slate-900"
                 >
-                  Kalshi Markets
+                  Kalshi Prediction Markets
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1 }}
-                  className="text-sm text-muted-foreground flex items-center gap-2"
+                  className="text-sm text-slate-600 flex items-center gap-2"
                 >
-                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                  Trade on Solana via DFlow
+                  <Zap className="w-3.5 h-3.5 text-teal-500" />
+                  Trade on Solana with zero fees • Powered by DFlow
+                  <img src={solanaLogo} alt="Solana" className="w-4 h-4 ml-1" />
                 </motion.p>
               </div>
             </div>
 
-            {/* DFlow + Solana branding + Wallet */}
             <div className="flex items-center gap-4">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50"
-              >
-                <img src={dflowLogo} alt="DFlow" className="w-4 h-4 rounded" />
-                <span className="text-xs font-medium text-muted-foreground">Powered by DFlow</span>
-                <div className="w-px h-3 bg-border/50" />
-                <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
-              </motion.div>
-
               {!connected ? (
-                <WalletMultiButton className="!h-11 !px-5 !rounded-xl !bg-gradient-to-r !from-emerald-500 !to-emerald-600 hover:!opacity-90 !text-white !font-medium !text-sm !transition-all" />
+                <WalletMultiButton className="!h-11 !px-6 !rounded-xl !bg-gradient-to-r !from-teal-600 !to-teal-700 hover:!opacity-90 !text-white !font-medium !text-sm !transition-all" />
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-emerald-400 font-medium text-sm">
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-50 border border-teal-200">
+                  <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                  <span className="text-teal-700 font-medium text-sm">
                     {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
                   </span>
                 </div>
@@ -702,146 +777,161 @@ export default function Kalshi() {
             </div>
           </div>
 
-          {/* Featured Market */}
+          {/* Featured Market - Desktop only */}
           {featuredMarket && !isLoading && (
-            <KalshiFeaturedMarket
-              market={featuredMarket}
-              onTrade={() => setSelectedMarket(featuredMarket)}
-              onAIAnalysis={() => setAiMarket(featuredMarket)}
-            />
+            <div className="hidden lg:block mb-8">
+              <KalshiFeaturedMarket
+                market={featuredMarket}
+                onTrade={() => setSelectedMarket(featuredMarket)}
+                onAIAnalysis={() => setAiMarket(featuredMarket)}
+              />
+            </div>
           )}
 
-          {/* Stats row */}
+          {/* Stats */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="flex items-center justify-center gap-8 sm:gap-12 mt-10 pt-8 border-t border-border/30"
+            className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 lg:gap-12 pt-6 border-t border-slate-200"
           >
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground">{allMarkets.length}+</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Markets</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">{allMarkets.length}+</p>
+              <p className="text-xs sm:text-sm text-slate-600">Active Markets</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-emerald-400">$0</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Fees</p>
+              <p className="text-xl sm:text-2xl font-bold text-teal-600">$0</p>
+              <p className="text-xs sm:text-sm text-slate-600">Trading Fees</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground">~400ms</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Execution</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">~400ms</p>
+              <p className="text-xs sm:text-sm text-slate-600">Avg. Execution</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl sm:text-2xl font-bold text-slate-900">24/7</p>
+              <p className="text-xs sm:text-sm text-slate-600">Trading Hours</p>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Markets Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-32">
-        {/* Tabs */}
+      {/* Main Content */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
+        {/* Tabs and Controls */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <TabsList className="bg-muted/40 p-1.5 rounded-2xl backdrop-blur-sm border border-border/50">
+            <TabsList className="bg-slate-100/80 p-1.5 rounded-xl backdrop-blur-sm border border-slate-200 w-full sm:w-auto">
               <TabsTrigger
                 value="markets"
-                className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all"
+                className="rounded-lg px-6 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-teal-700 data-[state=active]:border data-[state=active]:border-slate-200 transition-all flex-1 sm:flex-none"
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Markets
               </TabsTrigger>
               <TabsTrigger
                 value="portfolio"
-                className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all"
+                className="rounded-lg px-6 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-teal-700 data-[state=active]:border data-[state=active]:border-slate-200 transition-all flex-1 sm:flex-none"
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 Portfolio
               </TabsTrigger>
             </TabsList>
 
-            <div className="flex items-center gap-3">
-              {/* View Mode Toggle */}
-              <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border/50 backdrop-blur-sm">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className="h-9 px-3 rounded-lg transition-all"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className="h-9 px-3 rounded-lg transition-all"
-                >
-                  <List className="w-4 h-4" />
-                </Button>
-              </div>
-
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
               {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
-                  placeholder="Search all markets..."
+                  placeholder="Search markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 w-full sm:w-72 h-11 rounded-xl bg-background border-border/50 focus:border-primary/50 transition-all"
+                  className="pl-10 pr-4 w-full h-11 rounded-xl bg-white border-slate-300 focus:border-teal-500 transition-all"
                 />
               </div>
 
-              {/* Refresh Button */}
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  toast.loading("Refreshing markets...", { id: "refresh-markets" });
-                  fetchMarkets().then(() => {
-                    toast.success("Markets refreshed", { id: "refresh-markets" });
-                  });
-                }}
-                disabled={isLoading}
-                className="h-11 w-11 rounded-xl border-border/50 bg-muted/40 backdrop-blur-sm hover:bg-muted/60 hover:border-primary/50 transition-all"
-              >
-                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-              </Button>
+              {/* View Mode and Refresh */}
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-slate-100/80 border border-slate-200">
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className="h-8 px-3 rounded-lg bg-white text-slate-700 hover:text-teal-700 hover:bg-white"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    className="h-8 px-3 rounded-lg bg-white text-slate-700 hover:text-teal-700 hover:bg-white"
+                  >
+                    <List className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    toast.loading("Refreshing markets...", { id: "refresh-markets" });
+                    fetchMarkets().then(() => {
+                      toast.success("Markets refreshed", { id: "refresh-markets" });
+                    });
+                  }}
+                  disabled={isLoading}
+                  className="h-11 w-11 rounded-xl border-slate-300 bg-white hover:bg-slate-50 hover:border-teal-500"
+                >
+                  <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                </Button>
+              </div>
             </div>
           </div>
 
+          {/* Category Navigation */}
+          {categories.length > 0 && activeTab === "markets" && (
+            <div className="sticky top-0 z-10 -mx-4 px-4 py-3 mb-6 bg-white/80 backdrop-blur-sm border-b border-slate-200">
+              <KalshiTabNav
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+              />
+            </div>
+          )}
+
           <TabsContent value="markets" className="mt-0">
-            {/* Kalshi-Style Tab Navigation */}
-            {categories.length > 0 && (
-              <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-6 bg-background/80 backdrop-blur-xl border-b border-border/30">
-                <KalshiTabNav
-                  categories={categories}
-                  selectedCategory={selectedCategory}
-                  onSelectCategory={setSelectedCategory}
-                />
-              </div>
-            )}
-
-            {/* Search results count */}
+            {/* Search results header */}
             {deferredSearchQuery && searchResults.length > 0 && !isSearching && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400">
-                <Search className="w-4 h-4" />
-                Found {searchResults.length} markets matching "{deferredSearchQuery}"
+              <div className="mb-6 p-4 rounded-xl bg-teal-50 border border-teal-100">
+                <div className="flex items-center gap-2 text-teal-700">
+                  <Search className="w-4 h-4" />
+                  <span className="font-medium">
+                    Found {searchResults.length} markets for "{deferredSearchQuery}"
+                  </span>
+                </div>
               </div>
             )}
 
-            {/* Markets Grid/List */}
+            {/* Markets Content */}
             {isLoading ? (
               <KalshiLoadingSkeleton />
             ) : isSearching ? (
               <KalshiSearchLoadingSkeleton />
             ) : filteredMarkets.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-muted-foreground text-lg">No markets found</p>
+              <div className="text-center py-12 px-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                  <Search className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">No markets found</h3>
+                <p className="text-slate-600 mb-4">Try adjusting your search or filters</p>
                 {selectedCategory && (
-                  <Button variant="link" onClick={() => setSelectedCategory(null)} className="mt-2">
+                  <Button variant="outline" onClick={() => setSelectedCategory(null)} className="rounded-lg">
                     Clear filters
                   </Button>
                 )}
               </div>
             ) : viewMode === "grid" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {filteredMarkets.map((market, index) => (
                   <KalshiMarketCard
                     key={market.ticker}
@@ -854,63 +944,58 @@ export default function Kalshi() {
                 ))}
               </div>
             ) : (
-              // List view - more detailed
               <div className="space-y-3">
                 {filteredMarkets.map((market) => (
                   <div
                     key={market.ticker}
                     onClick={() => setSelectedMarket(market)}
-                    className="group cursor-pointer p-4 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/30 transition-all flex items-center gap-4"
+                    className="group cursor-pointer p-4 rounded-xl bg-white border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all flex items-center gap-4"
                   >
-                    {/* Status */}
                     <div
                       className={cn(
                         "w-2 h-2 rounded-full shrink-0",
-                        market.status === "active" ? "bg-emerald-400" : "bg-muted",
+                        market.status === "active" ? "bg-teal-500" : "bg-slate-300",
                       )}
                     />
 
-                    {/* Title */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                      <h3 className="font-medium text-slate-900 truncate group-hover:text-teal-700 transition-colors">
                         {market.title || market.ticker}
                       </h3>
-                      <p className="text-sm text-muted-foreground truncate">{market.subtitle || market.ticker}</p>
+                      <p className="text-sm text-slate-600 truncate">{market.subtitle || market.ticker}</p>
                     </div>
 
-                    {/* Prices */}
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right">
                         <p
                           className={cn(
-                            "text-lg font-bold",
-                            market.yesPrice > market.noPrice ? "text-emerald-400" : "text-foreground",
+                            "text-base font-semibold",
+                            market.yesPrice > market.noPrice ? "text-teal-600" : "text-slate-900",
                           )}
                         >
                           {market.yesPrice}¢
                         </p>
-                        <p className="text-xs text-muted-foreground">YES</p>
+                        <p className="text-xs text-slate-500">YES</p>
                       </div>
                       <div className="text-right">
                         <p
                           className={cn(
-                            "text-lg font-bold",
-                            market.noPrice > market.yesPrice ? "text-red-400" : "text-foreground",
+                            "text-base font-semibold",
+                            market.noPrice > market.yesPrice ? "text-rose-600" : "text-slate-900",
                           )}
                         >
                           {market.noPrice}¢
                         </p>
-                        <p className="text-xs text-muted-foreground">NO</p>
+                        <p className="text-xs text-slate-500">NO</p>
                       </div>
-                      <div className="text-right hidden sm:block">
-                        <p className="text-sm font-medium text-foreground">
+                      <div className="text-right hidden md:block">
+                        <p className="text-sm font-medium text-slate-900">
                           ${((market.volume || 0) / 1000).toFixed(0)}k
                         </p>
-                        <p className="text-xs text-muted-foreground">Volume</p>
+                        <p className="text-xs text-slate-500">Volume</p>
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="shrink-0">
                       <KalshiAIButton
                         onClick={(e) => {
@@ -925,7 +1010,7 @@ export default function Kalshi() {
               </div>
             )}
 
-            {/* View All Button - works for both search and browse */}
+            {/* Load More Button */}
             {(filteredMarkets.length >= 60 || (deferredSearchQuery && filteredMarkets.length > 20)) && !showAll && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -936,22 +1021,22 @@ export default function Kalshi() {
                 <Button
                   variant="outline"
                   onClick={() => setShowAll(true)}
-                  className="h-12 px-10 rounded-2xl border-border/50 hover:border-primary/50 hover:bg-primary/5 group transition-all shadow-lg hover:shadow-xl"
+                  className="h-12 px-8 rounded-xl border-slate-300 hover:border-teal-500 hover:bg-teal-50 hover:text-teal-700 group transition-all"
                 >
                   {deferredSearchQuery
                     ? `Show All ${filteredMarkets.length} Results`
-                    : `View All ${allMarkets.length} Markets`}
+                    : `View All ${filteredMarkets.length} Markets`}
                   <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </Button>
               </motion.div>
             )}
 
             {showAll && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-10 text-center">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8 text-center">
                 <Button
                   variant="ghost"
                   onClick={() => setShowAll(false)}
-                  className="h-10 px-6 rounded-xl text-muted-foreground hover:text-foreground"
+                  className="h-10 px-6 rounded-lg text-slate-600 hover:text-slate-900"
                 >
                   Show Less
                 </Button>
@@ -978,61 +1063,94 @@ export default function Kalshi() {
         </Tabs>
       </section>
 
-      {/* Trading Modal */}
-      {selectedMarket && (
-        <KalshiTradingModal
-          market={selectedMarket}
-          onClose={() => setSelectedMarket(null)}
-          onAIAnalysis={() => setAiMarket(selectedMarket)}
-          onOrderSubmitted={(order) => {
-            const newOrders = [order, ...recentOrders].slice(0, 20);
-            setRecentOrders(newOrders);
-            if (publicKey) {
-              setTimeout(() => {
-                localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
-              }, 100);
-            }
-          }}
-        />
-      )}
+      {/* Trading Modal with backdrop */}
+      <AnimatePresence>
+        {selectedMarket && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            data-modal-backdrop
+            onClick={(e) => e.target === e.currentTarget && setSelectedMarket(null)}
+          >
+            <KalshiTradingModal
+              market={selectedMarket}
+              onClose={() => setSelectedMarket(null)}
+              onAIAnalysis={() => setAiMarket(selectedMarket)}
+              onOrderSubmitted={(order) => {
+                const newOrders = [order, ...recentOrders].slice(0, 20);
+                setRecentOrders(newOrders);
+                if (publicKey) {
+                  setTimeout(() => {
+                    localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
+                  }, 100);
+                }
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* AI Analysis Modal */}
-      {aiMarket && (
-        <KalshiAIInsight
-          market={aiMarket}
-          onClose={() => setAiMarket(null)}
-          onTrade={() => setSelectedMarket(aiMarket)}
-        />
-      )}
+      {/* AI Analysis Modal with backdrop */}
+      <AnimatePresence>
+        {aiMarket && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            data-modal-backdrop
+            onClick={(e) => e.target === e.currentTarget && setAiMarket(null)}
+          >
+            <KalshiAIInsight
+              market={aiMarket}
+              onClose={() => setAiMarket(null)}
+              onTrade={() => setSelectedMarket(aiMarket)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Sell Modal */}
-      {sellPosition && (
-        <KalshiTradingModal
-          market={
-            {
-              ticker: sellPosition.marketTicker,
-              title: sellPosition.marketTitle,
-              yesPrice: sellPosition.side === "yes" ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
-              noPrice: sellPosition.side === "no" ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
-              accounts: {},
-            } as any
-          }
-          onClose={() => setSellPosition(null)}
-          mode="sell"
-          initialSide={sellPosition.side.toUpperCase() as "YES" | "NO"}
-          sellMint={sellPosition.sideMint}
-          sellDecimals={sellPosition.decimals}
-          maxShares={sellPosition.quantity}
-          onOrderSubmitted={(order) => {
-            const newOrders = [order, ...recentOrders].slice(0, 20);
-            setRecentOrders(newOrders);
-            if (publicKey) {
-              localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
-            }
-            fetchPositions();
-          }}
-        />
-      )}
+      {/* Sell Modal with backdrop */}
+      <AnimatePresence>
+        {sellPosition && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            data-modal-backdrop
+            onClick={(e) => e.target === e.currentTarget && setSellPosition(null)}
+          >
+            <KalshiTradingModal
+              market={
+                {
+                  ticker: sellPosition.marketTicker,
+                  title: sellPosition.marketTitle,
+                  yesPrice: sellPosition.side === "yes" ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
+                  noPrice: sellPosition.side === "no" ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
+                  accounts: {},
+                } as any
+              }
+              onClose={() => setSellPosition(null)}
+              mode="sell"
+              initialSide={sellPosition.side.toUpperCase() as "YES" | "NO"}
+              sellMint={sellPosition.sideMint}
+              sellDecimals={sellPosition.decimals}
+              maxShares={sellPosition.quantity}
+              onOrderSubmitted={(order) => {
+                const newOrders = [order, ...recentOrders].slice(0, 20);
+                setRecentOrders(newOrders);
+                if (publicKey) {
+                  localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
+                }
+                fetchPositions();
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
