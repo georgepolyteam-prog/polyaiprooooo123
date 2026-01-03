@@ -266,6 +266,20 @@ serve(async (req) => {
         });
       }
       
+      // For getOrderbook 404/400, return empty orderbook gracefully
+      if (action === 'getOrderbook' && (response.status === 404 || response.status === 400)) {
+        console.log(`No orderbook for ticker, returning empty orderbook`);
+        return new Response(JSON.stringify({ 
+          yesBids: [], 
+          yesAsks: [], 
+          noBids: [], 
+          noAsks: [] 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
       // For getMarketsByMints 404, return empty array
       if (action === 'getMarketsByMints' && response.status === 404) {
         return new Response(JSON.stringify({ markets: [] }), {
