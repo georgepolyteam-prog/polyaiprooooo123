@@ -132,7 +132,7 @@ export function KalshiCandlestickChart({
       chartRef.current = createChart(chartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: 'hsl(220, 10%, 60%)',
+          textColor: '#94a3b8', // slate-400 hex
           fontFamily: 'JetBrains Mono, monospace',
         },
         grid: {
@@ -143,11 +143,11 @@ export function KalshiCandlestickChart({
           mode: 1,
           vertLine: {
             color: 'rgba(100, 200, 200, 0.5)',
-            labelBackgroundColor: 'hsl(187, 80%, 48%)',
+            labelBackgroundColor: '#06b6d4', // cyan-500 hex
           },
           horzLine: {
             color: 'rgba(100, 200, 200, 0.5)',
-            labelBackgroundColor: 'hsl(187, 80%, 48%)',
+            labelBackgroundColor: '#06b6d4', // cyan-500 hex
           },
         },
         timeScale: {
