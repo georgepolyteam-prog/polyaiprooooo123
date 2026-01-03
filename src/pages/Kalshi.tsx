@@ -12,7 +12,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
-import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3, Filter, X, LayoutGrid, List } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3, Filter, X, LayoutGrid, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
@@ -25,6 +25,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import kalshiLogo from '@/assets/kalshi-logo-green.jpeg';
+import solanaLogo from '@/assets/solana-logo.png';
 
 // Demo markets for when API is unavailable
 const DEMO_MARKETS: KalshiMarket[] = [
@@ -504,34 +506,40 @@ export default function Kalshi() {
     getTrades(ticker, 50).catch(() => {});
   }, [getTrades]);
 
-  // Server-side search for comprehensive results
-  const { searchEvents: searchEventsApi } = useDflowApi();
+  // Server-side search for ALL markets (not just local filter)
+  const [searchResults, setSearchResults] = useState<KalshiMarket[]>([]);
   
   useEffect(() => {
-    if (deferredSearchQuery.length < 3) return;
+    if (!deferredSearchQuery || deferredSearchQuery.length < 2) {
+      setSearchResults([]);
+      return;
+    }
     
     const doSearch = async () => {
       setIsSearching(true);
       try {
-        const results = await searchEventsApi(deferredSearchQuery);
+        const results = await searchEvents(deferredSearchQuery);
         const searchMarkets = results.flatMap(e => e.markets || []);
-        // Add unique markets not already in list
-        const existing = new Set(markets.map(m => m.ticker));
-        const newMarkets = searchMarkets.filter(m => !existing.has(m.ticker));
-        if (newMarkets.length > 0) {
-          setMarkets(prev => [...prev, ...newMarkets]);
-        }
+        setSearchResults(searchMarkets);
       } catch {}
       setIsSearching(false);
     };
     
-    const timer = setTimeout(doSearch, 500);
+    const timer = setTimeout(doSearch, 400);
     return () => clearTimeout(timer);
-  }, [deferredSearchQuery]);
+  }, [deferredSearchQuery, searchEvents]);
 
-  // Filter markets: active only, category, search, limit
+  // Use search results when searching, otherwise filter local markets
   const filteredMarkets = useMemo(() => {
-    // Filter out finalized/determined/closed markets
+    // If we have search results from API, use those
+    if (deferredSearchQuery && searchResults.length > 0) {
+      return searchResults.filter(market => {
+        const status = (market.status || '').toLowerCase();
+        return status === 'active' || status === 'initialized' || status === '' || !status;
+      });
+    }
+    
+    // Otherwise filter local markets
     let result = markets.filter(market => {
       const status = (market.status || '').toLowerCase();
       return status === 'active' || status === 'initialized' || status === '' || !status;
@@ -545,8 +553,8 @@ export default function Kalshi() {
       );
     }
     
-    // Search filter
-    if (deferredSearchQuery) {
+    // Local search filter (if no API results yet)
+    if (deferredSearchQuery && searchResults.length === 0 && !isSearching) {
       result = result.filter(market =>
         (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
         (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
@@ -555,19 +563,39 @@ export default function Kalshi() {
     }
     
     return showAll ? result : result.slice(0, 60);
-  }, [markets, deferredSearchQuery, selectedCategory, showAll]);
+  }, [markets, deferredSearchQuery, selectedCategory, showAll, searchResults, isSearching]);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
+      {/* Hero Section - Redesigned with Kalshi/Solana branding */}
       <section className="relative overflow-hidden">
-        {/* Clean gradient background - no bubbles */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-background" />
+        {/* Gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 via-primary/5 to-background" />
         
         {/* Subtle grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16 pb-20 sm:pb-24">
+          {/* Logo Bubbles */}
+          <div className="flex justify-center gap-6 mb-8">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 0.1, type: 'spring' }}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#00D395]/10 border border-[#00D395]/30 flex items-center justify-center shadow-lg shadow-[#00D395]/20"
+            >
+              <img src={kalshiLogo} alt="Kalshi" className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover" />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ delay: 0.2, type: 'spring' }}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-purple-500/10 to-cyan-500/10 border border-purple-500/30 flex items-center justify-center shadow-lg shadow-purple-500/20"
+            >
+              <img src={solanaLogo} alt="Solana" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
+            </motion.div>
+          </div>
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -578,44 +606,61 @@ export default function Kalshi() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.1 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8"
+              transition={{ delay: 0.3 }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6"
             >
-              <Zap className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Powered by DFlow on Solana</span>
+              <Zap className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm font-medium text-emerald-400">Powered by DFlow on Solana</span>
             </motion.div>
 
             {/* Headline */}
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
               <span className="text-foreground">Kalshi</span>
-              <br />
-              <span className="bg-gradient-to-r from-primary via-purple-400 to-secondary bg-clip-text text-transparent">
-                Markets
-              </span>
+              <span className="bg-gradient-to-r from-emerald-400 via-primary to-purple-400 bg-clip-text text-transparent"> Markets</span>
             </h1>
 
             {/* Subheadline */}
-            <p className="text-xl sm:text-2xl text-muted-foreground mb-10 leading-relaxed">
-              Trade the future on Solana.
-              <br />
-              <span className="text-foreground font-medium">Fast. Simple. Powerful.</span>
+            <p className="text-lg sm:text-xl text-muted-foreground mb-8 leading-relaxed">
+              Trade prediction markets on Solana
             </p>
+            
+            {/* Buy/Sell Pills */}
+            <div className="flex items-center justify-center gap-3 mb-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-500/10 border border-emerald-500/30"
+              >
+                <TrendingUp className="w-5 h-5 text-emerald-400" />
+                <span className="text-emerald-400 font-semibold">BUY YES</span>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-500/10 border border-red-500/30"
+              >
+                <TrendingDown className="w-5 h-5 text-red-400" />
+                <span className="text-red-400 font-semibold">BUY NO</span>
+              </motion.div>
+            </div>
             
             {/* Wallet Button */}
             {!connected ? (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.5 }}
               >
-                <WalletMultiButton className="!h-14 !px-8 !rounded-2xl !bg-primary hover:!bg-primary/90 !text-primary-foreground !font-semibold !text-lg !transition-all !duration-300 !shadow-lg hover:!shadow-xl hover:!shadow-primary/20" />
+                <WalletMultiButton className="!h-14 !px-8 !rounded-full !bg-gradient-to-r !from-emerald-500 !to-primary hover:!opacity-90 !text-primary-foreground !font-semibold !text-lg !transition-all !duration-300 !shadow-lg hover:!shadow-xl hover:!shadow-emerald-500/20" />
               </motion.div>
             ) : (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30"
+                transition={{ delay: 0.5 }}
+                className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-emerald-500/10 border border-emerald-500/30"
               >
                 <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
                 <span className="text-emerald-400 font-medium">
@@ -626,23 +671,23 @@ export default function Kalshi() {
           </motion.div>
 
           {/* Feature Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mt-12 sm:mt-16">
             <KalshiFeatureCard
               icon={<Zap className="w-6 h-6" />}
               title="Lightning Fast"
-              description="Solana-native trading with sub-second execution and minimal fees"
+              description="Sub-second execution on Solana"
               index={0}
             />
             <KalshiFeatureCard
               icon={<TrendingUp className="w-6 h-6" />}
               title="Deep Liquidity"
-              description="Powered by Kalshi's institutional-grade prediction markets"
+              description="Kalshi's institutional markets"
               index={1}
             />
             <KalshiFeatureCard
               icon={<Shield className="w-6 h-6" />}
-              title="Secure & Simple"
-              description="Non-custodial SPL token trading with your Solana wallet"
+              title="Non-Custodial"
+              description="Trade with your Solana wallet"
               index={2}
             />
           </div>
@@ -666,6 +711,12 @@ export default function Kalshi() {
                 value="portfolio" 
                 className="rounded-xl px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 disabled={!connected}
+                onClick={(e) => {
+                  if (!connected) {
+                    e.preventDefault();
+                    toast.info('Connect your wallet to view portfolio');
+                  }
+                }}
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 Portfolio
@@ -763,7 +814,15 @@ export default function Kalshi() {
             {isSearching && (
               <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Searching all markets...
+                Searching all 5,000+ markets...
+              </div>
+            )}
+            
+            {/* Search results count */}
+            {deferredSearchQuery && searchResults.length > 0 && !isSearching && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400">
+                <Search className="w-4 h-4" />
+                Found {searchResults.length} markets matching "{deferredSearchQuery}"
               </div>
             )}
 

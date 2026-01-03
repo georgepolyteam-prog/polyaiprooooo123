@@ -1,7 +1,12 @@
 import { useMemo, ReactNode } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { 
+  PhantomWalletAdapter, 
+  SolflareWalletAdapter,
+  TorusWalletAdapter,
+  LedgerWalletAdapter,
+} from '@solana/wallet-adapter-wallets';
 
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -16,8 +21,14 @@ interface SolanaWalletProviderProps {
 export const SolanaWalletProvider = ({ children }: SolanaWalletProviderProps) => {
   const endpoint = useMemo(() => HELIUS_RPC_PROXY, []);
 
-  // Only Solflare; Coinbase is EVM-only and is disabled separately.
-  const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
+  // All major Solana wallets - Phantom is most popular on mobile
+  const wallets = useMemo(() => [
+    new PhantomWalletAdapter(),
+    new SolflareWalletAdapter(),
+    new TorusWalletAdapter(),
+    new LedgerWalletAdapter(),
+  ], []);
+  
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
