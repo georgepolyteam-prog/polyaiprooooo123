@@ -12,50 +12,53 @@ function KalshiAIButtonComponent({ onClick, compact = false }: KalshiAIButtonPro
     <button
       onClick={onClick}
       className={cn(
-        "relative group overflow-hidden",
+        "relative group overflow-hidden w-full",
         "flex items-center justify-center gap-2",
-        compact ? "h-10 px-4" : "h-11 px-5",
-        "rounded-full text-sm font-semibold",
-        // Base gradient
-        "bg-gradient-to-r from-violet-500/20 via-primary/20 to-fuchsia-500/20",
-        // Border with gradient
-        "border border-violet-500/30",
+        compact ? "h-9 px-3" : "h-11 px-4",
+        "rounded-xl text-sm font-semibold",
+        // Premium gradient background
+        "bg-gradient-to-r from-violet-600/20 via-purple-500/20 to-fuchsia-500/20",
+        // Animated border
+        "border border-violet-500/40",
         // Text
         "text-violet-300",
         // Transitions
-        "transition-all duration-500",
+        "transition-all duration-300",
         // Hover effects
-        "hover:border-violet-400/60 hover:text-violet-200",
-        "hover:shadow-xl hover:shadow-violet-500/25",
-        "hover:scale-[1.03] active:scale-[0.97]"
+        "hover:border-violet-400/70 hover:text-violet-200",
+        "hover:shadow-lg hover:shadow-violet-500/20",
+        "hover:scale-[1.02] active:scale-[0.98]"
       )}
     >
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-primary/20 to-fuchsia-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      {/* Animated gradient sweep */}
+      <div className="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-400/20 to-violet-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
       {/* Shimmer effect */}
-      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       
-      {/* Glow ring */}
-      <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 ring-2 ring-violet-400/30 ring-offset-2 ring-offset-transparent" />
+      {/* Pulse ring on hover */}
+      <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className="absolute inset-0 rounded-xl animate-pulse-slow ring-1 ring-violet-400/30" />
+      </div>
       
       {/* Icon with animation */}
       <Sparkles className={cn(
         "relative z-10 transition-all duration-300",
-        compact ? "w-4 h-4" : "w-4.5 h-4.5",
-        "group-hover:rotate-12 group-hover:scale-110"
+        compact ? "w-3.5 h-3.5" : "w-4 h-4",
+        "group-hover:rotate-12 group-hover:scale-110",
+        "drop-shadow-[0_0_4px_rgba(139,92,246,0.5)]"
       )} />
       
       {/* Text */}
-      <span className="relative z-10">
+      <span className="relative z-10 font-medium">
         {compact ? 'AI' : 'AI Analysis'}
       </span>
       
-      {/* Floating particles on hover */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/2 left-2 w-1 h-1 rounded-full bg-violet-400 opacity-0 group-hover:opacity-100 group-hover:animate-ping" style={{ animationDelay: '0ms' }} />
-        <div className="absolute top-1/3 right-3 w-0.5 h-0.5 rounded-full bg-fuchsia-400 opacity-0 group-hover:opacity-100 group-hover:animate-ping" style={{ animationDelay: '200ms' }} />
-        <div className="absolute bottom-1/3 left-1/3 w-0.5 h-0.5 rounded-full bg-primary opacity-0 group-hover:opacity-100 group-hover:animate-ping" style={{ animationDelay: '400ms' }} />
+      {/* Floating sparkles on hover */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-1 h-1 rounded-full bg-violet-400/80 opacity-0 group-hover:opacity-100 group-hover:animate-float-up" style={{ animationDelay: '0ms' }} />
+        <div className="absolute top-1/2 right-1/4 w-0.5 h-0.5 rounded-full bg-fuchsia-400/80 opacity-0 group-hover:opacity-100 group-hover:animate-float-up" style={{ animationDelay: '150ms' }} />
+        <div className="absolute bottom-1/4 left-1/3 w-0.5 h-0.5 rounded-full bg-purple-400/80 opacity-0 group-hover:opacity-100 group-hover:animate-float-up" style={{ animationDelay: '300ms' }} />
       </div>
     </button>
   );
