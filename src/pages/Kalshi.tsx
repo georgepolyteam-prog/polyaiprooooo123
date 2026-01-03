@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useRef, startTransition } from 'react';
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { motion } from 'framer-motion';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useRef, startTransition } from "react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { motion } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
 
 // Debounce utility for localStorage writes
 function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
@@ -12,92 +12,104 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
-import { TrendingUp, TrendingDown, Zap, ArrowRight, RefreshCw, Search, Wallet, LayoutGrid, List, Sparkles, Shield, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
-import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
-import { KalshiTradingModal } from '@/components/kalshi/KalshiTradingModal';
-import { KalshiLoadingSkeleton, KalshiSearchLoadingSkeleton } from '@/components/kalshi/KalshiLoadingSkeleton';
-import { KalshiPortfolio } from '@/components/kalshi/KalshiPortfolio';
-import { KalshiAIInsight } from '@/components/kalshi/KalshiAIInsight';
-import { KalshiConnectWallet } from '@/components/kalshi/KalshiConnectWallet';
-import { KalshiAIButton } from '@/components/kalshi/KalshiAIButton';
-import { KalshiFeaturedMarket } from '@/components/kalshi/KalshiFeaturedMarket';
-import { KalshiTabNav } from '@/components/kalshi/KalshiTabNav';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
-import kalshiLogo from '@/assets/kalshi-logo-green.jpeg';
-import dflowLogo from '@/assets/dome-logo.png';
-import solanaLogo from '@/assets/solana-logo.png';
+import {
+  TrendingUp,
+  TrendingDown,
+  Zap,
+  ArrowRight,
+  RefreshCw,
+  Search,
+  Wallet,
+  LayoutGrid,
+  List,
+  Sparkles,
+  Shield,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useDflowApi, type KalshiMarket, type KalshiEvent } from "@/hooks/useDflowApi";
+import { KalshiMarketCard } from "@/components/kalshi/KalshiMarketCard";
+import { KalshiTradingModal } from "@/components/kalshi/KalshiTradingModal";
+import { KalshiLoadingSkeleton, KalshiSearchLoadingSkeleton } from "@/components/kalshi/KalshiLoadingSkeleton";
+import { KalshiPortfolio } from "@/components/kalshi/KalshiPortfolio";
+import { KalshiAIInsight } from "@/components/kalshi/KalshiAIInsight";
+import { KalshiConnectWallet } from "@/components/kalshi/KalshiConnectWallet";
+import { KalshiAIButton } from "@/components/kalshi/KalshiAIButton";
+import { KalshiFeaturedMarket } from "@/components/kalshi/KalshiFeaturedMarket";
+import { KalshiTabNav } from "@/components/kalshi/KalshiTabNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import kalshiLogo from "@/assets/kalshi-logo-green.jpeg";
+import solanaLogo from "@/assets/solana-logo.png";
 
 // Demo markets for when API is unavailable
 const DEMO_MARKETS: KalshiMarket[] = [
   {
-    ticker: 'BTCUSD-25DEC31',
-    title: 'Will Bitcoin exceed $100,000 by end of 2025?',
-    subtitle: 'BTC Price Prediction',
-    status: 'active',
+    ticker: "BTCUSD-25DEC31",
+    title: "Will Bitcoin exceed $100,000 by end of 2025?",
+    subtitle: "BTC Price Prediction",
+    status: "active",
     yesPrice: 67,
     noPrice: 33,
     volume: 1250000,
-    closeTime: '2025-12-31T00:00:00Z',
+    closeTime: "2025-12-31T00:00:00Z",
     accounts: {},
   },
   {
-    ticker: 'FEDRATE-25JAN',
-    title: 'Will the Fed cut rates in January 2025?',
-    subtitle: 'Federal Reserve Policy',
-    status: 'active',
+    ticker: "FEDRATE-25JAN",
+    title: "Will the Fed cut rates in January 2025?",
+    subtitle: "Federal Reserve Policy",
+    status: "active",
     yesPrice: 23,
     noPrice: 77,
     volume: 890000,
-    closeTime: '2025-01-31T00:00:00Z',
+    closeTime: "2025-01-31T00:00:00Z",
     accounts: {},
   },
   {
-    ticker: 'STARSHIP-25Q1',
-    title: 'Will SpaceX Starship reach orbit in Q1 2025?',
-    subtitle: 'Space Technology',
-    status: 'active',
+    ticker: "STARSHIP-25Q1",
+    title: "Will SpaceX Starship reach orbit in Q1 2025?",
+    subtitle: "Space Technology",
+    status: "active",
     yesPrice: 82,
     noPrice: 18,
     volume: 567000,
-    closeTime: '2025-03-31T00:00:00Z',
+    closeTime: "2025-03-31T00:00:00Z",
     accounts: {},
   },
   {
-    ticker: 'TIKTOK-25MAR',
-    title: 'Will there be a TikTok ban in the US by March 2025?',
-    subtitle: 'Tech Policy',
-    status: 'active',
+    ticker: "TIKTOK-25MAR",
+    title: "Will there be a TikTok ban in the US by March 2025?",
+    subtitle: "Tech Policy",
+    status: "active",
     yesPrice: 45,
     noPrice: 55,
     volume: 2100000,
-    closeTime: '2025-03-31T00:00:00Z',
+    closeTime: "2025-03-31T00:00:00Z",
     accounts: {},
   },
   {
-    ticker: 'SPX-25JAN6K',
-    title: 'Will the S&P 500 close above 6,000 in January?',
-    subtitle: 'Stock Market',
-    status: 'active',
+    ticker: "SPX-25JAN6K",
+    title: "Will the S&P 500 close above 6,000 in January?",
+    subtitle: "Stock Market",
+    status: "active",
     yesPrice: 58,
     noPrice: 42,
     volume: 1780000,
-    closeTime: '2025-01-31T00:00:00Z',
+    closeTime: "2025-01-31T00:00:00Z",
     accounts: {},
   },
   {
-    ticker: 'GPT5-25Q1',
-    title: 'Will OpenAI release GPT-5 in Q1 2025?',
-    subtitle: 'AI & Technology',
-    status: 'active',
+    ticker: "GPT5-25Q1",
+    title: "Will OpenAI release GPT-5 in Q1 2025?",
+    subtitle: "AI & Technology",
+    status: "active",
     yesPrice: 31,
     noPrice: 69,
     volume: 920000,
-    closeTime: '2025-03-31T00:00:00Z',
+    closeTime: "2025-03-31T00:00:00Z",
     accounts: {},
   },
 ];
@@ -116,34 +128,44 @@ interface DebugInfo {
 interface RecentOrder {
   signature: string;
   ticker: string;
-  side: 'YES' | 'NO';
+  side: "YES" | "NO";
   amountUSDC: number;
   estimatedShares: string;
   timestamp: number;
-  status?: 'pending' | 'open' | 'closed' | 'failed' | 'expired' | 'unknown';
+  status?: "pending" | "open" | "closed" | "failed" | "expired" | "unknown";
 }
 
 // Token program IDs
-const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM_ID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 // LocalStorage key for recent orders
-const RECENT_ORDERS_KEY = 'kalshi_recent_orders';
+const RECENT_ORDERS_KEY = "kalshi_recent_orders";
 
 // Cache key and TTL
-const MARKETS_CACHE_KEY = 'kalshi_markets_cache';
+const MARKETS_CACHE_KEY = "kalshi_markets_cache";
 const CACHE_TTL_MS = 120000; // 2 minutes
 
 export default function Kalshi() {
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
-  const { getEvents, getMarkets, filterOutcomeMints, getMarketsByMints, loading, error, callDflowApi, searchEvents, getTagsByCategories } = useDflowApi();
+  const {
+    getEvents,
+    getMarkets,
+    filterOutcomeMints,
+    getMarketsByMints,
+    loading,
+    error,
+    callDflowApi,
+    searchEvents,
+    getTagsByCategories,
+  } = useDflowApi();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('markets');
+  const [activeTab, setActiveTab] = useState("markets");
   const [positions, setPositions] = useState<any[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
@@ -153,18 +175,20 @@ export default function Kalshi() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [allMarkets, setAllMarkets] = useState<KalshiMarket[]>([]);
-  
+
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  
+
   // Warm up edge function on mount to eliminate cold start
   useEffect(() => {
-    supabase.functions.invoke('dflow-api', { 
-      body: { action: 'ping', params: {} }
-    }).catch(() => {}); // Silent warm-up
+    supabase.functions
+      .invoke("dflow-api", {
+        body: { action: "ping", params: {} },
+      })
+      .catch(() => {}); // Silent warm-up
   }, []);
-  
+
   // Load cached markets immediately on mount
   useEffect(() => {
     try {
@@ -172,24 +196,26 @@ export default function Kalshi() {
       if (cached) {
         const { markets: cachedMarkets, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < CACHE_TTL_MS && cachedMarkets?.length > 0) {
-          console.log('[Kalshi] Loading from cache:', cachedMarkets.length, 'markets');
+          console.log("[Kalshi] Loading from cache:", cachedMarkets.length, "markets");
           setMarkets(cachedMarkets);
           setIsLoading(false);
         }
       }
     } catch (e) {
-      console.log('[Kalshi] Cache read failed');
+      console.log("[Kalshi] Cache read failed");
     }
     // Always fetch fresh data in background
     fetchMarkets();
     // Fetch categories
-    getTagsByCategories().then(data => {
-      if (data?.tagsByCategories) {
-        setCategories(Object.keys(data.tagsByCategories).slice(0, 8));
-      }
-    }).catch(() => {});
+    getTagsByCategories()
+      .then((data) => {
+        if (data?.tagsByCategories) {
+          setCategories(Object.keys(data.tagsByCategories).slice(0, 8));
+        }
+      })
+      .catch(() => {});
   }, []);
-  
+
   // Load recent orders from localStorage
   useEffect(() => {
     if (publicKey) {
@@ -199,14 +225,14 @@ export default function Kalshi() {
           setRecentOrders(JSON.parse(stored));
         }
       } catch (e) {
-        console.log('[Portfolio] Failed to load recent orders');
+        console.log("[Portfolio] Failed to load recent orders");
       }
     }
   }, [publicKey]);
 
   // Fetch positions when portfolio tab is selected or wallet connects
   useEffect(() => {
-    if (activeTab === 'portfolio' && connected && publicKey) {
+    if (activeTab === "portfolio" && connected && publicKey) {
       startTransition(() => {
         fetchPositions();
       });
@@ -215,23 +241,23 @@ export default function Kalshi() {
 
   // Known non-market mints to exclude from portfolio scan
   const EXCLUDED_MINTS = [
-    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-    'So11111111111111111111111111111111111111112', // wSOL
-    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+    "So11111111111111111111111111111111111111112", // wSOL
+    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT
   ];
 
   const fetchPositions = useCallback(async () => {
     if (!publicKey || !connection) {
-      console.log('[Portfolio] No wallet connected, skipping fetch');
+      console.log("[Portfolio] No wallet connected, skipping fetch");
       return;
     }
-    
+
     const walletAddress = publicKey.toBase58();
-    console.log('[Portfolio] Starting fetch for wallet:', walletAddress);
+    console.log("[Portfolio] Starting fetch for wallet:", walletAddress);
     setPositionsLoading(true);
     setDebugInfo(null);
-    toast.loading('Refreshing portfolio...', { id: 'refresh-portfolio' });
-    
+    toast.loading("Refreshing portfolio...", { id: "refresh-portfolio" });
+
     const debug: DebugInfo = {
       tokenkegCount: 0,
       token2022Count: 0,
@@ -240,123 +266,123 @@ export default function Kalshi() {
       sampleMints: [],
       outcomeMints: [],
     };
-    
+
     try {
-      const { PublicKey } = await import('@solana/web3.js');
-      
+      const { PublicKey } = await import("@solana/web3.js");
+
       // Step 1: Get token accounts from BOTH programs
-      console.log('[Portfolio] Step 1: Fetching token accounts from Tokenkeg + Token-2022...');
-      
+      console.log("[Portfolio] Step 1: Fetching token accounts from Tokenkeg + Token-2022...");
+
       const [tokenkegAccounts, token2022Accounts] = await Promise.all([
-        connection.getParsedTokenAccountsByOwner(
-          publicKey,
-          { programId: new PublicKey(TOKEN_PROGRAM_ID) }
-        ).catch(err => {
-          console.log('[Portfolio] Tokenkeg fetch error:', err);
-          return { value: [] };
-        }),
-        connection.getParsedTokenAccountsByOwner(
-          publicKey,
-          { programId: new PublicKey(TOKEN_2022_PROGRAM_ID) }
-        ).catch(err => {
-          console.log('[Portfolio] Token-2022 fetch error:', err);
-          return { value: [] };
-        }),
+        connection
+          .getParsedTokenAccountsByOwner(publicKey, { programId: new PublicKey(TOKEN_PROGRAM_ID) })
+          .catch((err) => {
+            console.log("[Portfolio] Tokenkeg fetch error:", err);
+            return { value: [] };
+          }),
+        connection
+          .getParsedTokenAccountsByOwner(publicKey, { programId: new PublicKey(TOKEN_2022_PROGRAM_ID) })
+          .catch((err) => {
+            console.log("[Portfolio] Token-2022 fetch error:", err);
+            return { value: [] };
+          }),
       ]);
-      
+
       debug.tokenkegCount = tokenkegAccounts.value.length;
       debug.token2022Count = token2022Accounts.value.length;
       console.log(`[Portfolio] Found ${debug.tokenkegCount} Tokenkeg + ${debug.token2022Count} Token-2022 accounts`);
-      
+
       // Merge all accounts
       const allTokenAccounts = [...tokenkegAccounts.value, ...token2022Accounts.value];
-      
+
       // Filter for non-zero balances using raw amount (string !== "0")
       // Store full info for each mint: { uiAmount, rawAmount, decimals }
       const mintToInfo: Record<string, { uiAmount: number; rawAmount: string; decimals: number }> = {};
       const excludedHitSet = new Set<string>();
-      
-      allTokenAccounts.forEach(account => {
+
+      allTokenAccounts.forEach((account) => {
         const info = account.account.data.parsed?.info;
         const tokenAmount = info?.tokenAmount;
         const rawAmount = tokenAmount?.amount || "0";
         const decimals = tokenAmount?.decimals ?? 0;
         const mint = info?.mint;
-        
+
         if (!mint) return;
-        
+
         // Check if non-zero using raw string comparison
         if (rawAmount === "0") return;
-        
+
         // Track excluded mints
         if (EXCLUDED_MINTS.includes(mint)) {
           excludedHitSet.add(mint);
           return;
         }
-        
+
         // Compute uiAmount robustly - fallback if uiAmount is null
         let uiAmount = tokenAmount?.uiAmount;
         if (uiAmount == null || isNaN(uiAmount)) {
           // Compute from raw amount and decimals
           uiAmount = Number(rawAmount) / Math.pow(10, decimals);
         }
-        
+
         mintToInfo[mint] = { uiAmount, rawAmount, decimals };
       });
-      
+
       debug.excludedHits = Array.from(excludedHitSet);
       debug.eligibleCount = Object.keys(mintToInfo).length;
-      
+
       // Sample mints for debugging
-      debug.sampleMints = Object.entries(mintToInfo).slice(0, 5).map(([mint, info]) => ({
-        mint: mint.slice(0, 8) + '...' + mint.slice(-4),
-        amount: info.uiAmount.toString(),
-      }));
-      
+      debug.sampleMints = Object.entries(mintToInfo)
+        .slice(0, 5)
+        .map(([mint, info]) => ({
+          mint: mint.slice(0, 8) + "..." + mint.slice(-4),
+          amount: info.uiAmount.toString(),
+        }));
+
       console.log(`[Portfolio] ${debug.eligibleCount} eligible accounts (non-zero, after exclusions)`);
-      console.log('[Portfolio] Excluded mints hit:', debug.excludedHits);
-      
+      console.log("[Portfolio] Excluded mints hit:", debug.excludedHits);
+
       if (debug.eligibleCount === 0) {
-        console.log('[Portfolio] No eligible token accounts found');
+        console.log("[Portfolio] No eligible token accounts found");
         setDebugInfo(debug);
         setPositions([]);
         setPositionsLoading(false);
         return;
       }
-      
+
       const allMints = Object.keys(mintToInfo);
       console.log(`[Portfolio] Step 2: Calling filterOutcomeMints with ${allMints.length} mints...`);
-      console.log('[Portfolio] Sample mints:', allMints.slice(0, 3));
-      
+      console.log("[Portfolio] Sample mints:", allMints.slice(0, 3));
+
       // Step 2: Filter to only prediction market outcome mints using DFlow API
       const outcomeMints = await filterOutcomeMints(allMints);
       debug.outcomeMints = outcomeMints;
       console.log(`[Portfolio] filterOutcomeMints returned ${outcomeMints.length} prediction market mints`);
-      
+
       if (outcomeMints.length === 0) {
-        console.log('[Portfolio] No prediction market tokens found in wallet');
+        console.log("[Portfolio] No prediction market tokens found in wallet");
         setDebugInfo(debug);
         setPositions([]);
         setPositionsLoading(false);
         return;
       }
-      
+
       // Step 3: Batch fetch market data for outcome mints using POST batch endpoint
       console.log(`[Portfolio] Step 3: Fetching market data for ${outcomeMints.length} mints...`);
       const marketsData = await getMarketsByMints(outcomeMints);
       console.log(`[Portfolio] getMarketsByMints returned ${marketsData.length} markets`);
-      
+
       // Build positions from matched markets
       const positionsList: any[] = [];
-      
+
       for (const market of marketsData) {
         if (!market.accounts) continue;
-        
+
         // Check all account entries for matching mints
         for (const settlementKey of Object.keys(market.accounts)) {
           const accountInfo = market.accounts[settlementKey];
           if (!accountInfo) continue;
-          
+
           // Check if user holds YES token
           const yesMint = accountInfo.yesMint;
           if (yesMint && mintToInfo[yesMint]) {
@@ -364,7 +390,7 @@ export default function Kalshi() {
             positionsList.push({
               marketTicker: market.ticker,
               marketTitle: market.title,
-              side: 'yes',
+              side: "yes",
               quantity: info.uiAmount,
               avgPrice: market.yesPrice,
               currentPrice: market.yesPrice,
@@ -376,7 +402,7 @@ export default function Kalshi() {
               rawAmount: info.rawAmount,
             });
           }
-          
+
           // Check if user holds NO token
           const noMint = accountInfo.noMint;
           if (noMint && mintToInfo[noMint]) {
@@ -384,7 +410,7 @@ export default function Kalshi() {
             positionsList.push({
               marketTicker: market.ticker,
               marketTitle: market.title,
-              side: 'no',
+              side: "no",
               quantity: info.uiAmount,
               avgPrice: market.noPrice,
               currentPrice: market.noPrice,
@@ -398,16 +424,18 @@ export default function Kalshi() {
           }
         }
       }
-      
+
       console.log(`[Portfolio] Built ${positionsList.length} positions from ${marketsData.length} markets`);
       setDebugInfo(debug);
       setPositions(positionsList);
-      toast.success(`Found ${positionsList.length} positions`, { id: 'refresh-portfolio' });
+      toast.success(`Found ${positionsList.length} positions`, { id: "refresh-portfolio" });
     } catch (err) {
-      console.error('[Portfolio] Error fetching positions:', err);
-      debug.error = err instanceof Error ? err.message : 'Unknown error';
+      console.error("[Portfolio] Error fetching positions:", err);
+      debug.error = err instanceof Error ? err.message : "Unknown error";
       setDebugInfo(debug);
-      toast.error(`Failed to load portfolio: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: 'refresh-portfolio' });
+      toast.error(`Failed to load portfolio: ${err instanceof Error ? err.message : "Unknown error"}`, {
+        id: "refresh-portfolio",
+      });
     } finally {
       setPositionsLoading(false);
     }
@@ -416,9 +444,9 @@ export default function Kalshi() {
   // Send debug report to backend for server-visible logging
   const sendDebugReport = useCallback(async () => {
     if (!publicKey || !debugInfo) return;
-    
+
     try {
-      await callDflowApi('clientLog', {
+      await callDflowApi("clientLog", {
         wallet: publicKey.toBase58(),
         tokenkegCount: debugInfo.tokenkegCount,
         token2022Count: debugInfo.token2022Count,
@@ -426,22 +454,22 @@ export default function Kalshi() {
         excludedHits: debugInfo.excludedHits,
         sampleMints: debugInfo.sampleMints,
         outcomeMints: debugInfo.outcomeMints,
-        recentOrderSignatures: recentOrders.slice(0, 5).map(o => o.signature),
+        recentOrderSignatures: recentOrders.slice(0, 5).map((o) => o.signature),
         error: debugInfo.error,
       });
-      toast.success('Debug report sent');
+      toast.success("Debug report sent");
     } catch (err) {
-      toast.error('Failed to send debug report');
+      toast.error("Failed to send debug report");
     }
   }, [publicKey, debugInfo, recentOrders, callDflowApi]);
 
   // Clear completed orders - only keep pending/open, remove closed/failed/expired/unknown
   const clearCompletedOrders = useCallback(() => {
     if (!publicKey) return;
-    const pending = recentOrders.filter(o => o.status === 'pending' || o.status === 'open');
+    const pending = recentOrders.filter((o) => o.status === "pending" || o.status === "open");
     setRecentOrders(pending);
     localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(pending));
-    toast.success('Cleared completed orders');
+    toast.success("Cleared completed orders");
   }, [publicKey, recentOrders]);
 
   const fetchMarkets = async () => {
@@ -452,13 +480,13 @@ export default function Kalshi() {
     }
     try {
       // Try to get events with nested markets first
-      const events = await getEvents('active');
-      
+      const events = await getEvents("active");
+
       // Flatten events into markets
       const allMarketsData: KalshiMarket[] = [];
       events.forEach((event: KalshiEvent) => {
         if (event.markets && event.markets.length > 0) {
-          event.markets.forEach(market => {
+          event.markets.forEach((market) => {
             // Add event info to market if title is missing
             if (!market.title && event.title) {
               market.title = event.title;
@@ -467,34 +495,40 @@ export default function Kalshi() {
           });
         }
       });
-      
-      const fetchedMarkets = allMarketsData.length > 0 
-        ? allMarketsData 
-        : (await getMarkets()).length > 0 
-          ? await getMarkets() 
-          : DEMO_MARKETS;
-      
+
+      const fetchedMarkets =
+        allMarketsData.length > 0
+          ? allMarketsData
+          : (await getMarkets()).length > 0
+            ? await getMarkets()
+            : DEMO_MARKETS;
+
       setMarkets(fetchedMarkets);
       setAllMarkets(fetchedMarkets);
-      
+
       // Cache the fresh data
       try {
-        sessionStorage.setItem(MARKETS_CACHE_KEY, JSON.stringify({
-          markets: fetchedMarkets,
-          timestamp: Date.now()
-        }));
+        sessionStorage.setItem(
+          MARKETS_CACHE_KEY,
+          JSON.stringify({
+            markets: fetchedMarkets,
+            timestamp: Date.now(),
+          }),
+        );
       } catch (e) {
-        console.log('[Kalshi] Cache write failed');
+        console.log("[Kalshi] Cache write failed");
       }
-      
-      console.log(`[Kalshi] Fetched ${fetchedMarkets.length} markets in ${Math.round(performance.now() - fetchStart)}ms`);
+
+      console.log(
+        `[Kalshi] Fetched ${fetchedMarkets.length} markets in ${Math.round(performance.now() - fetchStart)}ms`,
+      );
     } catch (err) {
-      console.error('Failed to fetch markets:', err);
+      console.error("Failed to fetch markets:", err);
       // Use demo markets as fallback only if we have nothing
       if (markets.length === 0) {
         setMarkets(DEMO_MARKETS);
         setAllMarkets(DEMO_MARKETS);
-        toast.info('Showing demo markets');
+        toast.info("Showing demo markets");
       }
     } finally {
       setIsLoading(false);
@@ -503,46 +537,50 @@ export default function Kalshi() {
 
   // Prefetch cache to avoid duplicate requests
   const prefetchedRef = useRef<Set<string>>(new Set());
-  
+
   // Prefetch trades on hover for faster modal open - uses cached getTrades
   const { getTrades } = useDflowApi();
-  const handlePrefetch = useCallback((ticker: string) => {
-    if (prefetchedRef.current.has(ticker)) return;
-    prefetchedRef.current.add(ticker);
-    // Silent prefetch - populates the client-side cache
-    getTrades(ticker, 50).catch(() => {});
-  }, [getTrades]);
+  const handlePrefetch = useCallback(
+    (ticker: string) => {
+      if (prefetchedRef.current.has(ticker)) return;
+      prefetchedRef.current.add(ticker);
+      // Silent prefetch - populates the client-side cache
+      getTrades(ticker, 50).catch(() => {});
+    },
+    [getTrades],
+  );
 
   // Server-side search for ALL markets (not just local filter)
   const [searchResults, setSearchResults] = useState<KalshiMarket[]>([]);
-  
+
   useEffect(() => {
     if (!deferredSearchQuery || deferredSearchQuery.length < 2) {
       setSearchResults([]);
       setIsSearching(false);
       return;
     }
-    
+
     setIsSearching(true);
-    
+
     const doSearch = async () => {
       try {
         const results = await searchEvents(deferredSearchQuery);
-        const searchMarkets = results.flatMap(e => e.markets || []);
+        const searchMarkets = results.flatMap((e) => e.markets || []);
         setSearchResults(searchMarkets);
       } catch {
         // Fallback to local search of ALL markets
-        const localResults = allMarkets.filter(market =>
-          (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-          (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-          (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+        const localResults = allMarkets.filter(
+          (market) =>
+            (market.title || "").toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+            (market.subtitle || "").toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+            (market.ticker || "").toLowerCase().includes(deferredSearchQuery.toLowerCase()),
         );
         setSearchResults(localResults);
       } finally {
         setIsSearching(false);
       }
     };
-    
+
     const timer = setTimeout(doSearch, 400);
     return () => clearTimeout(timer);
   }, [deferredSearchQuery, searchEvents, allMarkets]);
@@ -551,45 +589,47 @@ export default function Kalshi() {
   const filteredMarkets = useMemo(() => {
     // If actively searching, use search results
     if (deferredSearchQuery && searchResults.length > 0) {
-      return searchResults.filter(market => {
-        const status = (market.status || '').toLowerCase();
-        return status === 'active' || status === 'initialized' || status === '' || !status;
+      return searchResults.filter((market) => {
+        const status = (market.status || "").toLowerCase();
+        return status === "active" || status === "initialized" || status === "" || !status;
       });
     }
-    
+
     // If searching but no results yet, show all markets with local filter
     if (deferredSearchQuery && isSearching) {
-      const localResults = allMarkets.filter(market =>
-        (market.title || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        (market.subtitle || '').toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
-        (market.ticker || '').toLowerCase().includes(deferredSearchQuery.toLowerCase())
+      const localResults = allMarkets.filter(
+        (market) =>
+          (market.title || "").toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+          (market.subtitle || "").toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+          (market.ticker || "").toLowerCase().includes(deferredSearchQuery.toLowerCase()),
       );
-      return localResults.filter(market => {
-        const status = (market.status || '').toLowerCase();
-        return status === 'active' || status === 'initialized' || status === '' || !status;
+      return localResults.filter((market) => {
+        const status = (market.status || "").toLowerCase();
+        return status === "active" || status === "initialized" || status === "" || !status;
       });
     }
-    
+
     // Otherwise use displayed markets with filters
-    let result = markets.filter(market => {
-      const status = (market.status || '').toLowerCase();
-      return status === 'active' || status === 'initialized' || status === '' || !status;
+    let result = markets.filter((market) => {
+      const status = (market.status || "").toLowerCase();
+      return status === "active" || status === "initialized" || status === "" || !status;
     });
-    
+
     // Category filter
     if (selectedCategory) {
-      result = result.filter(market =>
-        (market.subtitle || '').toLowerCase().includes(selectedCategory.toLowerCase()) ||
-        (market.ticker || '').toLowerCase().includes(selectedCategory.toLowerCase())
+      result = result.filter(
+        (market) =>
+          (market.subtitle || "").toLowerCase().includes(selectedCategory.toLowerCase()) ||
+          (market.ticker || "").toLowerCase().includes(selectedCategory.toLowerCase()),
       );
     }
-    
+
     return showAll ? result : result.slice(0, 60);
   }, [markets, allMarkets, deferredSearchQuery, selectedCategory, showAll, searchResults, isSearching]);
 
   // Get featured market (highest volume active market)
   const featuredMarket = useMemo(() => {
-    const activeMarkets = markets.filter(m => m.status === 'active' || !m.status);
+    const activeMarkets = markets.filter((m) => m.status === "active" || !m.status);
     if (activeMarkets.length === 0) return null;
     return activeMarkets.reduce((a, b) => ((a.volume || 0) > (b.volume || 0) ? a : b));
   }, [markets]);
@@ -600,20 +640,16 @@ export default function Kalshi() {
       <section className="relative overflow-hidden border-b border-border/30">
         {/* Subtle gradient background */}
         <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 via-transparent to-transparent" />
-        
+
         {/* Grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
-        
+
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
           {/* Header row */}
           <div className="flex items-center justify-between mb-10">
             {/* Logo & Title */}
             <div className="flex items-center gap-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="relative"
-              >
+              <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="relative">
                 <div className="absolute inset-0 bg-emerald-500/30 rounded-2xl blur-xl" />
                 <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 flex items-center justify-center overflow-hidden">
                   <img src={kalshiLogo} alt="Kalshi" className="w-10 h-10 rounded-xl object-cover" />
@@ -638,7 +674,7 @@ export default function Kalshi() {
                 </motion.p>
               </div>
             </div>
-            
+
             {/* DFlow + Solana branding + Wallet */}
             <div className="flex items-center gap-4">
               <motion.div
@@ -652,7 +688,7 @@ export default function Kalshi() {
                 <div className="w-px h-3 bg-border/50" />
                 <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
               </motion.div>
-              
+
               {!connected ? (
                 <WalletMultiButton className="!h-11 !px-5 !rounded-xl !bg-gradient-to-r !from-emerald-500 !to-emerald-600 hover:!opacity-90 !text-white !font-medium !text-sm !transition-all" />
               ) : (
@@ -674,7 +710,7 @@ export default function Kalshi() {
               onAIAnalysis={() => setAiMarket(featuredMarket)}
             />
           )}
-          
+
           {/* Stats row */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -704,43 +740,43 @@ export default function Kalshi() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <TabsList className="bg-muted/40 p-1.5 rounded-2xl backdrop-blur-sm border border-border/50">
-              <TabsTrigger 
-                value="markets" 
+              <TabsTrigger
+                value="markets"
                 className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all"
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Markets
               </TabsTrigger>
-              <TabsTrigger 
-                value="portfolio" 
+              <TabsTrigger
+                value="portfolio"
                 className="rounded-xl px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all"
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 Portfolio
               </TabsTrigger>
             </TabsList>
-            
+
             <div className="flex items-center gap-3">
               {/* View Mode Toggle */}
               <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border/50 backdrop-blur-sm">
                 <Button
-                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  variant={viewMode === "grid" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setViewMode('grid')}
+                  onClick={() => setViewMode("grid")}
                   className="h-9 px-3 rounded-lg transition-all"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </Button>
                 <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => setViewMode("list")}
                   className="h-9 px-3 rounded-lg transition-all"
                 >
                   <List className="w-4 h-4" />
                 </Button>
               </div>
-              
+
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
@@ -751,15 +787,15 @@ export default function Kalshi() {
                   className="pl-10 pr-4 w-full sm:w-72 h-11 rounded-xl bg-background border-border/50 focus:border-primary/50 transition-all"
                 />
               </div>
-              
+
               {/* Refresh Button */}
               <Button
                 variant="outline"
                 size="icon"
                 onClick={() => {
-                  toast.loading('Refreshing markets...', { id: 'refresh-markets' });
+                  toast.loading("Refreshing markets...", { id: "refresh-markets" });
                   fetchMarkets().then(() => {
-                    toast.success('Markets refreshed', { id: 'refresh-markets' });
+                    toast.success("Markets refreshed", { id: "refresh-markets" });
                   });
                 }}
                 disabled={isLoading}
@@ -804,7 +840,7 @@ export default function Kalshi() {
                   </Button>
                 )}
               </div>
-            ) : viewMode === 'grid' ? (
+            ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMarkets.map((market, index) => (
                   <KalshiMarketCard
@@ -827,37 +863,41 @@ export default function Kalshi() {
                     className="group cursor-pointer p-4 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/30 transition-all flex items-center gap-4"
                   >
                     {/* Status */}
-                    <div className={cn(
-                      "w-2 h-2 rounded-full shrink-0",
-                      market.status === 'active' ? "bg-emerald-400" : "bg-muted"
-                    )} />
-                    
+                    <div
+                      className={cn(
+                        "w-2 h-2 rounded-full shrink-0",
+                        market.status === "active" ? "bg-emerald-400" : "bg-muted",
+                      )}
+                    />
+
                     {/* Title */}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
                         {market.title || market.ticker}
                       </h3>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {market.subtitle || market.ticker}
-                      </p>
+                      <p className="text-sm text-muted-foreground truncate">{market.subtitle || market.ticker}</p>
                     </div>
-                    
+
                     {/* Prices */}
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right">
-                        <p className={cn(
-                          "text-lg font-bold",
-                          market.yesPrice > market.noPrice ? "text-emerald-400" : "text-foreground"
-                        )}>
+                        <p
+                          className={cn(
+                            "text-lg font-bold",
+                            market.yesPrice > market.noPrice ? "text-emerald-400" : "text-foreground",
+                          )}
+                        >
                           {market.yesPrice}¢
                         </p>
                         <p className="text-xs text-muted-foreground">YES</p>
                       </div>
                       <div className="text-right">
-                        <p className={cn(
-                          "text-lg font-bold",
-                          market.noPrice > market.yesPrice ? "text-red-400" : "text-foreground"
-                        )}>
+                        <p
+                          className={cn(
+                            "text-lg font-bold",
+                            market.noPrice > market.yesPrice ? "text-red-400" : "text-foreground",
+                          )}
+                        >
                           {market.noPrice}¢
                         </p>
                         <p className="text-xs text-muted-foreground">NO</p>
@@ -869,15 +909,15 @@ export default function Kalshi() {
                         <p className="text-xs text-muted-foreground">Volume</p>
                       </div>
                     </div>
-                    
+
                     {/* Actions */}
                     <div className="shrink-0">
-                      <KalshiAIButton 
+                      <KalshiAIButton
                         onClick={(e) => {
                           e.stopPropagation();
                           setAiMarket(market);
                         }}
-                        compact 
+                        compact
                       />
                     </div>
                   </div>
@@ -898,20 +938,16 @@ export default function Kalshi() {
                   onClick={() => setShowAll(true)}
                   className="h-12 px-10 rounded-2xl border-border/50 hover:border-primary/50 hover:bg-primary/5 group transition-all shadow-lg hover:shadow-xl"
                 >
-                  {deferredSearchQuery 
-                    ? `Show All ${filteredMarkets.length} Results` 
+                  {deferredSearchQuery
+                    ? `Show All ${filteredMarkets.length} Results`
                     : `View All ${allMarkets.length} Markets`}
                   <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                 </Button>
               </motion.div>
             )}
-            
+
             {showAll && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mt-10 text-center"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-10 text-center">
                 <Button
                   variant="ghost"
                   onClick={() => setShowAll(false)}
@@ -925,8 +961,8 @@ export default function Kalshi() {
 
           <TabsContent value="portfolio" className="mt-0">
             {connected ? (
-              <KalshiPortfolio 
-                positions={positions} 
+              <KalshiPortfolio
+                positions={positions}
                 isLoading={positionsLoading}
                 debugInfo={debugInfo}
                 recentOrders={recentOrders}
@@ -972,16 +1008,18 @@ export default function Kalshi() {
       {/* Sell Modal */}
       {sellPosition && (
         <KalshiTradingModal
-          market={{
-            ticker: sellPosition.marketTicker,
-            title: sellPosition.marketTitle,
-            yesPrice: sellPosition.side === 'yes' ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
-            noPrice: sellPosition.side === 'no' ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
-            accounts: {},
-          } as any}
+          market={
+            {
+              ticker: sellPosition.marketTicker,
+              title: sellPosition.marketTitle,
+              yesPrice: sellPosition.side === "yes" ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
+              noPrice: sellPosition.side === "no" ? sellPosition.currentPrice : 100 - sellPosition.currentPrice,
+              accounts: {},
+            } as any
+          }
           onClose={() => setSellPosition(null)}
           mode="sell"
-          initialSide={sellPosition.side.toUpperCase() as 'YES' | 'NO'}
+          initialSide={sellPosition.side.toUpperCase() as "YES" | "NO"}
           sellMint={sellPosition.sideMint}
           sellDecimals={sellPosition.decimals}
           maxShares={sellPosition.quantity}
