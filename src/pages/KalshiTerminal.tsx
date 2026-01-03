@@ -4,18 +4,11 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutGrid, 
-  PanelLeftClose, 
   PanelLeft, 
-  Sparkles, 
-  BarChart3, 
-  Activity,
   ArrowLeft,
-  ExternalLink,
-  Wallet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
-import { useDflowWebSocket, type PriceUpdate } from '@/hooks/useDflowWebSocket';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Link } from 'react-router-dom';
 
@@ -37,11 +30,10 @@ import solanaLogo from '@/assets/solana-logo.png';
 export default function KalshiTerminal() {
   const isMobile = useIsMobile();
   const { connected } = useWallet();
-  const { getEvents, loading } = useDflowApi();
+  const { getEvents, getOrderbook } = useDflowApi();
   
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [rightPanelTab, setRightPanelTab] = useState<'ai' | 'orderbook' | 'trades'>('ai');
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [mobileTab, setMobileTab] = useState<'chart' | 'data' | 'trade'>('chart');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -52,7 +44,6 @@ export default function KalshiTerminal() {
       try {
         const events = await getEvents('active');
         if (events.length > 0 && events[0].markets?.length > 0) {
-          // Pick the highest volume market
           const allMarkets: KalshiMarket[] = [];
           events.forEach((event: KalshiEvent) => {
             event.markets?.forEach(m => {
@@ -73,7 +64,34 @@ export default function KalshiTerminal() {
     fetchInitialMarket();
   }, [getEvents]);
 
-  // Handle price updates
+  // Poll for price updates every 3 seconds instead of WebSocket
+  useEffect(() => {
+    if (!selectedMarket) return;
+    
+    let mounted = true;
+    
+    const poll = async () => {
+      if (!mounted) return;
+      try {
+        const orderbookData = await getOrderbook(selectedMarket.ticker);
+        if (mounted && orderbookData?.yesBid) {
+          setLivePrice(orderbookData.yesBid);
+        }
+      } catch (err) {
+        // Silently fail - will retry on next interval
+      }
+    };
+    
+    poll(); // Initial fetch
+    const interval = setInterval(poll, 3000);
+    
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedMarket?.ticker, getOrderbook]);
+
+  // Handle price updates from chart
   const handlePriceUpdate = useCallback((price: number) => {
     setLivePrice(price);
   }, []);
@@ -278,12 +296,12 @@ export default function KalshiTerminal() {
             )}
           </div>
 
-          {/* Right Panel */}
+          {/* Right Panel - Fixed width with shrink */}
           {selectedMarket && (
-            <div className="w-80 border-l border-border/30 bg-card/20 flex flex-col">
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-4">
-                  <KalshiAIAgents market={selectedMarket} />
+            <div className="w-72 min-w-0 shrink-0 border-l border-border/30 bg-card/20 flex flex-col overflow-hidden">
+              <ScrollArea className="flex-1">
+                <div className="p-3 space-y-3">
+                  <KalshiAIAgents market={selectedMarket} compact />
                   <KalshiTradingPanel market={selectedMarket} />
                 </div>
               </ScrollArea>
