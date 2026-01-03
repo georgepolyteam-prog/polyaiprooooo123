@@ -132,18 +132,25 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
         )}
       </div>
       
-      {/* Action Buttons */}
+      {/* Action Buttons - Apple/Kalshi style */}
       <div className="flex items-center gap-2">
         {onAIAnalysis && (
-          <Button
-            variant="outline"
-            size="sm"
+          <button
             onClick={handleAIClick}
-            className="flex-1 rounded-xl border-border/50 hover:bg-primary/10 hover:border-primary/30 hover:text-primary"
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 h-10 px-4",
+              "rounded-full text-sm font-medium",
+              "bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10",
+              "border border-primary/20 hover:border-primary/40",
+              "text-primary",
+              "transition-all duration-300",
+              "hover:shadow-lg hover:shadow-primary/20",
+              "hover:scale-[1.02] active:scale-[0.98]"
+            )}
           >
-            <Sparkles className="w-4 h-4 mr-1.5" />
-            AI Analysis
-          </Button>
+            <Sparkles className="w-4 h-4" />
+            <span>AI</span>
+          </button>
         )}
         <KalshiShareButton market={market} compact />
       </div>

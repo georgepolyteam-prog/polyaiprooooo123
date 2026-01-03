@@ -69,7 +69,7 @@ export function KalshiAIInsight({ market, onClose }: KalshiAIInsightProps) {
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-lg bg-background/95 backdrop-blur-xl border-border/50">
+      <DialogContent className="sm:max-w-lg bg-background/95 backdrop-blur-xl border-border/50 max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Sparkles className="w-5 h-5 text-primary" />

@@ -506,7 +506,7 @@ export function KalshiTradingModal({
   
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-background border border-border max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="sm:max-w-md bg-background border border-border p-0">
         {/* Header with gradient */}
         <div className={cn(
           "p-6 pb-4 rounded-t-lg",
