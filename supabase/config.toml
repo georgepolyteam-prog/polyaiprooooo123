@@ -1,5 +1,8 @@
 project_id = "rgmzmtsgpxxzxvdcwsdx"
 
+[functions.kalshi-chat]
+verify_jwt = false
+
 [functions.process-deposit]
 verify_jwt = false
 
