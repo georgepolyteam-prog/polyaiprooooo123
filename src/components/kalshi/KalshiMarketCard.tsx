@@ -1,8 +1,8 @@
 import { memo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Clock, Users, Sparkles } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { KalshiShareButton } from './KalshiShareButton';
+import { KalshiAIButton } from './KalshiAIButton';
 import type { KalshiMarket } from '@/hooks/useDflowApi';
 
 interface KalshiMarketCardProps {
@@ -33,127 +33,125 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
       onClick={onClick}
       onMouseEnter={handleMouseEnter}
       className={cn(
-        'group cursor-pointer rounded-3xl p-6',
-        'bg-card/80 border border-border/50',
-        'hover:border-primary/30 transition-colors duration-200',
-        'hover:shadow-lg hover:-translate-y-0.5'
+        'group cursor-pointer rounded-[28px] p-5',
+        'bg-card/60 backdrop-blur-sm',
+        'border border-border/40',
+        'transition-all duration-300 ease-out',
+        'hover:border-border/60 hover:bg-card/80',
+        'hover:shadow-2xl hover:shadow-black/10',
+        'hover:-translate-y-1'
       )}
     >
-      {/* Status Badge */}
-      {market.status && (
-        <span className={cn(
-          "inline-block px-3 py-1 mb-4 text-xs font-medium rounded-full border",
-          market.status === 'active' 
-            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-            : 'bg-muted/50 text-muted-foreground border-border/50'
-        )}>
-          {market.status.charAt(0).toUpperCase() + market.status.slice(1)}
-        </span>
-      )}
+      {/* Header with status */}
+      <div className="flex items-start justify-between mb-4">
+        {market.status && (
+          <span className={cn(
+            "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-full",
+            market.status === 'active' 
+              ? 'bg-emerald-500/15 text-emerald-400'
+              : 'bg-muted/50 text-muted-foreground'
+          )}>
+            <span className={cn(
+              "w-1.5 h-1.5 rounded-full",
+              market.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground'
+            )} />
+            {market.status === 'active' ? 'Live' : market.status.charAt(0).toUpperCase() + market.status.slice(1)}
+          </span>
+        )}
+        <KalshiShareButton market={market} compact />
+      </div>
 
       {/* Title */}
-      <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+      <h3 className="text-base font-semibold text-foreground mb-1.5 line-clamp-2 leading-snug group-hover:text-foreground/90 transition-colors min-h-[2.75rem]">
         {displayTitle}
       </h3>
       
-      {/* Subtitle if available */}
+      {/* Subtitle */}
       {market.subtitle && (
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-1">
+        <p className="text-xs text-muted-foreground mb-4 line-clamp-1">
           {market.subtitle}
         </p>
       )}
       
-      {/* Price Display */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      {/* Premium Price Display - Large centered prices */}
+      <div className="flex items-stretch gap-2 mb-4">
         <div className={cn(
-          'p-4 rounded-2xl border transition-colors',
+          'flex-1 p-3 rounded-2xl transition-all duration-200',
+          'border',
           yesLeading 
-            ? 'bg-emerald-500/10 border-emerald-500/30' 
-            : 'bg-muted/50 border-border/50'
+            ? 'bg-emerald-500/10 border-emerald-500/25' 
+            : 'bg-muted/30 border-transparent'
         )}>
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className={cn(
-              'w-4 h-4',
-              yesLeading ? 'text-emerald-400' : 'text-muted-foreground'
-            )} />
-            <span className={cn(
-              'text-xs font-medium uppercase tracking-wide',
-              yesLeading ? 'text-emerald-400' : 'text-muted-foreground'
-            )}>
-              Yes
-            </span>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5">
+              <TrendingUp className={cn(
+                'w-3.5 h-3.5',
+                yesLeading ? 'text-emerald-400' : 'text-muted-foreground'
+              )} />
+              <span className={cn(
+                'text-[10px] font-semibold uppercase tracking-wider',
+                yesLeading ? 'text-emerald-400' : 'text-muted-foreground'
+              )}>
+                Yes
+              </span>
+            </div>
           </div>
           <p className={cn(
-            'text-2xl font-bold',
-            yesLeading ? 'text-emerald-400' : 'text-foreground'
+            'text-2xl font-bold tracking-tight',
+            yesLeading ? 'text-emerald-400' : 'text-foreground/80'
           )}>
-            {market.yesPrice}¢
+            {market.yesPrice}<span className="text-base">¢</span>
           </p>
         </div>
 
         <div className={cn(
-          'p-4 rounded-2xl border transition-colors',
+          'flex-1 p-3 rounded-2xl transition-all duration-200',
+          'border',
           !yesLeading 
-            ? 'bg-red-500/10 border-red-500/30' 
-            : 'bg-muted/50 border-border/50'
+            ? 'bg-red-500/10 border-red-500/25' 
+            : 'bg-muted/30 border-transparent'
         )}>
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingDown className={cn(
-              'w-4 h-4',
-              !yesLeading ? 'text-red-400' : 'text-muted-foreground'
-            )} />
-            <span className={cn(
-              'text-xs font-medium uppercase tracking-wide',
-              !yesLeading ? 'text-red-400' : 'text-muted-foreground'
-            )}>
-              No
-            </span>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5">
+              <TrendingDown className={cn(
+                'w-3.5 h-3.5',
+                !yesLeading ? 'text-red-400' : 'text-muted-foreground'
+              )} />
+              <span className={cn(
+                'text-[10px] font-semibold uppercase tracking-wider',
+                !yesLeading ? 'text-red-400' : 'text-muted-foreground'
+              )}>
+                No
+              </span>
+            </div>
           </div>
           <p className={cn(
-            'text-2xl font-bold',
-            !yesLeading ? 'text-red-400' : 'text-foreground'
+            'text-2xl font-bold tracking-tight',
+            !yesLeading ? 'text-red-400' : 'text-foreground/80'
           )}>
-            {market.noPrice}¢
+            {market.noPrice}<span className="text-base">¢</span>
           </p>
         </div>
       </div>
       
-      {/* Stats */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
+      {/* Stats row - cleaner */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 px-0.5">
         <div className="flex items-center gap-1.5">
-          <Users className="w-4 h-4" />
-          <span>${(market.volume || 0).toLocaleString()}</span>
+          <DollarSign className="w-3.5 h-3.5" />
+          <span className="font-medium">{((market.volume || 0) / 1000).toFixed(0)}k vol</span>
         </div>
         {market.closeTime && (
           <div className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4" />
-            <span>{new Date(market.closeTime).toLocaleDateString()}</span>
+            <Clock className="w-3.5 h-3.5" />
+            <span>{new Date(market.closeTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
           </div>
         )}
       </div>
       
-      {/* Action Buttons - Apple/Kalshi premium style */}
-      <div className="flex items-center gap-2">
-        {onAIAnalysis && (
-          <button
-            onClick={handleAIClick}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 h-10 px-4",
-              "rounded-full text-sm font-medium",
-              "bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10",
-              "border border-primary/20 hover:border-primary/40",
-              "text-primary",
-              "transition-all duration-300",
-              "hover:shadow-lg hover:shadow-primary/20",
-              "hover:scale-[1.02] active:scale-[0.98]"
-            )}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>AI Analysis</span>
-          </button>
-        )}
-        <KalshiShareButton market={market} compact />
-      </div>
+      {/* Premium AI Button */}
+      {onAIAnalysis && (
+        <KalshiAIButton onClick={handleAIClick} />
+      )}
     </div>
   );
 }
