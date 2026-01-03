@@ -1,9 +1,10 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Clock, DollarSign, Zap, Share2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Zap, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KalshiShareButton } from './KalshiShareButton';
 import { KalshiAIButton } from './KalshiAIButton';
+import { KalshiChartModal } from './KalshiChartModal';
 import type { KalshiMarket } from '@/hooks/useDflowApi';
 
 interface KalshiMarketCardProps {
@@ -18,10 +19,16 @@ interface KalshiMarketCardProps {
 function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, onPrefetch, index = 0 }: KalshiMarketCardProps) {
   const yesLeading = market.yesPrice > market.noPrice;
   const displayTitle = market.title || eventTitle || 'Market';
+  const [chartOpen, setChartOpen] = useState(false);
   
   const handleAIClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onAIAnalysis?.();
+  };
+  
+  const handleChartClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setChartOpen(true);
   };
   
   const handleMouseEnter = useCallback(() => {
@@ -57,7 +64,7 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
       <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-emerald-500/0 via-primary/0 to-purple-500/0 opacity-0 group-hover:opacity-100 group-hover:from-emerald-500/10 group-hover:via-primary/10 group-hover:to-purple-500/10 transition-opacity duration-500 blur-xl" />
       
       <div className="relative">
-        {/* Header row - Live indicator + Share */}
+        {/* Header row - Live indicator + Chart + Share */}
         <div className="flex items-center justify-between mb-4">
           {market.status === 'active' || !market.status ? (
             <div className="flex items-center gap-2">
@@ -70,9 +77,18 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
           ) : (
             <span className="text-xs font-medium text-muted-foreground capitalize">{market.status}</span>
           )}
-          <KalshiShareButton market={market} compact />
+          <div className="flex items-center gap-1.5">
+            {/* Chart Button */}
+            <button
+              onClick={handleChartClick}
+              className="p-2 rounded-lg bg-muted/50 hover:bg-muted border border-border/50 hover:border-primary/40 transition-all group"
+              title="View Chart"
+            >
+              <LineChart className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            </button>
+            <KalshiShareButton market={market} compact />
+          </div>
         </div>
-
         {/* Title */}
         <h3 className="text-[15px] font-semibold text-foreground mb-4 line-clamp-2 leading-snug group-hover:text-foreground transition-colors min-h-[2.5rem]">
           {displayTitle}
@@ -162,6 +178,13 @@ function KalshiMarketCardComponent({ market, eventTitle, onClick, onAIAnalysis, 
           <KalshiAIButton onClick={handleAIClick} />
         )}
       </div>
+      
+      {/* Chart Modal */}
+      <KalshiChartModal 
+        market={market}
+        open={chartOpen}
+        onOpenChange={setChartOpen}
+      />
     </motion.div>
   );
 }
