@@ -19,21 +19,31 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const prompt = `Analyze this prediction market and provide a trading insight:
+    const prompt = `You are analyzing a PREDICTION MARKET. This is critical context:
+- Users can only BUY YES contracts or BUY NO contracts
+- They CANNOT "sell" unless they already own a position (this is a NEW trade)
+- YES price + NO price = 100¢ (they are complementary)
+- If you think the event WILL happen, recommend "BUY YES"
+- If you think the event will NOT happen, recommend "BUY NO"
 
 Market Question: "${marketTitle}"
-Current YES Price: ${yesPrice}¢ (${yesPrice}% implied probability)
-Current NO Price: ${noPrice}¢ (${noPrice}% implied probability)
+Current YES Price: ${yesPrice}¢ (market implies ${yesPrice}% chance YES wins)
+Current NO Price: ${noPrice}¢ (market implies ${noPrice}% chance NO wins)
 Trading Volume: $${(volume || 0).toLocaleString()}
 ${closeTime ? `Closes: ${new Date(closeTime).toLocaleDateString()}` : ''}
 
-Based on this market data, provide:
-1. Your estimated probability (0-100) that YES will win
-2. Your sentiment (bullish, bearish, or neutral)
-3. Your confidence level (high, medium, low)
-4. 3-4 key factors that could influence this outcome
+ANALYZE and provide:
+1. Your probability estimate (0-100) that YES will occur
+2. Sentiment: "bullish" (you'd buy YES), "bearish" (you'd buy NO), "neutral" (fair price)
+3. Confidence: high/medium/low
+4. 3-4 key factors affecting this outcome
 5. Brief reasoning (2-3 sentences)
-6. A clear trading recommendation
+6. CLEAR recommendation - MUST be one of:
+   - "BUY YES at ${yesPrice}¢" (if your probability > market's ${yesPrice}%)
+   - "BUY NO at ${noPrice}¢" (if your probability < market's ${yesPrice}%)
+   - "HOLD - price is fair" (if your probability ≈ market price)
+
+NEVER say "Sell YES" or "Sell NO" - users are BUYING positions!
 
 Respond in this exact JSON format:
 {
@@ -42,7 +52,7 @@ Respond in this exact JSON format:
   "confidence": "<high|medium|low>",
   "keyFactors": ["factor1", "factor2", "factor3"],
   "reasoning": "<your analysis>",
-  "recommendation": "<your recommendation>"
+  "recommendation": "<BUY YES at Xc | BUY NO at Xc | HOLD - price is fair>"
 }`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
