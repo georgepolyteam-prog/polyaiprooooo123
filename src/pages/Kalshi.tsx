@@ -12,7 +12,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
-import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3, Filter, X } from 'lucide-react';
+import { TrendingUp, Zap, Shield, ArrowRight, RefreshCw, Search, Sparkles, Wallet, BarChart3, Filter, X, LayoutGrid, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
@@ -147,6 +147,7 @@ export default function Kalshi() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
   const deferredSearchQuery = useDeferredValue(searchQuery);
   
@@ -222,6 +223,7 @@ export default function Kalshi() {
     console.log('[Portfolio] Starting fetch for wallet:', walletAddress);
     setPositionsLoading(true);
     setDebugInfo(null);
+    toast.loading('Refreshing portfolio...', { id: 'refresh-portfolio' });
     
     const debug: DebugInfo = {
       tokenkegCount: 0,
@@ -393,11 +395,12 @@ export default function Kalshi() {
       console.log(`[Portfolio] Built ${positionsList.length} positions from ${marketsData.length} markets`);
       setDebugInfo(debug);
       setPositions(positionsList);
+      toast.success(`Found ${positionsList.length} positions`, { id: 'refresh-portfolio' });
     } catch (err) {
       console.error('[Portfolio] Error fetching positions:', err);
       debug.error = err instanceof Error ? err.message : 'Unknown error';
       setDebugInfo(debug);
-      toast.error(`Failed to load portfolio: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Failed to load portfolio: ${err instanceof Error ? err.message : 'Unknown error'}`, { id: 'refresh-portfolio' });
     } finally {
       setPositionsLoading(false);
     }
@@ -425,12 +428,13 @@ export default function Kalshi() {
     }
   }, [publicKey, debugInfo, recentOrders, callDflowApi]);
 
-  // Clear completed orders
+  // Clear completed orders - only keep pending/open, remove closed/failed/expired/unknown
   const clearCompletedOrders = useCallback(() => {
     if (!publicKey) return;
-    const pending = recentOrders.filter(o => o.status === 'pending' || o.status === 'open' || !o.status);
+    const pending = recentOrders.filter(o => o.status === 'pending' || o.status === 'open');
     setRecentOrders(pending);
     localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(pending));
+    toast.success('Cleared completed orders');
   }, [publicKey, recentOrders]);
 
   const fetchMarkets = async () => {
@@ -669,11 +673,31 @@ export default function Kalshi() {
             </TabsList>
             
             <div className="flex items-center gap-3">
+              {/* View Mode Toggle */}
+              <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/30">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="h-8 px-3 rounded-lg"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="h-8 px-3 rounded-lg"
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </div>
+              
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search markets..."
+                  placeholder="Search all markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 w-full sm:w-64 h-11 rounded-xl bg-muted/30 border-border/50"
@@ -684,7 +708,12 @@ export default function Kalshi() {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={fetchMarkets}
+                onClick={() => {
+                  toast.loading('Refreshing markets...', { id: 'refresh-markets' });
+                  fetchMarkets().then(() => {
+                    toast.success('Markets refreshed', { id: 'refresh-markets' });
+                  });
+                }}
                 disabled={isLoading}
                 className="h-11 w-11 rounded-xl border-border/50"
               >
@@ -738,7 +767,7 @@ export default function Kalshi() {
               </div>
             )}
 
-            {/* Markets Grid */}
+            {/* Markets Grid/List */}
             {isLoading ? (
               <KalshiLoadingSkeleton />
             ) : filteredMarkets.length === 0 ? (
@@ -750,7 +779,7 @@ export default function Kalshi() {
                   </Button>
                 )}
               </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMarkets.map((market, index) => (
                   <KalshiMarketCard
@@ -761,6 +790,76 @@ export default function Kalshi() {
                     onPrefetch={handlePrefetch}
                     index={index}
                   />
+                ))}
+              </div>
+            ) : (
+              // List view - more detailed
+              <div className="space-y-3">
+                {filteredMarkets.map((market) => (
+                  <div
+                    key={market.ticker}
+                    onClick={() => setSelectedMarket(market)}
+                    className="group cursor-pointer p-4 rounded-2xl bg-card/80 border border-border/50 hover:border-primary/30 transition-all flex items-center gap-4"
+                  >
+                    {/* Status */}
+                    <div className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      market.status === 'active' ? "bg-emerald-400" : "bg-muted"
+                    )} />
+                    
+                    {/* Title */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                        {market.title || market.ticker}
+                      </h3>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {market.subtitle || market.ticker}
+                      </p>
+                    </div>
+                    
+                    {/* Prices */}
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <p className={cn(
+                          "text-lg font-bold",
+                          market.yesPrice > market.noPrice ? "text-emerald-400" : "text-foreground"
+                        )}>
+                          {market.yesPrice}¢
+                        </p>
+                        <p className="text-xs text-muted-foreground">YES</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={cn(
+                          "text-lg font-bold",
+                          market.noPrice > market.yesPrice ? "text-red-400" : "text-foreground"
+                        )}>
+                          {market.noPrice}¢
+                        </p>
+                        <p className="text-xs text-muted-foreground">NO</p>
+                      </div>
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-medium text-foreground">
+                          ${((market.volume || 0) / 1000).toFixed(0)}k
+                        </p>
+                        <p className="text-xs text-muted-foreground">Volume</p>
+                      </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAiMarket(market);
+                        }}
+                        className="h-8 w-8 p-0 rounded-lg"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
