@@ -743,12 +743,12 @@ export default function Kalshi() {
               
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
                 <Input
                   placeholder="Search all markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-11 pr-4 w-full sm:w-72 h-11 rounded-xl bg-muted/40 border-border/50 backdrop-blur-sm focus:border-primary/50 transition-all"
+                  className="pl-10 pr-4 w-full sm:w-72 h-11 rounded-xl bg-background border-border/50 focus:border-primary/50 transition-all"
                 />
               </div>
               
