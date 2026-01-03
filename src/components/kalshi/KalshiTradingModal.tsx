@@ -656,88 +656,107 @@ export function KalshiTradingModal({
             </div>
           )}
 
-          {/* Side Selector - More compact and punchy */}
-          <div className="grid grid-cols-2 gap-2">
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setSide('YES')}
-              disabled={!connected || executing}
-              className={cn(
-                'relative p-4 rounded-xl border-2 transition-all duration-200',
-                side === 'YES'
-                  ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
-                  : 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border',
-                (!connected || executing) && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {side === 'YES' && (
-                <motion.div
-                  layoutId="sideIndicator"
-                  className="absolute inset-0 rounded-xl border-2 border-emerald-500"
-                />
-              )}
-              <div className="relative">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <TrendingUp className={cn(
-                    'w-5 h-5',
-                    side === 'YES' ? 'text-emerald-400' : 'text-muted-foreground'
-                  )} />
-                  <span className={cn(
-                    'font-bold text-lg',
+          {/* Side Selector - Only show in buy mode */}
+          {!isSellMode ? (
+            <div className="grid grid-cols-2 gap-2">
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setSide('YES')}
+                disabled={!connected || executing}
+                className={cn(
+                  'relative p-4 rounded-xl border-2 transition-all duration-200',
+                  side === 'YES'
+                    ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10'
+                    : 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border',
+                  (!connected || executing) && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                {side === 'YES' && (
+                  <motion.div
+                    layoutId="sideIndicator"
+                    className="absolute inset-0 rounded-xl border-2 border-emerald-500"
+                  />
+                )}
+                <div className="relative">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <TrendingUp className={cn(
+                      'w-5 h-5',
+                      side === 'YES' ? 'text-emerald-400' : 'text-muted-foreground'
+                    )} />
+                    <span className={cn(
+                      'font-bold text-lg',
+                      side === 'YES' ? 'text-emerald-400' : 'text-foreground'
+                    )}>
+                      YES
+                    </span>
+                  </div>
+                  <p className={cn(
+                    'text-2xl font-bold',
                     side === 'YES' ? 'text-emerald-400' : 'text-foreground'
                   )}>
-                    YES
-                  </span>
+                    {market.yesPrice}¢
+                  </p>
                 </div>
-                <p className={cn(
-                  'text-2xl font-bold',
-                  side === 'YES' ? 'text-emerald-400' : 'text-foreground'
-                )}>
-                  {market.yesPrice}¢
-                </p>
-              </div>
-            </motion.button>
+              </motion.button>
 
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setSide('NO')}
-              disabled={!connected || executing}
-              className={cn(
-                'relative p-4 rounded-xl border-2 transition-all duration-200',
-                side === 'NO'
-                  ? 'border-red-500 bg-red-500/10 shadow-lg shadow-red-500/10'
-                  : 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border',
-                (!connected || executing) && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {side === 'NO' && (
-                <motion.div
-                  layoutId="sideIndicator"
-                  className="absolute inset-0 rounded-xl border-2 border-red-500"
-                />
-              )}
-              <div className="relative">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <TrendingDown className={cn(
-                    'w-5 h-5',
-                    side === 'NO' ? 'text-red-400' : 'text-muted-foreground'
-                  )} />
-                  <span className={cn(
-                    'font-bold text-lg',
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setSide('NO')}
+                disabled={!connected || executing}
+                className={cn(
+                  'relative p-4 rounded-xl border-2 transition-all duration-200',
+                  side === 'NO'
+                    ? 'border-red-500 bg-red-500/10 shadow-lg shadow-red-500/10'
+                    : 'border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border',
+                  (!connected || executing) && 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                {side === 'NO' && (
+                  <motion.div
+                    layoutId="sideIndicator"
+                    className="absolute inset-0 rounded-xl border-2 border-red-500"
+                  />
+                )}
+                <div className="relative">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <TrendingDown className={cn(
+                      'w-5 h-5',
+                      side === 'NO' ? 'text-red-400' : 'text-muted-foreground'
+                    )} />
+                    <span className={cn(
+                      'font-bold text-lg',
+                      side === 'NO' ? 'text-red-400' : 'text-foreground'
+                    )}>
+                      NO
+                    </span>
+                  </div>
+                  <p className={cn(
+                    'text-2xl font-bold',
                     side === 'NO' ? 'text-red-400' : 'text-foreground'
                   )}>
-                    NO
-                  </span>
+                    {market.noPrice}¢
+                  </p>
                 </div>
-                <p className={cn(
-                  'text-2xl font-bold',
-                  side === 'NO' ? 'text-red-400' : 'text-foreground'
-                )}>
-                  {market.noPrice}¢
-                </p>
-              </div>
-            </motion.button>
-          </div>
+              </motion.button>
+            </div>
+          ) : (
+            // Sell mode - show position info instead of side selector
+            <div className={cn(
+              "p-4 rounded-xl border text-center",
+              side === 'YES' 
+                ? "bg-emerald-500/10 border-emerald-500/30" 
+                : "bg-red-500/10 border-red-500/30"
+            )}>
+              <span className="text-muted-foreground text-sm">Selling your </span>
+              <span className={cn(
+                "text-lg font-bold",
+                side === 'YES' ? "text-emerald-400" : "text-red-400"
+              )}>
+                {side}
+              </span>
+              <span className="text-muted-foreground text-sm"> position @ {price}¢</span>
+            </div>
+          )}
 
           {/* Amount Input - Enhanced */}
           <div className="space-y-3">

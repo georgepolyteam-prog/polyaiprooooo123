@@ -124,22 +124,6 @@ export function KalshiPriceChart({ trades, yesPrice, compact = false, loading = 
             </span>
           </div>
         </div>
-        
-        <div className="flex gap-1">
-          {['1H', '1D', '1W', '1M'].map((period) => (
-            <button
-              key={period}
-              className={cn(
-                "px-3 py-1 rounded-lg text-xs font-medium transition-all",
-                period === '1D' 
-                  ? "bg-primary/20 text-primary" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              {period}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="h-48 w-full">
