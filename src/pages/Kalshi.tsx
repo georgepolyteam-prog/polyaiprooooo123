@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useR
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 // Debounce utility for localStorage writes
@@ -733,6 +734,23 @@ export default function Kalshi() {
                 </span>
               </motion.div>
             )}
+            
+            {/* Terminal Link */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="mt-4"
+            >
+              <Link 
+                to="/terminal"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition-all font-medium"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Open Trading Terminal
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </motion.div>
           </motion.div>
 
           {/* Feature Cards */}
