@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Sparkles, Clock, BarChart3, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { KalshiMarket } from '@/hooks/useDflowApi';
-import polyfactualLogo from '@/assets/polyfactual-logo.png';
+import dflowLogo from '@/assets/dome-logo.png';
+import solanaLogo from '@/assets/solana-logo.png';
 
 interface KalshiFeaturedMarketProps {
   market: KalshiMarket;
@@ -60,9 +60,11 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
               />
               <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Featured Market</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-muted/50 border border-border/50">
-              <img src={polyfactualLogo} alt="Polyfactual" className="w-4 h-4 rounded" />
-              <span className="text-xs font-medium text-muted-foreground">Polyfactual</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50">
+              <img src={dflowLogo} alt="DFlow" className="w-4 h-4 rounded" />
+              <span className="text-xs font-medium text-muted-foreground">DFlow</span>
+              <div className="w-px h-3 bg-border/50" />
+              <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
             </div>
           </div>
           

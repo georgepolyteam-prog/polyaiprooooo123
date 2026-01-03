@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, TrendingUp, TrendingDown, Loader2, Brain, AlertTriangle, Send, MessageCircle, ArrowLeft, Bot, User } from 'lucide-react';
+import { Sparkles, TrendingUp, TrendingDown, Loader2, Brain, AlertTriangle, Send, MessageCircle, ArrowLeft, Bot, User, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import type { KalshiMarket } from '@/hooks/useDflowApi';
 interface KalshiAIInsightProps {
   market: KalshiMarket;
   onClose: () => void;
+  onTrade?: () => void;
 }
 
 interface AIAnalysis {
@@ -27,7 +28,7 @@ interface ChatMessage {
   content: string;
 }
 
-export function KalshiAIInsight({ market, onClose }: KalshiAIInsightProps) {
+export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightProps) {
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +104,11 @@ export function KalshiAIInsight({ market, onClose }: KalshiAIInsightProps) {
     } finally {
       setIsChatLoading(false);
     }
+  };
+
+  const handleTradeClick = () => {
+    onClose();
+    onTrade?.();
   };
 
   const getSentimentColor = (sentiment: string) => {
@@ -398,20 +404,31 @@ export function KalshiAIInsight({ market, onClose }: KalshiAIInsightProps) {
                       </p>
                     </div>
 
-                    {/* Ask Follow-up Button */}
+                    {/* Action Buttons */}
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ delay: 0.3 }}
+                      className="grid grid-cols-2 gap-3 pt-2"
                     >
                       <Button
                         onClick={() => setIsChatMode(true)}
                         variant="outline"
-                        className="w-full h-11 rounded-xl border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/50 text-purple-400 group"
+                        className="h-11 rounded-xl border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/50 text-purple-400 group"
                       >
                         <MessageCircle className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
-                        Ask Follow-up Questions
+                        Ask Follow-up
                       </Button>
+                      
+                      {onTrade && (
+                        <Button
+                          onClick={handleTradeClick}
+                          className="h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white group"
+                        >
+                          <Zap className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                          Trade Now
+                        </Button>
+                      )}
                     </motion.div>
                   </motion.div>
                 )}

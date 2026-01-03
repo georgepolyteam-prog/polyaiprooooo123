@@ -1245,3 +1245,18 @@
 .typing-dot:nth-child(1) { animation-delay: 0ms; }
 .typing-dot:nth-child(2) { animation-delay: 150ms; }
 .typing-dot:nth-child(3) { animation-delay: 300ms; }
+
+/* Float up animation for sparkles */
+@keyframes float-up {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-20px) scale(0); opacity: 0; }
+}
+
+.animate-float-up {
+  animation: float-up 0.8s ease-out forwards;
+}
+
+/* Slow pulse for AI button */
+.animate-pulse-slow {
+  animation: pulse 2s ease-in-out infinite;
+}

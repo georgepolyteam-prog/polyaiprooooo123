@@ -29,7 +29,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import kalshiLogo from '@/assets/kalshi-logo-green.jpeg';
-import polyfactualLogo from '@/assets/polyfactual-logo.png';
+import dflowLogo from '@/assets/dome-logo.png';
+import solanaLogo from '@/assets/solana-logo.png';
 
 // Demo markets for when API is unavailable
 const DEMO_MARKETS: KalshiMarket[] = [
@@ -638,7 +639,7 @@ export default function Kalshi() {
               </div>
             </div>
             
-            {/* Polyfactual branding + Wallet */}
+            {/* DFlow + Solana branding + Wallet */}
             <div className="flex items-center gap-4">
               <motion.div
                 initial={{ opacity: 0 }}
@@ -646,8 +647,10 @@ export default function Kalshi() {
                 transition={{ delay: 0.2 }}
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50"
               >
-                <img src={polyfactualLogo} alt="Polyfactual" className="w-4 h-4 rounded" />
-                <span className="text-xs font-medium text-muted-foreground">Powered by Polyfactual</span>
+                <img src={dflowLogo} alt="DFlow" className="w-4 h-4 rounded" />
+                <span className="text-xs font-medium text-muted-foreground">Powered by DFlow</span>
+                <div className="w-px h-3 bg-border/50" />
+                <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
               </motion.div>
               
               {!connected ? (
@@ -950,11 +953,11 @@ export default function Kalshi() {
         <KalshiTradingModal
           market={selectedMarket}
           onClose={() => setSelectedMarket(null)}
+          onAIAnalysis={() => setAiMarket(selectedMarket)}
           onOrderSubmitted={(order) => {
             const newOrders = [order, ...recentOrders].slice(0, 20);
             setRecentOrders(newOrders);
             if (publicKey) {
-              // Debounce localStorage write
               setTimeout(() => {
                 localStorage.setItem(`${RECENT_ORDERS_KEY}_${publicKey.toBase58()}`, JSON.stringify(newOrders));
               }, 100);
@@ -968,6 +971,7 @@ export default function Kalshi() {
         <KalshiAIInsight
           market={aiMarket}
           onClose={() => setAiMarket(null)}
+          onTrade={() => setSelectedMarket(aiMarket)}
         />
       )}
 
