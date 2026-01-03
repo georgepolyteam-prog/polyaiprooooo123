@@ -675,7 +675,7 @@ export default function Kalshi() {
               </div>
             </div>
 
-            {/* Solana branding + Wallet */}
+            {/* DFlow + Solana branding + Wallet */}
             <div className="flex items-center gap-4">
               <motion.div
                 initial={{ opacity: 0 }}
@@ -683,6 +683,7 @@ export default function Kalshi() {
                 transition={{ delay: 0.2 }}
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50"
               >
+                <img src={dflowLogo} alt="DFlow" className="w-4 h-4 rounded" />
                 <span className="text-xs font-medium text-muted-foreground">Powered by DFlow</span>
                 <div className="w-px h-3 bg-border/50" />
                 <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
@@ -722,8 +723,8 @@ export default function Kalshi() {
               <p className="text-xs sm:text-sm text-muted-foreground">Markets</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-emerald-400">$0</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Fees</p>
+              <p className="text-2xl sm:text-3xl font-bold text-emerald-400">Instant</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Trading</p>
             </div>
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-foreground">~400ms</p>
