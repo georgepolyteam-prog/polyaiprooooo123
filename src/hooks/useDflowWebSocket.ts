@@ -93,7 +93,7 @@ export function useDflowWebSocket({
                   yesAsk: parseFloat(data.yesAsk || data.yes_ask || 0) * 100,
                   noBid: parseFloat(data.noBid || data.no_bid || 0) * 100,
                   noAsk: parseFloat(data.noAsk || data.no_ask || 0) * 100,
-                  timestamp: data.timestamp || Date.now(),
+                  timestamp: data.timestamp || Math.floor(Date.now() / 1000),
                 };
                 onPriceUpdate(update);
               }
@@ -107,7 +107,7 @@ export function useDflowWebSocket({
                   side: data.side?.toLowerCase() || 'yes',
                   price: parseFloat(data.price || 0) * 100,
                   size: parseFloat(data.size || data.amount || 0),
-                  timestamp: data.timestamp || Date.now(),
+                  timestamp: data.timestamp || Math.floor(Date.now() / 1000),
                 };
                 onTradeUpdate(update);
               }
