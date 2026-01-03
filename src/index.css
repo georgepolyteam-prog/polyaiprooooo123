@@ -1065,3 +1065,183 @@
   pointer-events: auto !important;
   cursor: pointer !important;
 }
+
+/* ========== KALSHI PREMIUM STYLES ========== */
+
+/* Premium scrollbar for modals */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.5);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border));
+}
+
+/* AI Button Glow Animation */
+@keyframes ai-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.4), 0 0 30px rgba(168, 85, 247, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), 0 0 50px rgba(168, 85, 247, 0.3);
+  }
+}
+
+.animate-ai-glow {
+  animation: ai-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Kalshi Tab Underline Animation */
+@keyframes tab-underline-slide {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Featured Market Card Shimmer */
+@keyframes featured-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.featured-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: featured-shimmer 2s linear infinite;
+}
+
+/* Premium Card Hover Effect */
+.kalshi-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kalshi-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.2);
+}
+
+/* Chat Bubble Animation */
+@keyframes chat-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-bubble-enter {
+  animation: chat-bubble-in 0.2s ease-out forwards;
+}
+
+/* Sparkle Animation for AI Button */
+@keyframes sparkle-float {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0) translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1) translateY(-10px);
+  }
+}
+
+.sparkle-particle {
+  animation: sparkle-float 1.5s ease-in-out infinite;
+}
+
+/* Price Change Flash Animation */
+@keyframes price-flash-green {
+  0% {
+    background-color: rgba(16, 185, 129, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes price-flash-red {
+  0% {
+    background-color: rgba(239, 68, 68, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.price-flash-up {
+  animation: price-flash-green 0.5s ease-out;
+}
+
+.price-flash-down {
+  animation: price-flash-red 0.5s ease-out;
+}
+
+/* Featured Market Glow Border */
+.featured-glow-border {
+  position: relative;
+}
+
+.featured-glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(
+    90deg,
+    hsl(160, 84%, 39%),
+    hsl(270, 70%, 60%),
+    hsl(187, 85%, 43%),
+    hsl(160, 84%, 39%)
+  );
+  background-size: 300% 100%;
+  border-radius: inherit;
+  z-index: -1;
+  animation: gradient-x 4s linear infinite;
+  opacity: 0.5;
+}
+
+/* Clean Button Press Effect */
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Typing Dots Animation */
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0ms; }
+.typing-dot:nth-child(2) { animation-delay: 150ms; }
+.typing-dot:nth-child(3) { animation-delay: 300ms; }

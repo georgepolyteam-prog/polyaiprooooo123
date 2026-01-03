@@ -12,23 +12,24 @@ function debounce<T extends (...args: any[]) => void>(fn: T, delay: number): T {
     timeoutId = setTimeout(() => fn(...args), delay);
   }) as T;
 }
-import { TrendingUp, TrendingDown, Zap, Shield, ArrowRight, RefreshCw, Search, Wallet, X, LayoutGrid, List } from 'lucide-react';
+import { TrendingUp, TrendingDown, Zap, ArrowRight, RefreshCw, Search, Wallet, LayoutGrid, List, Sparkles, Shield, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { KalshiMarketCard } from '@/components/kalshi/KalshiMarketCard';
 import { KalshiTradingModal } from '@/components/kalshi/KalshiTradingModal';
-import { KalshiFeatureCard } from '@/components/kalshi/KalshiFeatureCard';
 import { KalshiLoadingSkeleton } from '@/components/kalshi/KalshiLoadingSkeleton';
 import { KalshiPortfolio } from '@/components/kalshi/KalshiPortfolio';
 import { KalshiAIInsight } from '@/components/kalshi/KalshiAIInsight';
 import { KalshiConnectWallet } from '@/components/kalshi/KalshiConnectWallet';
 import { KalshiAIButton } from '@/components/kalshi/KalshiAIButton';
+import { KalshiFeaturedMarket } from '@/components/kalshi/KalshiFeaturedMarket';
+import { KalshiTabNav } from '@/components/kalshi/KalshiTabNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import kalshiLogo from '@/assets/kalshi-logo-green.jpeg';
-import solanaLogo from '@/assets/solana-logo.png';
+import polyfactualLogo from '@/assets/polyfactual-logo.png';
 
 // Demo markets for when API is unavailable
 const DEMO_MARKETS: KalshiMarket[] = [
@@ -585,180 +586,112 @@ export default function Kalshi() {
     return showAll ? result : result.slice(0, 60);
   }, [markets, allMarkets, deferredSearchQuery, selectedCategory, showAll, searchResults, isSearching]);
 
+  // Get featured market (highest volume active market)
+  const featuredMarket = useMemo(() => {
+    const activeMarkets = markets.filter(m => m.status === 'active' || !m.status);
+    if (activeMarkets.length === 0) return null;
+    return activeMarkets.reduce((a, b) => ((a.volume || 0) > (b.volume || 0) ? a : b));
+  }, [markets]);
+
   return (
     <div className="min-h-screen bg-background">
-      {/* NEW PREMIUM HERO SECTION */}
-      <section className="relative overflow-hidden">
-        {/* Animated gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-primary/5 to-purple-500/10" />
+      {/* CLEAN KALSHI-STYLE HERO */}
+      <section className="relative overflow-hidden border-b border-border/30">
+        {/* Subtle gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 via-transparent to-transparent" />
         
-        {/* Premium grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:48px_48px]" />
+        {/* Grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
         
-        {/* Floating orbs */}
-        <div className="absolute top-20 left-10 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '700ms' }} />
-        
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16 pb-20 sm:pb-28">
-          {/* Premium Logo Bubbles with animations */}
-          <div className="flex justify-center gap-4 sm:gap-8 mb-10">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              className="relative group"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#00D395] to-emerald-600 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#00D395]/20 border-2 border-[#00D395]/40 flex items-center justify-center shadow-2xl backdrop-blur-sm">
-                <img src={kalshiLogo} alt="Kalshi" className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover" />
-              </div>
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: -30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
-              className="flex items-center justify-center"
-            >
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-10">
+            {/* Logo & Title */}
+            <div className="flex items-center gap-4">
               <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-400 via-primary to-purple-400 bg-clip-text text-transparent"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative"
               >
-                ✕
+                <div className="absolute inset-0 bg-emerald-500/30 rounded-2xl blur-xl" />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 flex items-center justify-center overflow-hidden">
+                  <img src={kalshiLogo} alt="Kalshi" className="w-10 h-10 rounded-xl object-cover" />
+                </div>
               </motion.div>
-            </motion.div>
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              whileHover={{ scale: 1.1, rotate: -5 }}
-              className="relative group"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-cyan-500 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20 border-2 border-purple-500/40 flex items-center justify-center shadow-2xl backdrop-blur-sm">
-                <img src={solanaLogo} alt="Solana" className="w-12 h-12 sm:w-14 sm:h-14 object-contain" />
+              <div>
+                <motion.h1
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="text-2xl sm:text-3xl font-bold text-foreground"
+                >
+                  Kalshi Markets
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-sm text-muted-foreground flex items-center gap-2"
+                >
+                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                  Trade on Solana via DFlow
+                </motion.p>
               </div>
-            </motion.div>
+            </div>
+            
+            {/* Polyfactual branding + Wallet */}
+            <div className="flex items-center gap-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50"
+              >
+                <img src={polyfactualLogo} alt="Polyfactual" className="w-4 h-4 rounded" />
+                <span className="text-xs font-medium text-muted-foreground">Powered by Polyfactual</span>
+              </motion.div>
+              
+              {!connected ? (
+                <WalletMultiButton className="!h-11 !px-5 !rounded-xl !bg-gradient-to-r !from-emerald-500 !to-emerald-600 hover:!opacity-90 !text-white !font-medium !text-sm !transition-all" />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-emerald-400 font-medium text-sm">
+                    {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Featured Market */}
+          {featuredMarket && !isLoading && (
+            <KalshiFeaturedMarket
+              market={featuredMarket}
+              onTrade={() => setSelectedMarket(featuredMarket)}
+              onAIAnalysis={() => setAiMarket(featuredMarket)}
+            />
+          )}
+          
+          {/* Stats row */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-center max-w-3xl mx-auto"
+            transition={{ delay: 0.4 }}
+            className="flex items-center justify-center gap-8 sm:gap-12 mt-10 pt-8 border-t border-border/30"
           >
-            {/* Badge */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6"
-            >
-              <Zap className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-medium text-emerald-400">Powered by DFlow on Solana</span>
-            </motion.div>
-
-            {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
-              <span className="text-foreground">Kalshi</span>
-              <span className="bg-gradient-to-r from-emerald-400 via-primary to-purple-400 bg-clip-text text-transparent"> Markets</span>
-            </h1>
-
-            {/* Subheadline */}
-            <p className="text-lg sm:text-xl text-muted-foreground mb-8 leading-relaxed">
-              Trade prediction markets on Solana
-            </p>
-            
-            {/* Premium Buy/Sell Pills */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
-              <motion.div
-                initial={{ opacity: 0, x: -30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4, type: 'spring' }}
-                whileHover={{ scale: 1.05 }}
-                className="relative group w-full sm:w-auto"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-                <div className="relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 border-2 border-emerald-500/40 backdrop-blur-sm shadow-xl">
-                  <div className="p-2 rounded-full bg-emerald-500/20">
-                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-xs text-emerald-400/80 font-medium">Buy</p>
-                    <p className="text-lg text-emerald-400 font-bold">YES</p>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4, type: 'spring' }}
-                whileHover={{ scale: 1.05 }}
-                className="relative group w-full sm:w-auto"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity" />
-                <div className="relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-500/40 backdrop-blur-sm shadow-xl">
-                  <div className="p-2 rounded-full bg-red-500/20">
-                    <TrendingDown className="w-5 h-5 text-red-400" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-xs text-red-400/80 font-medium">Buy</p>
-                    <p className="text-lg text-red-400 font-bold">NO</p>
-                  </div>
-                </div>
-              </motion.div>
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl font-bold text-foreground">{allMarkets.length}+</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Markets</p>
             </div>
-            
-            {/* Wallet Button */}
-            {!connected ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-              >
-                <WalletMultiButton className="!h-14 !px-8 !rounded-full !bg-gradient-to-r !from-emerald-500 !to-primary hover:!opacity-90 !text-primary-foreground !font-semibold !text-lg !transition-all !duration-300 !shadow-lg hover:!shadow-xl hover:!shadow-emerald-500/20" />
-              </motion.div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-emerald-500/10 border border-emerald-500/30"
-              >
-                <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-emerald-400 font-medium">
-                  {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
-                </span>
-              </motion.div>
-            )}
-            
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl font-bold text-emerald-400">$0</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Fees</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl font-bold text-foreground">~400ms</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">Execution</p>
+            </div>
           </motion.div>
-
-          {/* Feature Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mt-12 sm:mt-16">
-            <KalshiFeatureCard
-              icon={<Zap className="w-6 h-6" />}
-              title="Lightning Fast"
-              description="Sub-second execution on Solana"
-              index={0}
-            />
-            <KalshiFeatureCard
-              icon={<TrendingUp className="w-6 h-6" />}
-              title="Deep Liquidity"
-              description="Kalshi's institutional markets"
-              index={1}
-            />
-            <KalshiFeatureCard
-              icon={<Shield className="w-6 h-6" />}
-              title="Non-Custodial"
-              description="Trade with your Solana wallet"
-              index={2}
-            />
-          </div>
         </div>
       </section>
 
@@ -835,51 +768,14 @@ export default function Kalshi() {
           </div>
 
           <TabsContent value="markets" className="mt-0">
-            {/* Category Filters - Sticky with glassmorphism */}
+            {/* Kalshi-Style Tab Navigation */}
             {categories.length > 0 && (
-              <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-4 bg-background/80 backdrop-blur-xl border-b border-border/30">
-                <div className="flex flex-wrap gap-2 overflow-x-auto scrollbar-hide pb-1">
-                  <Button
-                    variant={selectedCategory === null ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCategory(null)}
-                    className={cn(
-                      "rounded-full h-8 px-4 text-xs font-medium transition-all shrink-0",
-                      selectedCategory === null 
-                        ? "shadow-md" 
-                        : "border-border/40 hover:border-border/60"
-                    )}
-                  >
-                    All Markets
-                  </Button>
-                  {categories.map(cat => (
-                    <Button
-                      key={cat}
-                      variant={selectedCategory === cat ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setSelectedCategory(cat)}
-                      className={cn(
-                        "rounded-full h-8 px-4 text-xs font-medium transition-all shrink-0",
-                        selectedCategory === cat 
-                          ? "shadow-md" 
-                          : "border-border/40 hover:border-border/60"
-                      )}
-                    >
-                      {cat}
-                    </Button>
-                  ))}
-                  {selectedCategory && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedCategory(null)}
-                      className="rounded-full h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground shrink-0"
-                    >
-                      <X className="w-3 h-3 mr-1" />
-                      Clear
-                    </Button>
-                  )}
-                </div>
+              <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-6 bg-background/80 backdrop-blur-xl border-b border-border/30">
+                <KalshiTabNav
+                  categories={categories}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                />
               </div>
             )}
 
