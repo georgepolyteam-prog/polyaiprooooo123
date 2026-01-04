@@ -264,103 +264,75 @@ const About = () => {
               {
                 tier: "Conservative",
                 users: "10K",
-                avgCredits: 100,
-                monthlyBurn: 700000,
-                annualBurn: 8400000,
-                supplyImpact: 0.84,
-                multiplier: 2,
+                avgCredits: 300,
+                monthlyBurn: 2100000,
+                annualBurn: 25200000,
+                supplyImpact: 2.52,
                 accent: "border-border"
               },
               {
                 tier: "Base Case",
                 users: "50K",
-                avgCredits: 150,
-                monthlyBurn: 5250000,
-                annualBurn: 63000000,
-                supplyImpact: 6.3,
-                multiplier: 5,
+                avgCredits: 450,
+                monthlyBurn: 15750000,
+                annualBurn: 189000000,
+                supplyImpact: 18.9,
                 accent: "border-foreground/30 bg-muted/50"
               },
               {
                 tier: "Aggressive",
                 users: "250K",
-                avgCredits: 200,
-                monthlyBurn: 35000000,
-                annualBurn: 420000000,
-                supplyImpact: 42,
-                multiplier: 15,
+                avgCredits: 600,
+                monthlyBurn: 105000000,
+                annualBurn: 1260000000,
+                supplyImpact: 100,
                 accent: "border-foreground/50 bg-muted/70"
               }
-            ].map((scenario, i) => {
-              const currentPrice = priceData?.price || 0;
-              const currentMcap = priceData?.marketCap || 0;
-              const projectedPrice = currentPrice * scenario.multiplier;
-              const projectedMcap = currentMcap * scenario.multiplier;
-              
-              return (
-                <motion.div
-                  key={scenario.tier}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: i * 0.1 }}
-                  className={`rounded-2xl border ${scenario.accent} bg-card p-6`}
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-semibold text-foreground">{scenario.tier}</h3>
-                    <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-                      {scenario.users} MAU
+            ].map((scenario, i) => (
+              <motion.div
+                key={scenario.tier}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className={`rounded-2xl border ${scenario.accent} bg-card p-6`}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-semibold text-foreground">{scenario.tier}</h3>
+                  <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                    {scenario.users} MAU
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center py-2 border-b border-border/50">
+                    <span className="text-sm text-muted-foreground">Avg Credits/User</span>
+                    <span className="font-mono text-sm text-foreground">{scenario.avgCredits}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-border/50">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5 text-orange-500" />
+                      Monthly Burn
+                    </span>
+                    <span className="font-mono text-sm text-foreground">
+                      {(scenario.monthlyBurn / 1000000).toFixed(1)}M
                     </span>
                   </div>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center py-2 border-b border-border/50">
-                      <span className="text-sm text-muted-foreground">Avg Credits/User</span>
-                      <span className="font-mono text-sm text-foreground">{scenario.avgCredits}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-border/50">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                        <Flame className="w-3.5 h-3.5 text-orange-500" />
-                        Monthly Burn
-                      </span>
-                      <span className="font-mono text-sm text-foreground">
-                        {(scenario.monthlyBurn / 1000000).toFixed(1)}M
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-border/50">
-                      <span className="text-sm text-muted-foreground">Annual Burn</span>
-                      <span className="font-mono text-sm text-foreground">
-                        {(scenario.annualBurn / 1000000).toFixed(0)}M
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-border/50">
-                      <span className="text-sm text-muted-foreground">Supply Impact</span>
-                      <span className="font-mono text-sm text-emerald-500">
-                        -{scenario.supplyImpact}%/yr
-                      </span>
-                    </div>
+                  <div className="flex justify-between items-center py-2 border-b border-border/50">
+                    <span className="text-sm text-muted-foreground">Annual Burn</span>
+                    <span className="font-mono text-sm text-foreground">
+                      {(scenario.annualBurn / 1000000).toFixed(0)}M
+                    </span>
                   </div>
-
-                  <div className="mt-6 pt-4 border-t border-border">
-                    <p className="text-xs text-muted-foreground mb-2">Projected Valuation</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-semibold text-foreground font-mono">
-                        {priceLoading ? '—' : projectedMcap >= 1000000 
-                          ? `$${(projectedMcap / 1000000).toFixed(1)}M`
-                          : `$${(projectedMcap / 1000).toFixed(0)}K`
-                        }
-                      </span>
-                      <span className="text-sm text-emerald-500 font-mono">
-                        {scenario.multiplier}x
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 font-mono">
-                      {priceLoading ? '—' : `$${formatPrice(projectedPrice)}/token`}
-                    </p>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Supply Impact</span>
+                    <span className="font-mono text-sm text-emerald-500">
+                      -{scenario.supplyImpact > 100 ? '100+' : scenario.supplyImpact}%/yr
+                    </span>
                   </div>
-                </motion.div>
-              );
-            })}
+                </div>
+              </motion.div>
+            ))}
           </div>
 
           {/* Formula explanation */}
