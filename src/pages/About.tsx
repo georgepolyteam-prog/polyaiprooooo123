@@ -237,7 +237,7 @@ const About = () => {
         </div>
       </section>
 
-      {/* Growth Projections */}
+      {/* Token Burn Model */}
       <section className="py-16 md:py-20">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div
@@ -245,47 +245,83 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="text-center mb-12"
+            className="text-center mb-10"
           >
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border mb-4">
-              <TrendingUp className="w-4 h-4 text-foreground/70" />
-              <span className="text-sm text-muted-foreground">Valuation Model</span>
+              <Flame className="w-4 h-4 text-orange-500" />
+              <span className="text-sm text-muted-foreground">Deflationary Model</span>
             </div>
             <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-3">
-              Growth Projections
+              Token Burn Model
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Projected valuations based on platform adoption scenarios and the 70% burn mechanism
+              How POLY becomes deflationary: Users spend POLY for credits, 70% is burned forever, 30% funds development.
             </p>
           </motion.div>
+
+          {/* Current Status Banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="rounded-2xl border border-foreground/20 bg-muted/50 p-6 mb-8"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Activity className="w-4 h-4 text-foreground/70" />
+              <span className="text-sm font-medium text-foreground">Current Status</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-2xl md:text-3xl font-semibold text-foreground">~5K</p>
+                <p className="text-xs text-muted-foreground">Monthly Active Users</p>
+              </div>
+              <div>
+                <p className="text-2xl md:text-3xl font-semibold text-foreground">~1M</p>
+                <p className="text-xs text-muted-foreground">POLY Burned/Month</p>
+              </div>
+              <div>
+                <p className="text-2xl md:text-3xl font-semibold text-foreground">~5%</p>
+                <p className="text-xs text-muted-foreground">Supply Burned to Date</p>
+              </div>
+            </div>
+          </motion.div>
+
+          <h3 className="text-lg font-medium text-foreground text-center mb-6">Projected Annual Burn Rates</h3>
 
           <div className="grid md:grid-cols-3 gap-5 mb-8">
             {[
               {
-                tier: "Conservative",
+                tier: "Year 1 (Building)",
+                subtitle: "Early Adoption",
                 users: "10K",
+                multiplier: "2x current",
                 avgCredits: 300,
                 monthlyBurn: 2100000,
                 annualBurn: 25200000,
-                supplyImpact: 2.52,
+                annualBurnRate: 2.5,
                 accent: "border-border"
               },
               {
-                tier: "Base Case",
+                tier: "Year 2 (Growth)",
+                subtitle: "Product-Market Fit",
                 users: "50K",
+                multiplier: "10x current",
                 avgCredits: 450,
                 monthlyBurn: 15750000,
                 annualBurn: 189000000,
-                supplyImpact: 18.9,
+                annualBurnRate: 18.9,
                 accent: "border-foreground/30 bg-muted/50"
               },
               {
-                tier: "Aggressive",
-                users: "250K",
-                avgCredits: 600,
-                monthlyBurn: 105000000,
-                annualBurn: 1260000000,
-                supplyImpact: 100,
+                tier: "Year 3+ (Scale)",
+                subtitle: "Mass Adoption",
+                users: "250K+",
+                multiplier: "50x current",
+                avgCredits: 200,
+                monthlyBurn: 35000000,
+                annualBurn: 250000000,
+                annualBurnRate: 25,
                 accent: "border-foreground/50 bg-muted/70"
               }
             ].map((scenario, i) => (
@@ -297,17 +333,22 @@ const About = () => {
                 transition={{ duration: 0.5, delay: i * 0.1 }}
                 className={`rounded-2xl border ${scenario.accent} bg-card p-6`}
               >
-                <div className="flex items-center justify-between mb-6">
+                <div className="mb-6">
                   <h3 className="font-semibold text-foreground">{scenario.tier}</h3>
-                  <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-                    {scenario.users} MAU
+                  <p className="text-xs text-muted-foreground">{scenario.subtitle}</p>
+                </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-2xl font-semibold text-foreground">{scenario.users}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {scenario.multiplier}
                   </span>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex justify-between items-center py-2 border-b border-border/50">
                     <span className="text-sm text-muted-foreground">Avg Credits/User</span>
-                    <span className="font-mono text-sm text-foreground">{scenario.avgCredits}</span>
+                    <span className="font-mono text-sm text-foreground">{scenario.avgCredits}/mo</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-border/50">
                     <span className="text-sm text-muted-foreground flex items-center gap-1.5">
@@ -325,12 +366,18 @@ const About = () => {
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-muted-foreground">Supply Impact</span>
+                    <span className="text-sm text-muted-foreground">Annual Burn Rate</span>
                     <span className="font-mono text-sm text-emerald-500">
-                      -{scenario.supplyImpact > 100 ? '100+' : scenario.supplyImpact}%/yr
+                      {scenario.annualBurnRate}%
                     </span>
                   </div>
                 </div>
+
+                {scenario.tier === "Year 3+ (Scale)" && (
+                  <p className="text-xs text-muted-foreground mt-4 pt-4 border-t border-border/50">
+                    Burn rate capped at 25% as supply decreases and token value increases
+                  </p>
+                )}
               </motion.div>
             ))}
           </div>
@@ -341,7 +388,7 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="rounded-xl bg-muted/30 border border-border p-5"
+            className="rounded-xl bg-muted/30 border border-border p-5 mb-6"
           >
             <div className="flex flex-wrap gap-x-8 gap-y-3 justify-center text-sm">
               <div className="flex items-center gap-2">
@@ -361,9 +408,27 @@ const About = () => {
             </div>
           </motion.div>
 
-          <p className="text-xs text-muted-foreground/60 text-center mt-6 max-w-lg mx-auto">
+          {/* Price dynamics note */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="rounded-xl bg-muted/20 border border-border/50 p-4 mb-6"
+          >
+            <p className="text-sm text-muted-foreground text-center">
+              As supply decreases, token value is expected to increase, naturally slowing burn rate. 
+              These projections assume stable token price and constant user behavior.
+            </p>
+          </motion.div>
+
+          <p className="text-xs text-muted-foreground/60 text-center max-w-lg mx-auto">
             Projections are hypothetical scenarios for illustrative purposes only. 
-            Actual results depend on market conditions and platform adoption. This is not financial advice.
+            Actual results depend on market conditions and platform adoption. Not financial advice.
+          </p>
+
+          <p className="text-xs text-muted-foreground/40 text-center mt-4">
+            Projections updated: January 2026
           </p>
         </div>
       </section>
