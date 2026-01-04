@@ -1,9 +1,9 @@
-import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Sparkles, Clock, BarChart3, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import type { KalshiMarket } from '@/hooks/useDflowApi';
-import dflowLogo from '@/assets/dome-logo.png';
-import solanaLogo from '@/assets/solana-logo.png';
+import { motion } from "framer-motion";
+import { TrendingUp, TrendingDown, Sparkles, Clock, BarChart3, Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { KalshiMarket } from "@/hooks/useDflowApi";
+import dflowLogo from "@/assets/dflow-logo.png";
+import solanaLogo from "@/assets/solana-logo.png";
 
 interface KalshiFeaturedMarketProps {
   market: KalshiMarket;
@@ -18,16 +18,16 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
     const now = new Date();
     const diffMs = date.getTime() - now.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return 'Closed';
-    if (diffDays === 0) return 'Closes today';
-    if (diffDays === 1) return 'Closes tomorrow';
+
+    if (diffDays < 0) return "Closed";
+    if (diffDays === 0) return "Closes today";
+    if (diffDays === 1) return "Closes tomorrow";
     if (diffDays < 7) return `${diffDays} days left`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   const formatVolume = (vol?: number) => {
-    if (!vol) return '$0';
+    if (!vol) return "$0";
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`;
     if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`;
     return `$${vol.toFixed(0)}`;
@@ -42,12 +42,12 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
     >
       {/* Outer glow */}
       <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 via-primary/20 to-purple-500/20 rounded-3xl blur-xl opacity-60" />
-      
+
       {/* Card */}
       <div className="relative bg-background/80 backdrop-blur-2xl rounded-3xl border border-border/40 overflow-hidden shadow-2xl">
         {/* Animated border gradient */}
         <div className="absolute inset-0 rounded-3xl p-[1px] bg-gradient-to-r from-emerald-500/50 via-primary/50 to-purple-500/50 opacity-50" />
-        
+
         {/* Inner content */}
         <div className="relative p-6 sm:p-8">
           {/* Header badges */}
@@ -67,12 +67,12 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
               <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
             </div>
           </div>
-          
+
           {/* Market title */}
           <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight mb-6">
             {market.title || market.ticker}
           </h2>
-          
+
           {/* Price chart area (simplified sparkline) */}
           <div className="h-20 mb-6 relative overflow-hidden rounded-xl bg-gradient-to-b from-emerald-500/5 to-transparent border border-emerald-500/10">
             {/* Fake sparkline visualization */}
@@ -86,7 +86,7 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
               <motion.path
                 initial={{ pathLength: 0, opacity: 0 }}
                 animate={{ pathLength: 1, opacity: 1 }}
-                transition={{ duration: 1.5, ease: 'easeOut' }}
+                transition={{ duration: 1.5, ease: "easeOut" }}
                 d="M 0 60 Q 50 50 100 55 T 200 40 T 300 45 T 400 30 T 500 35 T 600 25"
                 fill="none"
                 stroke="rgb(16, 185, 129)"
@@ -102,7 +102,7 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
                 fill="url(#featured-gradient)"
               />
             </svg>
-            
+
             {/* Floating data points */}
             <motion.div
               initial={{ opacity: 0, scale: 0 }}
@@ -114,7 +114,7 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
               <span className="text-xs font-bold text-emerald-400">+{Math.floor(Math.random() * 8 + 2)}%</span>
             </motion.div>
           </div>
-          
+
           {/* Big price display */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <motion.button
@@ -130,11 +130,12 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
                   <span className="text-sm font-semibold text-emerald-400/80">YES</span>
                 </div>
                 <div className="text-4xl font-bold text-emerald-400">
-                  {market.yesPrice}<span className="text-2xl">¢</span>
+                  {market.yesPrice}
+                  <span className="text-2xl">¢</span>
                 </div>
               </div>
             </motion.button>
-            
+
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -148,12 +149,13 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
                   <span className="text-sm font-semibold text-red-400/80">NO</span>
                 </div>
                 <div className="text-4xl font-bold text-red-400">
-                  {market.noPrice}<span className="text-2xl">¢</span>
+                  {market.noPrice}
+                  <span className="text-2xl">¢</span>
                 </div>
               </div>
             </motion.button>
           </div>
-          
+
           {/* Stats row */}
           <div className="flex items-center justify-between px-1 mb-6">
             <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -167,7 +169,7 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
               </div>
             )}
           </div>
-          
+
           {/* Action buttons */}
           <div className="grid grid-cols-2 gap-3">
             <motion.button
@@ -178,13 +180,13 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
             >
               {/* Shimmer effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-              
+
               <div className="relative flex items-center justify-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 <span className="text-sm font-semibold text-purple-300">Ask AI</span>
               </div>
             </motion.button>
-            
+
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -193,7 +195,7 @@ export function KalshiFeaturedMarket({ market, onTrade, onAIAnalysis }: KalshiFe
             >
               {/* Shimmer effect */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-              
+
               <div className="relative flex items-center justify-center gap-2">
                 <Zap className="w-4 h-4" />
                 <span className="text-sm">Trade Now</span>
