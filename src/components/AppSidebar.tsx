@@ -18,6 +18,7 @@ import {
   Coins,
   User,
   LineChart,
+  Handshake,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SidebarLogo } from './SidebarLogo';
@@ -49,6 +50,7 @@ const leaderboardNav = [
 
 const resourceNav = [
   { title: 'Documentation', url: '/docs', icon: FileText },
+  { title: 'Partnerships', url: '/partnerships', icon: Handshake },
   { title: 'About', url: '/about', icon: Info },
   { title: 'Help', url: '/help', icon: HelpCircle },
 ];
