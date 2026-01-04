@@ -153,99 +153,255 @@ const About = () => {
       <TopBar />
       <LaunchModal open={launchModalOpen} onOpenChange={setLaunchModalOpen} />
 
-      {/* Hero Section - Apple Style */}
-      <section ref={heroRef} className="relative pt-24 pb-20 md:pt-32 md:pb-28 overflow-hidden">
-        {/* Subtle gradient orb */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-radial from-primary/5 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+      {/* GET POLY - Primary Section (Top of Page) */}
+      <section ref={heroRef} className="relative pt-20 pb-16 md:pt-28 md:pb-24 overflow-hidden">
+        {/* Background effects */}
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-radial from-primary/10 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-gradient-radial from-emerald-500/8 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
         
-        <div className="max-w-5xl mx-auto px-6 text-center relative">
+        <div className="max-w-5xl mx-auto px-4 md:px-6 relative">
+          {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-8 md:mb-12"
           >
-            {/* Minimal Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50 mb-10">
-              <BadgeCheck className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground">Polymarket Builders Program</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6">
+              <Coins className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-medium text-primary">Get Started</span>
+            </div>
+            
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-semibold tracking-tight text-foreground mb-6">
+              Buy{' '}
+              <span className="bg-gradient-to-r from-primary via-purple-400 to-primary bg-clip-text text-transparent">
+                $POLY
+              </span>
+            </h1>
+            
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+              The token that powers AI-driven prediction market analysis.
+            </p>
+          </motion.div>
+
+          {/* Contract Address - Prominent & Copiable */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={heroInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="mb-10 md:mb-14"
+          >
+            <div className="max-w-xl mx-auto">
+              <p className="text-sm text-muted-foreground text-center mb-3">Contract Address (CA)</p>
+              <button 
+                onClick={copyContract}
+                className="w-full flex items-center justify-between gap-3 px-4 py-4 md:px-6 md:py-5 rounded-2xl bg-card border-2 border-primary/30 hover:border-primary/60 transition-all group"
+              >
+                <code className="text-xs md:text-sm font-mono text-foreground break-all text-left flex-1">
+                  {CONTRACT_ADDRESS}
+                </code>
+                <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-medium text-primary hidden sm:inline">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-medium text-primary hidden sm:inline">Copy</span>
+                    </>
+                  )}
+                </div>
+              </button>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Tap to copy • Solana SPL Token
+              </p>
             </div>
           </motion.div>
-          
-          <motion.h1 
-            initial={{ opacity: 0, y: 30 }}
+
+          {/* Buy Options Cards */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.1, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="text-6xl md:text-8xl lg:text-[7rem] font-semibold tracking-tight text-foreground mb-8 leading-[0.95]"
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="grid md:grid-cols-3 gap-4 md:gap-6 mb-12"
           >
-            Poly.
-          </motion.h1>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 30 }}
+            {buyOptions.map((option, i) => (
+              <motion.a
+                key={option.id}
+                href={option.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 30 }}
+                animate={heroInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.5, delay: 0.2 + i * 0.1 }}
+                whileHover={{ y: -4, scale: 1.01 }}
+                className={`group relative block cursor-pointer transition-all duration-500 ${option.shadowGlow}`}
+              >
+                <div className={`absolute -inset-[1px] rounded-[24px] ${option.bgGlow} blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                
+                <div className={`relative p-6 md:p-8 rounded-3xl bg-card/80 backdrop-blur-xl border border-border/50 ${option.borderHover} transition-all duration-300 h-full`}>
+                  <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br ${option.gradient} flex items-center justify-center mx-auto mb-5 shadow-lg group-hover:shadow-xl transition-shadow duration-300`}>
+                    <img 
+                      src={option.logo} 
+                      alt={option.name}
+                      className="w-10 h-10 md:w-12 md:h-12 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-center mb-3">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground px-3 py-1 rounded-full bg-muted/50">
+                      {option.tagline}
+                    </span>
+                  </div>
+                  
+                  <h4 className="text-lg md:text-xl font-semibold text-foreground text-center mb-2">
+                    {option.name}
+                  </h4>
+                  <p className="text-muted-foreground text-center text-sm mb-5">
+                    {option.description}
+                  </p>
+                  
+                  <div className="flex items-center justify-center gap-2 text-primary font-medium group-hover:gap-3 transition-all duration-300">
+                    <span>Buy Now</span>
+                    <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
+                  </div>
+                </div>
+              </motion.a>
+            ))}
+          </motion.div>
+
+          {/* Beginner's Guide */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
             animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.2, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="text-2xl md:text-3xl text-muted-foreground mb-12 max-w-3xl mx-auto font-light leading-relaxed"
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="max-w-3xl mx-auto"
           >
-            The intelligent prediction market terminal.
-            <br className="hidden md:block" />
-            <span className="text-foreground">AI analysis. Real-time trading. One platform.</span>
-          </motion.p>
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.3, duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="flex flex-wrap gap-4 justify-center"
-          >
-            <Button 
-              asChild
-              size="lg"
-              className="px-10 h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
-            >
-              <Link to="/chat">
-                Get Started
-              </Link>
-            </Button>
-            <Button 
-              variant="ghost"
-              size="lg"
-              asChild
-              className="px-10 h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
-            >
-              <Link to="/markets">
-                Explore Markets
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
+            <div className="p-6 md:p-8 rounded-3xl bg-muted/30 border border-border/50">
+              <h3 className="text-xl md:text-2xl font-semibold text-foreground text-center mb-6">
+                🆕 New to Crypto? Here's How to Buy
+              </h3>
+              
+              <div className="space-y-6">
+                {/* Step 1 */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">1</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Get a Solana Wallet</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Download <strong>Phantom Wallet</strong> (free) from{' '}
+                      <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                        phantom.app
+                      </a>
+                      {' '}— it's like a digital wallet for crypto. Works on phone or desktop.
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">
+                      💡 Write down your secret recovery phrase and keep it safe! Never share it with anyone.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">2</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Add SOL to Your Wallet</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      You need SOL (Solana's currency) to buy POLY. Inside Phantom, tap <strong>"Buy"</strong> and purchase SOL with your debit card, Apple Pay, or bank transfer.
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">
+                      💡 Start with $20-50 worth of SOL. You'll use some for the POLY purchase and a tiny bit (~$0.01) for transaction fees.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">3</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Swap SOL for POLY</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Click any of the <strong>"Buy Now"</strong> buttons above. It will open a swap page. Connect your Phantom wallet, enter how much SOL you want to swap, and confirm the transaction.
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">
+                      💡 Pump.fun is the easiest for beginners — just paste the contract address (CA) above if needed.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 4 */}
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">4</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Deposit POLY to Get Credits</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Once you have POLY in your wallet, go to our{' '}
+                      <Link to="/credits" className="text-primary hover:underline font-medium">
+                        Credits page
+                      </Link>
+                      , connect your wallet, and deposit your POLY tokens. <strong>1 POLY = 1 Credit</strong> for using our AI tools.
+                    </p>
+                    <p className="text-xs text-muted-foreground/80">
+                      💡 You're all set! Use credits to ask our AI about any prediction market.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Links */}
+              <div className="mt-8 pt-6 border-t border-border/50">
+                <p className="text-sm text-muted-foreground text-center mb-4">Quick Links</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <a 
+                    href="https://phantom.app" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-muted/50 hover:bg-muted text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Get Phantom
+                  </a>
+                  <Link 
+                    to="/credits"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-sm text-primary transition-colors"
+                  >
+                    <Coins className="w-3.5 h-3.5" />
+                    Deposit Credits
+                  </Link>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
       </section>
 
       {/* Token Metrics Section */}
-      <section className="py-24 px-6">
+      <section className="py-20 md:py-24 px-4 md:px-6 bg-muted/20">
         <div className="max-w-5xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-16"
+            className="text-center mb-12"
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Token</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-6">
-              $POLY
+            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Live Data</p>
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">
+              $POLY Token Stats
             </h2>
-            <button 
-              onClick={copyContract}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted/50 text-muted-foreground hover:text-foreground text-xs font-mono transition-colors border border-border/50"
-            >
-              <span className="truncate max-w-[160px] md:max-w-none">{CONTRACT_ADDRESS}</span>
-              {copied ? (
-                <Check className="w-3.5 h-3.5 text-primary" />
-              ) : (
-                <Copy className="w-3.5 h-3.5" />
-              )}
-            </button>
           </motion.div>
 
           <motion.div 
@@ -253,7 +409,7 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12"
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-10"
           >
             {[
               { label: "Price", value: priceLoading ? '...' : `$${formatPrice(priceData?.price || 0)}`, change: priceData?.priceChange24h },
@@ -263,7 +419,7 @@ const About = () => {
             ].map((metric, i) => (
               <div 
                 key={i}
-                className="p-4 md:p-6 rounded-2xl md:rounded-3xl bg-muted/30 text-center min-w-0"
+                className="p-4 md:p-6 rounded-2xl md:rounded-3xl bg-card text-center min-w-0"
               >
                 <p className="text-[10px] md:text-xs text-muted-foreground mb-2 md:mb-3 uppercase tracking-wide">{metric.label}</p>
                 <p className="text-lg md:text-2xl font-semibold text-foreground font-mono truncate">
@@ -283,7 +439,7 @@ const About = () => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="rounded-3xl bg-muted/30 overflow-hidden"
+            className="rounded-3xl bg-card overflow-hidden"
           >
             <div id="dexscreener-embed" className="relative w-full" style={{ paddingBottom: '60%' }}>
               <iframe 
@@ -296,106 +452,53 @@ const About = () => {
         </div>
       </section>
 
-      {/* Buy POLY Section */}
-      <section className="py-24 px-6 relative overflow-hidden">
-        {/* Animated background orbs */}
-        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-radial from-primary/8 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-gradient-radial from-emerald-500/6 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="max-w-5xl mx-auto relative">
+      {/* About Poly Section (Moved from Hero) */}
+      <section className="py-20 md:py-24 px-4 md:px-6">
+        <div className="max-w-5xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
+            transition={{ duration: 0.8 }}
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6">
-              <Coins className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-primary">How to Buy</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50 mb-8">
+              <BadgeCheck className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-medium text-muted-foreground">Polymarket Builders Program</span>
             </div>
-            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-6">
-              Get{' '}
-              <span className="bg-gradient-to-r from-primary via-purple-400 to-primary bg-clip-text text-transparent">
-                POLY
-              </span>
+            
+            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-8">
+              Poly.
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Purchase POLY tokens through any of these trusted platforms.
-              <br />
-              Then deposit to start analyzing markets.
+            
+            <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto font-light leading-relaxed">
+              The intelligent prediction market terminal.
+              <br className="hidden md:block" />
+              <span className="text-foreground">AI analysis. Real-time trading. One platform.</span>
             </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {buyOptions.map((option, i) => (
-              <motion.a
-                key={option.id}
-                href={option.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className={`group relative block cursor-pointer transition-all duration-500 ${option.shadowGlow}`}
+            
+            <div className="flex flex-wrap gap-4 justify-center">
+              <Button 
+                asChild
+                size="lg"
+                className="px-8 md:px-10 h-12 md:h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
               >
-                {/* Glow effect on hover */}
-                <div className={`absolute -inset-[1px] rounded-[28px] ${option.bgGlow} blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                
-                {/* Card */}
-                <div className={`relative p-8 rounded-3xl bg-card/80 backdrop-blur-xl border border-border/50 ${option.borderHover} transition-all duration-300 h-full`}>
-                  {/* Logo container with gradient */}
-                  <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${option.gradient} flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow duration-300`}>
-                    <img 
-                      src={option.logo} 
-                      alt={option.name}
-                      className="w-12 h-12 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  </div>
-                  
-                  {/* Tagline chip */}
-                  <div className="flex justify-center mb-4">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground px-3 py-1 rounded-full bg-muted/50">
-                      {option.tagline}
-                    </span>
-                  </div>
-                  
-                  {/* Text */}
-                  <h4 className="text-xl font-semibold text-foreground text-center mb-2">
-                    {option.name}
-                  </h4>
-                  <p className="text-muted-foreground text-center text-sm mb-6">
-                    {option.description}
-                  </p>
-                  
-                  {/* CTA */}
-                  <div className="flex items-center justify-center gap-2 text-primary font-medium group-hover:gap-3 transition-all duration-300">
-                    <span>Buy Now</span>
-                    <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
-                  </div>
-                </div>
-              </motion.a>
-            ))}
-          </div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-center text-sm text-muted-foreground"
-          >
-            After purchasing, visit the{' '}
-            <Link to="/credits" className="text-primary hover:underline font-medium">
-              Credits page
-            </Link>
-            {' '}to deposit and start using AI analysis.
-          </motion.p>
+                <Link to="/chat">
+                  Get Started
+                </Link>
+              </Button>
+              <Button 
+                variant="ghost"
+                size="lg"
+                asChild
+                className="px-8 md:px-10 h-12 md:h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <Link to="/markets">
+                  Explore Markets
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Link>
+              </Button>
+            </div>
+          </motion.div>
         </div>
       </section>
 
