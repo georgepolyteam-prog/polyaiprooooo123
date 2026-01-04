@@ -20,6 +20,8 @@ import {
   Target,
   Zap as ZapIcon,
   AlertTriangle,
+  Check,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/TopBar";
@@ -597,22 +599,26 @@ export default function LiveTrades() {
     const tradeVolume = trade.price * (trade.shares_normalized || trade.shares);
     const walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
 
+    // Fresh wallet (new wallet making significant trades)
     if (walletAgeHours < INSIDER_THRESHOLDS.freshWalletHours && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
       signals.push("fresh_wallet");
       details.push(`Wallet age: ${Math.round(walletAgeHours)}h`);
     }
 
+    // Unusual sizing (trade size significantly larger than wallet's average)
     if (activity.trades.length > 1 && tradeVolume > activity.avgTradeSize * INSIDER_THRESHOLDS.largeTradeMult) {
       signals.push("unusual_sizing");
       details.push(`${Math.round(tradeVolume / activity.avgTradeSize)}x avg size`);
     }
 
+    // Repeated entries in same market
     const marketEntries = activity.marketCounts.get(trade.market_slug) || 0;
     if (marketEntries >= INSIDER_THRESHOLDS.repeatedEntries) {
       signals.push("repeated_entries");
       details.push(`${marketEntries} entries in market`);
     }
 
+    // Rapid clustering (multiple trades in short time)
     const recentTrades = activity.trades.filter(
       (t) => trade.timestamp - t.timestamp < INSIDER_THRESHOLDS.rapidEntryMinutes * 60,
     );
@@ -1002,6 +1008,19 @@ export default function LiveTrades() {
     return [...new Set(trades.map((t) => t.market_slug))];
   }, [trades]);
 
+  // Helper function to check if trade has ALL selected insider signals
+  const hasAllSelectedInsiderSignals = useCallback(
+    (trade: Trade): boolean => {
+      if (enabledInsiderSignals.size === 0) return false;
+
+      const { signals } = detectInsiderSignals(trade);
+
+      // Check if trade has ALL enabled signals
+      return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
+    },
+    [enabledInsiderSignals, detectInsiderSignals],
+  );
+
   // Apply all filters - use whale buffer when whalesOnly is active
   const filteredTrades = useMemo(() => {
     // Use dedicated whale buffer when whales filter is active
@@ -1064,9 +1083,8 @@ export default function LiveTrades() {
 
       // Insider activity filter - at the end of filter chain
       if (insiderOnly) {
-        const { signals } = detectInsiderSignals(trade);
-        const matchingSignals = signals.filter((s) => enabledInsiderSignals.has(s));
-        if (matchingSignals.length === 0) return false;
+        // Trade must have ALL selected insider signals (AND logic)
+        if (!hasAllSelectedInsiderSignals(trade)) return false;
       }
 
       return true;
@@ -1084,8 +1102,7 @@ export default function LiveTrades() {
     trackedOnly,
     trackedAddresses,
     insiderOnly,
-    enabledInsiderSignals,
-    detectInsiderSignals,
+    hasAllSelectedInsiderSignals,
   ]);
 
   const formatTime = (timestamp: number) => {
@@ -1133,6 +1150,17 @@ export default function LiveTrades() {
   }, [filteredTrades]);
 
   const isStale = lastUpdateAgo > 10;
+
+  // Helper to get signal display name
+  const getSignalDisplayName = (signal: string): string => {
+    const names: Record<string, string> = {
+      fresh_wallet: "Fresh Wallet",
+      unusual_sizing: "Unusual Sizing",
+      repeated_entries: "Repeated Entries",
+      rapid_clustering: "Rapid Clustering",
+    };
+    return names[signal] || signal.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-24 md:pb-0">
@@ -1271,6 +1299,47 @@ export default function LiveTrades() {
           setShowInsiderSettings={setShowInsiderSettings}
         />
 
+        {/* Insider Signals Active Banner */}
+        <AnimatePresence>
+          {insiderOnly && enabledInsiderSignals.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    Insider Filter Active: Showing trades with ALL selected signals ({enabledInsiderSignals.size}/4)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    {Array.from(enabledInsiderSignals).map((signal) => (
+                      <span
+                        key={signal}
+                        className="px-2 py-1 text-xs font-medium rounded-full bg-red-500/20 text-red-400 border border-red-500/30"
+                      >
+                        {getSignalDisplayName(signal)}
+                      </span>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowInsiderSettings(true)}
+                    className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  >
+                    <Settings className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Banners */}
         <AnimatePresence>
           {paused && queuedCount > 0 && (
@@ -1335,7 +1404,7 @@ export default function LiveTrades() {
                   const isRecentBatch = trade._batchTime && Date.now() - trade._batchTime < 500;
                   const staggerDelay = isRecentBatch ? (trade._batchIndex || 0) * 30 : 0;
                   const { signals, details } = detectInsiderSignals(trade);
-                  const matchingSignals = signals.filter((s) => enabledInsiderSignals.has(s));
+                  const hasAllSignals = hasAllSelectedInsiderSignals(trade);
 
                   return (
                     <div
@@ -1395,7 +1464,7 @@ export default function LiveTrades() {
                           </span>
                         )}
                         {/* Insider signal badges - clickable to show details */}
-                        {matchingSignals.length > 0 && (
+                        {hasAllSignals && enabledInsiderSignals.size > 0 && (
                           <div className="relative">
                             <button
                               onClick={(e) => {
@@ -1403,25 +1472,60 @@ export default function LiveTrades() {
                                 toast.custom(
                                   (t) => (
                                     <div className="bg-card border border-border rounded-lg p-4 shadow-lg max-w-xs">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <AlertTriangle className="w-4 h-4 text-red-400" />
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <AlertTriangle className="w-5 h-5 text-red-400" />
                                         <p className="font-semibold text-foreground">Insider Signals Detected</p>
                                       </div>
-                                      <div className="space-y-2">
-                                        {details.map((detail, i) => (
-                                          <div key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                                            <div className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1 flex-shrink-0" />
-                                            <span>{detail}</span>
+                                      <div className="space-y-3">
+                                        <div>
+                                          <p className="text-xs font-medium text-muted-foreground mb-2">
+                                            Matching ALL selected signals ({enabledInsiderSignals.size}/4):
+                                          </p>
+                                          <div className="space-y-1.5">
+                                            {Array.from(enabledInsiderSignals).map((signal) => {
+                                              const signalIndex = signals.indexOf(signal);
+                                              const isPresent = signalIndex !== -1;
+                                              return (
+                                                <div key={signal} className="flex items-center justify-between">
+                                                  <div className="flex items-center gap-2">
+                                                    {isPresent ? (
+                                                      <Check className="w-3 h-3 text-green-500" />
+                                                    ) : (
+                                                      <X className="w-3 h-3 text-red-500" />
+                                                    )}
+                                                    <span className="text-xs font-medium">
+                                                      {getSignalDisplayName(signal)}
+                                                    </span>
+                                                  </div>
+                                                  {isPresent && details[signalIndex] && (
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {details[signalIndex]}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
-                                        ))}
-                                      </div>
-                                      <div className="mt-3 pt-3 border-t border-border/50">
-                                        <p className="text-xs text-muted-foreground">
-                                          Signals:{" "}
-                                          {matchingSignals
-                                            .map((s) => s.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase()))
-                                            .join(", ")}
-                                        </p>
+                                        </div>
+                                        {signals.length > enabledInsiderSignals.size && (
+                                          <div className="pt-3 border-t border-border/50">
+                                            <p className="text-xs font-medium text-muted-foreground mb-1">
+                                              Additional signals detected:
+                                            </p>
+                                            <div className="flex flex-wrap gap-1">
+                                              {signals
+                                                .filter((s) => !enabledInsiderSignals.has(s))
+                                                .map((signal) => (
+                                                  <span
+                                                    key={signal}
+                                                    className="px-2 py-1 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                                  >
+                                                    {getSignalDisplayName(signal)}
+                                                  </span>
+                                                ))}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   ),
@@ -1430,10 +1534,11 @@ export default function LiveTrades() {
                                   },
                                 );
                               }}
-                              className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
+                              className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
                               title="Click to view insider signal details"
                             >
-                              🚨 {matchingSignals.length} SIGNAL{matchingSignals.length > 1 ? "S" : ""}
+                              <AlertTriangle className="w-3 h-3" />
+                              {enabledInsiderSignals.size}/{signals.length} INSIDER
                             </button>
                           </div>
                         )}
@@ -1495,32 +1600,67 @@ export default function LiveTrades() {
                             {whaleLevel === "mega" ? "🔥 MEGA" : "🐋 WHALE"}
                           </span>
                         )}
-                        {matchingSignals.length > 0 && (
+                        {hasAllSignals && enabledInsiderSignals.size > 0 && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               toast.custom(
                                 (t) => (
                                   <div className="bg-card border border-border rounded-lg p-4 shadow-lg max-w-xs">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <AlertTriangle className="w-5 h-5 text-red-400" />
                                       <p className="font-semibold text-foreground">Insider Signals Detected</p>
                                     </div>
-                                    <div className="space-y-2">
-                                      {details.map((detail, i) => (
-                                        <div key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                                          <div className="w-1.5 h-1.5 bg-red-400 rounded-full mt-1 flex-shrink-0" />
-                                          <span>{detail}</span>
+                                    <div className="space-y-3">
+                                      <div>
+                                        <p className="text-xs font-medium text-muted-foreground mb-2">
+                                          Matching ALL selected signals ({enabledInsiderSignals.size}/4):
+                                        </p>
+                                        <div className="space-y-1.5">
+                                          {Array.from(enabledInsiderSignals).map((signal) => {
+                                            const signalIndex = signals.indexOf(signal);
+                                            const isPresent = signalIndex !== -1;
+                                            return (
+                                              <div key={signal} className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                  {isPresent ? (
+                                                    <Check className="w-3 h-3 text-green-500" />
+                                                  ) : (
+                                                    <X className="w-3 h-3 text-red-500" />
+                                                  )}
+                                                  <span className="text-xs font-medium">
+                                                    {getSignalDisplayName(signal)}
+                                                  </span>
+                                                </div>
+                                                {isPresent && details[signalIndex] && (
+                                                  <span className="text-xs text-muted-foreground">
+                                                    {details[signalIndex]}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
                                         </div>
-                                      ))}
-                                    </div>
-                                    <div className="mt-3 pt-3 border-t border-border/50">
-                                      <p className="text-xs text-muted-foreground">
-                                        Signals:{" "}
-                                        {matchingSignals
-                                          .map((s) => s.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase()))
-                                          .join(", ")}
-                                      </p>
+                                      </div>
+                                      {signals.length > enabledInsiderSignals.size && (
+                                        <div className="pt-3 border-t border-border/50">
+                                          <p className="text-xs font-medium text-muted-foreground mb-1">
+                                            Additional signals detected:
+                                          </p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {signals
+                                              .filter((s) => !enabledInsiderSignals.has(s))
+                                              .map((signal) => (
+                                                <span
+                                                  key={signal}
+                                                  className="px-2 py-1 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                                >
+                                                  {getSignalDisplayName(signal)}
+                                                </span>
+                                              ))}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 ),
@@ -1529,10 +1669,11 @@ export default function LiveTrades() {
                                 },
                               );
                             }}
-                            className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
                             title="Click to view insider signal details"
                           >
-                            🚨 {matchingSignals.length} SIGNAL{matchingSignals.length > 1 ? "S" : ""}
+                            <AlertTriangle className="w-3 h-3" />
+                            {enabledInsiderSignals.size}/{signals.length} INSIDER
                           </button>
                         )}
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
