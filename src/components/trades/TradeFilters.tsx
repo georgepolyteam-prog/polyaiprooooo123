@@ -34,6 +34,8 @@ interface TradeFiltersProps {
   setEnabledInsiderSignals?: (value: Set<string>) => void;
   showInsiderSettings?: boolean;
   setShowInsiderSettings?: (value: boolean) => void;
+  insiderMatchMode?: 'any' | 'all';
+  setInsiderMatchMode?: (value: 'any' | 'all') => void;
 }
 
 export function TradeFilters({
@@ -61,7 +63,9 @@ export function TradeFilters({
   enabledInsiderSignals = new Set(['fresh_wallet', 'unusual_sizing', 'repeated_entries', 'rapid_clustering']),
   setEnabledInsiderSignals,
   showInsiderSettings = false,
-  setShowInsiderSettings
+  setShowInsiderSettings,
+  insiderMatchMode = 'any',
+  setInsiderMatchMode
 }: TradeFiltersProps) {
   const { user } = useAuth();
   const [expanded, setExpanded] = useState(true); // Open by default
@@ -97,7 +101,7 @@ export function TradeFilters({
   };
 
   const insiderSignalOptions = [
-    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users, description: 'Wallets with <30 trades (verified)' },
+    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users, description: 'Wallets with <10 trades (verified)' },
     { id: 'unusual_sizing', label: 'Unusual Sizing', icon: TrendingUp, description: 'Trade 3x+ larger than avg' },
     { id: 'repeated_entries', label: 'Repeated Entries', icon: Target, description: '3+ entries in same market' },
     { id: 'rapid_clustering', label: 'Rapid Clustering', icon: Zap, description: '3+ trades within 30 min' }
@@ -230,9 +234,37 @@ export function TradeFilters({
             className="overflow-hidden"
           >
             <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/5 backdrop-blur-sm space-y-3">
-              <div className="text-sm font-semibold flex items-center gap-2 text-red-400">
-                <AlertTriangle className="w-4 h-4" />
-                Insider Detection Signals
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold flex items-center gap-2 text-red-400">
+                  <AlertTriangle className="w-4 h-4" />
+                  Insider Detection Signals
+                </div>
+                
+                {/* Match Mode Toggle */}
+                {setInsiderMatchMode && (
+                  <div className="flex items-center gap-2 bg-muted/30 rounded-lg p-1">
+                    <button
+                      onClick={() => setInsiderMatchMode('any')}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        insiderMatchMode === 'any' 
+                          ? 'bg-red-500 text-white' 
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      ANY
+                    </button>
+                    <button
+                      onClick={() => setInsiderMatchMode('all')}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        insiderMatchMode === 'all' 
+                          ? 'bg-red-500 text-white' 
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      ALL
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {insiderSignalOptions.map(signal => {
@@ -258,8 +290,10 @@ export function TradeFilters({
                 })}
               </div>
               <p className="text-xs text-muted-foreground">
-                Select which insider signals to detect. <strong>Fresh Wallets</strong> uses API verification for accurate wallet age detection.
-                Trades must match ALL selected signals to appear.
+                <strong>Fresh Wallets</strong> uses API verification for accurate wallet age detection (&lt;10 trades).
+                {insiderMatchMode === 'all' 
+                  ? ' Trades must match ALL selected signals (strict mode).' 
+                  : ' Trades matching ANY selected signal will appear (broad mode).'}
               </p>
             </div>
           </motion.div>
