@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown, Star, HelpCircle } from 'lucide-react';
+import { ChevronDown, Search, X, Filter, TrendingUp, TrendingDown, Star, HelpCircle, Eye, Settings, Users, Target, Zap, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +27,13 @@ interface TradeFiltersProps {
   trackedOnly?: boolean;
   setTrackedOnly?: (value: boolean) => void;
   hasTrackedWallets?: boolean;
+  // Insider activity props
+  insiderOnly?: boolean;
+  setInsiderOnly?: (value: boolean) => void;
+  enabledInsiderSignals?: Set<string>;
+  setEnabledInsiderSignals?: (value: Set<string>) => void;
+  showInsiderSettings?: boolean;
+  setShowInsiderSettings?: (value: boolean) => void;
 }
 
 export function TradeFilters({
@@ -48,7 +55,13 @@ export function TradeFilters({
   setHideUpDown,
   trackedOnly = false,
   setTrackedOnly,
-  hasTrackedWallets = false
+  hasTrackedWallets = false,
+  insiderOnly = false,
+  setInsiderOnly,
+  enabledInsiderSignals = new Set(['fresh_wallet', 'unusual_sizing', 'repeated_entries', 'rapid_clustering']),
+  setEnabledInsiderSignals,
+  showInsiderSettings = false,
+  setShowInsiderSettings
 }: TradeFiltersProps) {
   const { user } = useAuth();
   const [expanded, setExpanded] = useState(true); // Open by default
@@ -82,6 +95,13 @@ export function TradeFilters({
     const parsed = parseFloat(minVolumeInput) || 0;
     setMinVolume(parsed);
   };
+
+  const insiderSignalOptions = [
+    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users },
+    { id: 'unusual_sizing', label: 'Unusual Sizing', icon: TrendingUp },
+    { id: 'repeated_entries', label: 'Repeated Entries', icon: Target },
+    { id: 'rapid_clustering', label: 'Rapid Clustering', icon: Zap }
+  ];
 
   return (
     <div className="mb-6 space-y-3">
@@ -143,6 +163,31 @@ export function TradeFilters({
           </Badge>
         )}
 
+        {/* Insider Activity Toggle */}
+        {setInsiderOnly && (
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={() => setInsiderOnly(!insiderOnly)}
+              variant={insiderOnly ? 'default' : 'outline'}
+              size="sm"
+              className={`min-h-[44px] sm:min-h-[36px] gap-2 ${insiderOnly ? 'bg-red-500 hover:bg-red-500/90 text-white' : ''}`}
+            >
+              <Eye className="w-4 h-4" />
+              Insider {insiderOnly && `(${enabledInsiderSignals.size})`}
+            </Button>
+            {insiderOnly && setShowInsiderSettings && (
+              <Button
+                onClick={() => setShowInsiderSettings(!showInsiderSettings)}
+                variant="ghost"
+                size="sm"
+                className="min-h-[44px] sm:min-h-[36px] px-2"
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Tracked Wallets Toggle - Only show if user is logged in */}
         {user && setTrackedOnly && (
           <Button
@@ -174,6 +219,52 @@ export function TradeFilters({
           Showing {totalTrades} of last {whalesOnly ? '2,000' : '200'}
         </div>
       </div>
+
+      {/* Insider Settings Panel */}
+      <AnimatePresence>
+        {showInsiderSettings && insiderOnly && setEnabledInsiderSignals && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/5 backdrop-blur-sm space-y-3">
+              <div className="text-sm font-semibold flex items-center gap-2 text-red-400">
+                <AlertTriangle className="w-4 h-4" />
+                Insider Detection Signals
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {insiderSignalOptions.map(signal => {
+                  const Icon = signal.icon;
+                  const isEnabled = enabledInsiderSignals.has(signal.id);
+                  return (
+                    <Button
+                      key={signal.id}
+                      onClick={() => {
+                        const next = new Set(enabledInsiderSignals);
+                        if (next.has(signal.id)) next.delete(signal.id);
+                        else next.add(signal.id);
+                        setEnabledInsiderSignals(next);
+                      }}
+                      variant={isEnabled ? 'default' : 'outline'}
+                      size="sm"
+                      className={`gap-2 justify-start min-h-[44px] ${isEnabled ? 'bg-red-500 hover:bg-red-500/90 text-white' : ''}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="truncate">{signal.label}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select which insider signals to detect. Fresh wallets are new traders, unusual sizing shows abnormally large trades, 
+                repeated entries flag multiple trades in the same market, and rapid clustering detects many trades in short time.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Advanced Filters Panel */}
       <AnimatePresence>
