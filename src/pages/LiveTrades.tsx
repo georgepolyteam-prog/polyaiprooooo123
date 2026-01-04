@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Check,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/TopBar";
@@ -1579,27 +1580,28 @@ export default function LiveTrades() {
                                       <div className="space-y-3">
                                         <div>
                                           <p className="text-xs font-medium text-muted-foreground mb-2">
-                                            Matching ALL selected signals ({enabledInsiderSignals.size}/4):
+                                            Matching {signals.length} of {enabledInsiderSignals.size} selected signals:
                                           </p>
-                                          <div className="space-y-1.5">
+                                          <div className="space-y-2">
                                             {Array.from(enabledInsiderSignals).map((signal) => {
                                               const signalIndex = signals.indexOf(signal);
                                               const isPresent = signalIndex !== -1;
+                                              const detail = isPresent ? details[signalIndex] : null;
                                               return (
-                                                <div key={signal} className="flex items-center justify-between">
+                                                <div key={signal} className="flex flex-col gap-0.5">
                                                   <div className="flex items-center gap-2">
                                                     {isPresent ? (
-                                                      <Check className="w-3 h-3 text-green-500" />
+                                                      <Check className="w-3 h-3 text-green-500 shrink-0" />
                                                     ) : (
-                                                      <X className="w-3 h-3 text-red-500" />
+                                                      <X className="w-3 h-3 text-red-500 shrink-0" />
                                                     )}
                                                     <span className="text-xs font-medium">
                                                       {getSignalDisplayName(signal)}
                                                     </span>
                                                   </div>
-                                                  {isPresent && details[signalIndex] && (
-                                                    <span className="text-xs text-muted-foreground">
-                                                      {details[signalIndex]}
+                                                  {detail && (
+                                                    <span className="text-xs text-muted-foreground ml-5">
+                                                      {detail}
                                                     </span>
                                                   )}
                                                 </div>
@@ -1634,11 +1636,12 @@ export default function LiveTrades() {
                                   },
                                 );
                               }}
-                              className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
+                              className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
                               title="Click to view insider signal details"
                             >
                               <AlertTriangle className="w-3 h-3" />
-                              {enabledInsiderSignals.size}/{signals.length} INSIDER
+                              {signals.length} Signals
+                              <ChevronDown className="w-3 h-3 opacity-60" />
                             </button>
                           </div>
                         )}
@@ -1714,27 +1717,28 @@ export default function LiveTrades() {
                                     <div className="space-y-3">
                                       <div>
                                         <p className="text-xs font-medium text-muted-foreground mb-2">
-                                          Matching ALL selected signals ({enabledInsiderSignals.size}/4):
+                                          Matching {signals.length} of {enabledInsiderSignals.size} selected signals:
                                         </p>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-2">
                                           {Array.from(enabledInsiderSignals).map((signal) => {
                                             const signalIndex = signals.indexOf(signal);
                                             const isPresent = signalIndex !== -1;
+                                            const detail = isPresent ? details[signalIndex] : null;
                                             return (
-                                              <div key={signal} className="flex items-center justify-between">
+                                              <div key={signal} className="flex flex-col gap-0.5">
                                                 <div className="flex items-center gap-2">
                                                   {isPresent ? (
-                                                    <Check className="w-3 h-3 text-green-500" />
+                                                    <Check className="w-3 h-3 text-green-500 shrink-0" />
                                                   ) : (
-                                                    <X className="w-3 h-3 text-red-500" />
+                                                    <X className="w-3 h-3 text-red-500 shrink-0" />
                                                   )}
                                                   <span className="text-xs font-medium">
                                                     {getSignalDisplayName(signal)}
                                                   </span>
                                                 </div>
-                                                {isPresent && details[signalIndex] && (
-                                                  <span className="text-xs text-muted-foreground">
-                                                    {details[signalIndex]}
+                                                {detail && (
+                                                  <span className="text-xs text-muted-foreground ml-5">
+                                                    {detail}
                                                   </span>
                                                 )}
                                               </div>
@@ -1769,11 +1773,11 @@ export default function LiveTrades() {
                                 },
                               );
                             }}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
-                            title="Click to view insider signal details"
+                            className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors cursor-pointer"
+                            title="Tap to view signals"
                           >
                             <AlertTriangle className="w-3 h-3" />
-                            {enabledInsiderSignals.size}/{signals.length} INSIDER
+                            {signals.length}
                           </button>
                         )}
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
@@ -1927,6 +1931,7 @@ export default function LiveTrades() {
         {selectedTrade && (
           <TradeDetailModal
             trade={selectedTrade}
+            insiderSignals={detectInsiderSignals(selectedTrade)}
             onClose={() => setSelectedTrade(null)}
             onTrade={async (marketUrl, trade, side) => {
               // Open modal immediately with loading state
