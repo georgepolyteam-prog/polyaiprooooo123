@@ -97,7 +97,7 @@ export function TradeFilters({
   };
 
   const insiderSignalOptions = [
-    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users, description: 'Wallets <24h old (API verified)' },
+    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users, description: 'Wallets with <30 trades (verified)' },
     { id: 'unusual_sizing', label: 'Unusual Sizing', icon: TrendingUp, description: 'Trade 3x+ larger than avg' },
     { id: 'repeated_entries', label: 'Repeated Entries', icon: Target, description: '3+ entries in same market' },
     { id: 'rapid_clustering', label: 'Rapid Clustering', icon: Zap, description: '3+ trades within 30 min' }
