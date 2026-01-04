@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock, Download, Volume2, VolumeX, HelpCircle } from 'lucide-react';
+import { Pause, Play, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw, AlertCircle, Clock, Download, Volume2, VolumeX, HelpCircle, Eye, Settings, Users, Target, Zap as ZapIcon, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TopBar } from '@/components/TopBar';
 import { Footer } from '@/components/Footer';
@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { fetchTradeableMarketData, TradeableMarketData } from '@/lib/market-trade-data';
 import { useTrackedWallets } from '@/hooks/useTrackedWallets';
-import domeLogo from '@/assets/dome-logo.png';
+import dflowLogo from '@/assets/dflow-logo.png';
 
 interface Trade {
   token_id: string;
@@ -70,6 +70,17 @@ const HARD_RECONNECT_INTERVAL_MS = 300000;
 const WHALE_THRESHOLD = 1000; // $1k+
 const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
+// Insider detection thresholds
+const INSIDER_THRESHOLDS = {
+  freshWalletHours: 24,
+  largeTradeMult: 3,
+  nicheMarketVolume: 10000,
+  rapidEntryMinutes: 30,
+  rapidEntryCount: 3,
+  repeatedEntries: 3,
+  minTradeVolume: 500
+};
+
 // Performance optimization constants
 const BATCH_INTERVAL_MS = 50; // Flush trades every 50ms for near-instant realtime feel
 const MAX_IMAGE_BATCH_SIZE = 20; // Max items per batch
@@ -107,6 +118,11 @@ export default function LiveTrades() {
   const [trackedOnly, setTrackedOnly] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   
+  // Insider activity filter states
+  const [insiderOnly, setInsiderOnly] = useState(false);
+  const [enabledInsiderSignals, setEnabledInsiderSignals] = useState<Set<string>>(new Set(['fresh_wallet', 'unusual_sizing', 'repeated_entries', 'rapid_clustering']));
+  const [showInsiderSettings, setShowInsiderSettings] = useState(false);
+  
   // Tracked wallets hook
   const { trackedWallets, getTrackedAddresses } = useTrackedWallets();
   const trackedAddresses = useMemo(() => getTrackedAddresses(), [getTrackedAddresses]);
@@ -134,6 +150,9 @@ export default function LiveTrades() {
   const tradeCounterRef = useRef<{ count: number; startTime: number }>({ count: 0, startTime: Date.now() });
   const imageCacheRef = useRef<Map<string, string>>(new Map()); // condition_id -> image URL
   const imagePreCachedRef = useRef<boolean>(false);
+  
+  // Wallet activity tracking for insider detection
+  const walletActivityMapRef = useRef<Map<string, { firstSeen: number; trades: Trade[]; totalVolume: number; avgTradeSize: number; marketCounts: Map<string, number> }>>(new Map());
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -499,6 +518,69 @@ export default function LiveTrades() {
     }
   }, [fetchMarketImages]);
 
+  // Update wallet activity for insider detection
+  const updateWalletActivity = useCallback((trade: Trade) => {
+    const wallet = trade.user;
+    const volume = trade.price * (trade.shares_normalized || trade.shares);
+    
+    if (!walletActivityMapRef.current.has(wallet)) {
+      walletActivityMapRef.current.set(wallet, {
+        firstSeen: trade.timestamp,
+        trades: [],
+        totalVolume: 0,
+        avgTradeSize: 0,
+        marketCounts: new Map()
+      });
+    }
+    
+    const activity = walletActivityMapRef.current.get(wallet)!;
+    activity.trades.push(trade);
+    activity.totalVolume += volume;
+    activity.avgTradeSize = activity.totalVolume / activity.trades.length;
+    
+    const marketCount = activity.marketCounts.get(trade.market_slug) || 0;
+    activity.marketCounts.set(trade.market_slug, marketCount + 1);
+  }, []);
+
+  // Detect insider signals for a trade
+  const detectInsiderSignals = useCallback((trade: Trade): { signals: string[]; details: string[] } => {
+    const signals: string[] = [];
+    const details: string[] = [];
+    const wallet = trade.user;
+    const activity = walletActivityMapRef.current.get(wallet);
+    
+    if (!activity) return { signals: [], details: [] };
+    
+    const tradeVolume = trade.price * (trade.shares_normalized || trade.shares);
+    const walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
+    
+    if (walletAgeHours < INSIDER_THRESHOLDS.freshWalletHours && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
+      signals.push('fresh_wallet');
+      details.push(`Wallet age: ${Math.round(walletAgeHours)}h`);
+    }
+    
+    if (activity.trades.length > 1 && tradeVolume > activity.avgTradeSize * INSIDER_THRESHOLDS.largeTradeMult) {
+      signals.push('unusual_sizing');
+      details.push(`${Math.round(tradeVolume / activity.avgTradeSize)}x avg size`);
+    }
+    
+    const marketEntries = activity.marketCounts.get(trade.market_slug) || 0;
+    if (marketEntries >= INSIDER_THRESHOLDS.repeatedEntries) {
+      signals.push('repeated_entries');
+      details.push(`${marketEntries} entries in market`);
+    }
+    
+    const recentTrades = activity.trades.filter(t => 
+      trade.timestamp - t.timestamp < INSIDER_THRESHOLDS.rapidEntryMinutes * 60
+    );
+    if (recentTrades.length >= INSIDER_THRESHOLDS.rapidEntryCount) {
+      signals.push('rapid_clustering');
+      details.push(`${recentTrades.length} trades in ${INSIDER_THRESHOLDS.rapidEntryMinutes}min`);
+    }
+    
+    return { signals, details };
+  }, []);
+
   const forceReconnect = useCallback(() => {
     console.log('Force reconnecting...');
     if (wsRef.current) {
@@ -646,6 +728,10 @@ export default function LiveTrades() {
           if (!newTrade.image) {
             queueImageFetch(newTrade.market_slug, newTrade.condition_id);
           }
+          
+          // Update wallet activity for insider detection
+          updateWalletActivity(newTrade);
+          
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
           if (volume >= WHALE_THRESHOLD) {
             showWhaleAlert(newTrade, volume);
@@ -922,9 +1008,16 @@ export default function LiveTrades() {
         }
       }
       
+      // Insider activity filter - at the end of filter chain
+      if (insiderOnly) {
+        const { signals } = detectInsiderSignals(trade);
+        const matchingSignals = signals.filter(s => enabledInsiderSignals.has(s));
+        if (matchingSignals.length === 0) return false;
+      }
+      
       return true;
     });
-  }, [trades, whaleTrades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown, trackedOnly, trackedAddresses]);
+  }, [trades, whaleTrades, filter, minVolume, whalesOnly, tokenFilter, marketFilter, searchTerm, hideUpDown, trackedOnly, trackedAddresses, insiderOnly, enabledInsiderSignals, detectInsiderSignals]);
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleTimeString();
@@ -980,19 +1073,19 @@ export default function LiveTrades() {
       </div>
 
       <main className="flex-1 relative z-10 container mx-auto px-4 py-8">
-        {/* DOME Attribution */}
+        {/* DFlow Attribution */}
         <div className="mb-6 flex items-center justify-center gap-4">
           <a 
-            href="https://domeapi.io" 
+            href="https://dflow.net" 
             target="_blank" 
             rel="noopener noreferrer"
             className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-background/80 to-muted/30 border border-border/50 hover:border-primary/40 transition-all group backdrop-blur-sm"
           >
-            <img src={domeLogo} alt="DOME" className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <img src={dflowLogo} alt="DFlow" className="w-5 h-5 group-hover:scale-110 transition-transform" />
             <span className="text-sm font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
-              Dome
+              DFlow
             </span>
-            <span className="text-xs text-muted-foreground">(domeapi.io)</span>
+            <span className="text-xs text-muted-foreground">(dflow.net)</span>
             <ExternalLink className="w-3 h-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
           </a>
           
@@ -1109,6 +1202,12 @@ export default function LiveTrades() {
           trackedOnly={trackedOnly}
           setTrackedOnly={setTrackedOnly}
           hasTrackedWallets={trackedWallets.length > 0}
+          insiderOnly={insiderOnly}
+          setInsiderOnly={setInsiderOnly}
+          enabledInsiderSignals={enabledInsiderSignals}
+          setEnabledInsiderSignals={setEnabledInsiderSignals}
+          showInsiderSettings={showInsiderSettings}
+          setShowInsiderSettings={setShowInsiderSettings}
         />
 
         {/* Banners */}
@@ -1230,6 +1329,16 @@ export default function LiveTrades() {
                             {whaleLevel === 'mega' ? '🔥 MEGA' : '🐋 WHALE'}
                           </span>
                         )}
+                        {/* Insider signal badges */}
+                        {(() => {
+                          const { signals } = detectInsiderSignals(trade);
+                          const matchingSignals = signals.filter(s => enabledInsiderSignals.has(s));
+                          return matchingSignals.length > 0 && (
+                            <span className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-500/20 text-red-400">
+                              🚨 {matchingSignals.length} SIGNAL{matchingSignals.length > 1 ? 'S' : ''}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Side */}
