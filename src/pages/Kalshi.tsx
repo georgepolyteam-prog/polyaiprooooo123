@@ -639,7 +639,7 @@ export default function Kalshi() {
       {/* CLEAN KALSHI-STYLE HERO */}
       <section className="relative overflow-hidden border-b border-border/30">
         {/* Subtle gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 via-transparent to-transparent" />
 
         {/* Grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
@@ -669,7 +669,7 @@ export default function Kalshi() {
                   transition={{ delay: 0.1 }}
                   className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2"
                 >
-                  <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500" />
+                  <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-500" />
                   Trade on Solana via DFlow
                 </motion.p>
               </div>
@@ -681,22 +681,30 @@ export default function Kalshi() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50"
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 via-purple-600/5 to-purple-500/10 border border-purple-500/30 backdrop-blur-sm"
               >
-                <span className="text-xs font-medium text-muted-foreground">Powered by DFlow</span>
-                <div className="w-px h-3 bg-border/50" />
+                <span className="text-xs font-medium bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
+                  Powered by DFlow
+                </span>
+                <div className="w-px h-3 bg-gradient-to-b from-transparent via-purple-500/50 to-transparent" />
                 <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
               </motion.div>
 
               {!connected ? (
-                <WalletMultiButton className="!h-10 sm:!h-11 !px-4 sm:!px-5 !rounded-xl !bg-gradient-to-r !from-blue-600 !to-blue-700 hover:!opacity-90 !text-white !font-medium !text-sm !transition-all" />
+                <WalletMultiButton className="!h-10 sm:!h-11 !px-4 sm:!px-5 !rounded-xl !bg-gradient-to-r !from-purple-600 !to-purple-700 hover:!from-purple-700 hover:!to-purple-800 !shadow-lg hover:!shadow-purple-500/30 !border !border-purple-500/50 hover:!border-purple-400/70 !text-white !font-medium !text-sm !transition-all duration-300 !transform hover:!scale-[1.02]" />
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  <span className="text-blue-600 font-medium text-sm">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/30 hover:border-purple-400/50 transition-all cursor-pointer group backdrop-blur-sm"
+                >
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-purple-500 rounded-full blur animate-pulse" />
+                    <div className="relative w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-purple-300" />
+                  </div>
+                  <span className="text-sm font-medium bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent group-hover:from-purple-500 group-hover:to-purple-400 transition-all">
                     {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
                   </span>
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
@@ -724,7 +732,9 @@ export default function Kalshi() {
               <p className="text-xs sm:text-sm text-muted-foreground">Active Markets</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-blue-500">~400ms</p>
+              <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
+                ~400ms
+              </p>
               <p className="text-xs sm:text-sm text-muted-foreground">Instant Execution</p>
             </div>
             <div className="text-center">
@@ -787,7 +797,7 @@ export default function Kalshi() {
                   placeholder="Search markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 w-full h-11 rounded-xl bg-background border-border/50 focus:border-blue-500/50 transition-all"
+                  className="pl-10 pr-4 w-full h-11 rounded-xl bg-background border-border/50 focus:border-purple-500/50 transition-all"
                 />
               </div>
 
@@ -802,7 +812,7 @@ export default function Kalshi() {
                   });
                 }}
                 disabled={isLoading}
-                className="h-11 w-11 rounded-xl border-border/50 bg-muted/40 backdrop-blur-sm hover:bg-muted/60 hover:border-blue-500/50 transition-all flex-shrink-0"
+                className="h-11 w-11 rounded-xl border-border/50 bg-muted/40 backdrop-blur-sm hover:bg-muted/60 hover:border-purple-500/50 transition-all flex-shrink-0"
               >
                 <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
               </Button>
@@ -823,7 +833,7 @@ export default function Kalshi() {
 
             {/* Search results count */}
             {deferredSearchQuery && searchResults.length > 0 && !isSearching && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-blue-500">
+              <div className="mb-4 flex items-center gap-2 text-sm text-purple-500">
                 <Search className="w-4 h-4" />
                 Found {searchResults.length} markets matching "{deferredSearchQuery}"
               </div>
@@ -863,7 +873,7 @@ export default function Kalshi() {
                   <div
                     key={market.ticker}
                     onClick={() => setSelectedMarket(market)}
-                    className="group cursor-pointer p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-card/80 border border-border/50 hover:border-blue-500/30 transition-all flex items-center gap-3 sm:gap-4"
+                    className="group cursor-pointer p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-card/80 border border-border/50 hover:border-purple-500/30 transition-all flex items-center gap-3 sm:gap-4"
                   >
                     {/* Status */}
                     <div
@@ -875,7 +885,7 @@ export default function Kalshi() {
 
                     {/* Title */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-foreground text-sm sm:text-base truncate group-hover:text-blue-500 transition-colors">
+                      <h3 className="font-medium text-foreground text-sm sm:text-base truncate group-hover:text-purple-500 transition-colors">
                         {market.title || market.ticker}
                       </h3>
                       <p className="text-xs sm:text-sm text-muted-foreground truncate">
@@ -941,7 +951,7 @@ export default function Kalshi() {
                 <Button
                   variant="outline"
                   onClick={() => setShowAll(true)}
-                  className="h-11 sm:h-12 px-6 sm:px-10 rounded-xl sm:rounded-2xl border-border/50 hover:border-blue-500/50 hover:bg-blue-500/5 group transition-all shadow-lg hover:shadow-xl w-full sm:w-auto"
+                  className="h-11 sm:h-12 px-6 sm:px-10 rounded-xl sm:rounded-2xl border-border/50 hover:border-purple-500/50 hover:bg-purple-500/5 group transition-all shadow-lg hover:shadow-xl w-full sm:w-auto"
                 >
                   {deferredSearchQuery
                     ? `Show All ${filteredMarkets.length} Results`
