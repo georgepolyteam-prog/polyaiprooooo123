@@ -41,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import kalshiLogo from "@/assets/kalshi-logo-green.jpeg";
+import dflowLogo from "@/assets/dflow-logo.png";
 import solanaLogo from "@/assets/solana-logo.png";
 
 // Demo markets for when API is unavailable
@@ -652,7 +652,7 @@ export default function Kalshi() {
               <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="relative">
                 <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl" />
                 <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/20 flex items-center justify-center overflow-hidden">
-                  <img src={kalshiLogo} alt="Kalshi" className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover" />
+                  <img src={dflowLogo} alt="DFlow" className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover" />
                 </div>
               </motion.div>
               <div>
