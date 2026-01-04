@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Trophy, CheckCircle2, LineChart } from 'lucide-react';
+import { X, ExternalLink, TrendingUp, TrendingDown, Copy, Sparkles, Check, Loader2, Star, BarChart3, DollarSign, ArrowUpRight, ArrowDownRight, RefreshCw, ChevronLeft, Activity, Layers, Trophy, CheckCircle2, LineChart, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
@@ -62,14 +62,27 @@ interface RecentTrade {
   timestamp: number;
 }
 
+interface InsiderSignals {
+  signals: string[];
+  details: string[];
+}
+
 interface TradeDetailModalProps {
   trade: Trade;
   onClose: () => void;
   onTrade?: (marketUrl: string, trade: Trade, side: 'YES' | 'NO') => void;
   onAnalyze?: (trade: Trade, resolvedUrl: string) => void;
+  insiderSignals?: InsiderSignals;
 }
 
-export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDetailModalProps) {
+const SIGNAL_DISPLAY_NAMES: Record<string, string> = {
+  freshWallet: 'Fresh Wallet',
+  unusualSizing: 'Unusual Sizing',
+  repeatedEntries: 'Repeated Entries',
+  rapidClustering: 'Rapid Clustering',
+};
+
+export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze, insiderSignals }: TradeDetailModalProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -568,6 +581,34 @@ export function TradeDetailModal({ trade, onClose, onTrade, onAnalyze }: TradeDe
             </div>
           </div>
         </div>
+
+        {/* Insider Signals Section */}
+        {insiderSignals && insiderSignals.signals.length > 0 && (
+          <div className="rounded-xl p-4 bg-red-500/10 border border-red-500/30">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <span className="font-semibold text-red-400">Insider Signals Detected</span>
+              <span className="ml-auto text-xs text-red-400/70 font-medium">{insiderSignals.signals.length} signals</span>
+            </div>
+            <div className="space-y-2">
+              {insiderSignals.signals.map((signal, i) => {
+                const displayName = SIGNAL_DISPLAY_NAMES[signal] || signal;
+                const detail = insiderSignals.details[i];
+                return (
+                  <div key={signal} className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      <span className="text-sm font-medium text-foreground">{displayName}</span>
+                    </div>
+                    {detail && (
+                      <span className="text-xs text-muted-foreground ml-5">{detail}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* View Chart Button */}
         <Button
