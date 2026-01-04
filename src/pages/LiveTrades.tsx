@@ -95,7 +95,7 @@ const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
 // Insider detection thresholds
 const INSIDER_THRESHOLDS = {
-  freshWalletMaxTrades: 30, // Wallet with <30 total trades is considered "fresh"
+  freshWalletMaxTrades: 10, // Wallet with <10 total trades is considered "fresh"
   largeTradeMult: 3,
   nicheMarketVolume: 10000,
   rapidEntryMinutes: 30,
@@ -148,6 +148,7 @@ export default function LiveTrades() {
     new Set(["fresh_wallet", "unusual_sizing", "repeated_entries", "rapid_clustering"]),
   );
   const [showInsiderSettings, setShowInsiderSettings] = useState(false);
+  const [insiderMatchMode, setInsiderMatchMode] = useState<'any' | 'all'>('any');
 
   // Tracked wallets hook
   const { trackedWallets, getTrackedAddresses } = useTrackedWallets();
@@ -668,17 +669,22 @@ export default function LiveTrades() {
     return detectInsiderSignals(trade);
   }, [detectInsiderSignals, fetchWalletTradeCount]);
 
-  // Check if trade has ANY selected insider signals (for filtering)
-  const hasAnySelectedInsiderSignal = useCallback(
+  // Check if trade has matching insider signals based on match mode
+  const hasMatchingInsiderSignals = useCallback(
     (trade: Trade): boolean => {
       if (enabledInsiderSignals.size === 0) return false;
 
       const { signals } = detectInsiderSignals(trade);
 
-      // Check if trade has ANY enabled signal (OR logic - more useful for discovery)
-      return Array.from(enabledInsiderSignals).some((signal) => signals.includes(signal));
+      if (insiderMatchMode === 'all') {
+        // ALL mode: trade must have ALL enabled signals (strict)
+        return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
+      } else {
+        // ANY mode: trade must have at least one enabled signal (broad)
+        return Array.from(enabledInsiderSignals).some((signal) => signals.includes(signal));
+      }
     },
-    [enabledInsiderSignals, detectInsiderSignals],
+    [enabledInsiderSignals, detectInsiderSignals, insiderMatchMode],
   );
 
   const forceReconnect = useCallback(() => {
@@ -871,8 +877,8 @@ export default function LiveTrades() {
             });
           }
 
-          // Check for insider trade (has ANY selected insider signal)
-          const hasInsiderSignal = hasAnySelectedInsiderSignal(newTrade);
+          // Check for insider trade (has matching insider signals based on mode)
+          const hasInsiderSignal = hasMatchingInsiderSignals(newTrade);
           if (hasInsiderSignal) {
             // Try to get cached image before adding to insider trades
             if (!newTrade.image) {
@@ -937,7 +943,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAnySelectedInsiderSignal, fetchWalletTradeCount]);
+  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasMatchingInsiderSignals, fetchWalletTradeCount]);
 
   // Watchdog - check connection health
   useEffect(() => {
@@ -1176,7 +1182,7 @@ export default function LiveTrades() {
       // Don't re-check to avoid flashing when API updates cache
       // Only re-check if BOTH insiderOnly and whalesOnly are active (filtering whaleTrades for insider signals)
       if (insiderOnly && whalesOnly) {
-        if (!hasAnySelectedInsiderSignal(trade)) return false;
+        if (!hasMatchingInsiderSignals(trade)) return false;
       }
 
       // Whale filter - if whalesOnly is true, we're already using whaleTrades buffer
@@ -1202,7 +1208,7 @@ export default function LiveTrades() {
     trackedOnly,
     trackedAddresses,
     insiderOnly,
-    hasAnySelectedInsiderSignal,
+    hasMatchingInsiderSignals,
   ]);
 
   const formatTime = (timestamp: number) => {
@@ -1397,6 +1403,8 @@ export default function LiveTrades() {
           setEnabledInsiderSignals={setEnabledInsiderSignals}
           showInsiderSettings={showInsiderSettings}
           setShowInsiderSettings={setShowInsiderSettings}
+          insiderMatchMode={insiderMatchMode}
+          setInsiderMatchMode={setInsiderMatchMode}
         />
 
         {/* Insider Signals Active Banner */}
@@ -1408,12 +1416,11 @@ export default function LiveTrades() {
               exit={{ opacity: 0, height: 0 }}
               className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
             >
-              <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-red-400">
                   <AlertTriangle className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    Insider Filter Active: Showing last 2000 trades with ALL selected signals (
-                    {enabledInsiderSignals.size}/4)
+                    Insider Filter Active: Matching {insiderMatchMode === 'all' ? 'ALL' : 'ANY'} of {enabledInsiderSignals.size} signals
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1505,7 +1512,7 @@ export default function LiveTrades() {
                   const isRecentBatch = trade._batchTime && Date.now() - trade._batchTime < 500;
                   const staggerDelay = isRecentBatch ? (trade._batchIndex || 0) * 30 : 0;
                   const { signals, details } = detectInsiderSignals(trade);
-                  const hasAnySignal = hasAnySelectedInsiderSignal(trade);
+                  const hasAnySignal = hasMatchingInsiderSignals(trade);
 
                   return (
                     <div
