@@ -113,8 +113,7 @@ const SIDEBAR_THROTTLE_MS = 1000; // Recalculate topTraders/marketVolumes every 
 export default function LiveTrades() {
   const navigate = useNavigate();
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [whaleTrades, setWhaleTrades] = useState<Trade[]>([]); // Dedicated whale buffer (2000 trades)
-  const [insiderTrades, setInsiderTrades] = useState<Trade[]>([]); // NEW: Dedicated insider buffer (2000 trades)
+  const [whaleTrades, setWhaleTrades] = useState<Trade[]>([]); // Dedicated whale buffer
   const [paused, setPaused] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -192,6 +191,7 @@ export default function LiveTrades() {
       }
     >
   >(new Map());
+  const fetchedWalletsRef = useRef<Set<string>>(new Set()); // Track wallets we've fetched historical data for
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -509,20 +509,6 @@ export default function LiveTrades() {
           return trade;
         }),
       );
-
-      // Also update insider trades with newly cached images
-      setInsiderTrades((prev) =>
-        prev.map((trade) => {
-          if (!trade.image) {
-            const cachedImage =
-              imageCacheRef.current.get(trade.condition_id) || imageCacheRef.current.get(trade.market_slug);
-            if (cachedImage) {
-              return { ...trade, image: cachedImage };
-            }
-          }
-          return trade;
-        }),
-      );
     } catch (err) {
       console.error("[LiveTrades] 💥 Batch fetch exception:", err);
     }
@@ -578,21 +564,119 @@ export default function LiveTrades() {
     [fetchMarketImages],
   );
 
+  // Fetch wallet historical data for insider detection
+  const fetchWalletHistory = useCallback(async (walletAddress: string) => {
+    // Don't fetch if we already have this wallet's history
+    if (fetchedWalletsRef.current.has(walletAddress)) return;
+    fetchedWalletsRef.current.add(walletAddress);
+
+    try {
+      const params = new URLSearchParams({
+        address: walletAddress,
+        timeframe: "30d",
+      });
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-profile?${params}`, {
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+
+      // Initialize wallet activity with historical data
+      if (data.recentTrades && data.recentTrades.length > 0) {
+        const oldestTrade = data.recentTrades[data.recentTrades.length - 1];
+
+        // Create trades array from historical data
+        const historicalTrades = data.recentTrades.map((t: any) => ({
+          timestamp: t.timestamp,
+          market_slug: t.marketSlug,
+          price: t.price,
+          shares: t.shares,
+          shares_normalized: t.shares,
+          side: t.side,
+          user: walletAddress,
+          token_id: "", // Historical data might not have these fields
+          token_label: "", // We'll set defaults
+          tx_hash: "",
+          title: "",
+          order_hash: "",
+          taker: "",
+          condition_id: "",
+        }));
+
+        // Check if wallet already has activity from real-time trades
+        const existingActivity = walletActivityMapRef.current.get(walletAddress);
+
+        if (existingActivity) {
+          // Merge historical trades with existing trades
+          const mergedTrades = [...historicalTrades, ...existingActivity.trades];
+          const mergedVolume = data.stats.volume + existingActivity.totalVolume;
+          const marketCounts = new Map(existingActivity.marketCounts);
+
+          // Update market counts from historical trades
+          historicalTrades.forEach((t: any) => {
+            const count = marketCounts.get(t.marketSlug) || 0;
+            marketCounts.set(t.marketSlug, count + 1);
+          });
+
+          // Use the oldest timestamp between historical and real-time
+          const firstSeen = Math.min(existingActivity.firstSeen, oldestTrade.timestamp);
+
+          existingActivity.firstSeen = firstSeen;
+          existingActivity.trades = mergedTrades;
+          existingActivity.totalVolume = mergedVolume;
+          existingActivity.avgTradeSize = mergedVolume / Math.max(mergedTrades.length, 1);
+          existingActivity.marketCounts = marketCounts;
+        } else {
+          // Create new activity with historical data
+          const activity = {
+            firstSeen: oldestTrade.timestamp, // Use ACTUAL first trade timestamp from history
+            trades: historicalTrades,
+            totalVolume: data.stats.volume,
+            avgTradeSize: data.stats.volume / Math.max(data.stats.trades, 1),
+            marketCounts: new Map<string, number>(),
+          };
+
+          // Count how many times wallet traded each market
+          data.recentTrades.forEach((t: any) => {
+            const count = activity.marketCounts.get(t.marketSlug) || 0;
+            activity.marketCounts.set(t.marketSlug, count + 1);
+          });
+
+          walletActivityMapRef.current.set(walletAddress, activity);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch wallet history:", err);
+      // Remove from fetched set so we can retry if needed
+      fetchedWalletsRef.current.delete(walletAddress);
+    }
+  }, []);
+
   // Update wallet activity for insider detection
   const updateWalletActivity = useCallback((trade: Trade) => {
     const wallet = trade.user;
     const volume = trade.price * (trade.shares_normalized || trade.shares);
 
+    // Don't create new activity if we're fetching historical data
+    // Wait for historical data to populate first
     if (!walletActivityMapRef.current.has(wallet)) {
+      // Create a temporary activity that will be updated when historical data arrives
       walletActivityMapRef.current.set(wallet, {
-        firstSeen: trade.timestamp,
-        trades: [],
-        totalVolume: 0,
-        avgTradeSize: 0,
-        marketCounts: new Map(),
+        firstSeen: trade.timestamp, // Temporary, will be updated by historical data
+        trades: [trade],
+        totalVolume: volume,
+        avgTradeSize: volume,
+        marketCounts: new Map([[trade.market_slug, 1]]),
       });
+      return;
     }
 
+    // Update existing activity
     const activity = walletActivityMapRef.current.get(wallet)!;
     activity.trades.push(trade);
     activity.totalVolume += volume;
@@ -644,19 +728,6 @@ export default function LiveTrades() {
 
     return { signals, details };
   }, []);
-
-  // Check if trade has ALL selected insider signals (for filtering)
-  const hasAllSelectedInsiderSignals = useCallback(
-    (trade: Trade): boolean => {
-      if (enabledInsiderSignals.size === 0) return false;
-
-      const { signals } = detectInsiderSignals(trade);
-
-      // Check if trade has ALL enabled signals (AND logic)
-      return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
-    },
-    [enabledInsiderSignals, detectInsiderSignals],
-  );
 
   const forceReconnect = useCallback(() => {
     console.log("Force reconnecting...");
@@ -806,12 +877,15 @@ export default function LiveTrades() {
             queueImageFetch(newTrade.market_slug, newTrade.condition_id);
           }
 
+          // Fetch historical data for new wallets to make insider detection accurate
+          if (!walletActivityMapRef.current.has(newTrade.user)) {
+            fetchWalletHistory(newTrade.user);
+          }
+
           // Update wallet activity for insider detection
           updateWalletActivity(newTrade);
 
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
-
-          // Check for whale trade
           if (volume >= WHALE_THRESHOLD) {
             showWhaleAlert(newTrade, volume);
 
@@ -826,32 +900,6 @@ export default function LiveTrades() {
 
             // Accumulate whale trades in dedicated buffer (keep up to 2000)
             setWhaleTrades((prev) => {
-              const exists = prev.some(
-                (t) =>
-                  (t.order_hash && t.order_hash === newTrade.order_hash) ||
-                  (t.tx_hash === newTrade.tx_hash &&
-                    t.timestamp === newTrade.timestamp &&
-                    t.token_id === newTrade.token_id),
-              );
-              if (exists) return prev;
-              return [newTrade, ...prev.slice(0, 1999)];
-            });
-          }
-
-          // Check for insider trade (has ALL selected insider signals)
-          const hasAllInsiderSignals = hasAllSelectedInsiderSignals(newTrade);
-          if (hasAllInsiderSignals) {
-            // Try to get cached image before adding to insider trades
-            if (!newTrade.image) {
-              const cachedImg =
-                imageCacheRef.current.get(newTrade.condition_id) || imageCacheRef.current.get(newTrade.market_slug);
-              if (cachedImg) {
-                newTrade.image = cachedImg;
-              }
-            }
-
-            // Accumulate insider trades in dedicated buffer (keep up to 2000)
-            setInsiderTrades((prev) => {
               const exists = prev.some(
                 (t) =>
                   (t.order_hash && t.order_hash === newTrade.order_hash) ||
@@ -904,7 +952,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals]);
+  }, [queueImageFetch, showWhaleAlert, fetchWalletHistory, updateWalletActivity]);
 
   // Watchdog - check connection health
   useEffect(() => {
@@ -976,7 +1024,7 @@ export default function LiveTrades() {
 
   const togglePause = useCallback(() => {
     if (paused) {
-      setTrades((prev) => [...pausedTradesRef.current, ...prev].slice(0, 199)); // Keep main trades at 200
+      setTrades((prev) => [...pausedTradesRef.current, ...prev].slice(0, 499));
       pausedTradesRef.current = [];
       setQueuedCount(0);
     }
@@ -1006,9 +1054,8 @@ export default function LiveTrades() {
       buyVolume,
       sellVolume,
       whaleCount: whaleTrades.length,
-      insiderCount: insiderTrades.length, // NEW: Add insider count to stats
     };
-  }, [throttledTrades, whaleTrades.length, insiderTrades.length]);
+  }, [throttledTrades, whaleTrades.length]);
 
   // Compute top traders - use throttledTrades for performance (updates every 1s)
   const topTraders = useMemo(() => {
@@ -1065,24 +1112,23 @@ export default function LiveTrades() {
     return [...new Set(trades.map((t) => t.market_slug))];
   }, [trades]);
 
-  // Apply all filters - use appropriate buffer based on filter type
-  const filteredTrades = useMemo(() => {
-    // Determine which source array to use based on active filters
-    let sourceArray: Trade[];
+  // Helper function to check if trade has ALL selected insider signals
+  const hasAllSelectedInsiderSignals = useCallback(
+    (trade: Trade): boolean => {
+      if (enabledInsiderSignals.size === 0) return false;
 
-    if (whalesOnly && insiderOnly) {
-      // If both whalesOnly and insiderOnly are enabled, show whale trades that also have insider signals
-      sourceArray = whaleTrades;
-    } else if (whalesOnly) {
-      // Use dedicated whale buffer when whales filter is active
-      sourceArray = whaleTrades;
-    } else if (insiderOnly) {
-      // NEW: Use dedicated insider buffer when insider filter is active
-      sourceArray = insiderTrades;
-    } else {
-      // Default: use main trades buffer (200 trades)
-      sourceArray = trades;
-    }
+      const { signals } = detectInsiderSignals(trade);
+
+      // Check if trade has ALL enabled signals
+      return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
+    },
+    [enabledInsiderSignals, detectInsiderSignals],
+  );
+
+  // Apply all filters - use whale buffer when whalesOnly is active
+  const filteredTrades = useMemo(() => {
+    // Use dedicated whale buffer when whales filter is active
+    const sourceArray = whalesOnly ? whaleTrades : trades;
 
     return sourceArray.filter((trade) => {
       const volume = trade.price * (trade.shares_normalized || trade.shares);
@@ -1139,18 +1185,10 @@ export default function LiveTrades() {
         }
       }
 
-      // Insider activity filter - if insiderOnly is true, we're already using insiderTrades buffer
-      // But we need to re-check in case whalesOnly is also true
+      // Insider activity filter - at the end of filter chain
       if (insiderOnly) {
         // Trade must have ALL selected insider signals (AND logic)
         if (!hasAllSelectedInsiderSignals(trade)) return false;
-      }
-
-      // Whale filter - if whalesOnly is true, we're already using whaleTrades buffer
-      // But we need to re-check in case insiderOnly is also true
-      if (whalesOnly && !insiderOnly) {
-        const volume = trade.price * (trade.shares_normalized || trade.shares);
-        if (volume < WHALE_THRESHOLD) return false;
       }
 
       return true;
@@ -1158,7 +1196,6 @@ export default function LiveTrades() {
   }, [
     trades,
     whaleTrades,
-    insiderTrades,
     filter,
     minVolume,
     whalesOnly,
@@ -1379,8 +1416,7 @@ export default function LiveTrades() {
                 <div className="flex items-center gap-2 text-red-400">
                   <AlertTriangle className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    Insider Filter Active: Showing last 2000 trades with ALL selected signals (
-                    {enabledInsiderSignals.size}/4)
+                    Insider Filter Active: Showing trades with ALL selected signals ({enabledInsiderSignals.size}/4)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
