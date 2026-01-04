@@ -667,15 +667,15 @@ export default function LiveTrades() {
     return detectInsiderSignals(trade);
   }, [detectInsiderSignals, fetchWalletTradeCount]);
 
-  // Check if trade has ALL selected insider signals (for filtering)
-  const hasAllSelectedInsiderSignals = useCallback(
+  // Check if trade has ANY selected insider signals (for filtering)
+  const hasAnySelectedInsiderSignal = useCallback(
     (trade: Trade): boolean => {
       if (enabledInsiderSignals.size === 0) return false;
 
       const { signals } = detectInsiderSignals(trade);
 
-      // Check if trade has ALL enabled signals (AND logic)
-      return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
+      // Check if trade has ANY enabled signal (OR logic - more useful for discovery)
+      return Array.from(enabledInsiderSignals).some((signal) => signals.includes(signal));
     },
     [enabledInsiderSignals, detectInsiderSignals],
   );
@@ -870,9 +870,9 @@ export default function LiveTrades() {
             });
           }
 
-          // Check for insider trade (has ALL selected insider signals)
-          const hasAllInsiderSignals = hasAllSelectedInsiderSignals(newTrade);
-          if (hasAllInsiderSignals) {
+          // Check for insider trade (has ANY selected insider signal)
+          const hasInsiderSignal = hasAnySelectedInsiderSignal(newTrade);
+          if (hasInsiderSignal) {
             // Try to get cached image before adding to insider trades
             if (!newTrade.image) {
               const cachedImg =
@@ -936,7 +936,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals, fetchWalletTradeCount]);
+  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAnySelectedInsiderSignal, fetchWalletTradeCount]);
 
   // Watchdog - check connection health
   useEffect(() => {
@@ -1171,11 +1171,11 @@ export default function LiveTrades() {
         }
       }
 
-      // Insider activity filter - if insiderOnly is true, we're already using insiderTrades buffer
-      // But we need to re-check in case whalesOnly is also true
-      if (insiderOnly) {
-        // Trade must have ALL selected insider signals (AND logic)
-        if (!hasAllSelectedInsiderSignals(trade)) return false;
+      // Insider activity filter - trades in insiderTrades buffer already passed the check when added
+      // Don't re-check to avoid flashing when API updates cache
+      // Only re-check if BOTH insiderOnly and whalesOnly are active (filtering whaleTrades for insider signals)
+      if (insiderOnly && whalesOnly) {
+        if (!hasAnySelectedInsiderSignal(trade)) return false;
       }
 
       // Whale filter - if whalesOnly is true, we're already using whaleTrades buffer
@@ -1201,7 +1201,7 @@ export default function LiveTrades() {
     trackedOnly,
     trackedAddresses,
     insiderOnly,
-    hasAllSelectedInsiderSignals,
+    hasAnySelectedInsiderSignal,
   ]);
 
   const formatTime = (timestamp: number) => {
@@ -1504,7 +1504,7 @@ export default function LiveTrades() {
                   const isRecentBatch = trade._batchTime && Date.now() - trade._batchTime < 500;
                   const staggerDelay = isRecentBatch ? (trade._batchIndex || 0) * 30 : 0;
                   const { signals, details } = detectInsiderSignals(trade);
-                  const hasAllSignals = hasAllSelectedInsiderSignals(trade);
+                  const hasAnySignal = hasAnySelectedInsiderSignal(trade);
 
                   return (
                     <div
@@ -1564,7 +1564,7 @@ export default function LiveTrades() {
                           </span>
                         )}
                         {/* Insider signal badges - clickable to show details */}
-                        {hasAllSignals && enabledInsiderSignals.size > 0 && (
+                        {hasAnySignal && enabledInsiderSignals.size > 0 && (
                           <div className="relative">
                             <button
                               onClick={(e) => {
@@ -1700,7 +1700,7 @@ export default function LiveTrades() {
                             {whaleLevel === "mega" ? "🔥 MEGA" : "🐋 WHALE"}
                           </span>
                         )}
-                        {hasAllSignals && enabledInsiderSignals.size > 0 && (
+                        {hasAnySignal && enabledInsiderSignals.size > 0 && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
