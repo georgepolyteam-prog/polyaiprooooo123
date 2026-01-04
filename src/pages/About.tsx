@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useInView } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { TopBar } from '@/components/TopBar';
-import { Footer } from '@/components/Footer';
 import { LaunchModal } from '@/components/LaunchModal';
 import okxLogo from "@/assets/okx-logo.png";
 import binanceLogo from "@/assets/binance-logo.png";
@@ -16,8 +15,6 @@ import {
   BookOpen, 
   ClipboardList, 
   Activity,
-  Flame,
-  Wrench,
   ChevronDown,
   CheckCircle2,
   BadgeCheck,
@@ -29,7 +26,8 @@ import {
   LineChart,
   ArrowRight,
   ExternalLink,
-  Coins
+  Coins,
+  Flame
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePolyPrice } from '@/hooks/usePolyPrice';
@@ -51,7 +49,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: "How do I acquire $POLY tokens?",
-    answer: "You can buy POLY on Jupiter (best rates), Pump.fun, or OKX Wallet. Visit the Credits page for direct links to all purchase options. Contract address: 982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump"
+    answer: "You can buy POLY on Jupiter, Pump.fun, or OKX Wallet. Visit the Credits page for direct links to all purchase options. Contract address: 982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump"
   },
   {
     question: "What does Polymarket Builders Program membership provide?",
@@ -74,23 +72,13 @@ const buyOptions = [
     id: "binance",
     name: "Binance Web3",
     description: "World's largest exchange",
-    tagline: "Instant access",
-    gradient: "from-[#F0B90B] via-[#F8D12F] to-[#C99400]",
-    bgGlow: "bg-[#F0B90B]/20",
-    borderHover: "hover:border-[#F0B90B]/50",
-    shadowGlow: "group-hover:shadow-[0_0_80px_-20px_rgba(240,185,11,0.6)]",
     url: `https://web3.binance.com/sv/token/sol/${CONTRACT_ADDRESS}`,
     logo: binanceLogo,
   },
   {
     id: "pumpfun",
     name: "Pump.fun",
-    description: "Community favorite",
-    tagline: "Trade direct",
-    gradient: "from-emerald-400 via-teal-500 to-cyan-600",
-    bgGlow: "bg-emerald-500/20",
-    borderHover: "hover:border-emerald-500/50",
-    shadowGlow: "group-hover:shadow-[0_0_80px_-20px_rgba(16,185,129,0.6)]",
+    description: "Community trading",
     url: `https://pump.fun/coin/${CONTRACT_ADDRESS}`,
     logo: "https://pump.fun/icon.png",
   },
@@ -98,11 +86,6 @@ const buyOptions = [
     id: "okx",
     name: "OKX Wallet",
     description: "50M+ users worldwide",
-    tagline: "Swap instantly",
-    gradient: "from-zinc-300 via-zinc-400 to-zinc-600",
-    bgGlow: "bg-zinc-400/20",
-    borderHover: "hover:border-zinc-400/50",
-    shadowGlow: "group-hover:shadow-[0_0_80px_-20px_rgba(161,161,170,0.6)]",
     url: `https://www.okx.com/web3/dex-swap#inputChain=501&inputCurrency=So11111111111111111111111111111111111111112&outputChain=501&outputCurrency=${CONTRACT_ADDRESS}`,
     logo: okxLogo,
   },
@@ -114,16 +97,6 @@ const About = () => {
   const [copied, setCopied] = useState(false);
   const { data: priceData, isLoading: priceLoading } = usePolyPrice(30000);
 
-  const heroRef = useRef(null);
-  const featuresRef = useRef(null);
-  const tokenomicsRef = useRef(null);
-  const pricingRef = useRef(null);
-  
-  const heroInView = useInView(heroRef, { once: true });
-  const featuresInView = useInView(featuresRef, { once: true, margin: "-100px" });
-  const tokenomicsInView = useInView(tokenomicsRef, { once: true, margin: "-100px" });
-  const pricingInView = useInView(pricingRef, { once: true, margin: "-100px" });
-
   const toggleFAQ = (index: number) => {
     setOpenFAQ(openFAQ === index ? null : index);
   };
@@ -131,7 +104,7 @@ const About = () => {
   const copyContract = async () => {
     await navigator.clipboard.writeText(CONTRACT_ADDRESS);
     setCopied(true);
-    toast.success('Contract address copied!');
+    toast.success('Contract address copied');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -153,254 +126,207 @@ const About = () => {
       <TopBar />
       <LaunchModal open={launchModalOpen} onOpenChange={setLaunchModalOpen} />
 
-      {/* GET POLY - Primary Section (Top of Page) */}
-      <section ref={heroRef} className="relative pt-20 pb-16 md:pt-28 md:pb-24 overflow-hidden">
-        {/* Background effects */}
-        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-radial from-primary/10 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-gradient-radial from-emerald-500/8 via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="max-w-5xl mx-auto px-4 md:px-6 relative">
-          {/* Header */}
+      {/* Hero */}
+      <section className="pt-16 pb-12 md:pt-24 md:pb-16">
+        <div className="max-w-3xl mx-auto px-6 text-center">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-8 md:mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6">
-              <Coins className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-primary">Get Started</span>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border mb-6">
+              <BadgeCheck className="w-4 h-4 text-foreground/70" />
+              <span className="text-sm text-muted-foreground">Polymarket Builders Program</span>
             </div>
             
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-semibold tracking-tight text-foreground mb-6">
-              Buy{' '}
-              <span className="bg-gradient-to-r from-primary via-purple-400 to-primary bg-clip-text text-transparent">
-                $POLY
-              </span>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight text-foreground mb-6">
+              Poly
             </h1>
             
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-              The token that powers AI-driven prediction market analysis.
+            <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-8">
+              The intelligent prediction market terminal. AI analysis, real-time trading, professional tools.
             </p>
-          </motion.div>
-
-          {/* Contract Address - Prominent & Copiable */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="mb-10 md:mb-14"
-          >
-            <div className="max-w-xl mx-auto">
-              <p className="text-sm text-muted-foreground text-center mb-3">Contract Address (CA)</p>
-              <button 
-                onClick={copyContract}
-                className="w-full flex items-center justify-between gap-3 px-4 py-4 md:px-6 md:py-5 rounded-2xl bg-card border-2 border-primary/30 hover:border-primary/60 transition-all group"
-              >
-                <code className="text-xs md:text-sm font-mono text-foreground break-all text-left flex-1">
-                  {CONTRACT_ADDRESS}
-                </code>
-                <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 text-primary" />
-                      <span className="text-xs font-medium text-primary hidden sm:inline">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 text-primary" />
-                      <span className="text-xs font-medium text-primary hidden sm:inline">Copy</span>
-                    </>
-                  )}
-                </div>
-              </button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Tap to copy • Solana SPL Token
-              </p>
-            </div>
-          </motion.div>
-
-          {/* Buy Options Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid md:grid-cols-3 gap-4 md:gap-6 mb-12"
-          >
-            {buyOptions.map((option, i) => (
-              <motion.a
-                key={option.id}
-                href={option.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                initial={{ opacity: 0, y: 30 }}
-                animate={heroInView ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.5, delay: 0.2 + i * 0.1 }}
-                whileHover={{ y: -4, scale: 1.01 }}
-                className={`group relative block cursor-pointer transition-all duration-500 ${option.shadowGlow}`}
-              >
-                <div className={`absolute -inset-[1px] rounded-[24px] ${option.bgGlow} blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                
-                <div className={`relative p-6 md:p-8 rounded-3xl bg-card/80 backdrop-blur-xl border border-border/50 ${option.borderHover} transition-all duration-300 h-full`}>
-                  <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br ${option.gradient} flex items-center justify-center mx-auto mb-5 shadow-lg group-hover:shadow-xl transition-shadow duration-300`}>
-                    <img 
-                      src={option.logo} 
-                      alt={option.name}
-                      className="w-10 h-10 md:w-12 md:h-12 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                  </div>
-                  
-                  <div className="flex justify-center mb-3">
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground px-3 py-1 rounded-full bg-muted/50">
-                      {option.tagline}
-                    </span>
-                  </div>
-                  
-                  <h4 className="text-lg md:text-xl font-semibold text-foreground text-center mb-2">
-                    {option.name}
-                  </h4>
-                  <p className="text-muted-foreground text-center text-sm mb-5">
-                    {option.description}
-                  </p>
-                  
-                  <div className="flex items-center justify-center gap-2 text-primary font-medium group-hover:gap-3 transition-all duration-300">
-                    <span>Buy Now</span>
-                    <ExternalLink className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
-                  </div>
-                </div>
-              </motion.a>
-            ))}
-          </motion.div>
-
-          {/* Beginner's Guide */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={heroInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="max-w-3xl mx-auto"
-          >
-            <div className="p-6 md:p-8 rounded-3xl bg-muted/30 border border-border/50">
-              <h3 className="text-xl md:text-2xl font-semibold text-foreground text-center mb-6">
-                🆕 New to Crypto? Here's How to Buy
-              </h3>
-              
-              <div className="space-y-6">
-                {/* Step 1 */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">1</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">Get a Solana Wallet</h4>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Download <strong>Phantom Wallet</strong> (free) from{' '}
-                      <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                        phantom.app
-                      </a>
-                      {' '}— it's like a digital wallet for crypto. Works on phone or desktop.
-                    </p>
-                    <p className="text-xs text-muted-foreground/80">
-                      💡 Write down your secret recovery phrase and keep it safe! Never share it with anyone.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">2</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">Add SOL to Your Wallet</h4>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      You need SOL (Solana's currency) to buy POLY. Inside Phantom, tap <strong>"Buy"</strong> and purchase SOL with your debit card, Apple Pay, or bank transfer.
-                    </p>
-                    <p className="text-xs text-muted-foreground/80">
-                      💡 Start with $20-50 worth of SOL. You'll use some for the POLY purchase and a tiny bit (~$0.01) for transaction fees.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">3</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">Swap SOL for POLY</h4>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Click any of the <strong>"Buy Now"</strong> buttons above. It will open a swap page. Connect your Phantom wallet, enter how much SOL you want to swap, and confirm the transaction.
-                    </p>
-                    <p className="text-xs text-muted-foreground/80">
-                      💡 Pump.fun is the easiest for beginners — just paste the contract address (CA) above if needed.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 4 */}
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">4</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground mb-1">Deposit POLY to Get Credits</h4>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Once you have POLY in your wallet, go to our{' '}
-                      <Link to="/credits" className="text-primary hover:underline font-medium">
-                        Credits page
-                      </Link>
-                      , connect your wallet, and deposit your POLY tokens. <strong>1 POLY = 1 Credit</strong> for using our AI tools.
-                    </p>
-                    <p className="text-xs text-muted-foreground/80">
-                      💡 You're all set! Use credits to ask our AI about any prediction market.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Links */}
-              <div className="mt-8 pt-6 border-t border-border/50">
-                <p className="text-sm text-muted-foreground text-center mb-4">Quick Links</p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  <a 
-                    href="https://phantom.app" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-muted/50 hover:bg-muted text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Get Phantom
-                  </a>
-                  <Link 
-                    to="/credits"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-sm text-primary transition-colors"
-                  >
-                    <Coins className="w-3.5 h-3.5" />
-                    Deposit Credits
-                  </Link>
-                </div>
-              </div>
+            
+            <div className="flex flex-wrap gap-3 justify-center">
+              <Button asChild size="lg" className="rounded-full">
+                <Link to="/">Get Started</Link>
+              </Button>
+              <Button variant="outline" asChild size="lg" className="rounded-full">
+                <Link to="/markets">
+                  Browse Markets
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Link>
+              </Button>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Token Metrics Section */}
-      <section className="py-20 md:py-24 px-4 md:px-6 bg-muted/20">
-        <div className="max-w-5xl mx-auto">
+      {/* Contract Address */}
+      <section className="py-12 md:py-16">
+        <div className="max-w-2xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <p className="text-sm text-muted-foreground text-center mb-3">Contract Address</p>
+            <button 
+              onClick={copyContract}
+              className="w-full flex items-center justify-between gap-4 px-5 py-4 rounded-xl bg-muted/50 border border-border hover:border-foreground/20 transition-colors"
+            >
+              <code className="text-sm font-mono text-foreground break-all text-left">
+                {CONTRACT_ADDRESS}
+              </code>
+              <div className="flex-shrink-0">
+                {copied ? (
+                  <Check className="w-5 h-5 text-foreground" />
+                ) : (
+                  <Copy className="w-5 h-5 text-muted-foreground" />
+                )}
+              </div>
+            </button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Solana SPL Token
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Buy Options */}
+      <section className="py-12 md:py-16">
+        <div className="max-w-4xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <h2 className="text-2xl font-semibold text-foreground text-center mb-8">
+              Get $POLY
+            </h2>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              {buyOptions.map((option) => (
+                <a
+                  key={option.id}
+                  href={option.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex flex-col items-center p-6 rounded-2xl border border-border bg-card hover:border-foreground/20 transition-colors"
+                >
+                  <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center mb-4">
+                    <img 
+                      src={option.logo} 
+                      alt={option.name}
+                      className="w-8 h-8 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <h3 className="font-medium text-foreground mb-1">{option.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{option.description}</p>
+                  <span className="text-sm text-foreground/70 group-hover:text-foreground transition-colors flex items-center gap-1">
+                    Buy Now
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </span>
+                </a>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Beginner Guide */}
+      <section className="py-12 md:py-16 bg-muted/30">
+        <div className="max-w-3xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <h2 className="text-2xl font-semibold text-foreground text-center mb-2">
+              New to Crypto?
+            </h2>
+            <p className="text-muted-foreground text-center mb-10">
+              Follow these steps to get started
+            </p>
+            
+            <div className="space-y-8">
+              {[
+                {
+                  step: "1",
+                  title: "Get a Solana Wallet",
+                  desc: "Download Phantom Wallet from phantom.app — it's free and works on mobile or desktop.",
+                  tip: "Write down your recovery phrase and keep it safe. Never share it."
+                },
+                {
+                  step: "2",
+                  title: "Add SOL to Your Wallet",
+                  desc: "Inside Phantom, tap \"Buy\" to purchase SOL with card, Apple Pay, or bank transfer.",
+                  tip: "Start with $20-50. You'll need a small amount (~$0.01) for transaction fees."
+                },
+                {
+                  step: "3",
+                  title: "Swap SOL for POLY",
+                  desc: "Click any \"Buy Now\" button above. Connect your wallet, enter the amount, and confirm.",
+                  tip: "Pump.fun is the easiest option for beginners."
+                },
+                {
+                  step: "4",
+                  title: "Deposit POLY for Credits",
+                  desc: "Go to the Credits page, connect your wallet, and deposit tokens. 1 POLY = 1 Credit.",
+                  tip: "Credits are used to access AI analysis and trading tools."
+                }
+              ].map((item, i) => (
+                <div key={i} className="flex gap-5">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center text-sm font-medium">
+                    {item.step}
+                  </div>
+                  <div className="flex-1 pt-0.5">
+                    <h3 className="font-medium text-foreground mb-1">{item.title}</h3>
+                    <p className="text-muted-foreground text-sm mb-2">{item.desc}</p>
+                    <p className="text-xs text-muted-foreground/70">{item.tip}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-10 flex flex-wrap justify-center gap-3">
+              <a 
+                href="https://phantom.app" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border text-sm hover:border-foreground/20 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Get Phantom
+              </a>
+              <Link 
+                to="/credits"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-foreground text-background text-sm hover:bg-foreground/90 transition-colors"
+              >
+                <Coins className="w-3.5 h-3.5" />
+                Deposit Credits
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Token Stats */}
+      <section className="py-16 md:py-20">
+        <div className="max-w-4xl mx-auto px-6">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-12"
+            transition={{ duration: 0.5 }}
+            className="text-center mb-10"
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Live Data</p>
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">
-              $POLY Token Stats
+            <h2 className="text-2xl font-semibold text-foreground">
+              Token Stats
             </h2>
           </motion.div>
 
@@ -408,25 +334,22 @@ const About = () => {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-10"
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10"
           >
             {[
-              { label: "Price", value: priceLoading ? '...' : `$${formatPrice(priceData?.price || 0)}`, change: priceData?.priceChange24h },
-              { label: "Market Cap", value: priceLoading ? '...' : formatNumber(priceData?.marketCap || 0) },
-              { label: "24h Volume", value: priceLoading ? '...' : formatNumber(priceData?.volume24h || 0) },
-              { label: "Liquidity", value: priceLoading ? '...' : formatNumber(priceData?.liquidity || 0) }
+              { label: "Price", value: priceLoading ? '—' : `$${formatPrice(priceData?.price || 0)}`, change: priceData?.priceChange24h },
+              { label: "Market Cap", value: priceLoading ? '—' : formatNumber(priceData?.marketCap || 0) },
+              { label: "24h Volume", value: priceLoading ? '—' : formatNumber(priceData?.volume24h || 0) },
+              { label: "Liquidity", value: priceLoading ? '—' : formatNumber(priceData?.liquidity || 0) }
             ].map((metric, i) => (
-              <div 
-                key={i}
-                className="p-4 md:p-6 rounded-2xl md:rounded-3xl bg-card text-center min-w-0"
-              >
-                <p className="text-[10px] md:text-xs text-muted-foreground mb-2 md:mb-3 uppercase tracking-wide">{metric.label}</p>
-                <p className="text-lg md:text-2xl font-semibold text-foreground font-mono truncate">
+              <div key={i} className="p-5 rounded-xl bg-muted/50 border border-border text-center">
+                <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">{metric.label}</p>
+                <p className="text-xl font-semibold text-foreground font-mono">
                   {metric.value}
                 </p>
                 {metric.change !== undefined && (
-                  <p className={`text-xs md:text-sm font-medium mt-1 md:mt-2 ${metric.change >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                  <p className={`text-sm mt-1 ${metric.change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                     {metric.change >= 0 ? '+' : ''}{metric.change.toFixed(2)}%
                   </p>
                 )}
@@ -438,10 +361,10 @@ const About = () => {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="rounded-3xl bg-card overflow-hidden"
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="rounded-xl overflow-hidden border border-border"
           >
-            <div id="dexscreener-embed" className="relative w-full" style={{ paddingBottom: '60%' }}>
+            <div className="relative w-full" style={{ paddingBottom: '50%' }}>
               <iframe 
                 src="https://dexscreener.com/solana/982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump?embed=1&theme=dark&info=0"
                 className="absolute top-0 left-0 w-full h-full border-0"
@@ -452,198 +375,43 @@ const About = () => {
         </div>
       </section>
 
-      {/* About Poly Section (Moved from Hero) */}
-      <section className="py-20 md:py-24 px-4 md:px-6">
-        <div className="max-w-5xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-          >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border/50 mb-8">
-              <BadgeCheck className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground">Polymarket Builders Program</span>
-            </div>
-            
-            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-8">
-              Poly.
-            </h2>
-            
-            <p className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-3xl mx-auto font-light leading-relaxed">
-              The intelligent prediction market terminal.
-              <br className="hidden md:block" />
-              <span className="text-foreground">AI analysis. Real-time trading. One platform.</span>
-            </p>
-            
-            <div className="flex flex-wrap gap-4 justify-center">
-              <Button 
-                asChild
-                size="lg"
-                className="px-8 md:px-10 h-12 md:h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
-              >
-                <Link to="/chat">
-                  Get Started
-                </Link>
-              </Button>
-              <Button 
-                variant="ghost"
-                size="lg"
-                asChild
-                className="px-8 md:px-10 h-12 md:h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
-              >
-                <Link to="/markets">
-                  Explore Markets
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Link>
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Credits System - Live */}
-      <section className="py-24 px-6 bg-muted/20">
-        <div className="max-w-4xl mx-auto text-center">
+      {/* Features */}
+      <section className="py-16 md:py-20 bg-muted/30">
+        <div className="max-w-5xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Credits</p>
-            
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-6">
-              Simple, transparent pricing.
+            <h2 className="text-2xl font-semibold text-foreground mb-3">
+              Platform Features
             </h2>
-            <p className="text-xl text-muted-foreground mb-16 max-w-2xl mx-auto">
-              1 POLY = 1 Credit. Use credits for AI analysis and premium features.
+            <p className="text-muted-foreground">
+              Everything you need to trade prediction markets
             </p>
           </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="grid md:grid-cols-3 gap-8 mb-12"
-          >
-            {[
-              { step: "01", title: "Acquire", desc: "Buy POLY on Jupiter, Pump.fun, or OKX Wallet", icon: Store },
-              { step: "02", title: "Deposit", desc: "Connect your Solana wallet and deposit tokens", icon: Zap },
-              { step: "03", title: "Analyze", desc: "Use credits for AI-powered market insights", icon: Brain },
-            ].map((item, i) => (
-              <div key={i} className="text-left p-8 rounded-3xl bg-card border border-border/50">
-                <span className="text-xs font-mono text-muted-foreground">{item.step}</span>
-                <h4 className="text-xl font-semibold text-foreground mt-2 mb-3">{item.title}</h4>
-                <p className="text-muted-foreground">{item.desc}</p>
-              </div>
-            ))}
-          </motion.div>
           
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <Button asChild size="lg" className="rounded-full px-10 h-14 text-base font-medium bg-foreground text-background hover:bg-foreground/90">
-              <Link to="/credits">
-                Get Credits
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Link>
-            </Button>
-          </motion.div>
-
-        </div>
-      </section>
-
-      {/* What is Poly */}
-      <section className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Overview</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground">
-              Everything you need to trade smarter.
-            </h2>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-6">
             {[
-              { 
-                icon: Brain, 
-                title: "AI Analysis", 
-                desc: "Instant market insights powered by real-time intelligence and data-driven predictions." 
-              },
-              { 
-                icon: BarChart3, 
-                title: "Pro Trading", 
-                desc: "Professional-grade terminal with orderbooks, limit orders, and direct execution." 
-              },
-              { 
-                icon: Database, 
-                title: "Deep Data", 
-                desc: "Comprehensive analytics, historical trends, and real-time price feeds." 
-              }
-            ].map((item, i) => (
+              { icon: Brain, title: "AI Analysis", desc: "Instant market insights powered by real-time intelligence" },
+              { icon: BarChart3, title: "Pro Trading", desc: "Professional terminal with orderbooks and limit orders" },
+              { icon: Database, title: "Deep Data", desc: "Comprehensive analytics and real-time price feeds" },
+              { icon: Store, title: "Markets", desc: "Browse and filter all prediction markets" },
+              { icon: Activity, title: "Portfolio", desc: "Track positions and performance" },
+              { icon: TrendingUp, title: "Whale Tracking", desc: "Monitor large trades in real-time" }
+            ].map((feature, i) => (
               <motion.div 
                 key={i}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="text-center"
+                transition={{ duration: 0.5, delay: i * 0.05 }}
+                className="p-6 rounded-xl bg-card border border-border"
               >
-                <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
-                  <item.icon className="w-7 h-7 text-foreground" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-3">{item.title}</h3>
-                <p className="text-muted-foreground leading-relaxed">{item.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Platform Features */}
-      <section ref={featuresRef} className="py-24 px-6 bg-muted/20">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={featuresInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Features</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-4">
-              Fully operational. Ready now.
-            </h2>
-          </motion.div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { icon: Store, title: "Markets", desc: "Browse and filter all prediction markets" },
-              { icon: MessageSquare, title: "AI Chat", desc: "Conversational analysis for any market" },
-              { icon: TrendingUp, title: "Trading", desc: "Execute trades with real-time pricing" },
-              { icon: BookOpen, title: "Orderbook", desc: "Full depth and trade history view" },
-              { icon: ClipboardList, title: "Limit Orders", desc: "Set your own price targets" },
-              { icon: Activity, title: "Portfolio", desc: "Track positions and performance" }
-            ].map((feature, i) => (
-              <motion.div 
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                animate={featuresInView ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.6, delay: i * 0.05 }}
-                className="p-8 rounded-3xl bg-card border border-border/50 group hover:bg-muted/50 transition-colors"
-              >
-                <feature.icon className="w-6 h-6 text-foreground mb-5" />
-                <h4 className="text-lg font-semibold text-foreground mb-2">{feature.title}</h4>
+                <feature.icon className="w-5 h-5 text-foreground/70 mb-4" />
+                <h4 className="font-medium text-foreground mb-2">{feature.title}</h4>
                 <p className="text-sm text-muted-foreground">{feature.desc}</p>
               </motion.div>
             ))}
@@ -652,48 +420,51 @@ const About = () => {
       </section>
 
       {/* Tokenomics */}
-      <section ref={tokenomicsRef} className="py-24 px-6">
-        <div className="max-w-4xl mx-auto">
+      <section className="py-16 md:py-20">
+        <div className="max-w-3xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Tokenomics</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-4">
-              Deflationary by design.
+            <h2 className="text-2xl font-semibold text-foreground mb-3">
+              Tokenomics
             </h2>
-            <p className="text-xl text-muted-foreground">
-              Total Supply: 1,000,000,000 $POLY
+            <p className="text-muted-foreground">
+              Total Supply: 1,000,000,000 POLY
             </p>
           </motion.div>
           
-          {/* Split Cards */}
           <div className="grid md:grid-cols-2 gap-6">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
-              animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="p-10 rounded-3xl bg-gradient-to-b from-muted/50 to-muted/20 border border-border/50 text-center"
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="p-8 rounded-xl bg-muted/50 border border-border text-center"
             >
-              <div className="text-6xl md:text-7xl font-bold text-foreground mb-4">70%</div>
-              <p className="text-lg font-medium text-foreground mb-2">Burned</p>
-              <p className="text-muted-foreground">
-                Permanently removed from circulation when spent
+              <Flame className="w-6 h-6 text-foreground/70 mx-auto mb-4" />
+              <div className="text-4xl font-semibold text-foreground mb-2">70%</div>
+              <p className="font-medium text-foreground mb-1">Burned</p>
+              <p className="text-sm text-muted-foreground">
+                Permanently removed when spent
               </p>
             </motion.div>
             
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
-              animate={tokenomicsInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="p-10 rounded-3xl bg-gradient-to-b from-muted/50 to-muted/20 border border-border/50 text-center"
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="p-8 rounded-xl bg-muted/50 border border-border text-center"
             >
-              <div className="text-6xl md:text-7xl font-bold text-foreground mb-4">30%</div>
-              <p className="text-lg font-medium text-foreground mb-2">Development</p>
-              <p className="text-muted-foreground">
-                Funds platform improvements and maintenance
+              <Zap className="w-6 h-6 text-foreground/70 mx-auto mb-4" />
+              <div className="text-4xl font-semibold text-foreground mb-2">30%</div>
+              <p className="font-medium text-foreground mb-1">Development</p>
+              <p className="text-sm text-muted-foreground">
+                Platform improvements
               </p>
             </motion.div>
           </div>
@@ -701,82 +472,79 @@ const About = () => {
       </section>
 
       {/* Pricing */}
-      <section ref={pricingRef} className="py-24 px-6 bg-muted/20">
-        <div className="max-w-3xl mx-auto text-center">
+      <section className="py-16 md:py-20 bg-muted/30">
+        <div className="max-w-xl mx-auto px-6 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={pricingInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6 }}
-            className="mb-16"
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Pricing</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground mb-4">
-              Pay for what you use.
+            <h2 className="text-2xl font-semibold text-foreground mb-3">
+              Simple Pricing
             </h2>
-            <p className="text-xl text-muted-foreground">
-              No subscriptions. No hidden fees.
+            <p className="text-muted-foreground mb-10">
+              No subscriptions. Pay for what you use.
             </p>
           </motion.div>
           
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
-            animate={pricingInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="p-10 rounded-3xl bg-card border border-border/50 max-w-sm mx-auto"
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="p-8 rounded-xl bg-card border border-border"
           >
-            <div className="text-5xl font-bold text-foreground mb-2">1:1</div>
-            <p className="text-lg text-muted-foreground mb-8">1 POLY = 1 Credit</p>
-            <ul className="space-y-4 mb-10 text-left">
+            <div className="text-3xl font-semibold text-foreground mb-2">1 POLY = 1 Credit</div>
+            <p className="text-muted-foreground mb-8">Use credits for AI analysis</p>
+            <ul className="space-y-3 mb-8 text-left max-w-xs mx-auto">
               {["Full platform access", "AI-powered analysis", "Real-time trading", "No expiration"].map((item, i) => (
-                <li key={i} className="flex items-center gap-3 text-muted-foreground">
-                  <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
-                  {item}
+                <li key={i} className="flex items-center gap-3 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-foreground/70 flex-shrink-0" />
+                  <span className="text-muted-foreground">{item}</span>
                 </li>
               ))}
             </ul>
-            <Button asChild className="w-full rounded-full h-12 bg-foreground text-background hover:bg-foreground/90">
-              <Link to="/credits">
-                Get Started
-              </Link>
+            <Button asChild className="w-full rounded-full">
+              <Link to="/credits">Get Credits</Link>
             </Button>
           </motion.div>
         </div>
       </section>
 
       {/* Tech Stack */}
-      <section className="py-24 px-6">
-        <div className="max-w-4xl mx-auto">
+      <section className="py-16 md:py-20">
+        <div className="max-w-4xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">Technology</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground">
-              Built on the best.
+            <h2 className="text-2xl font-semibold text-foreground">
+              Built With
             </h2>
           </motion.div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: "Brave Search", desc: "Real-time web data and news", icon: Search },
-              { name: "Polymarket", desc: "Direct CLOB API integration", icon: LineChart },
-              { name: "Dome API", desc: "Market data and price feeds", icon: Globe }
+              { name: "Brave Search", desc: "Real-time web data", icon: Search },
+              { name: "Polymarket", desc: "Direct CLOB API", icon: LineChart },
+              { name: "Dome API", desc: "Market data feeds", icon: Globe }
             ].map((tech, i) => (
               <motion.div 
                 key={i}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: i * 0.1 }}
-                className="text-center"
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                className="text-center p-6"
               >
-                <div className="w-14 h-14 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-5">
-                  <tech.icon className="w-6 h-6 text-foreground" />
+                <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-4">
+                  <tech.icon className="w-5 h-5 text-foreground/70" />
                 </div>
-                <h4 className="font-semibold text-foreground mb-2">{tech.name}</h4>
+                <h3 className="font-medium text-foreground mb-1">{tech.name}</h3>
                 <p className="text-sm text-muted-foreground">{tech.desc}</p>
               </motion.div>
             ))}
@@ -785,96 +553,81 @@ const About = () => {
       </section>
 
       {/* FAQ */}
-      <section className="py-24 px-6 bg-muted/20">
-        <div className="max-w-3xl mx-auto">
+      <section className="py-16 md:py-20 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
           >
-            <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">FAQ</p>
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground">
-              Questions? Answers.
+            <h2 className="text-2xl font-semibold text-foreground">
+              FAQ
             </h2>
           </motion.div>
           
-          <div className="space-y-4">
-            {faqItems.map((item, index) => (
-              <motion.div
-                key={index}
+          <div className="space-y-3">
+            {faqItems.map((item, i) => (
+              <motion.div 
+                key={i}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.05 }}
+                transition={{ duration: 0.5, delay: i * 0.05 }}
               >
                 <button
-                  onClick={() => toggleFAQ(index)}
-                  className="w-full p-6 rounded-2xl bg-card border border-border/50 text-left hover:bg-muted/50 transition-colors"
+                  onClick={() => toggleFAQ(i)}
+                  className="w-full flex items-center justify-between p-5 rounded-xl bg-card border border-border text-left hover:border-foreground/20 transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-foreground pr-4">{item.question}</span>
-                    <ChevronDown 
-                      className={`w-5 h-5 text-muted-foreground flex-shrink-0 transition-transform duration-200 ${
-                        openFAQ === index ? 'rotate-180' : ''
-                      }`} 
-                    />
-                  </div>
-                  {openFAQ === index && (
-                    <p className="mt-4 text-muted-foreground leading-relaxed">
-                      {item.answer}
-                    </p>
-                  )}
+                  <span className="font-medium text-foreground pr-4">{item.question}</span>
+                  <ChevronDown className={`w-5 h-5 text-muted-foreground flex-shrink-0 transition-transform ${openFAQ === i ? 'rotate-180' : ''}`} />
                 </button>
+                {openFAQ === i && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="px-5 py-4 text-sm text-muted-foreground"
+                  >
+                    {item.answer}
+                  </motion.div>
+                )}
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-32 px-6">
-        <div className="max-w-3xl mx-auto text-center">
+      {/* CTA */}
+      <section className="py-20 md:py-24">
+        <div className="max-w-2xl mx-auto px-6 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-6">
-              Start trading smarter.
+            <h2 className="text-3xl md:text-4xl font-semibold text-foreground mb-4">
+              Ready to start?
             </h2>
-            <p className="text-xl text-muted-foreground mb-10">
-              AI-powered insights. Professional tools. One platform.
+            <p className="text-muted-foreground mb-8">
+              Join thousands of traders using AI-powered market analysis
             </p>
-            <div className="flex flex-wrap gap-4 justify-center">
-              <Button 
-                asChild
-                size="lg"
-                className="px-10 h-14 text-base font-medium rounded-full bg-foreground text-background hover:bg-foreground/90"
-              >
-                <Link to="/credits">
-                  Get Credits
-                </Link>
-              </Button>
-              <Button 
-                asChild
-                variant="ghost"
-                size="lg"
-                className="px-10 h-14 text-base font-medium rounded-full text-muted-foreground hover:text-foreground"
-              >
+            <div className="flex flex-wrap gap-3 justify-center">
+              <Button asChild size="lg" className="rounded-full">
                 <Link to="/">
-                  Explore Platform
+                  Start Chatting
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Link>
+              </Button>
+              <Button variant="outline" asChild size="lg" className="rounded-full">
+                <Link to="/partnerships">View Partners</Link>
               </Button>
             </div>
           </motion.div>
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 };
