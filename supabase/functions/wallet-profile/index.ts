@@ -13,9 +13,26 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const url = new URL(req.url);
-  const address = url.searchParams.get('address');
-  const timeframe = url.searchParams.get('timeframe') || '30d';
+  // Support both GET (query params) and POST (body params)
+  let address: string | null = null;
+  let timeframe = '30d';
+
+  if (req.method === 'GET') {
+    const url = new URL(req.url);
+    address = url.searchParams.get('address');
+    timeframe = url.searchParams.get('timeframe') || '30d';
+  } else if (req.method === 'POST') {
+    try {
+      const body = await req.json();
+      address = body.address;
+      timeframe = body.timeframe || '30d';
+    } catch {
+      // Fallback to query params if body parsing fails
+      const url = new URL(req.url);
+      address = url.searchParams.get('address');
+      timeframe = url.searchParams.get('timeframe') || '30d';
+    }
+  }
 
   if (!address) {
     return new Response(
@@ -121,14 +138,14 @@ serve(async (req) => {
         const shares = parseFloat(order.shares_normalized || order.shares || 0);
         const price = parseFloat(order.price || 0);
         
-        // Parse timestamp - Dome returns Unix seconds as number or string
+        // Parse timestamp - ensure it's always a number
         let timestamp = Math.floor(Date.now() / 1000);
         if (order.timestamp) {
-          const ts = typeof order.timestamp === 'string' ? parseInt(order.timestamp) : order.timestamp;
-          if (!isNaN(ts)) timestamp = ts;
+          const ts = typeof order.timestamp === 'string' ? parseInt(order.timestamp, 10) : order.timestamp;
+          if (!isNaN(ts) && ts > 0) timestamp = ts;
         } else if (order.created_at) {
-          const ts = typeof order.created_at === 'string' ? parseInt(order.created_at) : order.created_at;
-          if (!isNaN(ts)) timestamp = ts;
+          const ts = typeof order.created_at === 'string' ? parseInt(order.created_at, 10) : order.created_at;
+          if (!isNaN(ts) && ts > 0) timestamp = ts;
         }
         
         return {
@@ -141,7 +158,8 @@ serve(async (req) => {
           shares: shares,
           timestamp: timestamp // Unix seconds
         };
-      });
+      })
+      .sort((a: any, b: any) => a.timestamp - b.timestamp); // Sort ascending (oldest first)
 
     // Top markets by volume
     const topMarkets = Array.from(marketVolumes.entries())
