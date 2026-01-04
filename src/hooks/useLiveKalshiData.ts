@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDflowApi } from './useDflowApi';
+import { generateMockOrderbook, generateMockTrades } from '@/lib/kalshi-mock-data';
 
 interface OrderbookLevel {
   price: number;
@@ -27,6 +28,7 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [usingMockData, setUsingMockData] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
@@ -53,6 +55,8 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
         getTrades(ticker, 20)
       ]);
 
+      let hasRealData = false;
+
       if (obData) {
         const parsedOrderbook: Orderbook = {
           yesBids: safeArray(obData.yesBids || obData.yes_bids).map(parseLevel).slice(0, 10),
@@ -60,19 +64,40 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
           noBids: safeArray(obData.noBids || obData.no_bids).map(parseLevel).slice(0, 10),
           noAsks: safeArray(obData.noAsks || obData.no_asks).map(parseLevel).slice(0, 10),
         };
-        setOrderbook(parsedOrderbook);
         
-        // Update live price from best bid
-        if (parsedOrderbook.yesBids[0]?.price) {
-          setLastPrice(parsedOrderbook.yesBids[0].price);
+        // Check if we got real data
+        if (parsedOrderbook.yesBids.length > 0 || parsedOrderbook.yesAsks.length > 0) {
+          setOrderbook(parsedOrderbook);
+          hasRealData = true;
+          
+          // Update live price from best bid
+          if (parsedOrderbook.yesBids[0]?.price) {
+            setLastPrice(parsedOrderbook.yesBids[0].price);
+          }
         }
       }
 
-      if (tradesData?.trades) {
+      if (tradesData?.trades && tradesData.trades.length > 0) {
         setTrades(tradesData.trades.map(parseTrade));
+        hasRealData = true;
+      }
+
+      // If no real data, use mock data
+      if (!hasRealData) {
+        console.log('[Live Data] No real data, using mock');
+        setOrderbook(generateMockOrderbook());
+        setTrades(generateMockTrades(20));
+        setLastPrice(50);
+        setUsingMockData(true);
+      } else {
+        setUsingMockData(false);
       }
     } catch (err) {
-      console.error('[Live Data] Fetch failed:', err);
+      console.error('[Live Data] Fetch failed, using mock data:', err);
+      setOrderbook(generateMockOrderbook());
+      setTrades(generateMockTrades(20));
+      setLastPrice(50);
+      setUsingMockData(true);
     }
   }, [ticker, getOrderbook, getTrades]);
 
@@ -105,5 +130,5 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
     };
   }, [ticker, enabled, fetchLiveData]);
 
-  return { orderbook, trades, lastPrice, isPolling, refetch: fetchLiveData };
+  return { orderbook, trades, lastPrice, isPolling, usingMockData, refetch: fetchLiveData };
 }

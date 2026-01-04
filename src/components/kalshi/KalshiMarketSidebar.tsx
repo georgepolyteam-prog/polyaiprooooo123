@@ -7,6 +7,7 @@ import { useDflowWebSocket, type PriceUpdate } from '@/hooks/useDflowWebSocket';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { MOCK_MARKETS } from '@/lib/kalshi-mock-data';
 
 interface KalshiMarketSidebarProps {
   selectedTicker?: string;
@@ -32,6 +33,7 @@ export function KalshiMarketSidebar({
   });
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [usingMockData, setUsingMockData] = useState(false);
 
   // Get top market tickers for WebSocket
   const topTickers = useMemo(() => 
@@ -51,7 +53,7 @@ export function KalshiMarketSidebar({
     },
   });
 
-  // Fetch markets
+  // Fetch markets with mock fallback
   const fetchMarkets = useCallback(async () => {
     try {
       setIsRefreshing(true);
@@ -71,9 +73,20 @@ export function KalshiMarketSidebar({
       
       // Sort by volume
       allMarkets.sort((a, b) => (b.volume || 0) - (a.volume || 0));
-      setMarkets(allMarkets);
+      
+      if (allMarkets.length > 0) {
+        setMarkets(allMarkets);
+        setUsingMockData(false);
+      } else {
+        // Fallback to mock data
+        console.log('[Sidebar] No markets fetched, using mock data');
+        setMarkets(MOCK_MARKETS);
+        setUsingMockData(true);
+      }
     } catch (err) {
-      console.error('Failed to fetch markets:', err);
+      console.error('Failed to fetch markets, using mock data:', err);
+      setMarkets(MOCK_MARKETS);
+      setUsingMockData(true);
     } finally {
       setIsRefreshing(false);
     }
