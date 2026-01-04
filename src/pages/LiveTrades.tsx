@@ -113,7 +113,8 @@ const SIDEBAR_THROTTLE_MS = 1000; // Recalculate topTraders/marketVolumes every 
 export default function LiveTrades() {
   const navigate = useNavigate();
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [whaleTrades, setWhaleTrades] = useState<Trade[]>([]); // Dedicated whale buffer
+  const [whaleTrades, setWhaleTrades] = useState<Trade[]>([]); // Dedicated whale buffer (2000 trades)
+  const [insiderTrades, setInsiderTrades] = useState<Trade[]>([]); // NEW: Dedicated insider buffer (2000 trades)
   const [paused, setPaused] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -508,6 +509,20 @@ export default function LiveTrades() {
           return trade;
         }),
       );
+
+      // Also update insider trades with newly cached images
+      setInsiderTrades((prev) =>
+        prev.map((trade) => {
+          if (!trade.image) {
+            const cachedImage =
+              imageCacheRef.current.get(trade.condition_id) || imageCacheRef.current.get(trade.market_slug);
+            if (cachedImage) {
+              return { ...trade, image: cachedImage };
+            }
+          }
+          return trade;
+        }),
+      );
     } catch (err) {
       console.error("[LiveTrades] 💥 Batch fetch exception:", err);
     }
@@ -629,6 +644,19 @@ export default function LiveTrades() {
 
     return { signals, details };
   }, []);
+
+  // Check if trade has ALL selected insider signals (for filtering)
+  const hasAllSelectedInsiderSignals = useCallback(
+    (trade: Trade): boolean => {
+      if (enabledInsiderSignals.size === 0) return false;
+
+      const { signals } = detectInsiderSignals(trade);
+
+      // Check if trade has ALL enabled signals (AND logic)
+      return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
+    },
+    [enabledInsiderSignals, detectInsiderSignals],
+  );
 
   const forceReconnect = useCallback(() => {
     console.log("Force reconnecting...");
@@ -782,6 +810,8 @@ export default function LiveTrades() {
           updateWalletActivity(newTrade);
 
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
+
+          // Check for whale trade
           if (volume >= WHALE_THRESHOLD) {
             showWhaleAlert(newTrade, volume);
 
@@ -796,6 +826,32 @@ export default function LiveTrades() {
 
             // Accumulate whale trades in dedicated buffer (keep up to 2000)
             setWhaleTrades((prev) => {
+              const exists = prev.some(
+                (t) =>
+                  (t.order_hash && t.order_hash === newTrade.order_hash) ||
+                  (t.tx_hash === newTrade.tx_hash &&
+                    t.timestamp === newTrade.timestamp &&
+                    t.token_id === newTrade.token_id),
+              );
+              if (exists) return prev;
+              return [newTrade, ...prev.slice(0, 1999)];
+            });
+          }
+
+          // Check for insider trade (has ALL selected insider signals)
+          const hasAllInsiderSignals = hasAllSelectedInsiderSignals(newTrade);
+          if (hasAllInsiderSignals) {
+            // Try to get cached image before adding to insider trades
+            if (!newTrade.image) {
+              const cachedImg =
+                imageCacheRef.current.get(newTrade.condition_id) || imageCacheRef.current.get(newTrade.market_slug);
+              if (cachedImg) {
+                newTrade.image = cachedImg;
+              }
+            }
+
+            // Accumulate insider trades in dedicated buffer (keep up to 2000)
+            setInsiderTrades((prev) => {
               const exists = prev.some(
                 (t) =>
                   (t.order_hash && t.order_hash === newTrade.order_hash) ||
@@ -848,7 +904,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [queueImageFetch, showWhaleAlert]);
+  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals]);
 
   // Watchdog - check connection health
   useEffect(() => {
@@ -920,7 +976,7 @@ export default function LiveTrades() {
 
   const togglePause = useCallback(() => {
     if (paused) {
-      setTrades((prev) => [...pausedTradesRef.current, ...prev].slice(0, 499));
+      setTrades((prev) => [...pausedTradesRef.current, ...prev].slice(0, 199)); // Keep main trades at 200
       pausedTradesRef.current = [];
       setQueuedCount(0);
     }
@@ -950,8 +1006,9 @@ export default function LiveTrades() {
       buyVolume,
       sellVolume,
       whaleCount: whaleTrades.length,
+      insiderCount: insiderTrades.length, // NEW: Add insider count to stats
     };
-  }, [throttledTrades, whaleTrades.length]);
+  }, [throttledTrades, whaleTrades.length, insiderTrades.length]);
 
   // Compute top traders - use throttledTrades for performance (updates every 1s)
   const topTraders = useMemo(() => {
@@ -1008,23 +1065,24 @@ export default function LiveTrades() {
     return [...new Set(trades.map((t) => t.market_slug))];
   }, [trades]);
 
-  // Helper function to check if trade has ALL selected insider signals
-  const hasAllSelectedInsiderSignals = useCallback(
-    (trade: Trade): boolean => {
-      if (enabledInsiderSignals.size === 0) return false;
-
-      const { signals } = detectInsiderSignals(trade);
-
-      // Check if trade has ALL enabled signals
-      return Array.from(enabledInsiderSignals).every((signal) => signals.includes(signal));
-    },
-    [enabledInsiderSignals, detectInsiderSignals],
-  );
-
-  // Apply all filters - use whale buffer when whalesOnly is active
+  // Apply all filters - use appropriate buffer based on filter type
   const filteredTrades = useMemo(() => {
-    // Use dedicated whale buffer when whales filter is active
-    const sourceArray = whalesOnly ? whaleTrades : trades;
+    // Determine which source array to use based on active filters
+    let sourceArray: Trade[];
+
+    if (whalesOnly && insiderOnly) {
+      // If both whalesOnly and insiderOnly are enabled, show whale trades that also have insider signals
+      sourceArray = whaleTrades;
+    } else if (whalesOnly) {
+      // Use dedicated whale buffer when whales filter is active
+      sourceArray = whaleTrades;
+    } else if (insiderOnly) {
+      // NEW: Use dedicated insider buffer when insider filter is active
+      sourceArray = insiderTrades;
+    } else {
+      // Default: use main trades buffer (200 trades)
+      sourceArray = trades;
+    }
 
     return sourceArray.filter((trade) => {
       const volume = trade.price * (trade.shares_normalized || trade.shares);
@@ -1081,10 +1139,18 @@ export default function LiveTrades() {
         }
       }
 
-      // Insider activity filter - at the end of filter chain
+      // Insider activity filter - if insiderOnly is true, we're already using insiderTrades buffer
+      // But we need to re-check in case whalesOnly is also true
       if (insiderOnly) {
         // Trade must have ALL selected insider signals (AND logic)
         if (!hasAllSelectedInsiderSignals(trade)) return false;
+      }
+
+      // Whale filter - if whalesOnly is true, we're already using whaleTrades buffer
+      // But we need to re-check in case insiderOnly is also true
+      if (whalesOnly && !insiderOnly) {
+        const volume = trade.price * (trade.shares_normalized || trade.shares);
+        if (volume < WHALE_THRESHOLD) return false;
       }
 
       return true;
@@ -1092,6 +1158,7 @@ export default function LiveTrades() {
   }, [
     trades,
     whaleTrades,
+    insiderTrades,
     filter,
     minVolume,
     whalesOnly,
@@ -1312,7 +1379,8 @@ export default function LiveTrades() {
                 <div className="flex items-center gap-2 text-red-400">
                   <AlertTriangle className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    Insider Filter Active: Showing trades with ALL selected signals ({enabledInsiderSignals.size}/4)
+                    Insider Filter Active: Showing last 2000 trades with ALL selected signals (
+                    {enabledInsiderSignals.size}/4)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
