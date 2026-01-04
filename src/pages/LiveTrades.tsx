@@ -94,7 +94,7 @@ const MEGA_WHALE_THRESHOLD = 10000; // $10k+
 
 // Insider detection thresholds
 const INSIDER_THRESHOLDS = {
-  freshWalletHours: 24,
+  freshWalletMaxTrades: 30, // Wallet with <30 total trades is considered "fresh"
   largeTradeMult: 3,
   nicheMarketVolume: 10000,
   rapidEntryMinutes: 30,
@@ -193,8 +193,8 @@ export default function LiveTrades() {
     >
   >(new Map());
   
-  // Cache for wallet first trade timestamps (API verified)
-  const walletFirstTradeCacheRef = useRef<Map<string, number | null>>(new Map());
+  // Cache for wallet total trade counts (API verified)
+  const walletTradeCountCacheRef = useRef<Map<string, number | null>>(new Map());
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -441,49 +441,12 @@ export default function LiveTrades() {
 
       console.log(`[LiveTrades] 💾 Cached ${cached} image keys (total cache size: ${imageCacheRef.current.size})`);
 
-      // Find condition_ids that didn't get images - try Gamma API fallback
+      // Log missing images (Gamma API fallback removed due to CORS)
       const missingConditionIds = conditionIds.filter(
         (id) => !data.markets.find((m: any) => m.conditionId === id && m.image),
       );
-
       if (missingConditionIds.length > 0) {
-        console.log(`[LiveTrades] 🔄 Trying Gamma fallback for ${missingConditionIds.length} missing images`);
-
-        // Try fetching directly from Gamma API for missing condition_ids (limit to 5)
-        for (const conditionId of missingConditionIds.slice(0, 5)) {
-          try {
-            const response = await fetch(`https://gamma-api.polymarket.com/markets?condition_id=${conditionId}`);
-            if (response.ok) {
-              const markets = await response.json();
-              if (markets?.[0]) {
-                const market = markets[0];
-                const eventSlug = market.eventSlug || market.event_slug || market.groupSlug;
-
-                // First check if market has an image directly
-                if (market.image) {
-                  imageCacheRef.current.set(conditionId, market.image);
-                  console.log(`[LiveTrades] ✅ Fallback found market image for ${conditionId.slice(0, 10)}...`);
-                  continue;
-                }
-
-                // Try to get event image if eventSlug exists
-                if (eventSlug) {
-                  const eventRes = await fetch(`https://gamma-api.polymarket.com/events?slug=${eventSlug}`);
-                  if (eventRes.ok) {
-                    const events = await eventRes.json();
-                    const image = events?.[0]?.image;
-                    if (image) {
-                      imageCacheRef.current.set(conditionId, image);
-                      console.log(`[LiveTrades] ✅ Fallback found event image for ${conditionId.slice(0, 10)}...`);
-                    }
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            // Ignore fallback errors silently
-          }
-        }
+        console.log(`[LiveTrades] ⚠️ ${missingConditionIds.length} markets without images (no fallback available)`);
       }
 
       // Update existing trades with newly cached images
@@ -612,11 +575,11 @@ export default function LiveTrades() {
     activity.marketCounts.set(trade.market_slug, marketCount + 1);
   }, []);
   
-  // Fetch wallet's first trade timestamp from API (for accurate fresh wallet detection)
-  const fetchWalletFirstTrade = useCallback(async (wallet: string): Promise<number | null> => {
+  // Fetch wallet's total trade count from API (for accurate fresh wallet detection)
+  const fetchWalletTradeCount = useCallback(async (wallet: string): Promise<number | null> => {
     // Check cache first
-    if (walletFirstTradeCacheRef.current.has(wallet)) {
-      return walletFirstTradeCacheRef.current.get(wallet) || null;
+    if (walletTradeCountCacheRef.current.has(wallet)) {
+      return walletTradeCountCacheRef.current.get(wallet) || null;
     }
     
     try {
@@ -624,18 +587,18 @@ export default function LiveTrades() {
         body: { address: wallet, timeframe: 'all' }
       });
       
-      if (error || !data?.recentTrades?.length) {
-        walletFirstTradeCacheRef.current.set(wallet, null);
+      if (error || !data?.stats) {
+        walletTradeCountCacheRef.current.set(wallet, null);
         return null;
       }
       
-      // Get earliest trade timestamp (already sorted ascending by edge function)
-      const firstTradeTimestamp = data.recentTrades[0].timestamp;
-      walletFirstTradeCacheRef.current.set(wallet, firstTradeTimestamp);
-      return firstTradeTimestamp;
+      // Get total trade count from stats
+      const totalTrades = data.stats.trades || 0;
+      walletTradeCountCacheRef.current.set(wallet, totalTrades);
+      return totalTrades;
     } catch (err) {
-      console.error('[InsiderDetection] Failed to fetch wallet first trade:', err);
-      walletFirstTradeCacheRef.current.set(wallet, null);
+      console.error('[InsiderDetection] Failed to fetch wallet trade count:', err);
+      walletTradeCountCacheRef.current.set(wallet, null);
       return null;
     }
   }, []);
@@ -650,19 +613,15 @@ export default function LiveTrades() {
     if (!activity) return { signals: [], details: [] };
 
     const tradeVolume = trade.price * (trade.shares_normalized || trade.shares);
-    let walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
     
-    // Check if we have API-verified first trade timestamp
-    const cachedFirstTrade = walletFirstTradeCacheRef.current.get(wallet);
-    if (cachedFirstTrade) {
-      walletAgeHours = (trade.timestamp - cachedFirstTrade) / 3600;
-    }
-
-    // Fresh wallet (new wallet making significant trades)
-    if (walletAgeHours < INSIDER_THRESHOLDS.freshWalletHours && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
+    // Fresh wallet: check API-verified trade count first, fallback to session count
+    const cachedTradeCount = walletTradeCountCacheRef.current.get(wallet);
+    const totalTrades = cachedTradeCount ?? activity.trades.length;
+    
+    if (totalTrades < INSIDER_THRESHOLDS.freshWalletMaxTrades && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
       signals.push("fresh_wallet");
-      const verified = cachedFirstTrade ? " ✓" : "";
-      details.push(`Wallet age: ${Math.round(walletAgeHours)}h${verified}`);
+      const verified = cachedTradeCount !== undefined && cachedTradeCount !== null ? " ✓" : "";
+      details.push(`${totalTrades} trades total${verified}`);
     }
 
     // Unusual sizing (trade size significantly larger than wallet's average)
@@ -698,19 +657,15 @@ export default function LiveTrades() {
     if (!activity) return { signals: [], details: [] };
     
     const tradeVolume = trade.price * (trade.shares_normalized || trade.shares);
-    let walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
     
-    // If wallet appears potentially fresh, verify via API
-    if (walletAgeHours < INSIDER_THRESHOLDS.freshWalletHours * 2 && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
-      const firstTradeTimestamp = await fetchWalletFirstTrade(wallet);
-      if (firstTradeTimestamp) {
-        walletAgeHours = (trade.timestamp - firstTradeTimestamp) / 3600;
-      }
+    // If wallet appears potentially fresh in session, verify via API
+    if (activity.trades.length < INSIDER_THRESHOLDS.freshWalletMaxTrades * 2 && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
+      await fetchWalletTradeCount(wallet);
     }
     
-    // Now run normal detection with potentially updated wallet age
+    // Now run normal detection with potentially updated trade count from cache
     return detectInsiderSignals(trade);
-  }, [detectInsiderSignals, fetchWalletFirstTrade]);
+  }, [detectInsiderSignals, fetchWalletTradeCount]);
 
   // Check if trade has ALL selected insider signals (for filtering)
   const hasAllSelectedInsiderSignals = useCallback(
@@ -880,10 +835,9 @@ export default function LiveTrades() {
           const tradeVol = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
           const activity = walletActivityMapRef.current.get(newTrade.user);
           if (activity && tradeVol >= INSIDER_THRESHOLDS.minTradeVolume) {
-            const sessionAge = (newTrade.timestamp - activity.firstSeen) / 3600;
-            if (sessionAge < INSIDER_THRESHOLDS.freshWalletHours * 2) {
-              // Fetch in background to populate cache for filtering
-              fetchWalletFirstTrade(newTrade.user);
+            // If wallet looks fresh in session, fetch actual trade count from API
+            if (activity.trades.length < INSIDER_THRESHOLDS.freshWalletMaxTrades * 2) {
+              fetchWalletTradeCount(newTrade.user);
             }
           }
 
@@ -982,7 +936,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals, fetchWalletFirstTrade]);
+  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals, fetchWalletTradeCount]);
 
   // Watchdog - check connection health
   useEffect(() => {
