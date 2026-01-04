@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type Candlestick } from '@/hooks/useDflowApi';
 import { useDflowWebSocket, type PriceUpdate } from '@/hooks/useDflowWebSocket';
+import { generateMockCandlesticks } from '@/lib/kalshi-mock-data';
 
 interface KalshiCandlestickChartProps {
   ticker: string;
@@ -41,6 +42,7 @@ export function KalshiCandlestickChart({
   const [isLoading, setIsLoading] = useState(true);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const [priceChange, setPriceChange] = useState<number>(0);
+  const [usingMockData, setUsingMockData] = useState(false);
 
   // Get current interval config
   const intervalConfig = useMemo(() => 
@@ -76,7 +78,7 @@ export function KalshiCandlestickChart({
     },
   });
 
-  // Fetch candlestick data
+  // Fetch candlestick data with mock fallback
   useEffect(() => {
     const fetchCandles = async () => {
       setIsLoading(true);
@@ -103,6 +105,7 @@ export function KalshiCandlestickChart({
           }
           
           setCandles(aggregated);
+          setUsingMockData(false);
           
           // Calculate price change
           if (aggregated.length >= 2) {
@@ -112,9 +115,34 @@ export function KalshiCandlestickChart({
             setPriceChange(change);
             setLastPrice(last);
           }
+        } else {
+          // Use mock data
+          console.log('[Chart] No candle data, using mock');
+          const mockCandles = generateMockCandlesticks(50, 100);
+          setCandles(mockCandles);
+          setUsingMockData(true);
+          
+          if (mockCandles.length >= 2) {
+            const first = mockCandles[0].close;
+            const last = mockCandles[mockCandles.length - 1].close;
+            const change = ((last - first) / first) * 100;
+            setPriceChange(change);
+            setLastPrice(last);
+          }
         }
       } catch (err) {
-        console.error('Failed to fetch candlesticks:', err);
+        console.error('Failed to fetch candlesticks, using mock data:', err);
+        const mockCandles = generateMockCandlesticks(50, 100);
+        setCandles(mockCandles);
+        setUsingMockData(true);
+        
+        if (mockCandles.length >= 2) {
+          const first = mockCandles[0].close;
+          const last = mockCandles[mockCandles.length - 1].close;
+          const change = ((last - first) / first) * 100;
+          setPriceChange(change);
+          setLastPrice(last);
+        }
       } finally {
         setIsLoading(false);
       }

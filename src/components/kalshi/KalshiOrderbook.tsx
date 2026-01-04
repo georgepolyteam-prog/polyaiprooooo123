@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLiveKalshiData } from '@/hooks/useLiveKalshiData';
+import { generateMockOrderbook } from '@/lib/kalshi-mock-data';
 
 interface OrderbookLevel {
   price: number;
@@ -15,15 +16,20 @@ interface KalshiOrderbookProps {
 }
 
 export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProps) {
-  const { orderbook, isPolling, refetch } = useLiveKalshiData(ticker, true);
+  const { orderbook: liveOrderbook, isPolling, refetch, usingMockData } = useLiveKalshiData(ticker, true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Use live orderbook or generate mock if not available
+  const orderbook = useMemo(() => {
+    if (liveOrderbook) return liveOrderbook;
+    return generateMockOrderbook();
+  }, [liveOrderbook]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   };
-
 
   // Calculate max size for bar widths
   const maxSize = useMemo(() => {
@@ -34,10 +40,6 @@ export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProp
     ];
     return Math.max(...allSizes, 1);
   }, [orderbook]);
-
-  if (!orderbook) {
-    return null;
-  }
 
   const displayLevels = compact ? 5 : 8;
 
@@ -51,11 +53,14 @@ export function KalshiOrderbook({ ticker, compact = false }: KalshiOrderbookProp
         <div className="flex items-center gap-2">
           <BarChart3 className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">Order Book</span>
-          {isPolling && (
+          {isPolling && !usingMockData && (
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[10px] text-muted-foreground">LIVE</span>
             </div>
+          )}
+          {usingMockData && (
+            <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">DEMO</span>
           )}
         </div>
         <button

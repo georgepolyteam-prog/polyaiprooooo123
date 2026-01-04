@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLiveKalshiData } from '@/hooks/useLiveKalshiData';
+import { generateMockTrades } from '@/lib/kalshi-mock-data';
 
 interface Trade {
   id: string;
@@ -17,8 +19,16 @@ interface KalshiTradeFeedProps {
 }
 
 export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps) {
-  const { trades, isPolling } = useLiveKalshiData(ticker, true);
-  const displayTrades = trades.slice(0, maxTrades);
+  const { trades, isPolling, usingMockData } = useLiveKalshiData(ticker, true);
+  
+  // Use trades from hook, which already has mock fallback built in
+  const displayTrades = useMemo(() => {
+    if (trades.length > 0) {
+      return trades.slice(0, maxTrades);
+    }
+    // Fallback to generate mock trades if still empty
+    return generateMockTrades(maxTrades);
+  }, [trades, maxTrades]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -32,20 +42,19 @@ export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps
     return date.toLocaleDateString();
   };
 
-  if (displayTrades.length === 0) {
-    return null;
-  }
-
   return (
     <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
       <div className="flex items-center gap-2 mb-3">
         <Activity className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium text-foreground">Recent Trades</span>
-        {isPolling && (
+        {isPolling && !usingMockData && (
           <div className="ml-auto flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] text-muted-foreground">LIVE</span>
           </div>
+        )}
+        {usingMockData && (
+          <span className="ml-auto text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">DEMO</span>
         )}
       </div>
 

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Link } from 'react-router-dom';
+import { MOCK_MARKETS } from '@/lib/kalshi-mock-data';
 
 // Components
 import { KalshiCandlestickChart } from '@/components/kalshi/KalshiCandlestickChart';
@@ -38,7 +39,7 @@ export default function KalshiTerminal() {
   const [mobileTab, setMobileTab] = useState<'chart' | 'data' | 'trade'>('chart');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
-  // Fetch initial market
+  // Fetch initial market with mock fallback
   useEffect(() => {
     const fetchInitialMarket = async () => {
       try {
@@ -54,10 +55,15 @@ export default function KalshiTerminal() {
           allMarkets.sort((a, b) => (b.volume || 0) - (a.volume || 0));
           if (allMarkets.length > 0) {
             setSelectedMarket(allMarkets[0]);
+            return;
           }
         }
+        // Fallback to mock data if no markets fetched
+        console.log('[Terminal] Using mock market data');
+        setSelectedMarket(MOCK_MARKETS[0]);
       } catch (err) {
-        console.error('Failed to fetch initial market:', err);
+        console.error('Failed to fetch initial market, using mock data:', err);
+        setSelectedMarket(MOCK_MARKETS[0]);
       }
     };
     
