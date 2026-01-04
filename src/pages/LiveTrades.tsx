@@ -192,6 +192,10 @@ export default function LiveTrades() {
       }
     >
   >(new Map());
+  
+  // Cache for wallet first trade timestamps (API verified)
+  const walletFirstTradeCacheRef = useRef<Map<string, number | null>>(new Map());
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -594,6 +598,12 @@ export default function LiveTrades() {
     }
 
     const activity = walletActivityMapRef.current.get(wallet)!;
+    
+    // Update firstSeen to earliest trade timestamp
+    if (trade.timestamp < activity.firstSeen) {
+      activity.firstSeen = trade.timestamp;
+    }
+    
     activity.trades.push(trade);
     activity.totalVolume += volume;
     activity.avgTradeSize = activity.totalVolume / activity.trades.length;
@@ -601,8 +611,36 @@ export default function LiveTrades() {
     const marketCount = activity.marketCounts.get(trade.market_slug) || 0;
     activity.marketCounts.set(trade.market_slug, marketCount + 1);
   }, []);
+  
+  // Fetch wallet's first trade timestamp from API (for accurate fresh wallet detection)
+  const fetchWalletFirstTrade = useCallback(async (wallet: string): Promise<number | null> => {
+    // Check cache first
+    if (walletFirstTradeCacheRef.current.has(wallet)) {
+      return walletFirstTradeCacheRef.current.get(wallet) || null;
+    }
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('wallet-profile', {
+        body: { address: wallet, timeframe: 'all' }
+      });
+      
+      if (error || !data?.recentTrades?.length) {
+        walletFirstTradeCacheRef.current.set(wallet, null);
+        return null;
+      }
+      
+      // Get earliest trade timestamp (already sorted ascending by edge function)
+      const firstTradeTimestamp = data.recentTrades[0].timestamp;
+      walletFirstTradeCacheRef.current.set(wallet, firstTradeTimestamp);
+      return firstTradeTimestamp;
+    } catch (err) {
+      console.error('[InsiderDetection] Failed to fetch wallet first trade:', err);
+      walletFirstTradeCacheRef.current.set(wallet, null);
+      return null;
+    }
+  }, []);
 
-  // Detect insider signals for a trade
+  // Detect insider signals for a trade (sync version for filtering)
   const detectInsiderSignals = useCallback((trade: Trade): { signals: string[]; details: string[] } => {
     const signals: string[] = [];
     const details: string[] = [];
@@ -612,12 +650,19 @@ export default function LiveTrades() {
     if (!activity) return { signals: [], details: [] };
 
     const tradeVolume = trade.price * (trade.shares_normalized || trade.shares);
-    const walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
+    let walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
+    
+    // Check if we have API-verified first trade timestamp
+    const cachedFirstTrade = walletFirstTradeCacheRef.current.get(wallet);
+    if (cachedFirstTrade) {
+      walletAgeHours = (trade.timestamp - cachedFirstTrade) / 3600;
+    }
 
     // Fresh wallet (new wallet making significant trades)
     if (walletAgeHours < INSIDER_THRESHOLDS.freshWalletHours && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
       signals.push("fresh_wallet");
-      details.push(`Wallet age: ${Math.round(walletAgeHours)}h`);
+      const verified = cachedFirstTrade ? " ✓" : "";
+      details.push(`Wallet age: ${Math.round(walletAgeHours)}h${verified}`);
     }
 
     // Unusual sizing (trade size significantly larger than wallet's average)
@@ -644,6 +689,28 @@ export default function LiveTrades() {
 
     return { signals, details };
   }, []);
+  
+  // Async version that fetches from API for potentially fresh wallets
+  const detectInsiderSignalsWithApi = useCallback(async (trade: Trade): Promise<{ signals: string[]; details: string[] }> => {
+    const wallet = trade.user;
+    const activity = walletActivityMapRef.current.get(wallet);
+    
+    if (!activity) return { signals: [], details: [] };
+    
+    const tradeVolume = trade.price * (trade.shares_normalized || trade.shares);
+    let walletAgeHours = (trade.timestamp - activity.firstSeen) / 3600;
+    
+    // If wallet appears potentially fresh, verify via API
+    if (walletAgeHours < INSIDER_THRESHOLDS.freshWalletHours * 2 && tradeVolume >= INSIDER_THRESHOLDS.minTradeVolume) {
+      const firstTradeTimestamp = await fetchWalletFirstTrade(wallet);
+      if (firstTradeTimestamp) {
+        walletAgeHours = (trade.timestamp - firstTradeTimestamp) / 3600;
+      }
+    }
+    
+    // Now run normal detection with potentially updated wallet age
+    return detectInsiderSignals(trade);
+  }, [detectInsiderSignals, fetchWalletFirstTrade]);
 
   // Check if trade has ALL selected insider signals (for filtering)
   const hasAllSelectedInsiderSignals = useCallback(
@@ -808,6 +875,17 @@ export default function LiveTrades() {
 
           // Update wallet activity for insider detection
           updateWalletActivity(newTrade);
+          
+          // Trigger async API fetch for potentially fresh wallets (non-blocking)
+          const tradeVol = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
+          const activity = walletActivityMapRef.current.get(newTrade.user);
+          if (activity && tradeVol >= INSIDER_THRESHOLDS.minTradeVolume) {
+            const sessionAge = (newTrade.timestamp - activity.firstSeen) / 3600;
+            if (sessionAge < INSIDER_THRESHOLDS.freshWalletHours * 2) {
+              // Fetch in background to populate cache for filtering
+              fetchWalletFirstTrade(newTrade.user);
+            }
+          }
 
           const volume = newTrade.price * (newTrade.shares_normalized || newTrade.shares);
 
@@ -904,7 +982,7 @@ export default function LiveTrades() {
         clearTimeout(connectionTimeoutRef.current);
       }
     }
-  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals]);
+  }, [queueImageFetch, showWhaleAlert, updateWalletActivity, hasAllSelectedInsiderSignals, fetchWalletFirstTrade]);
 
   // Watchdog - check connection health
   useEffect(() => {

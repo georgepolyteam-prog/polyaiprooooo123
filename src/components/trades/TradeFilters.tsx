@@ -97,10 +97,10 @@ export function TradeFilters({
   };
 
   const insiderSignalOptions = [
-    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users },
-    { id: 'unusual_sizing', label: 'Unusual Sizing', icon: TrendingUp },
-    { id: 'repeated_entries', label: 'Repeated Entries', icon: Target },
-    { id: 'rapid_clustering', label: 'Rapid Clustering', icon: Zap }
+    { id: 'fresh_wallet', label: 'Fresh Wallets', icon: Users, description: 'Wallets <24h old (API verified)' },
+    { id: 'unusual_sizing', label: 'Unusual Sizing', icon: TrendingUp, description: 'Trade 3x+ larger than avg' },
+    { id: 'repeated_entries', label: 'Repeated Entries', icon: Target, description: '3+ entries in same market' },
+    { id: 'rapid_clustering', label: 'Rapid Clustering', icon: Zap, description: '3+ trades within 30 min' }
   ];
 
   return (
@@ -258,8 +258,8 @@ export function TradeFilters({
                 })}
               </div>
               <p className="text-xs text-muted-foreground">
-                Select which insider signals to detect. Fresh wallets are new traders, unusual sizing shows abnormally large trades, 
-                repeated entries flag multiple trades in the same market, and rapid clustering detects many trades in short time.
+                Select which insider signals to detect. <strong>Fresh Wallets</strong> uses API verification for accurate wallet age detection.
+                Trades must match ALL selected signals to appear.
               </p>
             </div>
           </motion.div>
