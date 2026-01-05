@@ -4,7 +4,12 @@ import { supabase } from '@/integrations/supabase/client';
 export interface PolyMarket {
   id: string;
   conditionId: string;
+  /** Polymarket market slug (outcome-level) */
   slug: string;
+  /** Polymarket event slug (event-level) */
+  eventSlug: string;
+  /** Canonical Polymarket URL for this market/outcome */
+  marketUrl: string;
   title: string;
   question: string;
   description?: string;
@@ -13,10 +18,11 @@ export interface PolyMarket {
   volume: number;
   liquidity: number;
   endDate?: string;
-  yesPrice: number;
-  noPrice: number;
-  outcomes: string[];
-  tokens: { tokenId: string; outcome: string }[];
+  yesPrice: number; // cents (0-100)
+  noPrice: number; // cents (0-100)
+  yesTokenId?: string | null;
+  noTokenId?: string | null;
+  outcomes?: string[];
 }
 
 export interface Trade {
@@ -80,7 +86,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
       try {
         setLoading(true);
         setError(null);
-        
+
         const { data, error: fnError } = await supabase.functions.invoke('polymarket-data', {
           body: {
             action: 'getEvents',
@@ -91,72 +97,92 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
         });
 
         if (fnError) throw fnError;
+        if (!data?.success || !Array.isArray(data?.events)) {
+          throw new Error('Invalid markets response');
+        }
 
-        const events = data?.events || [];
-        
+        const events = data.events as any[];
+
         if (events.length === 0) {
           console.log('[PolyTerminal] No events returned');
           setError('No markets available');
-          setLoading(false);
           return;
         }
 
         console.log(`[PolyTerminal] Fetched ${events.length} events`);
 
-        // Transform events into flat market list
+        const toCents = (p: unknown): number => {
+          const n = typeof p === 'number' ? p : parseFloat(String(p ?? '0'));
+          // Dome/Gamma prices are typically 0..1. If we ever get 0..100, normalize.
+          const prob = n > 1 ? n / 100 : n;
+          return Math.round(Math.max(0, Math.min(1, prob)) * 100);
+        };
+
+        // Flatten events -> outcome-level markets
         const transformedMarkets: PolyMarket[] = events.flatMap((event: any) => {
-          const outcomes = event.outcomes || [];
-          
+          const outcomes = Array.isArray(event.outcomes) ? event.outcomes : [];
+          const eventSlug = event.slug || '';
+
+          // Fallback (should be rare): create a single pseudo-market
           if (outcomes.length === 0) {
-            return [{
-              id: event.id || event.slug,
-              conditionId: event.conditionId || '',
-              slug: event.slug || '',
-              title: event.title,
-              question: event.title,
-              description: event.description,
-              image: event.image,
-              volume24h: parseFloat(event.volume24hr || event.volume24h || 0),
-              volume: parseFloat(event.volume || 0),
-              liquidity: parseFloat(event.liquidity || 0),
-              endDate: event.endDate,
-              yesPrice: 50,
-              noPrice: 50,
-              outcomes: ['Yes', 'No'],
-              tokens: [],
-            }];
+            return [
+              {
+                id: event.id || eventSlug,
+                conditionId: '',
+                slug: eventSlug,
+                eventSlug,
+                marketUrl: eventSlug ? `https://polymarket.com/event/${eventSlug}` : '',
+                title: event.title,
+                question: event.title,
+                description: event.description,
+                image: event.image,
+                volume24h: Number(event.volume24hr || 0),
+                volume: Number(event.volume || 0),
+                liquidity: Number(event.liquidity || 0),
+                endDate: event.endDate,
+                yesPrice: 50,
+                noPrice: 50,
+              },
+            ];
           }
 
-          return outcomes.map((outcome: any) => ({
-            id: outcome.conditionId || `${event.id}-${outcome.slug}`,
-            conditionId: outcome.conditionId || '',
-            slug: outcome.slug || event.slug || '',
-            title: outcome.question || event.title,
-            question: outcome.question || event.title,
-            description: event.description,
-            image: event.image || outcome.image,
-            volume24h: parseFloat(outcome.volume24hr || outcome.volume24h || 0),
-            volume: parseFloat(outcome.volume || event.volume || 0),
-            liquidity: parseFloat(outcome.liquidity || event.liquidity || 0),
-            endDate: outcome.endDate || event.endDate,
-            yesPrice: Math.round((parseFloat(outcome.yesPrice || 0.5)) * 100),
-            noPrice: Math.round((1 - parseFloat(outcome.yesPrice || 0.5)) * 100),
-            outcomes: outcome.outcomes || ['Yes', 'No'],
-            tokens: outcome.tokens || [],
-          }));
+          return outcomes.map((outcome: any) => {
+            const marketSlug = outcome.slug || '';
+            const yesCents = toCents(outcome.yesPrice);
+
+            return {
+              id: outcome.conditionId || `${event.id}-${marketSlug}`,
+              conditionId: outcome.conditionId || '',
+              slug: marketSlug,
+              eventSlug,
+              marketUrl: eventSlug && marketSlug ? `https://polymarket.com/event/${eventSlug}/${marketSlug}` : (eventSlug ? `https://polymarket.com/event/${eventSlug}` : ''),
+              title: outcome.question || event.title,
+              question: outcome.question || event.title,
+              description: event.description,
+              image: outcome.image || event.image,
+              volume24h: Number(outcome.volume24hr || 0),
+              volume: Number(outcome.volume || event.volume || 0),
+              liquidity: Number(outcome.liquidity || event.liquidity || 0),
+              endDate: outcome.endDate || event.endDate,
+              yesPrice: yesCents,
+              noPrice: 100 - yesCents,
+              yesTokenId: outcome.yesTokenId ?? null,
+              noTokenId: outcome.noTokenId ?? null,
+              outcomes: Array.isArray(outcome.outcomes) ? outcome.outcomes : ['Yes', 'No'],
+            } as PolyMarket;
+          });
         });
 
-        // Filter out invalid/placeholder markets
-        const validMarkets = transformedMarkets.filter(m => 
-          m.title && m.yesPrice > 0 && m.yesPrice < 100
+        const validMarkets = transformedMarkets.filter((m) =>
+          Boolean(m.title) && Boolean(m.eventSlug) && Boolean(m.slug) && m.yesPrice >= 0 && m.yesPrice <= 100,
         );
 
-        console.log(`[PolyTerminal] Transformed ${validMarkets.length} valid markets`);
+        console.log(`[PolyTerminal] Transformed ${validMarkets.length} markets`);
         setMarkets(validMarkets);
-        
+
         // Auto-select first market
-        if (validMarkets.length > 0 && !selectedMarket) {
-          setSelectedMarket(validMarkets[0]);
+        if (validMarkets.length > 0) {
+          setSelectedMarket((prev) => prev ?? validMarkets[0]);
         }
       } catch (err) {
         console.error('[PolyTerminal] Failed to fetch markets:', err);
@@ -357,28 +383,57 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
   // Fetch orderbook data for selected market
   const fetchOrderbook = useCallback(async () => {
-    if (!selectedMarket?.conditionId && !selectedMarket?.slug) return;
+    if (!selectedMarket?.marketUrl) return;
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('market-dashboard', {
         body: {
-          marketSlug: selectedMarket.slug,
-          conditionId: selectedMarket.conditionId,
+          marketUrl: selectedMarket.marketUrl,
+          yesTokenId: selectedMarket.yesTokenId ?? undefined,
+          noTokenId: selectedMarket.noTokenId ?? undefined,
         },
       });
 
       if (fnError) throw fnError;
 
-      if (data?.orderbook) {
-        setOrderbook({
-          yesBids: data.orderbook.yesBids || [],
-          yesAsks: data.orderbook.yesAsks || [],
-          noBids: data.orderbook.noBids || [],
-          noAsks: data.orderbook.noAsks || [],
-          spread: data.orderbook.spread || 0,
-          midPrice: data.orderbook.midPrice || 50,
-        });
+      const raw = data?.orderbook;
+      if (!raw) {
+        setOrderbook(null);
+        return;
       }
+
+      const yesBids: OrderbookLevel[] = (raw.bids || []).map((l: any) => ({
+        price: Number(l.price ?? 0),
+        size: Number(l.size ?? 0),
+      }));
+
+      const yesAsks: OrderbookLevel[] = (raw.asks || []).map((l: any) => ({
+        price: Number(l.price ?? 0),
+        size: Number(l.size ?? 0),
+      }));
+
+      // Derive NO-side by inverting YES-side prices (NO = 100 - YES)
+      const invert = (levels: OrderbookLevel[]) =>
+        levels
+          .map((l) => ({ ...l, price: Math.max(0, Math.min(100, 100 - l.price)) }))
+          .filter((l) => l.size > 0);
+
+      const noBids = invert(yesAsks).sort((a, b) => b.price - a.price);
+      const noAsks = invert(yesBids).sort((a, b) => a.price - b.price);
+
+      const bestBid = yesBids[0]?.price;
+      const bestAsk = yesAsks[0]?.price;
+      const spread = bestBid !== undefined && bestAsk !== undefined ? bestAsk - bestBid : 0;
+      const midPrice = bestBid !== undefined && bestAsk !== undefined ? (bestBid + bestAsk) / 2 : selectedMarket.yesPrice;
+
+      setOrderbook({
+        yesBids,
+        yesAsks,
+        noBids,
+        noAsks,
+        spread,
+        midPrice,
+      });
     } catch (err) {
       console.error('[PolyTerminal] Failed to fetch orderbook:', err);
     }
