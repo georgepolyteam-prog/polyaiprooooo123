@@ -81,6 +81,12 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const isConnectingRef = useRef(false);
   const lastMessageTimeRef = useRef<number | null>(null);
 
+  // Keep latest market filter in a ref so WebSocket handlers always use the current market
+  const marketFilterRef = useRef<{ slug?: string | null; conditionId?: string | null } | null>(null);
+
+  // Seed trades from the market-dashboard "recentTrades" only once per selected market
+  const seededTradesMarketSlugRef = useRef<string | null>(null);
+
   // Fetch top markets on mount
   useEffect(() => {
     const fetchMarkets = async () => {
@@ -309,7 +315,16 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
             console.log(`[PolyTerminal] 📡 Subscription confirmed: ${data.subscription_id}`);
           } else if (data.type === 'event') {
             const rawTrade = data.data;
-            
+
+            const filter = marketFilterRef.current;
+            if (filter) {
+              const matchesSlug = filter.slug && rawTrade.market_slug && rawTrade.market_slug === filter.slug;
+              const matchesCondition = filter.conditionId && rawTrade.condition_id && rawTrade.condition_id === filter.conditionId;
+              if (!matchesSlug && !matchesCondition) {
+                return;
+              }
+            }
+
             console.log('[PolyTerminal] 📦 Trade received:', {
               side: rawTrade.side,
               token_label: rawTrade.token_label,
@@ -337,8 +352,8 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
               image: rawTrade.image,
             };
 
-            setTrades(prev => {
-              const exists = prev.some(t => t.id === newTrade.id);
+            setTrades((prev) => {
+              const exists = prev.some((t) => t.id === newTrade.id);
               if (exists) return prev;
               return [newTrade, ...prev.slice(0, 99)];
             });
@@ -399,6 +414,39 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
       if (fnError) throw fnError;
 
       const raw = data?.orderbook;
+
+      // Seed the trades feed immediately from the dashboard response (so it's not empty while waiting for WS)
+      const recent = Array.isArray(data?.recentTrades) ? (data.recentTrades as any[]) : [];
+      if (selectedMarket?.slug && seededTradesMarketSlugRef.current !== selectedMarket.slug) {
+        if (recent.length > 0) {
+          const seeded: Trade[] = recent.map((t: any, idx: number) => {
+            const tsMs = t.timestamp ? new Date(t.timestamp).getTime() : Date.now();
+            const price01 = Number.isFinite(Number(t.rawPrice)) ? Number(t.rawPrice) : Number(t.price ?? 0) / 100;
+            const shares = Number(t.shares ?? 0);
+            return {
+              id: String(t.id ?? `${selectedMarket.slug}-${tsMs}-${idx}`),
+              token_id: '',
+              token_label: String(t.outcome || 'YES') === 'NO' ? 'No' : 'Yes',
+              side: String(t.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+              market_slug: selectedMarket.slug,
+              condition_id: selectedMarket.conditionId,
+              shares,
+              shares_normalized: shares,
+              price: price01,
+              tx_hash: '',
+              title: selectedMarket.title,
+              timestamp: Math.floor(tsMs / 1000),
+              order_hash: '',
+              user: String(t.wallet || ''),
+              taker: '',
+              image: selectedMarket.image,
+            };
+          });
+          setTrades(seeded);
+        }
+        seededTradesMarketSlugRef.current = selectedMarket.slug;
+      }
+
       if (!raw) {
         setOrderbook(null);
         return;
@@ -460,11 +508,23 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
   // Update subscription when market changes
   useEffect(() => {
-    if (selectedMarket && wsRef.current?.readyState === WebSocket.OPEN) {
+    marketFilterRef.current = selectedMarket
+      ? { slug: selectedMarket.slug, conditionId: selectedMarket.conditionId }
+      : null;
+
+    // When switching markets, clear feed and allow a new seed from market-dashboard
+    seededTradesMarketSlugRef.current = null;
+    setTrades([]);
+
+    if (!selectedMarket) return;
+
+    // Update WS subscription if connected
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       updateSubscription(wsRef.current, selectedMarket);
-      setTrades([]); // Clear trades when switching markets
-      fetchOrderbook();
     }
+
+    // Fetch orderbook + seed trades
+    fetchOrderbook();
   }, [selectedMarket?.slug, selectedMarket?.conditionId]);
 
   // Fetch orderbook when market changes
@@ -474,11 +534,11 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     }
   }, [selectedMarket, fetchOrderbook]);
 
-  // Poll orderbook every 5 seconds
+  // Poll orderbook every 2 seconds (snappier “live” feel)
   useEffect(() => {
     if (!selectedMarket) return;
-    
-    const interval = setInterval(fetchOrderbook, 5000);
+
+    const interval = setInterval(fetchOrderbook, 2000);
     return () => clearInterval(interval);
   }, [selectedMarket, fetchOrderbook]);
 
