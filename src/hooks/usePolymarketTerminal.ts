@@ -56,6 +56,8 @@ interface UsePolymarketTerminalOptions {
   enabled?: boolean;
 }
 
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalOptions = {}) {
   const [markets, setMarkets] = useState<PolyMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<PolyMarket | null>(null);
@@ -68,7 +70,9 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const wsRef = useRef<WebSocket | null>(null);
   const wsUrlRef = useRef<string | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastMessageTimeRef = useRef<number>(Date.now());
+  const reconnectAttemptsRef = useRef(0);
+  const subscriptionIdRef = useRef<string | null>(null);
+  const isConnectingRef = useRef(false);
 
   // Fetch top markets on mount
   useEffect(() => {
@@ -88,7 +92,6 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
         if (fnError) throw fnError;
 
-        // Check for success response structure
         const events = data?.events || [];
         
         if (events.length === 0) {
@@ -102,11 +105,9 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
         // Transform events into flat market list
         const transformedMarkets: PolyMarket[] = events.flatMap((event: any) => {
-          // Each event may have multiple outcomes
           const outcomes = event.outcomes || [];
           
           if (outcomes.length === 0) {
-            // Single outcome event - use event directly
             return [{
               id: event.id || event.slug,
               conditionId: event.conditionId || '',
@@ -168,93 +169,195 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     fetchMarkets();
   }, []);
 
+  // Subscribe to market-specific orders
+  const subscribeToMarket = useCallback((ws: WebSocket, market: PolyMarket | null) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    // Build subscription based on market
+    const subscription: any = {
+      action: 'subscribe',
+      platform: 'polymarket',
+      version: 1,
+      type: 'orders',
+      filters: {},
+    };
+
+    if (market?.slug) {
+      // Subscribe to specific market by slug
+      subscription.filters.market_slugs = [market.slug];
+      console.log(`[PolyTerminal] Subscribing to market: ${market.slug}`);
+    } else if (market?.conditionId) {
+      // Fallback to condition_id if no slug
+      subscription.filters.condition_ids = [market.conditionId];
+      console.log(`[PolyTerminal] Subscribing to condition: ${market.conditionId}`);
+    } else {
+      // Subscribe to all trades (requires Dev tier)
+      subscription.filters.users = ['*'];
+      console.log('[PolyTerminal] Subscribing to all trades');
+    }
+
+    ws.send(JSON.stringify(subscription));
+  }, []);
+
+  // Update subscription when market changes
+  const updateSubscription = useCallback((ws: WebSocket, market: PolyMarket | null) => {
+    if (ws.readyState !== WebSocket.OPEN || !subscriptionIdRef.current) {
+      // No existing subscription, create new one
+      subscribeToMarket(ws, market);
+      return;
+    }
+
+    // Update existing subscription
+    const update: any = {
+      action: 'update',
+      subscription_id: subscriptionIdRef.current,
+      platform: 'polymarket',
+      version: 1,
+      type: 'orders',
+      filters: {},
+    };
+
+    if (market?.slug) {
+      update.filters.market_slugs = [market.slug];
+      console.log(`[PolyTerminal] Updating subscription to market: ${market.slug}`);
+    } else if (market?.conditionId) {
+      update.filters.condition_ids = [market.conditionId];
+      console.log(`[PolyTerminal] Updating subscription to condition: ${market.conditionId}`);
+    } else {
+      update.filters.users = ['*'];
+      console.log('[PolyTerminal] Updating subscription to all trades');
+    }
+
+    ws.send(JSON.stringify(update));
+  }, [subscribeToMarket]);
+
   // Connect to Dome WebSocket for live trades
   const connectWebSocket = useCallback(async () => {
-    if (!enabled || wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!enabled || wsRef.current?.readyState === WebSocket.OPEN || isConnectingRef.current) return;
+
+    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+      console.log('[PolyTerminal] Max reconnection attempts reached');
+      setError('Connection failed after max retries');
+      return;
+    }
 
     try {
+      isConnectingRef.current = true;
+      
       if (!wsUrlRef.current) {
+        console.log('[PolyTerminal] Fetching WebSocket URL...');
         const { data, error: fnError } = await supabase.functions.invoke('dome-ws-url');
         if (fnError || !data?.wsUrl) {
-          console.error('Failed to get WebSocket URL:', fnError);
+          console.error('[PolyTerminal] Failed to get WebSocket URL:', fnError);
           setError('Failed to connect to live feed');
+          isConnectingRef.current = false;
           return;
         }
         wsUrlRef.current = data.wsUrl;
       }
 
+      console.log(`[PolyTerminal] Connecting to Dome WebSocket (attempt ${reconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})...`);
       const ws = new WebSocket(wsUrlRef.current);
 
       ws.onopen = () => {
-        console.log('[PolyTerminal] WebSocket connected');
+        console.log('[PolyTerminal] ✅ WebSocket connected');
         setConnected(true);
         setError(null);
-        lastMessageTimeRef.current = Date.now();
+        reconnectAttemptsRef.current = 0;
+        isConnectingRef.current = false;
+        subscriptionIdRef.current = null;
 
-        // Subscribe to all Polymarket orders
-        ws.send(JSON.stringify({
-          action: 'subscribe',
-          platform: 'polymarket',
-          version: 1,
-          type: 'orders',
-          filters: {
-            users: ['*'],
-          },
-        }));
+        // Subscribe to current market
+        subscribeToMarket(ws, selectedMarket);
       };
 
       ws.onmessage = (event) => {
-        lastMessageTimeRef.current = Date.now();
-        const data = JSON.parse(event.data);
+        try {
+          const data = JSON.parse(event.data);
 
-        if (data.type === 'event') {
-          const rawTrade = data.data;
-          
-          // Only add trades for selected market if we have one
-          if (selectedMarket && rawTrade.condition_id !== selectedMarket.conditionId && 
-              rawTrade.market_slug !== selectedMarket.slug) {
-            return;
+          if (data.type === 'ack') {
+            // Subscription acknowledged - store the subscription ID
+            subscriptionIdRef.current = data.subscription_id;
+            console.log(`[PolyTerminal] 📡 Subscription confirmed: ${data.subscription_id}`);
+          } else if (data.type === 'event') {
+            const rawTrade = data.data;
+            
+            console.log('[PolyTerminal] 📦 Trade received:', {
+              side: rawTrade.side,
+              token_label: rawTrade.token_label,
+              price: rawTrade.price,
+              shares: rawTrade.shares_normalized,
+              market: rawTrade.market_slug,
+            });
+
+            const newTrade: Trade = {
+              id: rawTrade.order_hash || `${rawTrade.tx_hash}-${rawTrade.timestamp}`,
+              token_id: rawTrade.token_id || '',
+              token_label: rawTrade.token_label || 'Yes',
+              side: rawTrade.side || 'BUY',
+              market_slug: rawTrade.market_slug || '',
+              condition_id: rawTrade.condition_id || '',
+              shares: rawTrade.shares || 0,
+              shares_normalized: rawTrade.shares_normalized || rawTrade.shares / 1000000 || 0,
+              price: rawTrade.price || 0,
+              tx_hash: rawTrade.tx_hash || '',
+              title: rawTrade.title || '',
+              timestamp: rawTrade.timestamp || Math.floor(Date.now() / 1000),
+              order_hash: rawTrade.order_hash || '',
+              user: rawTrade.user || '',
+              taker: rawTrade.taker || '',
+              image: rawTrade.image,
+            };
+
+            setTrades(prev => {
+              const exists = prev.some(t => t.id === newTrade.id);
+              if (exists) return prev;
+              return [newTrade, ...prev.slice(0, 99)];
+            });
+          } else if (data.type === 'error') {
+            console.error('[PolyTerminal] ❌ WebSocket error:', data.message || data);
           }
-
-          const newTrade: Trade = {
-            id: rawTrade.order_hash || `${rawTrade.tx_hash}-${rawTrade.timestamp}`,
-            ...rawTrade,
-          };
-
-          setTrades(prev => {
-            const exists = prev.some(t => t.id === newTrade.id);
-            if (exists) return prev;
-            return [newTrade, ...prev.slice(0, 99)];
-          });
+        } catch (parseErr) {
+          console.error('[PolyTerminal] Failed to parse message:', parseErr);
         }
       };
 
       ws.onerror = () => {
-        console.error('[PolyTerminal] WebSocket error');
+        console.error('[PolyTerminal] ❌ WebSocket error');
         setError('Connection error');
+        isConnectingRef.current = false;
       };
 
-      ws.onclose = () => {
-        console.log('[PolyTerminal] WebSocket closed');
+      ws.onclose = (event) => {
+        console.log(`[PolyTerminal] 🔌 WebSocket closed: ${event.code}`);
         setConnected(false);
         wsRef.current = null;
+        subscriptionIdRef.current = null;
+        isConnectingRef.current = false;
 
-        // Auto-reconnect after 5 seconds
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
-        }, 5000);
+        // Auto-reconnect with exponential backoff
+        if (enabled && reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS && event.code !== 1000) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 16000);
+          console.log(`[PolyTerminal] 🔄 Reconnecting in ${delay}ms...`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current++;
+            connectWebSocket();
+          }, delay);
+        }
       };
 
       wsRef.current = ws;
     } catch (err) {
       console.error('[PolyTerminal] Connection error:', err);
       setError('Failed to connect');
+      isConnectingRef.current = false;
     }
-  }, [enabled, selectedMarket]);
+  }, [enabled, selectedMarket, subscribeToMarket]);
 
   // Fetch orderbook data for selected market
   const fetchOrderbook = useCallback(async () => {
-    if (!selectedMarket?.conditionId) return;
+    if (!selectedMarket?.conditionId && !selectedMarket?.slug) return;
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('market-dashboard', {
@@ -266,7 +369,6 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
       if (fnError) throw fnError;
 
-      // Parse orderbook from response
       if (data?.orderbook) {
         setOrderbook({
           yesBids: data.orderbook.yesBids || [],
@@ -290,20 +392,28 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
     return () => {
       if (wsRef.current) {
-        wsRef.current.close();
+        wsRef.current.close(1000);
         wsRef.current = null;
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [enabled, connectWebSocket]);
+  }, [enabled]);
+
+  // Update subscription when market changes
+  useEffect(() => {
+    if (selectedMarket && wsRef.current?.readyState === WebSocket.OPEN) {
+      updateSubscription(wsRef.current, selectedMarket);
+      setTrades([]); // Clear trades when switching markets
+      fetchOrderbook();
+    }
+  }, [selectedMarket?.slug, selectedMarket?.conditionId]);
 
   // Fetch orderbook when market changes
   useEffect(() => {
     if (selectedMarket) {
       fetchOrderbook();
-      setTrades([]); // Clear trades when switching markets
     }
   }, [selectedMarket, fetchOrderbook]);
 
