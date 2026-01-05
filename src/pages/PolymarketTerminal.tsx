@@ -1,14 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LayoutGrid, 
-  PanelLeft, 
+import {
+  LayoutGrid,
+  PanelLeft,
   ArrowLeft,
   AlertCircle,
   ExternalLink,
   TrendingUp,
   TrendingDown,
   Activity,
+  Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -22,12 +23,16 @@ import { PolyMarketSidebar } from '@/components/polymarket/PolyMarketSidebar';
 import { PolyMarketChat } from '@/components/polymarket/PolyMarketChat';
 import { PolyMarketNews } from '@/components/polymarket/PolyMarketNews';
 import { PolyMarketChart } from '@/components/polymarket/PolyMarketChart';
+import { PolyTradePanel } from '@/components/polymarket/PolyTradePanel';
+import { PolyConnectionHealth } from '@/components/polymarket/PolyConnectionHealth';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import polyLogo from '@/assets/poly-logo-new.png';
+
+const WHALE_THRESHOLD = 1000; // $1k+
 
 export default function PolymarketTerminal() {
   const isMobile = useIsMobile();
@@ -42,17 +47,26 @@ export default function PolymarketTerminal() {
     loading,
     error,
     refetchOrderbook,
+    reconnect,
+    reconnectAttempts,
+    lastMessageTime,
   } = usePolymarketTerminal();
-  
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'data' | 'chat' | 'trades'>('data');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [whalesOnly, setWhalesOnly] = useState(false);
 
   const formatVolume = (vol: number) => {
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`;
     if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`;
     return `$${vol.toFixed(0)}`;
   };
+
+  // Filter trades for whale trades
+  const filteredTrades = whalesOnly
+    ? trades.filter((t) => t.price * (t.shares_normalized || t.shares) >= WHALE_THRESHOLD)
+    : trades;
 
   // Mobile layout
   if (isMobile) {
@@ -87,12 +101,7 @@ export default function PolymarketTerminal() {
           </div>
           
           <div className="flex items-center gap-2">
-            {connected && (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] text-emerald-500">LIVE</span>
-              </div>
-            )}
+            <PolyConnectionHealth connected={connected} reconnectAttempts={reconnectAttempts} lastEventTime={lastMessageTime} onReconnect={reconnect} compact />
           </div>
         </div>
 
@@ -147,8 +156,20 @@ export default function PolymarketTerminal() {
              )}
            </TabsContent>
           
-          <TabsContent value="trades" className="flex-1 m-0 p-3">
-            <PolyTradeFeed trades={trades} maxTrades={20} connected={connected} />
+          <TabsContent value="trades" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-muted-foreground">Recent Trades</span>
+              <Button
+                variant={whalesOnly ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setWhalesOnly((p) => !p)}
+                className="h-7 gap-1 text-[10px]"
+              >
+                <Filter className="w-3 h-3" /> Whales
+              </Button>
+            </div>
+            <PolyTradeFeed trades={filteredTrades} maxTrades={20} connected={connected} />
+            {selectedMarket && <PolyTradePanel market={selectedMarket} compact />}
           </TabsContent>
           
           <TabsContent value="chat" className="flex-1 m-0 p-3">
@@ -232,12 +253,17 @@ export default function PolymarketTerminal() {
           </div>
           
           <div className="flex items-center gap-3">
-            {connected && (
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] text-emerald-500 font-medium">LIVE</span>
-              </div>
-            )}
+            <PolyConnectionHealth connected={connected} reconnectAttempts={reconnectAttempts} lastEventTime={lastMessageTime} onReconnect={reconnect} />
+
+            <Button
+              variant={whalesOnly ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setWhalesOnly((p) => !p)}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              {whalesOnly ? '🐋 Whales Only' : 'All Trades'}
+            </Button>
             
             {selectedMarket && (
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-muted/30 border border-border/30">
@@ -324,14 +350,20 @@ export default function PolymarketTerminal() {
 
                  <PolyMarketChart market={selectedMarket} />
 
-                 {/* Main Grid */}
-                 <div className="grid grid-cols-2 gap-4 mt-4">
+                 {/* Main Grid – 3 columns */}
+                 <div className="grid grid-cols-3 gap-4 mt-4">
+                   {/* Column 1: Orderbook + Trade Panel */}
                    <div className="space-y-4">
                      <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} />
+                     <PolyTradePanel market={selectedMarket} />
+                   </div>
+                   {/* Column 2: Trades + News */}
+                   <div className="space-y-4">
+                     <PolyTradeFeed trades={filteredTrades} maxTrades={12} connected={connected} />
                      <PolyMarketNews market={selectedMarket} />
                    </div>
+                   {/* Column 3: AI Chat */}
                    <div className="space-y-4">
-                     <PolyTradeFeed trades={trades} maxTrades={12} connected={connected} />
                      <PolyMarketChat market={selectedMarket} />
                    </div>
                  </div>
