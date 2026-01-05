@@ -6,12 +6,12 @@ import {
   LayoutGrid, 
   PanelLeft, 
   ArrowLeft,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Link } from 'react-router-dom';
-import { MOCK_MARKETS } from '@/lib/kalshi-mock-data';
 
 // Components
 import { KalshiCandlestickChart } from '@/components/kalshi/KalshiCandlestickChart';
@@ -20,6 +20,8 @@ import { KalshiAIAgents } from '@/components/kalshi/KalshiAIAgents';
 import { KalshiTradingPanel } from '@/components/kalshi/KalshiTradingPanel';
 import { KalshiOrderbook } from '@/components/kalshi/KalshiOrderbook';
 import { KalshiTradeFeed } from '@/components/kalshi/KalshiTradeFeed';
+import { KalshiMarketChat } from '@/components/kalshi/KalshiMarketChat';
+import { KalshiMarketNews } from '@/components/kalshi/KalshiMarketNews';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -38,11 +40,13 @@ export default function KalshiTerminal() {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [mobileTab, setMobileTab] = useState<'chart' | 'data' | 'trade'>('chart');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Fetch initial market with mock fallback
+  // Fetch initial market - no mock fallback
   useEffect(() => {
     const fetchInitialMarket = async () => {
       try {
+        setLoadError(null);
         const events = await getEvents('active');
         if (events.length > 0 && events[0].markets?.length > 0) {
           const allMarkets: KalshiMarket[] = [];
@@ -58,12 +62,11 @@ export default function KalshiTerminal() {
             return;
           }
         }
-        // Fallback to mock data if no markets fetched
-        console.log('[Terminal] Using mock market data');
-        setSelectedMarket(MOCK_MARKETS[0]);
+        // No markets found
+        setLoadError('No markets available');
       } catch (err) {
-        console.error('Failed to fetch initial market, using mock data:', err);
-        setSelectedMarket(MOCK_MARKETS[0]);
+        console.error('Failed to fetch initial market:', err);
+        setLoadError('Failed to load markets');
       }
     };
     
@@ -171,12 +174,14 @@ export default function KalshiTerminal() {
             )}
           </TabsContent>
           
-          <TabsContent value="data" className="flex-1 m-0 p-3 space-y-3">
+          <TabsContent value="data" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
             {selectedMarket && (
               <>
                 <KalshiAIAgents market={selectedMarket} compact />
                 <KalshiOrderbook ticker={selectedMarket.ticker} compact />
+                <KalshiMarketNews market={selectedMarket} compact />
                 <KalshiTradeFeed ticker={selectedMarket.ticker} maxTrades={5} />
+                <KalshiMarketChat market={selectedMarket} compact />
               </>
             )}
           </TabsContent>
@@ -278,7 +283,15 @@ export default function KalshiTerminal() {
         <div className="flex-1 flex overflow-hidden">
           {/* Chart Area */}
           <div className="flex-1 flex flex-col min-w-0 p-4">
-            {selectedMarket ? (
+            {loadError && !selectedMarket ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-muted-foreground">
+                  <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">{loadError}</p>
+                  <p className="text-sm mt-2">Select a market from the sidebar to continue</p>
+                </div>
+              </div>
+            ) : selectedMarket ? (
               <>
                 <KalshiCandlestickChart
                   ticker={selectedMarket.ticker}
@@ -286,10 +299,16 @@ export default function KalshiTerminal() {
                   onPriceUpdate={handlePriceUpdate}
                 />
                 
-                {/* Bottom section: Orderbook + Trades */}
+                {/* Bottom section: Orderbook + News | Trades + Chat */}
                 <div className="grid grid-cols-2 gap-4 mt-4">
-                  <KalshiOrderbook ticker={selectedMarket.ticker} compact />
-                  <KalshiTradeFeed ticker={selectedMarket.ticker} maxTrades={8} />
+                  <div className="space-y-4">
+                    <KalshiOrderbook ticker={selectedMarket.ticker} compact />
+                    <KalshiMarketNews market={selectedMarket} compact />
+                  </div>
+                  <div className="space-y-4">
+                    <KalshiTradeFeed ticker={selectedMarket.ticker} maxTrades={6} />
+                    <KalshiMarketChat market={selectedMarket} compact />
+                  </div>
                 </div>
               </>
             ) : (
@@ -302,12 +321,12 @@ export default function KalshiTerminal() {
             )}
           </div>
 
-          {/* Right Panel - Fixed width with shrink */}
+          {/* Right Panel - AI Agents & Trading */}
           {selectedMarket && (
-            <div className="w-72 min-w-0 shrink-0 border-l border-border/30 bg-card/20 flex flex-col overflow-hidden">
+            <div className="w-80 min-w-0 shrink-0 border-l border-border/30 bg-card/20 flex flex-col overflow-hidden">
               <ScrollArea className="flex-1">
                 <div className="p-3 space-y-3">
-                  <KalshiAIAgents market={selectedMarket} compact />
+                  <KalshiAIAgents market={selectedMarket} />
                   <KalshiTradingPanel market={selectedMarket} />
                 </div>
               </ScrollArea>

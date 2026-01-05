@@ -1,13 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Star, TrendingUp, TrendingDown, Flame, ChevronRight, X, RefreshCw } from 'lucide-react';
+import { Search, Star, TrendingUp, TrendingDown, Flame, ChevronRight, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
 import { useDflowWebSocket, type PriceUpdate } from '@/hooks/useDflowWebSocket';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { MOCK_MARKETS } from '@/lib/kalshi-mock-data';
 
 interface KalshiMarketSidebarProps {
   selectedTicker?: string;
@@ -53,7 +52,7 @@ export function KalshiMarketSidebar({
     },
   });
 
-  // Fetch markets with mock fallback
+  // Fetch markets - no mock fallback
   const fetchMarkets = useCallback(async () => {
     try {
       setIsRefreshing(true);
@@ -73,20 +72,10 @@ export function KalshiMarketSidebar({
       
       // Sort by volume
       allMarkets.sort((a, b) => (b.volume || 0) - (a.volume || 0));
-      
-      if (allMarkets.length > 0) {
-        setMarkets(allMarkets);
-        setUsingMockData(false);
-      } else {
-        // Fallback to mock data
-        console.log('[Sidebar] No markets fetched, using mock data');
-        setMarkets(MOCK_MARKETS);
-        setUsingMockData(true);
-      }
+      setMarkets(allMarkets);
     } catch (err) {
-      console.error('Failed to fetch markets, using mock data:', err);
-      setMarkets(MOCK_MARKETS);
-      setUsingMockData(true);
+      console.error('Failed to fetch markets:', err);
+      setMarkets([]);
     } finally {
       setIsRefreshing(false);
     }

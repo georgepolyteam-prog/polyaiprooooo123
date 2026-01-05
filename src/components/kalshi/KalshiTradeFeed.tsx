@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, TrendingUp, TrendingDown } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLiveKalshiData } from '@/hooks/useLiveKalshiData';
-import { generateMockTrades } from '@/lib/kalshi-mock-data';
 
 interface Trade {
   id: string;
@@ -19,15 +18,10 @@ interface KalshiTradeFeedProps {
 }
 
 export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps) {
-  const { trades, isPolling, usingMockData } = useLiveKalshiData(ticker, true);
+  const { trades, isPolling } = useLiveKalshiData(ticker, true);
   
-  // Use trades from hook, which already has mock fallback built in
   const displayTrades = useMemo(() => {
-    if (trades.length > 0) {
-      return trades.slice(0, maxTrades);
-    }
-    // Fallback to generate mock trades if still empty
-    return generateMockTrades(maxTrades);
+    return trades.slice(0, maxTrades);
   }, [trades, maxTrades]);
 
   const formatTime = (timestamp: number) => {
@@ -47,16 +41,21 @@ export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps
       <div className="flex items-center gap-2 mb-3">
         <Activity className="w-4 h-4 text-primary" />
         <span className="text-sm font-medium text-foreground">Recent Trades</span>
-        {isPolling && !usingMockData && (
+        {isPolling && displayTrades.length > 0 && (
           <div className="ml-auto flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] text-muted-foreground">LIVE</span>
           </div>
         )}
-        {usingMockData && (
-          <span className="ml-auto text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">DEMO</span>
-        )}
       </div>
+
+      {displayTrades.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <AlertCircle className="w-8 h-8 text-muted-foreground/50 mb-2" />
+          <p className="text-sm text-muted-foreground">No trades found</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">This market may not have recent trades</p>
+        </div>
+      ) : (
 
       <div className="space-y-1.5 max-h-64 overflow-y-auto">
         <AnimatePresence mode="popLayout">
@@ -102,6 +101,7 @@ export function KalshiTradeFeed({ ticker, maxTrades = 10 }: KalshiTradeFeedProps
           ))}
         </AnimatePresence>
       </div>
+      )}
     </div>
   );
 }
