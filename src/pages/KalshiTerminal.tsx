@@ -7,6 +7,8 @@ import {
   PanelLeft, 
   ArrowLeft,
   AlertCircle,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from '@/hooks/useDflowApi';
@@ -107,6 +109,37 @@ export default function KalshiTerminal() {
   if (isMobile) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
+        {/* Disclaimer Banner */}
+        <AnimatePresence>
+          {!sessionStorage.getItem('kalshi_terminal_disclaimer_dismissed') && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="relative bg-warning/10 border-b border-warning/30 flex-shrink-0"
+            >
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <AlertTriangle className="w-3.5 h-3.5 text-warning flex-shrink-0" />
+                  <p className="text-xs text-foreground/90 truncate">
+                    Third-party interface.{' '}
+                    <Link to="/kalshi-disclaimer" className="text-primary hover:underline">Disclaimer</Link>
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    sessionStorage.setItem('kalshi_terminal_disclaimer_dismissed', 'true');
+                    window.dispatchEvent(new Event('storage'));
+                  }}
+                  className="p-1 hover:bg-warning/20 rounded transition-colors flex-shrink-0"
+                >
+                  <X className="w-3.5 h-3.5 text-warning" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Mobile Header */}
         <div className="flex items-center justify-between p-3 border-b border-border/30 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
           <div className="flex items-center gap-2">
@@ -194,7 +227,44 @@ export default function KalshiTerminal() {
 
   // Desktop layout
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Disclaimer Banner - Desktop */}
+      <AnimatePresence>
+        {!sessionStorage.getItem('kalshi_terminal_disclaimer_dismissed') && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="relative bg-warning/10 border-b border-warning/30 flex-shrink-0"
+          >
+            <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
+                <p className="text-sm text-foreground/90">
+                  <span className="font-medium">Third-party interface.</span>{' '}
+                  Trades execute via DFlow on Solana—not directly on Kalshi.{' '}
+                  <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
+                    Read full disclaimer
+                  </Link>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem('kalshi_terminal_disclaimer_dismissed', 'true');
+                  window.dispatchEvent(new Event('storage'));
+                }}
+                className="p-1.5 hover:bg-warning/20 rounded-lg transition-colors flex-shrink-0"
+                aria-label="Dismiss disclaimer"
+              >
+                <X className="w-4 h-4 text-warning" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main content wrapper */}
+      <div className="flex-1 flex min-h-0">
       {/* Market Sidebar */}
       <AnimatePresence mode="wait">
         {!sidebarCollapsed ? (
@@ -327,6 +397,7 @@ export default function KalshiTerminal() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

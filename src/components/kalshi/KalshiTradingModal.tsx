@@ -798,6 +798,12 @@ export function KalshiTradingModal({
         )}
       </AnimatePresence>
 
+      {/* Risk Disclaimer */}
+      <p className="text-[10px] text-muted-foreground text-center leading-tight px-2">
+        By trading, you acknowledge the risks of event contracts. Not financial advice.{' '}
+        <a href="/kalshi-disclaimer" className="text-primary hover:underline">Full disclaimer</a>
+      </p>
+
       {/* Trade Button */}
       <motion.div whileTap={{ scale: 0.98 }}>
         <Button
