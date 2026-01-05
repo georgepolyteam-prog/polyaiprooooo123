@@ -21,6 +21,7 @@ import { PolyTradeFeed } from '@/components/polymarket/PolyTradeFeed';
 import { PolyMarketSidebar } from '@/components/polymarket/PolyMarketSidebar';
 import { PolyMarketChat } from '@/components/polymarket/PolyMarketChat';
 import { PolyMarketNews } from '@/components/polymarket/PolyMarketNews';
+import { PolyMarketChart } from '@/components/polymarket/PolyMarketChart';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -97,20 +98,22 @@ export default function PolymarketTerminal() {
 
         {/* Market Title */}
         {selectedMarket && (
-          <div className="px-3 py-2 border-b border-border/30">
+          <header className="px-3 py-2 border-b border-border/30">
             <h1 className="text-sm font-medium text-foreground line-clamp-2">
               {selectedMarket.title}
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className={cn(
-                'text-lg font-bold font-mono',
-                selectedMarket.yesPrice >= 50 ? 'text-emerald-500' : 'text-red-500'
-              )}>
+              <span
+                className={cn(
+                  'text-lg font-bold font-mono',
+                  selectedMarket.yesPrice >= 50 ? 'text-emerald-500' : 'text-red-500',
+                )}
+              >
                 {selectedMarket.yesPrice}¢
               </span>
               <span className="text-xs text-muted-foreground">YES</span>
-              <a 
-                href={`https://polymarket.com/event/${selectedMarket.slug}`}
+              <a
+                href={selectedMarket.marketUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ml-auto text-xs text-primary flex items-center gap-1"
@@ -119,7 +122,7 @@ export default function PolymarketTerminal() {
                 View on Polymarket
               </a>
             </div>
-          </div>
+          </header>
         )}
 
         {/* Mobile Tabs */}
@@ -130,18 +133,19 @@ export default function PolymarketTerminal() {
             <TabsTrigger value="chat">AI Chat</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="data" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
-            {selectedMarket ? (
-              <>
-                <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} compact />
-                <PolyMarketNews market={selectedMarket} compact />
-              </>
-            ) : (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-sm text-muted-foreground">Select a market to view data</p>
-              </div>
-            )}
-          </TabsContent>
+           <TabsContent value="data" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
+             {selectedMarket ? (
+               <>
+                 <PolyMarketChart market={selectedMarket} compact />
+                 <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} compact />
+                 <PolyMarketNews market={selectedMarket} compact />
+               </>
+             ) : (
+               <div className="flex items-center justify-center py-12">
+                 <p className="text-sm text-muted-foreground">Select a market to view data</p>
+               </div>
+             )}
+           </TabsContent>
           
           <TabsContent value="trades" className="flex-1 m-0 p-3">
             <PolyTradeFeed trades={trades} maxTrades={20} connected={connected} />
@@ -238,19 +242,21 @@ export default function PolymarketTerminal() {
             {selectedMarket && (
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-muted/30 border border-border/30">
                 {selectedMarket.image && (
-                  <img 
-                    src={selectedMarket.image} 
-                    alt="" 
-                    className="w-6 h-6 rounded object-cover" 
+                  <img
+                    src={selectedMarket.image}
+                    alt={`${selectedMarket.title} market image`}
+                    className="w-6 h-6 rounded object-cover"
                   />
                 )}
                 <span className="text-sm text-muted-foreground line-clamp-1 max-w-[300px]">
                   {selectedMarket.title}
                 </span>
-                <span className={cn(
-                  'text-lg font-bold font-mono',
-                  selectedMarket.yesPrice >= 50 ? 'text-emerald-500' : 'text-red-500'
-                )}>
+                <span
+                  className={cn(
+                    'text-lg font-bold font-mono',
+                    selectedMarket.yesPrice >= 50 ? 'text-emerald-500' : 'text-red-500',
+                  )}
+                >
                   {selectedMarket.yesPrice}¢
                 </span>
                 {selectedMarket.yesPrice >= 50 ? (
@@ -260,10 +266,10 @@ export default function PolymarketTerminal() {
                 )}
               </div>
             )}
-            
+
             {selectedMarket && (
               <a
-                href={`https://polymarket.com/event/${selectedMarket.slug}`}
+                href={selectedMarket.marketUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm"
@@ -275,68 +281,71 @@ export default function PolymarketTerminal() {
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Main Panel */}
-          <div className="flex-1 flex flex-col min-w-0 p-4 overflow-y-auto">
-            {error && !selectedMarket ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">{error}</p>
-                  <p className="text-sm mt-2">Select a market from the sidebar to continue</p>
-                </div>
-              </div>
-            ) : selectedMarket ? (
-              <>
-                {/* Stats Bar */}
-                <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-primary" />
-                    <span className="text-sm text-muted-foreground">Session Trades:</span>
-                    <span className="text-sm font-medium text-foreground">{stats.tradeCount}</span>
-                  </div>
-                  <div className="h-4 w-px bg-border/50" />
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    <span className="text-sm text-muted-foreground">Buys:</span>
-                    <span className="text-sm font-medium text-emerald-500">{stats.buyCount}</span>
-                  </div>
-                  <div className="h-4 w-px bg-border/50" />
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="w-4 h-4 text-red-500" />
-                    <span className="text-sm text-muted-foreground">Sells:</span>
-                    <span className="text-sm font-medium text-red-500">{stats.sellCount}</span>
-                  </div>
-                  <div className="h-4 w-px bg-border/50" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Volume:</span>
-                    <span className="text-sm font-medium text-foreground">{formatVolume(selectedMarket.volume24h || selectedMarket.volume)}</span>
-                  </div>
-                </div>
-                
-                {/* Main Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-4">
-                    <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} />
-                    <PolyMarketNews market={selectedMarket} />
-                  </div>
-                  <div className="space-y-4">
-                    <PolyTradeFeed trades={trades} maxTrades={12} connected={connected} />
-                    <PolyMarketChat market={selectedMarket} />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <LayoutGrid className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Select a market from the sidebar</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+         {/* Content Area */}
+         <main className="flex-1 flex overflow-hidden">
+           <h1 className="sr-only">Polymarket trading terminal</h1>
+           {/* Main Panel */}
+           <div className="flex-1 flex flex-col min-w-0 p-4 overflow-y-auto">
+             {error && !selectedMarket ? (
+               <div className="flex-1 flex items-center justify-center">
+                 <div className="text-center text-muted-foreground">
+                   <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                   <p className="text-lg font-medium">{error}</p>
+                   <p className="text-sm mt-2">Select a market from the sidebar to continue</p>
+                 </div>
+               </div>
+             ) : selectedMarket ? (
+               <>
+                 {/* Stats Bar */}
+                 <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 mb-4">
+                   <div className="flex items-center gap-2">
+                     <Activity className="w-4 h-4 text-primary" />
+                     <span className="text-sm text-muted-foreground">Session Trades:</span>
+                     <span className="text-sm font-medium text-foreground">{stats.tradeCount}</span>
+                   </div>
+                   <div className="h-4 w-px bg-border/50" />
+                   <div className="flex items-center gap-2">
+                     <TrendingUp className="w-4 h-4 text-emerald-500" />
+                     <span className="text-sm text-muted-foreground">Buys:</span>
+                     <span className="text-sm font-medium text-emerald-500">{stats.buyCount}</span>
+                   </div>
+                   <div className="h-4 w-px bg-border/50" />
+                   <div className="flex items-center gap-2">
+                     <TrendingDown className="w-4 h-4 text-red-500" />
+                     <span className="text-sm text-muted-foreground">Sells:</span>
+                     <span className="text-sm font-medium text-red-500">{stats.sellCount}</span>
+                   </div>
+                   <div className="h-4 w-px bg-border/50" />
+                   <div className="flex items-center gap-2">
+                     <span className="text-sm text-muted-foreground">Volume:</span>
+                     <span className="text-sm font-medium text-foreground">{formatVolume(selectedMarket.volume24h || selectedMarket.volume)}</span>
+                   </div>
+                 </div>
+
+                 <PolyMarketChart market={selectedMarket} />
+
+                 {/* Main Grid */}
+                 <div className="grid grid-cols-2 gap-4 mt-4">
+                   <div className="space-y-4">
+                     <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} />
+                     <PolyMarketNews market={selectedMarket} />
+                   </div>
+                   <div className="space-y-4">
+                     <PolyTradeFeed trades={trades} maxTrades={12} connected={connected} />
+                     <PolyMarketChat market={selectedMarket} />
+                   </div>
+                 </div>
+               </>
+             ) : (
+               <div className="flex-1 flex items-center justify-center">
+                 <div className="text-center text-muted-foreground">
+                   <LayoutGrid className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                   <p>Select a market from the sidebar</p>
+                 </div>
+               </div>
+             )}
+           </div>
+         </main>
       </div>
     </div>
   );
