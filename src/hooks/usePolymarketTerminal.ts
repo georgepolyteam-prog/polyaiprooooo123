@@ -79,6 +79,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const reconnectAttemptsRef = useRef(0);
   const subscriptionIdRef = useRef<string | null>(null);
   const isConnectingRef = useRef(false);
+  const lastMessageTimeRef = useRef<number | null>(null);
 
   // Fetch top markets on mount
   useEffect(() => {
@@ -299,6 +300,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
       ws.onmessage = (event) => {
         try {
+          lastMessageTimeRef.current = Date.now();
           const data = JSON.parse(event.data);
 
           if (data.type === 'ack') {
@@ -498,6 +500,13 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     };
   }, [trades]);
 
+  // Expose reconnect helper
+  const reconnect = useCallback(() => {
+    reconnectAttemptsRef.current = 0;
+    wsRef.current?.close();
+    connectWebSocket();
+  }, [connectWebSocket]);
+
   return {
     markets,
     selectedMarket,
@@ -509,5 +518,8 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     loading,
     error,
     refetchOrderbook: fetchOrderbook,
+    reconnect,
+    reconnectAttempts: reconnectAttemptsRef.current,
+    lastMessageTime: lastMessageTimeRef.current,
   };
 }
