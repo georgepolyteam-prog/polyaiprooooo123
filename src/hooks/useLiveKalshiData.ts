@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDflowApi } from './useDflowApi';
-import { generateMockOrderbook, generateMockTrades } from '@/lib/kalshi-mock-data';
 
 interface OrderbookLevel {
   price: number;
@@ -22,6 +21,28 @@ interface Trade {
   timestamp: number;
 }
 
+// Parse orderbook object format { "0.50": 100, "0.48": 50 } into array of levels
+const parseOrderbookSide = (data: any): OrderbookLevel[] => {
+  if (!data || typeof data !== 'object') return [];
+  
+  // If it's already an array, handle that case
+  if (Array.isArray(data)) {
+    return data.map(level => ({
+      price: Math.round((parseFloat(level?.price) || 0) * 100),
+      size: parseFloat(level?.size || level?.quantity || 0),
+    }));
+  }
+  
+  // It's an object like { "0.50": 100, "0.48": 50 }
+  return Object.entries(data)
+    .map(([priceStr, size]) => ({
+      price: Math.round(parseFloat(priceStr) * 100),
+      size: typeof size === 'number' ? size : parseFloat(String(size) || '0'),
+    }))
+    .filter(level => level.size > 0)
+    .sort((a, b) => b.price - a.price); // Sort by price descending (best first)
+};
+
 export function useLiveKalshiData(ticker: string, enabled = true) {
   const { getOrderbook, getTrades } = useDflowApi();
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null);
@@ -30,13 +51,6 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
   const [isPolling, setIsPolling] = useState(false);
   const [usingMockData, setUsingMockData] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const safeArray = (arr: any) => Array.isArray(arr) ? arr : [];
-  
-  const parseLevel = (level: any): OrderbookLevel => ({
-    price: Math.round((parseFloat(level?.price) || 0) * 100),
-    size: parseFloat(level?.size || level?.quantity || 0),
-  });
 
   const parseTrade = (t: any, idx: number): Trade => ({
     id: `${t.timestamp || idx}-${idx}`,
@@ -58,21 +72,38 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
       let hasRealData = false;
 
       if (obData) {
+        console.log('[Live Data] Raw orderbook:', JSON.stringify(obData).slice(0, 200));
+        
         const parsedOrderbook: Orderbook = {
-          yesBids: safeArray(obData.yesBids || obData.yes_bids).map(parseLevel).slice(0, 10),
-          yesAsks: safeArray(obData.yesAsks || obData.yes_asks).map(parseLevel).slice(0, 10),
-          noBids: safeArray(obData.noBids || obData.no_bids).map(parseLevel).slice(0, 10),
-          noAsks: safeArray(obData.noAsks || obData.no_asks).map(parseLevel).slice(0, 10),
+          yesBids: parseOrderbookSide(obData.yes_bids || obData.yesBids).slice(0, 10),
+          yesAsks: parseOrderbookSide(obData.yes_asks || obData.yesAsks).slice(0, 10),
+          noBids: parseOrderbookSide(obData.no_bids || obData.noBids).slice(0, 10),
+          noAsks: parseOrderbookSide(obData.no_asks || obData.noAsks).slice(0, 10),
         };
         
-        // Check if we got real data
-        if (parsedOrderbook.yesBids.length > 0 || parsedOrderbook.yesAsks.length > 0) {
+        console.log('[Live Data] Parsed orderbook:', {
+          yesBids: parsedOrderbook.yesBids.length,
+          yesAsks: parsedOrderbook.yesAsks.length,
+          noBids: parsedOrderbook.noBids.length,
+          noAsks: parsedOrderbook.noAsks.length,
+        });
+        
+        // Check if we got real data - check all sides
+        const totalLevels = 
+          parsedOrderbook.yesBids.length + 
+          parsedOrderbook.yesAsks.length + 
+          parsedOrderbook.noBids.length + 
+          parsedOrderbook.noAsks.length;
+          
+        if (totalLevels > 0) {
           setOrderbook(parsedOrderbook);
           hasRealData = true;
           
-          // Update live price from best bid
+          // Update live price from best yes bid or no bid
           if (parsedOrderbook.yesBids[0]?.price) {
             setLastPrice(parsedOrderbook.yesBids[0].price);
+          } else if (parsedOrderbook.noBids[0]?.price) {
+            setLastPrice(100 - parsedOrderbook.noBids[0].price);
           }
         }
       }
@@ -82,22 +113,20 @@ export function useLiveKalshiData(ticker: string, enabled = true) {
         hasRealData = true;
       }
 
-      // If no real data, use mock data
+      // If no real data, just show empty state (no mock)
       if (!hasRealData) {
-        console.log('[Live Data] No real data, using mock');
-        setOrderbook(generateMockOrderbook());
-        setTrades(generateMockTrades(20));
-        setLastPrice(50);
-        setUsingMockData(true);
+        console.log('[Live Data] No orderbook or trade data available');
+        setOrderbook({ yesBids: [], yesAsks: [], noBids: [], noAsks: [] });
+        setTrades([]);
+        setUsingMockData(false);
       } else {
         setUsingMockData(false);
       }
     } catch (err) {
-      console.error('[Live Data] Fetch failed, using mock data:', err);
-      setOrderbook(generateMockOrderbook());
-      setTrades(generateMockTrades(20));
-      setLastPrice(50);
-      setUsingMockData(true);
+      console.error('[Live Data] Fetch failed:', err);
+      setOrderbook({ yesBids: [], yesAsks: [], noBids: [], noAsks: [] });
+      setTrades([]);
+      setUsingMockData(false);
     }
   }, [ticker, getOrderbook, getTrades]);
 
