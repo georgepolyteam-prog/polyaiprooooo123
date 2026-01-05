@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { createChart, IChartApi, ISeriesApi, ColorType, Time } from 'lightweight-charts';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader2, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type Candlestick } from '@/hooks/useDflowApi';
 import { useDflowWebSocket, type PriceUpdate } from '@/hooks/useDflowWebSocket';
-import { generateMockCandlesticks } from '@/lib/kalshi-mock-data';
 
 interface KalshiCandlestickChartProps {
   ticker: string;
@@ -78,7 +77,7 @@ export function KalshiCandlestickChart({
     },
   });
 
-  // Fetch candlestick data with mock fallback
+  // Fetch candlestick data - no mock fallback
   useEffect(() => {
     const fetchCandles = async () => {
       setIsLoading(true);
@@ -116,33 +115,15 @@ export function KalshiCandlestickChart({
             setLastPrice(last);
           }
         } else {
-          // Use mock data
-          console.log('[Chart] No candle data, using mock');
-          const mockCandles = generateMockCandlesticks(50, 100);
-          setCandles(mockCandles);
-          setUsingMockData(true);
-          
-          if (mockCandles.length >= 2) {
-            const first = mockCandles[0].close;
-            const last = mockCandles[mockCandles.length - 1].close;
-            const change = ((last - first) / first) * 100;
-            setPriceChange(change);
-            setLastPrice(last);
-          }
+          // No data available
+          console.log('[Chart] No candle data available');
+          setCandles([]);
+          setUsingMockData(false);
         }
       } catch (err) {
-        console.error('Failed to fetch candlesticks, using mock data:', err);
-        const mockCandles = generateMockCandlesticks(50, 100);
-        setCandles(mockCandles);
-        setUsingMockData(true);
-        
-        if (mockCandles.length >= 2) {
-          const first = mockCandles[0].close;
-          const last = mockCandles[mockCandles.length - 1].close;
-          const change = ((last - first) / first) * 100;
-          setPriceChange(change);
-          setLastPrice(last);
-        }
+        console.error('Failed to fetch candlesticks:', err);
+        setCandles([]);
+        setUsingMockData(false);
       } finally {
         setIsLoading(false);
       }
@@ -376,8 +357,9 @@ export function KalshiCandlestickChart({
         {candles.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
-              <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No chart data available</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">This market may not have price history</p>
             </div>
           </div>
         )}
