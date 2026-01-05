@@ -153,6 +153,37 @@ export default function Disclaimer() {
               </div>
             </section>
 
+            {/* Kalshi Markets */}
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <Globe className="w-6 h-6 text-purple-400" />
+                <h2 className="text-2xl font-bold text-foreground">Kalshi Markets (via DFlow)</h2>
+              </div>
+              <div className="space-y-3">
+                <p>
+                  <strong>Kalshi markets on Poly are accessed through DFlow on Solana.</strong> This is a third-party integration—trades do not execute directly on Kalshi's exchange.
+                </p>
+                <ul className="list-disc pl-6 space-y-2">
+                  <li>Kalshi is a <strong>CFTC-regulated designated contract market (DCM)</strong></li>
+                  <li>Trades settle on Solana blockchain, introducing additional risks</li>
+                  <li>Multiple jurisdictions are <strong>prohibited from trading</strong> on Kalshi</li>
+                  <li>Market makers may have advantages not available to regular traders</li>
+                </ul>
+                <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg mt-4">
+                  <p className="text-foreground font-medium flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning" />
+                    Review the full Kalshi disclaimer before trading
+                  </p>
+                  <Link 
+                    to="/kalshi-disclaimer" 
+                    className="inline-block mt-2 text-primary hover:underline font-medium"
+                  >
+                    Read Kalshi Disclaimer →
+                  </Link>
+                </div>
+              </div>
+            </section>
+
             {/* Polymarket Builders Program */}
             <section>
               <div className="flex items-center gap-3 mb-4">

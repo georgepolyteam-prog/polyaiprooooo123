@@ -33,6 +33,7 @@ import Credits from "./pages/Credits";
 import Pandora from "./pages/Pandora";
 import Kalshi from "./pages/Kalshi";
 import KalshiTerminal from "./pages/KalshiTerminal";
+import KalshiDisclaimer from "./pages/KalshiDisclaimer";
 import PolymarketTerminal from "./pages/PolymarketTerminal";
 import Partnerships from "./pages/Partnerships";
 
@@ -75,6 +76,7 @@ const AppContent = () => {
               <Route path="/credits" element={<Credits />} />
               <Route path="/pandora" element={<Pandora />} />
               <Route path="/kalshi" element={<Kalshi />} />
+              <Route path="/kalshi-disclaimer" element={<KalshiDisclaimer />} />
               <Route path="/terminal" element={<PolymarketTerminal />} />
               <Route path="/kalshi-terminal" element={<KalshiTerminal />} />
               <Route path="/partnerships" element={<Partnerships />} />

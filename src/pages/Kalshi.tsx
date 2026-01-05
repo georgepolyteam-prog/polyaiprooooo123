@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useDeferredValue, memo, useRef, startTransition } from "react";
+import { Link } from "react-router-dom";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 
 // Debounce utility for localStorage writes
@@ -25,6 +26,7 @@ import {
   Sparkles,
   Shield,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDflowApi, type KalshiMarket, type KalshiEvent } from "@/hooks/useDflowApi";
@@ -636,6 +638,41 @@ export default function Kalshi() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* Dismissible Kalshi Disclaimer Banner */}
+      <AnimatePresence>
+        {!sessionStorage.getItem('kalshi_disclaimer_dismissed') && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="relative bg-warning/10 border-b border-warning/30"
+          >
+            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
+                <p className="text-sm text-foreground/90 truncate sm:whitespace-normal">
+                  <span className="font-medium">Third-party interface.</span>{' '}
+                  <span className="hidden sm:inline">Trades execute via DFlow on Solana—not directly on Kalshi. </span>
+                  <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
+                    Read full disclaimer
+                  </Link>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  sessionStorage.setItem('kalshi_disclaimer_dismissed', 'true');
+                  window.dispatchEvent(new Event('storage'));
+                }}
+                className="p-1.5 hover:bg-warning/20 rounded-lg transition-colors flex-shrink-0"
+                aria-label="Dismiss disclaimer"
+              >
+                <X className="w-4 h-4 text-warning" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* CLEAN KALSHI-STYLE HERO */}
       <section className="relative overflow-hidden border-b border-border/30">
         {/* Subtle gradient background */}
