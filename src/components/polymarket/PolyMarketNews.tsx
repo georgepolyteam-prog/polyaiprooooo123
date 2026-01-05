@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Newspaper, ExternalLink, RefreshCw, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { type KalshiMarket } from '@/hooks/useDflowApi';
+import { type PolyMarket } from '@/hooks/usePolymarketTerminal';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -15,12 +15,12 @@ interface NewsItem {
   summary?: string;
 }
 
-interface KalshiMarketNewsProps {
-  market: KalshiMarket;
+interface PolyMarketNewsProps {
+  market: PolyMarket;
   compact?: boolean;
 }
 
-export function KalshiMarketNews({ market, compact = false }: KalshiMarketNewsProps) {
+export function PolyMarketNews({ market, compact = false }: PolyMarketNewsProps) {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function KalshiMarketNews({ market, compact = false }: KalshiMarketNewsPr
     try {
       const { data, error: fnError } = await supabase.functions.invoke('fetch-news', {
         body: {
-          query: market.title,
+          query: market.title || market.question,
           limit: compact ? 3 : 5,
         },
       });
@@ -55,7 +55,7 @@ export function KalshiMarketNews({ market, compact = false }: KalshiMarketNewsPr
 
   useEffect(() => {
     fetchNews();
-  }, [market.ticker]);
+  }, [market.id]);
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, Loader2, Bot, User, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { type KalshiMarket } from '@/hooks/useDflowApi';
+import { type PolyMarket } from '@/hooks/usePolymarketTerminal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,12 +14,12 @@ interface Message {
   content: string;
 }
 
-interface KalshiMarketChatProps {
-  market: KalshiMarket;
+interface PolyMarketChatProps {
+  market: PolyMarket;
   compact?: boolean;
 }
 
-export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatProps) {
+export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +28,7 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
   // Reset messages when market changes
   useEffect(() => {
     setMessages([]);
-  }, [market.ticker]);
+  }, [market.id]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -57,14 +57,14 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
         { role: 'user', content: input.trim() },
       ];
 
-      const { data, error } = await supabase.functions.invoke('kalshi-chat', {
+      // Use poly-chat with market context
+      const { data, error } = await supabase.functions.invoke('poly-chat', {
         body: {
           messages: chatMessages,
-          marketTitle: market.title,
-          yesPrice: market.yesPrice,
-          noPrice: market.noPrice,
-          volume: market.volume,
-          closeTime: market.closeTime,
+          marketSlug: market.slug,
+          conditionId: market.conditionId,
+          userMessage: input.trim(),
+          skipAnalysis: false,
         },
       });
 
@@ -73,7 +73,7 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data?.message || data?.response || 'Sorry, I could not generate a response.',
+        content: data?.reply || data?.message || data?.response || 'Sorry, I could not generate a response.',
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -101,8 +101,8 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
 
   const suggestedQuestions = [
     'What are the key factors?',
+    'Analyze whale activity',
     'Should I buy YES or NO?',
-    'What\'s the risk here?',
   ];
 
   return (
@@ -119,7 +119,7 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
         <div className="p-1.5 rounded-lg bg-primary/10">
           <Sparkles className="w-4 h-4 text-primary" />
         </div>
-        <span className="text-sm font-medium text-foreground">AI Chat</span>
+        <span className="text-sm font-medium text-foreground">AI Analysis</span>
         <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded ml-auto">
           Claude
         </span>
@@ -131,7 +131,7 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
           <div className="h-full flex flex-col items-center justify-center text-center p-4">
             <Bot className="w-8 h-8 text-muted-foreground/50 mb-2" />
             <p className="text-xs text-muted-foreground mb-3">
-              Ask me anything about this market
+              Ask me anything about "{market.title?.slice(0, 40)}..."
             </p>
             <div className="flex flex-wrap gap-1.5 justify-center">
               {suggestedQuestions.map((q, idx) => (
@@ -167,7 +167,7 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
                   
                   <div
                     className={cn(
-                      'max-w-[80%] px-3 py-2 rounded-2xl text-xs',
+                      'max-w-[80%] px-3 py-2 rounded-2xl text-xs whitespace-pre-wrap',
                       msg.role === 'user'
                         ? 'bg-primary text-primary-foreground rounded-br-sm'
                         : 'bg-muted/50 text-foreground rounded-bl-sm'
@@ -195,7 +195,7 @@ export function KalshiMarketChat({ market, compact = false }: KalshiMarketChatPr
                   <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
                 </div>
                 <div className="px-3 py-2 rounded-2xl rounded-bl-sm bg-muted/50">
-                  <span className="text-xs text-muted-foreground">Thinking...</span>
+                  <span className="text-xs text-muted-foreground">Analyzing market data...</span>
                 </div>
               </motion.div>
             )}

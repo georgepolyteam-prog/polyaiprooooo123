@@ -20,8 +20,6 @@ import { KalshiAIAgents } from '@/components/kalshi/KalshiAIAgents';
 import { KalshiTradingPanel } from '@/components/kalshi/KalshiTradingPanel';
 import { KalshiOrderbook } from '@/components/kalshi/KalshiOrderbook';
 import { KalshiTradeFeed } from '@/components/kalshi/KalshiTradeFeed';
-import { KalshiMarketChat } from '@/components/kalshi/KalshiMarketChat';
-import { KalshiMarketNews } from '@/components/kalshi/KalshiMarketNews';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -179,9 +177,7 @@ export default function KalshiTerminal() {
               <>
                 <KalshiAIAgents market={selectedMarket} compact />
                 <KalshiOrderbook ticker={selectedMarket.ticker} compact />
-                <KalshiMarketNews market={selectedMarket} compact />
                 <KalshiTradeFeed ticker={selectedMarket.ticker} maxTrades={5} />
-                <KalshiMarketChat market={selectedMarket} compact />
               </>
             )}
           </TabsContent>
@@ -299,15 +295,13 @@ export default function KalshiTerminal() {
                   onPriceUpdate={handlePriceUpdate}
                 />
                 
-                {/* Bottom section: Orderbook + News | Trades + Chat */}
+                {/* Bottom section: Orderbook | Trades */}
                 <div className="grid grid-cols-2 gap-4 mt-4">
                   <div className="space-y-4">
                     <KalshiOrderbook ticker={selectedMarket.ticker} compact />
-                    <KalshiMarketNews market={selectedMarket} compact />
                   </div>
                   <div className="space-y-4">
                     <KalshiTradeFeed ticker={selectedMarket.ticker} maxTrades={6} />
-                    <KalshiMarketChat market={selectedMarket} compact />
                   </div>
                 </div>
               </>
