@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Loader2, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type PolyMarket } from '@/hooks/usePolymarketTerminal';
 import { Input } from '@/components/ui/input';
@@ -42,22 +42,34 @@ export function PolyMarketSidebar({
 
   if (collapsed) {
     return (
-      <div className="h-full w-12 bg-card/50 border-r border-border/30 flex flex-col items-center py-4">
+      <div className="h-full w-12 bg-card/80 border-r border-border/30 backdrop-blur-xl flex flex-col items-center py-4">
         <button
           onClick={onToggleCollapse}
           className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
         </button>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground rotate-90 mt-2">{markets.length}</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-72 bg-card/50 border-r border-border/30 flex flex-col">
+    <div className="h-full w-72 bg-card/80 border-r border-border/30 backdrop-blur-xl flex flex-col">
       {/* Header */}
-      <div className="p-3 border-b border-border/30 flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">Markets</span>
+      <div className="p-4 border-b border-border/30 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-primary/10">
+            <BarChart3 className="w-4 h-4 text-primary" />
+          </div>
+          <span className="text-sm font-semibold text-foreground">Markets</span>
+          <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+            {markets.length}
+          </span>
+        </div>
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
@@ -76,7 +88,7 @@ export function PolyMarketSidebar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search markets..."
-            className="pl-9 h-9 text-sm bg-muted/40 border-border/30"
+            className="pl-9 h-9 text-sm bg-muted/40 border-border/30 focus:border-primary/50"
           />
         </div>
       </div>
@@ -84,12 +96,21 @@ export function PolyMarketSidebar({
       {/* Market List */}
       <ScrollArea className="flex-1">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-primary/50 animate-spin" />
           </div>
         ) : filteredMarkets.length === 0 ? (
-          <div className="text-center py-8 text-sm text-muted-foreground">
-            No markets found
+          <div className="text-center py-12 px-4">
+            <Search className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No markets found</p>
+            {search && (
+              <button 
+                onClick={() => setSearch('')}
+                className="text-xs text-primary hover:underline mt-2"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           <div className="p-2 space-y-1">
@@ -105,23 +126,23 @@ export function PolyMarketSidebar({
                     'w-full text-left p-3 rounded-xl transition-all',
                     'hover:bg-muted/50',
                     selectedMarket?.id === market.id
-                      ? 'bg-primary/10 border border-primary/30'
+                      ? 'bg-primary/10 border border-primary/30 shadow-sm'
                       : 'border border-transparent'
                   )}
                 >
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-3">
                     {market.image && (
                       <img
                         src={market.image}
                         alt=""
-                        className="w-8 h-8 rounded-lg object-cover shrink-0"
+                        className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm"
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground line-clamp-2">
+                      <p className="text-xs font-medium text-foreground line-clamp-2 leading-relaxed">
                         {market.title}
                       </p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1.5">
                         <span className={cn(
                           'text-sm font-bold font-mono',
                           market.yesPrice >= 50 ? 'text-emerald-400' : 'text-red-400'
@@ -133,7 +154,7 @@ export function PolyMarketSidebar({
                         ) : (
                           <TrendingDown className="w-3 h-3 text-red-400" />
                         )}
-                        <span className="text-[10px] text-muted-foreground ml-auto">
+                        <span className="text-[10px] text-muted-foreground ml-auto font-mono">
                           {formatVolume(market.volume24h || market.volume)}
                         </span>
                       </div>
