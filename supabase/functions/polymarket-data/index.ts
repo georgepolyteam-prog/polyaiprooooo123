@@ -749,16 +749,32 @@ serve(async (req) => {
           const prices = JSON.parse(m.outcomePrices || "[]");
           const yesPrice = parseFloat(prices[0] || 0) * 100;
 
+          // Parse clobTokenIds for chart support
+          let clobTokenIds: string[] = [];
+          if (m.clobTokenIds) {
+            try {
+              clobTokenIds = typeof m.clobTokenIds === "string" ? JSON.parse(m.clobTokenIds) : m.clobTokenIds;
+            } catch {
+              clobTokenIds = [];
+            }
+          }
+
           return {
             id: m.id,
+            conditionId: m.conditionId || "", // CRITICAL: Include conditionId for chart
             question: m.question,
             slug: m.slug,
             yesPrice: Math.round(yesPrice),
             noPrice: Math.round(100 - yesPrice),
             volume: parseFloat(m.volume) || 0,
+            volume24hr: parseFloat(m.volume24hr || m.volume) || 0,
             liquidity: parseFloat(m.liquidity) || 0,
             endDate: m.endDate,
+            image: m.image || "",
+            description: m.description || "",
             url: `https://polymarket.com/event/${m.slug}`,
+            yesTokenId: clobTokenIds[0] || null,
+            noTokenId: clobTokenIds[1] || null,
             relevanceScore: score, // Include score for debugging and -chat filtering
             matchedOutcomes: matchedOutcomes.length > 0 ? matchedOutcomes : undefined, // Include matched outcomes if any
           };

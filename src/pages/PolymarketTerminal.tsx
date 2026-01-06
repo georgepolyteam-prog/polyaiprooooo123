@@ -17,7 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Link } from 'react-router-dom';
-import { usePolymarketTerminal } from '@/hooks/usePolymarketTerminal';
+import { usePolymarketTerminal, type Trade } from '@/hooks/usePolymarketTerminal';
 
 // Components
 import { PolyOrderbook } from '@/components/polymarket/PolyOrderbook';
@@ -28,6 +28,7 @@ import { PolyMarketNews } from '@/components/polymarket/PolyMarketNews';
 import { PolyMarketChart } from '@/components/polymarket/PolyMarketChart';
 import { PolyTradePanel } from '@/components/polymarket/PolyTradePanel';
 import { PolyConnectionHealth } from '@/components/polymarket/PolyConnectionHealth';
+import { TradeDetailModal } from '@/components/trades/TradeDetailModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -62,7 +63,25 @@ export default function PolymarketTerminal() {
   const [mobileTab, setMobileTab] = useState<'data' | 'chat' | 'trades'>('data');
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [whalesOnly, setWhalesOnly] = useState(false);
+  const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
 
+  // Convert terminal Trade to TradeDetailModal format
+  const convertTradeForModal = (trade: Trade) => ({
+    token_id: trade.token_id || '',
+    token_label: trade.token_label || 'YES',
+    side: trade.side as 'BUY' | 'SELL',
+    market_slug: selectedMarket?.slug || '',
+    condition_id: selectedMarket?.conditionId || '',
+    shares_normalized: trade.shares_normalized,
+    shares: trade.shares,
+    price: trade.price,
+    tx_hash: trade.id || '',
+    title: selectedMarket?.title || '',
+    timestamp: trade.timestamp,
+    user: trade.user || trade.taker || '',
+    image: selectedMarket?.image,
+    resolved_url: selectedMarket?.marketUrl,
+  });
   const formatVolume = (vol: number) => {
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`;
     if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`;
@@ -177,7 +196,7 @@ export default function PolymarketTerminal() {
                 <Filter className="w-3 h-3" /> Whales
               </Button>
             </div>
-            <PolyTradeFeed trades={filteredTrades} maxTrades={20} connected={connected} loading={loadingMarketData} />
+            <PolyTradeFeed trades={filteredTrades} maxTrades={20} connected={connected} loading={loadingMarketData} onTradeClick={setSelectedTrade} />
             {selectedMarket && <PolyTradePanel market={selectedMarket} compact />}
           </TabsContent>
           
@@ -432,7 +451,7 @@ export default function PolymarketTerminal() {
 
                 <div className="grid grid-cols-3 gap-6 mb-6">
                   <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} loading={loadingMarketData} />
-                  <PolyTradeFeed trades={filteredTrades} maxTrades={12} connected={connected} loading={loadingMarketData} />
+                  <PolyTradeFeed trades={filteredTrades} maxTrades={12} connected={connected} loading={loadingMarketData} onTradeClick={setSelectedTrade} />
                   <PolyMarketChat market={selectedMarket} />
                 </div>
 
@@ -457,6 +476,14 @@ export default function PolymarketTerminal() {
           </div>
         </main>
       </div>
+
+      {/* Trade Detail Modal */}
+      {selectedTrade && (
+        <TradeDetailModal
+          trade={convertTradeForModal(selectedTrade)}
+          onClose={() => setSelectedTrade(null)}
+        />
+      )}
     </div>
   );
 }

@@ -261,14 +261,14 @@ export function PolyMarketSidebar({
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence mode="sync">
               {displayMarkets.map((market) => (
                 <motion.button
                   key={market.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  layout
+                  transition={{ duration: 0.15 }}
                   onClick={() => onSelectMarket(market)}
                   className={cn(
                     'w-full text-left p-3 rounded-xl transition-all',
