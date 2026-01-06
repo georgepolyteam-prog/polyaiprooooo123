@@ -13,7 +13,11 @@ import {
   Zap,
   BarChart3,
   Radio,
+  Loader2,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Link } from 'react-router-dom';
@@ -53,6 +57,8 @@ export default function PolymarketTerminal() {
     hasMore,
     loadMoreMarkets,
     error,
+    fetchError,
+    retryFetch,
     refetchOrderbook,
     reconnect,
     reconnectAttempts,
@@ -385,11 +391,34 @@ export default function PolymarketTerminal() {
                     <div className="h-10 w-px bg-border/50" />
                     
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-                      <Radio className="w-3 h-3 text-primary animate-pulse" />
-                      <span className="text-xs font-medium text-primary">Live Data</span>
+                      {loadingMarketData ? (
+                        <>
+                          <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                          <span className="text-xs font-medium text-primary">Updating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Radio className="w-3 h-3 text-primary animate-pulse" />
+                          <span className="text-xs font-medium text-primary">
+                            {lastMessageTime ? `Updated ${formatDistanceToNow(lastMessageTime)} ago` : 'Live Data'}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </motion.div>
+                
+                {/* Error Banner with Retry */}
+                {fetchError && (
+                  <div className="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-destructive/10 border border-destructive/20">
+                    <AlertTriangle className="w-4 h-4 text-destructive" />
+                    <span className="text-sm text-destructive flex-1">{fetchError}</span>
+                    <Button size="sm" variant="outline" onClick={retryFetch} className="gap-2">
+                      <RefreshCw className="w-3 h-3" />
+                      Retry
+                    </Button>
+                  </div>
+                )}
 
                 {/* Stats Row */}
                 <motion.div 
