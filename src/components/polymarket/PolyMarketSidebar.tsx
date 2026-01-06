@@ -179,7 +179,7 @@ export function PolyMarketSidebar({
 
   if (collapsed) {
     return (
-      <div className="h-screen w-12 bg-card/80 border-r border-border/30 backdrop-blur-xl flex flex-col items-center py-4 overflow-hidden">
+      <div className="h-full w-full bg-card/80 backdrop-blur-xl flex flex-col items-center py-4 overflow-hidden">
         <button
           onClick={onToggleCollapse}
           className="p-2 rounded-lg hover:bg-muted transition-colors"
@@ -195,7 +195,7 @@ export function PolyMarketSidebar({
   }
 
   return (
-    <div className="h-screen w-72 bg-card/80 border-r border-border/30 backdrop-blur-xl flex flex-col overflow-hidden">
+    <div className="h-full w-full bg-card/80 backdrop-blur-xl flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-border/30 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
