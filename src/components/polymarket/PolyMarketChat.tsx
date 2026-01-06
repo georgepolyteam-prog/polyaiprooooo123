@@ -1,24 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Loader2, User, Sparkles, Lock, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 import { type PolyMarket } from '@/hooks/usePolymarketTerminal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { useCredits } from '@/hooks/useCredits';
+import { usePolyChat } from '@/hooks/usePolyChat';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import polyLogo from '@/assets/poly-logo-new.png';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-}
 
 interface PolyMarketChatProps {
   market: PolyMarket;
@@ -26,21 +19,36 @@ interface PolyMarketChatProps {
 }
 
 export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   
-  const { user, session } = useAuth();
-  const { credits, hasCredits, useCredit, isLoading: creditsLoading } = useCredits();
+  const { session } = useAuth();
+  const { credits, hasCredits, isLoading: creditsLoading } = useCredits();
   const navigate = useNavigate();
   
   const isAuthenticated = !!session?.access_token;
 
-  // Reset messages when market changes
+  // Use the shared usePolyChat hook - same as /chat page
+  const {
+    messages,
+    isLoading,
+    sendMessage,
+    setCurrentMarketContext,
+    clearMessages,
+  } = usePolyChat(session, null);
+
+  // Update market context when market changes
   useEffect(() => {
-    setMessages([]);
-  }, [market.id]);
+    if (market) {
+      setCurrentMarketContext({
+        slug: market.slug,
+        eventSlug: market.eventSlug,
+        question: market.title,
+        url: market.marketUrl,
+      });
+      clearMessages();
+    }
+  }, [market.id, market.slug, setCurrentMarketContext, clearMessages]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -52,96 +60,19 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
     }
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = () => {
+    const input = inputRef.current;
+    if (!input || !input.value.trim() || isLoading) return;
     
-    // Check authentication
-    if (!isAuthenticated) {
-      toast.error('Please sign in to chat');
-      return;
-    }
-    
-    // Check credits
-    if (!hasCredits(1)) {
-      toast.error('Out of credits', {
-        description: 'Add more credits to continue chatting',
-        action: {
-          label: 'Get Credits',
-          onClick: () => navigate('/credits'),
-        },
-      });
-      return;
-    }
-
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: input.trim(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
-    try {
-      // Format messages for the edge function
-      const chatMessages = [
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: input.trim() },
-      ];
-
-      // Use poly-chat with market context and auth token
-      const { data, error } = await supabase.functions.invoke('poly-chat', {
-        body: {
-          messages: chatMessages,
-          marketSlug: market.slug,
-          conditionId: market.conditionId,
-          userMessage: input.trim(),
-          skipAnalysis: false,
-          authToken: session?.access_token,
-          authType: 'supabase',
-        },
-      });
-
-      if (error) throw error;
-
-      // Deduct credit on success
-      await useCredit(1);
-
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: data?.reply || data?.message || data?.response || 'Sorry, I could not generate a response.',
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (err: any) {
-      console.error('Chat error:', err);
-      
-      // Handle specific errors
-      if (err?.message?.includes('401') || err?.message?.includes('Authentication')) {
-        toast.error('Session expired', { description: 'Please sign in again' });
-      } else if (err?.message?.includes('402')) {
-        toast.error('Out of credits');
-      } else {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: `error-${Date.now()}`,
-            role: 'assistant',
-            content: 'Sorry, there was an error processing your message. Please try again.',
-          },
-        ]);
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    const message = input.value.trim();
+    input.value = '';
+    sendMessage(message);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      handleSend();
     }
   };
 
@@ -231,7 +162,9 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
                 {suggestedQuestions.map((q, idx) => (
                   <button
                     key={idx}
-                    onClick={() => setInput(q)}
+                    onClick={() => {
+                      if (inputRef.current) inputRef.current.value = q;
+                    }}
                     className="px-3 py-1.5 text-xs rounded-full bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/20 transition-all"
                   >
                     {q}
@@ -242,9 +175,9 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
           ) : (
             <div className="space-y-4">
               <AnimatePresence mode="popLayout">
-                {messages.map((msg) => (
+                {messages.map((msg, idx) => (
                   <motion.div
-                    key={msg.id}
+                    key={`${msg.role}-${idx}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
@@ -268,6 +201,9 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
                       )}
                     >
                       {msg.content}
+                      {msg.isStreaming && (
+                        <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/60 animate-pulse" />
+                      )}
                     </div>
                     
                     {msg.role === 'user' && (
@@ -279,7 +215,7 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
                 ))}
               </AnimatePresence>
               
-              {isLoading && (
+              {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -309,8 +245,7 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
       <div className="p-3 border-t border-border/30 bg-muted/20">
         <div className="flex gap-2">
           <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            ref={inputRef}
             onKeyDown={handleKeyDown}
             placeholder={hasCredits(1) ? "Ask about this market..." : "Add credits to chat..."}
             className="h-10 text-sm bg-background/50 border-border/30 focus:border-primary/50 transition-colors"
@@ -318,8 +253,8 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
           />
           <Button
             size="icon"
-            onClick={sendMessage}
-            disabled={!input.trim() || isLoading || !hasCredits(1)}
+            onClick={handleSend}
+            disabled={isLoading || !hasCredits(1)}
             className="h-10 w-10 shrink-0 shadow-lg shadow-primary/20"
           >
             {isLoading ? (

@@ -675,6 +675,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     retryingIn,
     dismissLoadBanner,
     currentMarketContext,
+    setCurrentMarketContext,
     conversationId,
     setSidebarMarketData,
     analysisStep,

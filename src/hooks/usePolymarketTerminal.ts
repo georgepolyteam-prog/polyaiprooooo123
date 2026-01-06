@@ -69,12 +69,16 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMarketData, setLoadingMarketData] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
 
   // Request ID ref to prevent stale responses from overwriting state
   const requestIdRef = useRef(0);
   const isFirstFetchRef = useRef(true);
+  const offsetRef = useRef(0);
+  const BATCH_SIZE = 50;
 
   // Fetch top markets on mount
   useEffect(() => {
@@ -143,13 +147,25 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
           return outcomes.map((outcome: any) => {
             const marketSlug = outcome.slug || '';
             const yesCents = toCents(outcome.yesPrice);
+            const yesTokenId = outcome.yesTokenId ?? null;
+            
+            // Build marketUrl with tid if available for faster resolution
+            let marketUrl = '';
+            if (eventSlug && marketSlug) {
+              marketUrl = `https://polymarket.com/event/${eventSlug}/${marketSlug}`;
+              if (yesTokenId) {
+                marketUrl += `?tid=${yesTokenId}`;
+              }
+            } else if (eventSlug) {
+              marketUrl = `https://polymarket.com/event/${eventSlug}`;
+            }
 
             return {
               id: outcome.conditionId || `${event.id}-${marketSlug}`,
               conditionId: outcome.conditionId || '',
               slug: marketSlug,
               eventSlug,
-              marketUrl: eventSlug && marketSlug ? `https://polymarket.com/event/${eventSlug}/${marketSlug}` : (eventSlug ? `https://polymarket.com/event/${eventSlug}` : ''),
+              marketUrl,
               title: outcome.question || event.title,
               question: outcome.question || event.title,
               description: event.description,
@@ -160,7 +176,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
               endDate: outcome.endDate || event.endDate,
               yesPrice: yesCents,
               noPrice: 100 - yesCents,
-              yesTokenId: outcome.yesTokenId ?? null,
+              yesTokenId,
               noTokenId: outcome.noTokenId ?? null,
               outcomes: Array.isArray(outcome.outcomes) ? outcome.outcomes : ['Yes', 'No'],
             } as PolyMarket;
@@ -173,6 +189,8 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
         console.log(`[PolyTerminal] Transformed ${validMarkets.length} markets`);
         setMarkets(validMarkets);
+        offsetRef.current = BATCH_SIZE;
+        setHasMore(events.length >= BATCH_SIZE);
 
         // Auto-select first market
         if (validMarkets.length > 0) {
@@ -188,6 +206,122 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
 
     fetchMarkets();
   }, []);
+
+  // Load more markets (pagination)
+  const loadMoreMarkets = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('polymarket-data', {
+        body: {
+          action: 'getEvents',
+          limit: BATCH_SIZE,
+          offset: offsetRef.current,
+          order: 'volume',
+          ascending: false,
+        },
+      });
+
+      if (fnError) throw fnError;
+      if (!data?.success || !Array.isArray(data?.events)) {
+        setHasMore(false);
+        return;
+      }
+
+      const events = data.events as any[];
+      if (events.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      console.log(`[PolyTerminal] Loaded ${events.length} more events`);
+
+      const toCents = (p: unknown): number => {
+        const n = typeof p === 'number' ? p : parseFloat(String(p ?? '0'));
+        const prob = n > 1 ? n / 100 : n;
+        return Math.round(Math.max(0, Math.min(1, prob)) * 100);
+      };
+
+      const transformedMarkets: PolyMarket[] = events.flatMap((event: any) => {
+        const outcomes = Array.isArray(event.outcomes) ? event.outcomes : [];
+        const eventSlug = event.slug || '';
+
+        if (outcomes.length === 0) {
+          return [{
+            id: event.id || eventSlug,
+            conditionId: '',
+            slug: eventSlug,
+            eventSlug,
+            marketUrl: eventSlug ? `https://polymarket.com/event/${eventSlug}` : '',
+            title: event.title,
+            question: event.title,
+            description: event.description,
+            image: event.image,
+            volume24h: Number(event.volume24hr || 0),
+            volume: Number(event.volume || 0),
+            liquidity: Number(event.liquidity || 0),
+            endDate: event.endDate,
+            yesPrice: 50,
+            noPrice: 50,
+          }];
+        }
+
+        return outcomes.map((outcome: any) => {
+          const marketSlug = outcome.slug || '';
+          const yesCents = toCents(outcome.yesPrice);
+          const yesTokenId = outcome.yesTokenId ?? null;
+          
+          let marketUrl = '';
+          if (eventSlug && marketSlug) {
+            marketUrl = `https://polymarket.com/event/${eventSlug}/${marketSlug}`;
+            if (yesTokenId) marketUrl += `?tid=${yesTokenId}`;
+          } else if (eventSlug) {
+            marketUrl = `https://polymarket.com/event/${eventSlug}`;
+          }
+
+          return {
+            id: outcome.conditionId || `${event.id}-${marketSlug}`,
+            conditionId: outcome.conditionId || '',
+            slug: marketSlug,
+            eventSlug,
+            marketUrl,
+            title: outcome.question || event.title,
+            question: outcome.question || event.title,
+            description: event.description,
+            image: outcome.image || event.image,
+            volume24h: Number(outcome.volume24hr || 0),
+            volume: Number(outcome.volume || event.volume || 0),
+            liquidity: Number(outcome.liquidity || event.liquidity || 0),
+            endDate: outcome.endDate || event.endDate,
+            yesPrice: yesCents,
+            noPrice: 100 - yesCents,
+            yesTokenId,
+            noTokenId: outcome.noTokenId ?? null,
+            outcomes: Array.isArray(outcome.outcomes) ? outcome.outcomes : ['Yes', 'No'],
+          } as PolyMarket;
+        });
+      });
+
+      const validMarkets = transformedMarkets.filter((m) =>
+        Boolean(m.title) && Boolean(m.eventSlug) && Boolean(m.slug) && m.yesPrice >= 0 && m.yesPrice <= 100
+      );
+
+      // Append to existing markets, filtering duplicates
+      setMarkets(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const newMarkets = validMarkets.filter(m => !existingIds.has(m.id));
+        return [...prev, ...newMarkets];
+      });
+
+      offsetRef.current += BATCH_SIZE;
+      setHasMore(events.length >= BATCH_SIZE);
+    } catch (err) {
+      console.error('[PolyTerminal] Failed to load more markets:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore]);
 
   // Fetch market data (orderbook + trades) via polling with stale-response protection
   const fetchMarketData = useCallback(async () => {
@@ -350,6 +484,9 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     connected: true, // Always "connected" since we use polling
     loading,
     loadingMarketData,
+    loadingMore,
+    hasMore,
+    loadMoreMarkets,
     error,
     refetchOrderbook: fetchMarketData,
     reconnect: fetchMarketData,
