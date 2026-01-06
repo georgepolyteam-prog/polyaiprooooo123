@@ -65,13 +65,29 @@ const formatText = (text: string) => {
   return lines.map((line, index) => {
     const trimmedLine = line.trim();
     
+    // Empty line
     if (trimmedLine === "") return <div key={index} className="h-1" />;
     
-    // Main header: ## Title
+    // Horizontal rule: --- or ___
+    if (/^[-_]{3,}$/.test(trimmedLine)) {
+      return <hr key={index} className="my-2 border-border/30" />;
+    }
+    
+    // Main header: # Title (single hash)
+    if (/^#\s+/.test(trimmedLine) && !trimmedLine.startsWith("##")) {
+      const headerText = trimmedLine.replace(/^#\s+/, '');
+      return (
+        <h1 key={index} className="text-sm font-bold text-foreground mt-3 mb-1.5 first:mt-0">
+          {formatInlineText(headerText)}
+        </h1>
+      );
+    }
+    
+    // Secondary header: ## Title
     if (trimmedLine.startsWith("## ")) {
       const headerText = trimmedLine.slice(3);
       return (
-        <h2 key={index} className="text-xs font-bold text-foreground mt-2 mb-1 first:mt-0">
+        <h2 key={index} className="text-xs font-bold text-foreground mt-2.5 mb-1 first:mt-0">
           {formatInlineText(headerText)}
         </h2>
       );
@@ -81,9 +97,19 @@ const formatText = (text: string) => {
     if (trimmedLine.startsWith("### ")) {
       const headerText = trimmedLine.slice(4);
       return (
-        <h3 key={index} className="text-[11px] font-semibold text-foreground mt-1.5 mb-0.5 border-l-2 border-primary/50 pl-1.5">
+        <h3 key={index} className="text-[11px] font-semibold text-foreground mt-2 mb-0.5 border-l-2 border-primary/50 pl-1.5">
           {formatInlineText(headerText)}
         </h3>
+      );
+    }
+    
+    // Sub-sub header: #### Subtitle
+    if (trimmedLine.startsWith("#### ")) {
+      const headerText = trimmedLine.slice(5);
+      return (
+        <h4 key={index} className="text-[10px] font-semibold text-foreground/90 mt-1.5 mb-0.5">
+          {formatInlineText(headerText)}
+        </h4>
       );
     }
     
@@ -96,26 +122,31 @@ const formatText = (text: string) => {
       );
     }
     
-    // Bullet points
+    // Bullet points: • - *
     if (trimmedLine.startsWith("• ") || trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ")) {
       const bulletContent = trimmedLine.slice(2);
       return (
-        <div key={index} className="flex gap-1 ml-1.5 my-0.5">
+        <div key={index} className="flex gap-1.5 ml-1.5 my-0.5">
           <span className="text-primary mt-0.5 text-[9px]">•</span>
           <span className="text-foreground/90 text-[10px] leading-relaxed">{formatInlineText(bulletContent)}</span>
         </div>
       );
     }
     
-    // Numbered lists
+    // Numbered lists: 1. 2. etc
     const numberMatch = trimmedLine.match(/^(\d+)\.\s+(.+)/);
     if (numberMatch) {
       return (
-        <div key={index} className="flex gap-1 ml-1.5 my-0.5">
+        <div key={index} className="flex gap-1.5 ml-1.5 my-0.5">
           <span className="text-primary/70 font-medium min-w-[0.8rem] text-[10px]">{numberMatch[1]}.</span>
           <span className="text-foreground/90 text-[10px] leading-relaxed">{formatInlineText(numberMatch[2])}</span>
         </div>
       );
+    }
+    
+    // [DONE] tag cleanup
+    if (trimmedLine === '[DONE]') {
+      return null;
     }
 
     // Regular paragraph
