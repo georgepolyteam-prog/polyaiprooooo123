@@ -16,9 +16,10 @@ const navItems = [
 
 const menuItems = [
   { id: "home", label: "Home", icon: LineChart, path: "/" },
+  { id: "chat", label: "AI Chat", icon: MessageSquare, path: "/chat" },
   { id: "markets", label: "Browse Markets", icon: BarChart3, path: "/markets" },
   { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
-  { id: "chat", label: "AI Chat", icon: MessageSquare, path: "/chat" },
+  { id: "dashboard", label: "Dashboard", icon: BarChart3, path: "/dashboard" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
   { id: "leaderboard", label: "Top Traders", icon: Trophy, path: "/leaderboard" },
   { id: "builders", label: "Top Builders", icon: Hammer, path: "/builders" },
@@ -27,9 +28,10 @@ const menuItems = [
 const additionalMenuItems = [
   { id: "credits", label: "Get Credits", icon: Zap, path: "/credits" },
   { id: "tracked-wallets", label: "Tracked Wallets", icon: Star, path: "/tracked-wallets" },
+  { id: "partnerships", label: "Partnerships", icon: Star, path: "/partnerships" },
+  { id: "docs", label: "Documentation", icon: FileText, path: "/docs" },
   { id: "about", label: "About", icon: Info, path: "/about" },
   { id: "help", label: "Help & Support", icon: HelpCircle, path: "/help" },
-  { id: "docs", label: "Documentation", icon: FileText, path: "/docs" },
 ];
 
 export function MobileBottomNav() {

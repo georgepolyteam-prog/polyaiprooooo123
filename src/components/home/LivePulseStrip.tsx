@@ -11,10 +11,10 @@ interface MarketData {
 export const LivePulseStrip = () => {
   const [markets, setMarkets] = useState<MarketData[]>([
     { title: "Trump 2028", price: 23, change: 2.1 },
-    { title: "BTC $150k 2025", price: 8, change: -1.2 },
+    { title: "BTC $150k 2026", price: 8, change: -1.2 },
     { title: "Fed Rate Cut March", price: 67, change: 5.3 },
     { title: "Apple $250 EOY", price: 41, change: 0.8 },
-    { title: "Recession 2025", price: 19, change: -3.1 },
+    { title: "Recession 2026", price: 19, change: -3.1 },
     { title: "ETH Flips BTC", price: 4, change: 0.2 },
   ]);
 

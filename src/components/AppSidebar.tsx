@@ -33,15 +33,17 @@ import {
 } from '@/components/ui/tooltip';
 
 const mainNav = [
-  { title: 'Home', url: '/', icon: MessageSquare },
+  { title: 'Home', url: '/', icon: LineChart },
   { title: 'Chat', url: '/chat', icon: MessageSquare },
 ];
 
 const exploreNav = [
   { title: 'Browse Markets', url: '/markets', icon: LayoutGrid },
-  { title: 'Live Trades', url: '/trades', icon: Activity },
+  { title: 'Live Trades', url: '/live-trades', icon: Activity },
   { title: 'Dashboard', url: '/dashboard', icon: BarChart3 },
   { title: 'My Trades', url: '/my-trades', icon: Receipt },
+  { title: 'Tracked Wallets', url: '/tracked-wallets', icon: Wallet },
+  { title: 'Get Credits', url: '/credits', icon: Coins },
 ];
 
 const leaderboardNav = [
