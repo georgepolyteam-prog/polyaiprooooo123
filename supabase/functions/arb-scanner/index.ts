@@ -118,70 +118,104 @@ function extractArr(d: any): any[] {
 }
 
 // Filter constants for high-quality markets
-const MIN_VOLUME_USD = 5000; // Minimum $5k volume
+const MIN_VOLUME_API = 10000; // API filter: $10k+ volume
 const MAX_DAYS_TO_CLOSE = 30; // Markets closing within 30 days
+const API_PAGE_LIMIT = 100; // Dome API hard limit per request
 
-async function fetchPolymarketMarkets(apiKey: string, limit: number): Promise<{ markets: PolymarketMarket[]; error?: string }> {
-  // Request more markets and filter client-side, sort by volume
-  const url = `${DOME_API_URL}/polymarket/markets?status=open&limit=${limit}&sort=volume&order=desc`;
-  log(`Fetching Polymarket: ${url}`);
+async function fetchPolymarketMarketsPage(apiKey: string, offset: number): Promise<{ markets: PolymarketMarket[]; error?: string }> {
+  const url = `${DOME_API_URL}/polymarket/markets?status=open&min_volume=${MIN_VOLUME_API}&limit=${API_PAGE_LIMIT}&offset=${offset}`;
+  log(`Fetching Polymarket page offset=${offset}: ${url}`);
   try {
     const res = await domeGet(url, apiKey);
     if (!res.ok) return { markets: [], error: `Poly ${res.status}: ${res.text}` };
-    let arr = extractArr(res.data);
-    
-    // Filter for high-volume, short-term markets
-    const now = Date.now();
-    const maxCloseTime = now + MAX_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000;
-    
-    arr = arr.filter((m: PolymarketMarket) => {
-      const vol = m.volume || m.volume_24h || 0;
-      const endTime = m.end_time ? m.end_time * 1000 : Infinity;
-      // Keep if: has volume >= MIN and closes within MAX_DAYS
-      return vol >= MIN_VOLUME_USD && endTime <= maxCloseTime;
-    });
-    
-    // Sort by volume descending
-    arr.sort((a: PolymarketMarket, b: PolymarketMarket) => ((b.volume || b.volume_24h || 0) - (a.volume || a.volume_24h || 0)));
-    arr = arr.slice(0, limit);
-    
-    log(`Polymarket fetched: ${arr.length} (filtered for vol>=$${MIN_VOLUME_USD}, closes within ${MAX_DAYS_TO_CLOSE}d)`);
-    if (arr[0]) log("Poly top market:", { title: arr[0].title, volume: arr[0].volume || arr[0].volume_24h, end_time: arr[0].end_time });
-    return { markets: arr };
+    return { markets: extractArr(res.data) };
   } catch (e) {
     return { markets: [], error: String(e) };
   }
 }
 
-async function fetchKalshiMarkets(apiKey: string, limit: number): Promise<{ markets: KalshiMarket[]; error?: string }> {
-  // Request more markets and filter client-side, sort by volume
-  const url = `${DOME_API_URL}/kalshi/markets?status=open&limit=${limit}&sort=volume&order=desc`;
-  log(`Fetching Kalshi: ${url}`);
+async function fetchPolymarketMarkets(apiKey: string, targetCount: number): Promise<{ markets: PolymarketMarket[]; error?: string }> {
+  // Make multiple paginated calls to get up to targetCount markets
+  const pagesToFetch = Math.ceil(targetCount / API_PAGE_LIMIT);
+  const offsets = Array.from({ length: pagesToFetch }, (_, i) => i * API_PAGE_LIMIT);
+  
+  log(`Polymarket: fetching ${pagesToFetch} pages for ~${targetCount} markets`);
+  
+  const results = await Promise.all(offsets.map(offset => fetchPolymarketMarketsPage(apiKey, offset)));
+  
+  let allMarkets: PolymarketMarket[] = [];
+  let firstError: string | undefined;
+  
+  for (const r of results) {
+    if (r.error && !firstError) firstError = r.error;
+    allMarkets = allMarkets.concat(r.markets);
+  }
+  
+  // Filter for short-term markets (close within MAX_DAYS)
+  const now = Date.now();
+  const maxCloseTime = now + MAX_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000;
+  
+  allMarkets = allMarkets.filter((m: PolymarketMarket) => {
+    const endTime = m.end_time ? m.end_time * 1000 : Infinity;
+    return endTime <= maxCloseTime;
+  });
+  
+  // Sort by volume descending
+  allMarkets.sort((a, b) => ((b.volume || b.volume_24h || 0) - (a.volume || a.volume_24h || 0)));
+  allMarkets = allMarkets.slice(0, targetCount);
+  
+  log(`Polymarket total: ${allMarkets.length} markets (vol>=$${MIN_VOLUME_API}, closes within ${MAX_DAYS_TO_CLOSE}d)`);
+  if (allMarkets[0]) log("Poly top:", { title: allMarkets[0].title, volume: allMarkets[0].volume || allMarkets[0].volume_24h });
+  
+  return { markets: allMarkets, error: allMarkets.length === 0 ? firstError : undefined };
+}
+
+async function fetchKalshiMarketsPage(apiKey: string, offset: number): Promise<{ markets: KalshiMarket[]; error?: string }> {
+  const url = `${DOME_API_URL}/kalshi/markets?status=open&min_volume=${MIN_VOLUME_API}&limit=${API_PAGE_LIMIT}&offset=${offset}`;
+  log(`Fetching Kalshi page offset=${offset}: ${url}`);
   try {
     const res = await domeGet(url, apiKey);
     if (!res.ok) return { markets: [], error: `Kalshi ${res.status}: ${res.text}` };
-    let arr = extractArr(res.data);
-    
-    // Filter for high-volume, short-term markets
-    const now = Date.now();
-    const maxCloseTime = now + MAX_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000;
-    
-    arr = arr.filter((m: KalshiMarket) => {
-      const vol = m.volume || m.volume_24h || 0;
-      const closeTime = m.close_time ? m.close_time * 1000 : (m.end_time ? m.end_time * 1000 : Infinity);
-      return vol >= MIN_VOLUME_USD && closeTime <= maxCloseTime;
-    });
-    
-    // Sort by volume descending
-    arr.sort((a: KalshiMarket, b: KalshiMarket) => ((b.volume || b.volume_24h || 0) - (a.volume || a.volume_24h || 0)));
-    arr = arr.slice(0, limit);
-    
-    log(`Kalshi fetched: ${arr.length} (filtered for vol>=$${MIN_VOLUME_USD}, closes within ${MAX_DAYS_TO_CLOSE}d)`);
-    if (arr[0]) log("Kalshi top market:", { title: arr[0].title, volume: arr[0].volume || arr[0].volume_24h, close_time: arr[0].close_time });
-    return { markets: arr };
+    return { markets: extractArr(res.data) };
   } catch (e) {
     return { markets: [], error: String(e) };
   }
+}
+
+async function fetchKalshiMarkets(apiKey: string, targetCount: number): Promise<{ markets: KalshiMarket[]; error?: string }> {
+  // Make multiple paginated calls to get up to targetCount markets
+  const pagesToFetch = Math.ceil(targetCount / API_PAGE_LIMIT);
+  const offsets = Array.from({ length: pagesToFetch }, (_, i) => i * API_PAGE_LIMIT);
+  
+  log(`Kalshi: fetching ${pagesToFetch} pages for ~${targetCount} markets`);
+  
+  const results = await Promise.all(offsets.map(offset => fetchKalshiMarketsPage(apiKey, offset)));
+  
+  let allMarkets: KalshiMarket[] = [];
+  let firstError: string | undefined;
+  
+  for (const r of results) {
+    if (r.error && !firstError) firstError = r.error;
+    allMarkets = allMarkets.concat(r.markets);
+  }
+  
+  // Filter for short-term markets
+  const now = Date.now();
+  const maxCloseTime = now + MAX_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000;
+  
+  allMarkets = allMarkets.filter((m: KalshiMarket) => {
+    const closeTime = m.close_time ? m.close_time * 1000 : (m.end_time ? m.end_time * 1000 : Infinity);
+    return closeTime <= maxCloseTime;
+  });
+  
+  // Sort by volume descending
+  allMarkets.sort((a, b) => ((b.volume || b.volume_24h || 0) - (a.volume || a.volume_24h || 0)));
+  allMarkets = allMarkets.slice(0, targetCount);
+  
+  log(`Kalshi total: ${allMarkets.length} markets (vol>=$${MIN_VOLUME_API}, closes within ${MAX_DAYS_TO_CLOSE}d)`);
+  if (allMarkets[0]) log("Kalshi top:", { title: allMarkets[0].title, volume: allMarkets[0].volume || allMarkets[0].volume_24h });
+  
+  return { markets: allMarkets, error: allMarkets.length === 0 ? firstError : undefined };
 }
 
 // Orderbook endpoints REQUIRE start_time and end_time (milliseconds)
