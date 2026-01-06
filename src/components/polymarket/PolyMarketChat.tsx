@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Loader2, User, Sparkles, Lock, Coins, Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,120 @@ import { AnalysisStatus } from '@/components/chat/AnalysisStatus';
 import { PolyMarketChatExpanded } from './PolyMarketChatExpanded';
 
 import polyLogo from '@/assets/poly-logo-new.png';
+
+// Markdown formatting helper (matches /chat page format)
+const formatInlineText = (text: string): React.ReactNode => {
+  const boldRegex = /\*\*(.*?)\*\*/g;
+  const tempText = text.replace(boldRegex, (_, content) => `<<<BOLD_START>>>${content}<<<BOLD_END>>>`);
+  const parts = tempText.split(/(<<<BOLD_START>>>.*?<<<BOLD_END>>>)/);
+
+  return parts.map((part, idx) => {
+    if (part.startsWith("<<<BOLD_START>>>") && part.endsWith("<<<BOLD_END>>>")) {
+      const content = part.slice(16, -14);
+      return <strong key={idx} className="font-semibold text-foreground">{content}</strong>;
+    }
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    if (urlRegex.test(part)) {
+      const urlParts = part.split(urlRegex);
+      return urlParts.map((urlPart, i) => {
+        if (/(https?:\/\/[^\s]+)/.test(urlPart)) {
+          return (
+            <a
+              key={`${idx}-${i}`}
+              href={urlPart}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              {urlPart}
+            </a>
+          );
+        }
+        return urlPart;
+      });
+    }
+
+    return part;
+  });
+};
+
+const formatText = (text: string) => {
+  const lines = text.split("\n");
+
+  return lines.map((line, index) => {
+    const trimmedLine = line.trim();
+    
+    if (trimmedLine === "") return <div key={index} className="h-1.5" />;
+    
+    // Main header: ## Title
+    if (trimmedLine.startsWith("## ")) {
+      const headerText = trimmedLine.slice(3);
+      return (
+        <h2 key={index} className="text-sm font-bold text-foreground mt-3 mb-1.5 first:mt-0">
+          {formatInlineText(headerText)}
+        </h2>
+      );
+    }
+    
+    // Sub header: ### Subtitle
+    if (trimmedLine.startsWith("### ")) {
+      const headerText = trimmedLine.slice(4);
+      return (
+        <h3 key={index} className="text-[13px] font-semibold text-foreground mt-2 mb-1 border-l-2 border-primary/50 pl-2">
+          {formatInlineText(headerText)}
+        </h3>
+      );
+    }
+    
+    // Key-value bold line: **Label:** Value
+    if (trimmedLine.startsWith("**") && trimmedLine.includes(":**")) {
+      return (
+        <div key={index} className="py-1 px-2 my-0.5 rounded bg-muted/40 text-[12px]">
+          {formatInlineText(trimmedLine)}
+        </div>
+      );
+    }
+
+    // Emoji headers
+    if (/^[🎯💭⚠️📊🏁📈⚡🔥✨💡🚨]/.test(trimmedLine)) {
+      return (
+        <div key={index} className="font-semibold text-foreground mt-2 mb-1 text-[13px]">
+          {formatInlineText(trimmedLine)}
+        </div>
+      );
+    }
+    
+    // Bullet points
+    if (trimmedLine.startsWith("• ") || trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ")) {
+      const bulletContent = trimmedLine.slice(2);
+      return (
+        <div key={index} className="flex gap-1.5 ml-2 my-0.5">
+          <span className="text-primary mt-0.5 text-[10px]">•</span>
+          <span className="text-foreground/90 text-[12px] leading-relaxed">{formatInlineText(bulletContent)}</span>
+        </div>
+      );
+    }
+    
+    // Numbered lists
+    const numberMatch = trimmedLine.match(/^(\d+)\.\s+(.+)/);
+    if (numberMatch) {
+      return (
+        <div key={index} className="flex gap-1.5 ml-2 my-0.5">
+          <span className="text-primary/70 font-medium min-w-[1rem] text-[12px]">{numberMatch[1]}.</span>
+          <span className="text-foreground/90 text-[12px] leading-relaxed">{formatInlineText(numberMatch[2])}</span>
+        </div>
+      );
+    }
+
+    // Regular paragraph
+    return (
+      <p key={index} className="text-foreground/90 my-1 leading-relaxed text-[12px]">
+        {formatInlineText(trimmedLine)}
+      </p>
+    );
+  });
+};
 
 interface PolyMarketChatProps {
   market: PolyMarket;
@@ -112,10 +226,7 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          'rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl flex flex-col items-center justify-center overflow-hidden shadow-xl shadow-black/5',
-          compact ? 'h-[280px]' : 'h-[420px]'
-        )}
+        className="h-full rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl flex flex-col items-center justify-center overflow-hidden shadow-xl shadow-black/5"
       >
         <div className="flex flex-col items-center text-center p-6">
           <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
@@ -139,10 +250,7 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          'rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl flex flex-col overflow-hidden shadow-xl shadow-black/5',
-          compact ? 'h-[280px]' : 'h-[420px]'
-        )}
+        className="h-full rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl flex flex-col overflow-hidden shadow-xl shadow-black/5"
       >
         {/* Header - Poly Branding */}
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
@@ -230,13 +338,17 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
                       
                       <div
                         className={cn(
-                          'max-w-[85%] px-3 py-2 rounded-xl text-xs whitespace-pre-wrap leading-relaxed',
+                          'max-w-[90%] px-3 py-2 rounded-xl leading-relaxed',
                           msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20'
-                            : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/50'
+                            ? 'bg-primary text-primary-foreground rounded-br-sm shadow-lg shadow-primary/20 text-[13px]'
+                            : 'bg-muted/60 rounded-bl-sm border border-border/60'
                         )}
                       >
-                        {msg.content}
+                        {msg.role === 'user' ? (
+                          msg.content
+                        ) : (
+                          <div className="prose-compact">{formatText(msg.content)}</div>
+                        )}
                         {msg.isStreaming && (
                           <span className="inline-block w-1 h-3 ml-0.5 bg-primary/60 animate-pulse" />
                         )}

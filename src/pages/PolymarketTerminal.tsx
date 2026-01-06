@@ -157,7 +157,7 @@ export default function PolymarketTerminal() {
   // Mobile layout
   if (isMobile) {
     return (
-      <div className="h-screen flex flex-col bg-background">
+      <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
         {/* Mobile Header */}
         <header className="flex items-center justify-between h-12 px-3 border-b border-border/50 bg-card shrink-0">
           <div className="flex items-center gap-2">
@@ -200,14 +200,14 @@ export default function PolymarketTerminal() {
           </div>
         </header>
 
-        {/* Mobile Content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Mobile Content - full height with overflow scroll */}
+        <div className="flex-1 min-h-0 overflow-y-auto pb-20">
           <Tabs
             value={mobileTab}
             onValueChange={(v) => setMobileTab(v as any)}
-            className="h-full flex flex-col"
+            className="flex flex-col"
           >
-            <TabsList className="h-10 px-2 justify-start bg-card border-b border-border/50 rounded-none shrink-0">
+            <TabsList className="h-10 px-2 justify-start bg-card border-b border-border/50 rounded-none sticky top-0 z-10">
               <TabsTrigger value="data" className="text-xs">
                 Chart
               </TabsTrigger>
@@ -219,7 +219,7 @@ export default function PolymarketTerminal() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="data" className="flex-1 m-0 overflow-auto">
+            <TabsContent value="data" className="m-0">
               {selectedMarket && (
                 <div className="p-3 space-y-3">
                   <div className="h-[300px]">
@@ -235,11 +235,12 @@ export default function PolymarketTerminal() {
                     compact
                     loading={loadingMarketData}
                   />
+                  <PolyTradePanel market={selectedMarket} compact />
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="trades" className="flex-1 m-0 overflow-hidden">
+            <TabsContent value="trades" className="m-0 min-h-[400px]">
               <PolyTradeFeed
                 trades={filteredTrades}
                 maxTrades={30}
@@ -249,7 +250,7 @@ export default function PolymarketTerminal() {
               />
             </TabsContent>
 
-            <TabsContent value="chat" className="flex-1 m-0 overflow-hidden">
+            <TabsContent value="chat" className="m-0 min-h-[400px] p-3">
               {selectedMarket && <PolyMarketChat market={selectedMarket} />}
             </TabsContent>
           </Tabs>
@@ -561,15 +562,20 @@ export default function PolymarketTerminal() {
                 </ResizablePanelGroup>
               </div>
 
-              {/* Right Column: Orderbook/Trades + Trade Panel */}
+              {/* Right Column: Trade Panel on top, then Orderbook/Trades */}
               <div className="w-[320px] flex flex-col shrink-0 overflow-hidden">
-                {/* Orderbook/Trades - fills remaining space above trade panel */}
+                {/* Trade Panel - at top */}
+                <div className="shrink-0 border-b border-border/50 overflow-hidden">
+                  <PolyTradePanel market={selectedMarket} />
+                </div>
+
+                {/* Orderbook/Trades - fills remaining space */}
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  <div className="flex items-center h-9 px-2 bg-card border-b border-border/50 shrink-0">
+                  <div className="flex items-center h-8 px-2 bg-card border-b border-border/50 shrink-0">
                     <button
                       onClick={() => setRightTab('orderbook')}
                       className={cn(
-                        'px-3 py-1.5 text-xs font-medium rounded transition-colors',
+                        'px-3 py-1 text-xs font-medium rounded transition-colors',
                         rightTab === 'orderbook'
                           ? 'bg-muted text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
@@ -580,7 +586,7 @@ export default function PolymarketTerminal() {
                     <button
                       onClick={() => setRightTab('trades')}
                       className={cn(
-                        'px-3 py-1.5 text-xs font-medium rounded transition-colors',
+                        'px-3 py-1 text-xs font-medium rounded transition-colors',
                         rightTab === 'trades'
                           ? 'bg-muted text-foreground'
                           : 'text-muted-foreground hover:text-foreground'
@@ -600,18 +606,13 @@ export default function PolymarketTerminal() {
                     ) : (
                       <PolyTradeFeed
                         trades={filteredTrades}
-                        maxTrades={50}
+                        maxTrades={100}
                         connected={connected}
                         loading={loadingMarketData}
                         onTradeClick={setSelectedTrade}
                       />
                     )}
                   </div>
-                </div>
-
-                {/* Trade Panel - fixed height at bottom */}
-                <div className="h-[260px] border-t border-border/50 shrink-0 overflow-hidden">
-                  <PolyTradePanel market={selectedMarket} />
                 </div>
               </div>
             </>

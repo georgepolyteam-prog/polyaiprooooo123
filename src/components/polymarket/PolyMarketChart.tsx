@@ -183,21 +183,38 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     const rect = chartContainerRef.current?.getBoundingClientRect();
     if (!rect) return;
     
-    // Get price at click position
+    // Get price at click position using the chart's coordinate conversion
     const y = e.clientY - rect.top;
-    const priceScale = chartRef.current.priceScale('right');
     
-    // Approximate price from y position (this is a rough estimate)
-    const chartHeight = rect.height;
-    const priceRange = { min: 0, max: 1 }; // Price is 0-1
-    const price = priceRange.max - (y / chartHeight) * (priceRange.max - priceRange.min);
-    
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      price: Math.max(0.01, Math.min(0.99, price)),
-    });
-  }, [onCreateAlert]);
+    // Use the chart's time scale and price scale for accurate conversion
+    try {
+      // Get the series and use coordinateToPrice for accurate price
+      const series = chartRef.current.priceScale('right');
+      
+      // Calculate price based on visible price range from candles
+      if (candles.length > 0) {
+        const visibleData = candles.slice(-50); // Use recent candles for price range
+        const minPrice = Math.min(...visibleData.map(c => c.low));
+        const maxPrice = Math.max(...visibleData.map(c => c.high));
+        const padding = (maxPrice - minPrice) * 0.05;
+        const effectiveMin = Math.max(0, minPrice - padding);
+        const effectiveMax = Math.min(1, maxPrice + padding);
+        
+        // Convert y position to price
+        const chartHeight = rect.height;
+        const priceRatio = y / chartHeight;
+        const price = effectiveMax - priceRatio * (effectiveMax - effectiveMin);
+        
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          price: Math.max(0.01, Math.min(0.99, price)),
+        });
+      }
+    } catch (err) {
+      console.error('[Chart] Context menu price calculation failed:', err);
+    }
+  }, [onCreateAlert, candles]);
 
   return (
     <section className="h-full flex flex-col">
@@ -259,11 +276,24 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
           />
         )}
 
-        {/* Alert lines on chart */}
-        {alerts.length > 0 && candles.length > 0 && (
+        {/* Alert lines - positioned using chart's actual price range */}
+        {alerts.length > 0 && candles.length > 0 && chartRef.current && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             {alerts.map((alert) => {
-              const pct = (1 - alert.targetPrice / 100) * 100;
+              // Calculate position based on visible price range
+              const visibleData = candles.slice(-50);
+              const minPrice = Math.min(...visibleData.map(c => c.low));
+              const maxPrice = Math.max(...visibleData.map(c => c.high));
+              const padding = (maxPrice - minPrice) * 0.05;
+              const effectiveMin = Math.max(0, minPrice - padding);
+              const effectiveMax = Math.min(1, maxPrice + padding);
+              
+              const alertPriceDecimal = alert.targetPrice / 100;
+              const pct = ((effectiveMax - alertPriceDecimal) / (effectiveMax - effectiveMin)) * 100;
+              
+              // Hide if out of visible range
+              if (pct < 0 || pct > 100) return null;
+              
               return (
                 <div
                   key={alert.id}
