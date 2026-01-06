@@ -645,18 +645,18 @@ export default function Kalshi() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="relative bg-muted/50 border-b border-border/50"
+            className="relative bg-muted/30 border-b border-border/40"
           >
-            <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="p-1 rounded-md bg-primary/10">
-                  <Shield className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                  <Shield className="w-3 h-3 text-primary flex-shrink-0" />
                 </div>
-                <p className="text-sm text-muted-foreground truncate sm:whitespace-normal">
+                <p className="text-xs text-muted-foreground truncate sm:whitespace-normal font-mono">
                   <span className="font-medium text-foreground">Third-party interface.</span>{' '}
-                  <span className="hidden sm:inline">Trades execute via DFlow on Solana—not directly on Kalshi. </span>
+                  <span className="hidden sm:inline">Trades execute via DFlow on Solana. </span>
                   <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
-                    Read full disclaimer
+                    Disclaimer
                   </Link>
                 </p>
               </div>
@@ -665,40 +665,47 @@ export default function Kalshi() {
                   sessionStorage.setItem('kalshi_disclaimer_dismissed', 'true');
                   window.dispatchEvent(new Event('storage'));
                 }}
-                className="p-1.5 hover:bg-muted rounded-lg transition-colors flex-shrink-0"
+                className="p-1 hover:bg-muted rounded-lg transition-colors flex-shrink-0"
                 aria-label="Dismiss disclaimer"
               >
-                <X className="w-4 h-4 text-muted-foreground" />
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* CLEAN KALSHI-STYLE HERO */}
+      {/* Hero Section */}
       <section className="relative overflow-hidden border-b border-border/30">
-        {/* Subtle gradient background - matching homepage teal */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+        {/* Subtle gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/3 via-transparent to-transparent" />
 
-        {/* Grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 lg:py-12">
+          {/* Section label */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-6"
+          >
+            <span className="font-mono text-[10px] text-muted-foreground tracking-widest uppercase">
+              // kalshi markets
+            </span>
+          </motion.div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
-          {/* Header row - responsive stacking */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 mb-8 sm:mb-10">
+          {/* Header row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 mb-6 sm:mb-8">
             {/* Logo & Title */}
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-3">
               <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="relative">
-                <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-xl" />
-                <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
-                  <img src={kalshiLogo} alt="Kalshi" className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover" />
+                <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-card/60 border border-border/40 flex items-center justify-center overflow-hidden">
+                  <img src={kalshiLogo} alt="Kalshi" className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover" />
                 </div>
               </motion.div>
               <div>
                 <motion.h1
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground"
+                  className="text-xl sm:text-2xl font-bold text-foreground"
                 >
                   Kalshi Markets
                 </motion.h1>
@@ -706,41 +713,40 @@ export default function Kalshi() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1 }}
-                  className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2"
+                  className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1.5 font-mono"
                 >
-                  <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
+                  <Zap className="w-3 h-3 text-primary" />
                   Trade on Solana via DFlow
                 </motion.p>
               </div>
             </div>
 
-            {/* Solana branding + Wallet - responsive adjustments */}
-            <div className="flex items-center gap-3 sm:gap-4">
+            {/* Wallet */}
+            <div className="flex items-center gap-3">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/30 backdrop-blur-sm"
+                className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted/30 border border-border/40"
               >
-                <span className="text-xs font-medium text-primary">
+                <span className="text-[10px] font-mono text-muted-foreground">
                   Powered by DFlow
                 </span>
-                <div className="w-px h-3 bg-gradient-to-b from-transparent via-primary/50 to-transparent" />
-                <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
+                <div className="w-px h-2.5 bg-border/50" />
+                <img src={solanaLogo} alt="Solana" className="w-3.5 h-3.5" />
               </motion.div>
 
               {!connected ? (
-                <WalletMultiButton className="!h-10 sm:!h-11 !px-4 sm:!px-5 !rounded-xl !bg-primary hover:!bg-primary/90 !shadow-lg hover:!shadow-primary/30 !border !border-primary/50 hover:!border-primary/70 !text-primary-foreground !font-medium !text-sm !transition-all duration-300 !transform hover:!scale-[1.02]" />
+                <WalletMultiButton className="!h-9 sm:!h-10 !px-4 !rounded-xl !bg-primary hover:!bg-primary/90 !shadow-lg !border !border-primary/50 !text-primary-foreground !font-medium !text-sm !transition-all duration-200" />
               ) : (
                 <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 hover:border-primary/50 transition-all cursor-pointer group backdrop-blur-sm"
+                  whileHover={{ scale: 1.01 }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/30 hover:border-primary/50 transition-all cursor-pointer group"
                 >
                   <div className="relative">
-                    <div className="absolute inset-0 bg-primary rounded-full blur animate-pulse" />
-                    <div className="relative w-2 h-2 rounded-full bg-primary" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                   </div>
-                  <span className="text-sm font-medium text-primary group-hover:text-primary/80 transition-all">
+                  <span className="text-xs font-mono font-medium text-primary">
                     {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
                   </span>
                 </motion.div>
@@ -748,9 +754,9 @@ export default function Kalshi() {
             </div>
           </div>
 
-          {/* Featured Market - responsive padding */}
+          {/* Featured Market */}
           {featuredMarket && !isLoading && (
-            <div className="mb-8 sm:mb-10">
+            <div className="mb-6 sm:mb-8">
               <KalshiFeaturedMarket
                 market={featuredMarket}
                 onTrade={() => setSelectedMarket(featuredMarket)}
@@ -759,84 +765,91 @@ export default function Kalshi() {
             </div>
           )}
 
-          {/* Stats row - responsive stacking */}
+          {/* Stats row */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 lg:gap-12 mt-8 sm:mt-10 pt-6 sm:pt-8 border-t border-border/30"
+            transition={{ delay: 0.3 }}
+            className="flex flex-wrap items-center justify-center gap-6 sm:gap-10 pt-6 border-t border-border/30"
           >
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground">{allMarkets.length}+</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Active Markets</p>
+              <p className="text-2xl sm:text-3xl font-bold font-mono text-foreground">{allMarkets.length}+</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-mono uppercase tracking-wider">Markets</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
-                ~400ms
-              </p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Instant Execution</p>
+              <p className="text-2xl sm:text-3xl font-bold font-mono text-primary">~400ms</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-mono uppercase tracking-wider">Execution</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground">99.9%</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Uptime</p>
+              <p className="text-2xl sm:text-3xl font-bold font-mono text-foreground">99.9%</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-mono uppercase tracking-wider">Uptime</p>
             </div>
           </motion.div>
         </div>
       </section>
 
       {/* Markets Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 sm:pb-32">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 sm:pb-32">
+        {/* Section label */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mb-4"
+        >
+          <span className="font-mono text-[10px] text-muted-foreground tracking-widest uppercase">
+            // browse & trade
+          </span>
+        </motion.div>
+
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6 sm:mb-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <TabsList className="bg-muted/40 p-1.5 rounded-2xl backdrop-blur-sm border border-border/50 w-full sm:w-auto">
+            <TabsList className="bg-muted/30 p-1 rounded-xl backdrop-blur-sm border border-border/40 w-full sm:w-auto">
               <TabsTrigger
                 value="markets"
-                className="rounded-xl px-4 sm:px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all flex-1 sm:flex-none"
+                className="rounded-lg px-4 sm:px-5 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border/40 transition-all flex-1 sm:flex-none text-sm"
               >
-                <TrendingUp className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Markets</span>
-                <span className="sm:hidden">Markets</span>
+                <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
+                Markets
               </TabsTrigger>
               <TabsTrigger
                 value="portfolio"
-                className="rounded-xl px-4 sm:px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-lg data-[state=active]:border data-[state=active]:border-border/50 transition-all flex-1 sm:flex-none"
+                className="rounded-lg px-4 sm:px-5 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border/40 transition-all flex-1 sm:flex-none text-sm"
               >
-                <Wallet className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Portfolio</span>
-                <span className="sm:hidden">Portfolio</span>
+                <Wallet className="w-3.5 h-3.5 mr-1.5" />
+                Portfolio
               </TabsTrigger>
             </TabsList>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* View Mode Toggle - hidden on mobile */}
-              <div className="hidden sm:flex items-center gap-1 p-1 rounded-xl bg-muted/40 border border-border/50 backdrop-blur-sm">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* View Mode Toggle */}
+              <div className="hidden sm:flex items-center gap-1 p-1 rounded-lg bg-muted/30 border border-border/40">
                 <Button
                   variant={viewMode === "grid" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("grid")}
-                  className="h-9 px-3 rounded-lg transition-all"
+                  className="h-8 w-8 p-0 rounded-md transition-all"
                 >
-                  <LayoutGrid className="w-4 h-4" />
+                  <LayoutGrid className="w-3.5 h-3.5" />
                 </Button>
                 <Button
                   variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("list")}
-                  className="h-9 px-3 rounded-lg transition-all"
+                  className="h-8 w-8 p-0 rounded-md transition-all"
                 >
-                  <List className="w-4 h-4" />
+                  <List className="w-3.5 h-3.5" />
                 </Button>
               </div>
 
-              {/* Search - full width on mobile */}
-              <div className="relative flex-1 sm:flex-none">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+              {/* Search */}
+              <div className="relative flex-1 sm:flex-none sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground z-10" />
                 <Input
                   placeholder="Search markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 w-full h-11 rounded-xl bg-background border-border/50 focus:border-purple-500/50 transition-all"
+                  className="pl-9 pr-4 w-full h-10 rounded-xl bg-background border-border/40 focus:border-primary/50 transition-all text-sm"
                 />
               </div>
 
@@ -845,23 +858,23 @@ export default function Kalshi() {
                 variant="outline"
                 size="icon"
                 onClick={() => {
-                  toast.loading("Refreshing markets...", { id: "refresh-markets" });
+                  toast.loading("Refreshing...", { id: "refresh-markets" });
                   fetchMarkets().then(() => {
-                    toast.success("Markets refreshed", { id: "refresh-markets" });
+                    toast.success("Refreshed", { id: "refresh-markets" });
                   });
                 }}
                 disabled={isLoading}
-                className="h-11 w-11 rounded-xl border-border/50 bg-muted/40 backdrop-blur-sm hover:bg-muted/60 hover:border-purple-500/50 transition-all flex-shrink-0"
+                className="h-10 w-10 rounded-xl border-border/40 bg-muted/30 hover:bg-muted/50 hover:border-primary/30 transition-all flex-shrink-0"
               >
-                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
               </Button>
             </div>
           </div>
 
           <TabsContent value="markets" className="mt-0">
-            {/* Kalshi-Style Tab Navigation - horizontal scroll on mobile */}
+            {/* Category Navigation */}
             {categories.length > 0 && (
-              <div className="sticky top-0 z-20 -mx-4 px-4 py-3 mb-6 bg-background/80 backdrop-blur-xl border-b border-border/30">
+              <div className="sticky top-0 z-20 -mx-4 px-4 py-2.5 mb-5 bg-background/90 backdrop-blur-xl border-b border-border/30">
                 <KalshiTabNav
                   categories={categories}
                   selectedCategory={selectedCategory}
@@ -872,9 +885,9 @@ export default function Kalshi() {
 
             {/* Search results count */}
             {deferredSearchQuery && searchResults.length > 0 && !isSearching && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-purple-500">
-                <Search className="w-4 h-4" />
-                Found {searchResults.length} markets matching "{deferredSearchQuery}"
+              <div className="mb-4 flex items-center gap-2 text-xs text-primary font-mono">
+                <Search className="w-3.5 h-3.5" />
+                Found {searchResults.length} markets for "{deferredSearchQuery}"
               </div>
             )}
 
@@ -906,61 +919,61 @@ export default function Kalshi() {
                 ))}
               </div>
             ) : (
-              // List view - more detailed
-              <div className="space-y-2 sm:space-y-3">
+              // List view
+              <div className="space-y-2">
                 {filteredMarkets.map((market) => (
                   <div
                     key={market.ticker}
                     onClick={() => setSelectedMarket(market)}
-                    className="group cursor-pointer p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-card/80 border border-border/50 hover:border-purple-500/30 transition-all flex items-center gap-3 sm:gap-4"
+                    className="group cursor-pointer p-3 sm:p-4 rounded-xl bg-card/60 border border-border/40 hover:border-primary/30 hover:bg-card/80 transition-all flex items-center gap-3 sm:gap-4"
                   >
                     {/* Status */}
                     <div
                       className={cn(
                         "w-2 h-2 rounded-full shrink-0",
-                        market.status === "active" ? "bg-blue-500" : "bg-muted",
+                        market.status === "active" ? "bg-emerald-500" : "bg-muted",
                       )}
                     />
 
                     {/* Title */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-foreground text-sm sm:text-base truncate group-hover:text-purple-500 transition-colors">
+                      <h3 className="font-medium text-foreground text-sm truncate group-hover:text-primary transition-colors">
                         {market.title || market.ticker}
                       </h3>
-                      <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                      <p className="text-xs text-muted-foreground truncate font-mono">
                         {market.subtitle || market.ticker}
                       </p>
                     </div>
 
                     {/* Prices */}
-                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
                         <p
                           className={cn(
-                            "text-base sm:text-lg font-bold",
-                            market.yesPrice > market.noPrice ? "text-blue-500" : "text-foreground",
+                            "text-sm font-bold font-mono",
+                            market.yesPrice > market.noPrice ? "text-emerald-500" : "text-foreground/70",
                           )}
                         >
                           {market.yesPrice}¢
                         </p>
-                        <p className="text-xs text-muted-foreground">YES</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">YES</p>
                       </div>
                       <div className="text-right">
                         <p
                           className={cn(
-                            "text-base sm:text-lg font-bold",
-                            market.noPrice > market.yesPrice ? "text-red-500" : "text-foreground",
+                            "text-sm font-bold font-mono",
+                            market.noPrice > market.yesPrice ? "text-red-500" : "text-foreground/70",
                           )}
                         >
                           {market.noPrice}¢
                         </p>
-                        <p className="text-xs text-muted-foreground">NO</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">NO</p>
                       </div>
                       <div className="text-right hidden sm:block">
-                        <p className="text-sm font-medium text-foreground">
+                        <p className="text-xs font-mono font-medium text-foreground">
                           ${((market.volume || 0) / 1000).toFixed(0)}k
                         </p>
-                        <p className="text-xs text-muted-foreground">Volume</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">Vol</p>
                       </div>
                     </div>
 
@@ -984,28 +997,28 @@ export default function Kalshi() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="mt-8 sm:mt-10 text-center"
+                transition={{ delay: 0.2 }}
+                className="mt-8 text-center"
               >
                 <Button
                   variant="outline"
                   onClick={() => setShowAll(true)}
-                  className="h-11 sm:h-12 px-6 sm:px-10 rounded-xl sm:rounded-2xl border-border/50 hover:border-purple-500/50 hover:bg-purple-500/5 group transition-all shadow-lg hover:shadow-xl w-full sm:w-auto"
+                  className="h-10 px-6 rounded-xl border-border/40 hover:border-primary/30 hover:bg-primary/5 group transition-all"
                 >
                   {deferredSearchQuery
                     ? `Show All ${filteredMarkets.length} Results`
                     : `View All ${allMarkets.length} Markets`}
-                  <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-0.5" />
                 </Button>
               </motion.div>
             )}
 
             {showAll && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-8 sm:mt-10 text-center">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 text-center">
                 <Button
                   variant="ghost"
                   onClick={() => setShowAll(false)}
-                  className="h-10 px-6 rounded-xl text-muted-foreground hover:text-foreground"
+                  className="h-9 px-5 rounded-lg text-muted-foreground hover:text-foreground text-sm"
                 >
                   Show Less
                 </Button>

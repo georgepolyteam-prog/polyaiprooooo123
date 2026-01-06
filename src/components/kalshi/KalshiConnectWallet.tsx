@@ -5,65 +5,64 @@ import { cn } from '@/lib/utils';
 
 export function KalshiConnectWallet() {
   const features = [
-    { icon: TrendingUp, text: 'View your positions' },
-    { icon: BarChart3, text: 'Track profit & loss' },
-    { icon: Sparkles, text: 'Sell your shares' },
-    { icon: Shield, text: 'Non-custodial trading' },
+    { icon: TrendingUp, text: 'View positions' },
+    { icon: BarChart3, text: 'Track P&L' },
+    { icon: Sparkles, text: 'Sell shares' },
+    { icon: Shield, text: 'Non-custodial' },
   ];
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-16 px-6"
+      className="flex flex-col items-center justify-center py-12 px-6"
     >
-      {/* Glowing wallet icon */}
-      <div className="relative mb-8">
-        <div className="absolute inset-0 bg-primary/30 rounded-full blur-2xl animate-pulse" />
-        <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-primary/20 to-purple-500/20 border-2 border-primary/30 flex items-center justify-center">
-          <Wallet className="w-10 h-10 text-primary" />
+      {/* Wallet icon */}
+      <div className="relative mb-6">
+        <div className="relative w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <Wallet className="w-7 h-7 text-primary" />
         </div>
       </div>
 
       {/* Heading */}
-      <h3 className="text-2xl font-bold text-foreground mb-3">
-        Connect Your Wallet
+      <h3 className="text-xl font-bold text-foreground mb-2">
+        Connect Wallet
       </h3>
-      <p className="text-muted-foreground text-center max-w-sm mb-8">
-        Connect your Solana wallet to view and manage your prediction market positions
+      <p className="text-sm text-muted-foreground text-center max-w-sm mb-6">
+        Connect your Solana wallet to view and manage your positions
       </p>
 
       {/* Features list */}
-      <div className="grid grid-cols-2 gap-4 mb-10 w-full max-w-md">
+      <div className="grid grid-cols-2 gap-3 mb-8 w-full max-w-sm">
         {features.map((feature, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 * i }}
-            className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/50"
+            transition={{ delay: 0.05 * i }}
+            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30 border border-border/40"
           >
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <feature.icon className="w-4 h-4 text-primary" />
+            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <feature.icon className="w-3.5 h-3.5 text-primary" />
             </div>
-            <span className="text-sm font-medium text-foreground">{feature.text}</span>
+            <span className="text-xs font-medium text-foreground">{feature.text}</span>
           </motion.div>
         ))}
       </div>
 
       {/* Connect button */}
       <WalletMultiButton className={cn(
-        "!h-14 !px-10 !rounded-2xl",
-        "!bg-gradient-to-r !from-primary !to-purple-500",
-        "hover:!opacity-90 !text-primary-foreground !font-semibold !text-lg",
-        "!transition-all !duration-300 !shadow-xl hover:!shadow-2xl hover:!shadow-primary/30",
-        "!border-0"
+        "!h-11 !px-8 !rounded-xl",
+        "!bg-primary hover:!bg-primary/90",
+        "!text-primary-foreground !font-semibold !text-sm",
+        "!transition-all !duration-200 !shadow-lg hover:!shadow-xl hover:!shadow-primary/20",
+        "!border !border-primary/50"
       )} />
 
       {/* Security note */}
-      <p className="mt-6 text-xs text-muted-foreground text-center flex items-center gap-1.5">
-        <Shield className="w-3.5 h-3.5" />
-        Your keys, your funds. We never store your private keys.
+      <p className="mt-5 text-[11px] text-muted-foreground text-center flex items-center gap-1.5 font-mono">
+        <Shield className="w-3 h-3" />
+        Non-custodial · Your keys, your funds
       </p>
     </motion.div>
   );

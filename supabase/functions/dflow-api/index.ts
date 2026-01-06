@@ -129,9 +129,36 @@ serve(async (req) => {
         break;
       
       case 'getTagsByCategories':
-        // Get tags organized by categories
-        url = `${DFLOW_METADATA_API}/api/v1/tags/categories`;
-        break;
+        // Get tags organized by categories - handle 404 gracefully
+        try {
+          const tagsResponse = await fetch(
+            `${DFLOW_METADATA_API}/api/v1/tags/categories`,
+            {
+              method: 'GET',
+              headers: {
+                'x-api-key': DFLOW_API_KEY,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          
+          if (!tagsResponse.ok) {
+            console.log(`[DFlow] Tags endpoint returned ${tagsResponse.status}, returning empty`);
+            return new Response(JSON.stringify({ tagsByCategories: {} }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          
+          const tagsData = await tagsResponse.json();
+          return new Response(JSON.stringify(tagsData), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (err) {
+          console.log('[DFlow] Tags fetch failed, returning empty:', err);
+          return new Response(JSON.stringify({ tagsByCategories: {} }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       
       // Quote API endpoints (for trading) - uses GET /order
       case 'getOrder':
@@ -170,14 +197,43 @@ serve(async (req) => {
         url = `${DFLOW_METADATA_API}/api/v1/search?q=${query}`;
         break;
       
-      // Get candlestick data for charts
+      // Get candlestick data for charts - handle 404 gracefully
       case 'getCandlesticks':
-        const now = Math.floor(Date.now() / 1000);
-        const startTs = params.startTs || (now - 7 * 24 * 60 * 60); // Default 7 days
-        const endTs = params.endTs || now;
-        const interval = params.interval || 60; // 1=1min, 60=1hr, 1440=1day
-        url = `${DFLOW_METADATA_API}/api/v1/market/${params.ticker}/candlesticks?startTs=${startTs}&endTs=${endTs}&periodInterval=${interval}`;
-        break;
+        try {
+          const now = Math.floor(Date.now() / 1000);
+          const startTs = params.startTs || (now - 7 * 24 * 60 * 60);
+          const endTs = params.endTs || now;
+          const interval = params.interval || 60;
+          
+          const candleResponse = await fetch(
+            `${DFLOW_METADATA_API}/api/v1/market/${params.ticker}/candlesticks?startTs=${startTs}&endTs=${endTs}&periodInterval=${interval}`,
+            {
+              method: 'GET',
+              headers: {
+                'x-api-key': DFLOW_API_KEY,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(5000),
+            }
+          );
+          
+          if (!candleResponse.ok) {
+            console.log(`[DFlow] Candlesticks for ${params.ticker} returned ${candleResponse.status}, returning empty`);
+            return new Response(JSON.stringify({ candlesticks: [] }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          
+          const candleData = await candleResponse.json();
+          return new Response(JSON.stringify(candleData), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (err) {
+          console.log('[DFlow] Candlesticks fetch failed, returning empty:', err);
+          return new Response(JSON.stringify({ candlesticks: [] }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       
       // Get market by mint
       case 'getMarketByMint':
