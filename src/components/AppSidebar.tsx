@@ -33,7 +33,8 @@ import {
 } from '@/components/ui/tooltip';
 
 const mainNav = [
-  { title: 'Chat', url: '/', icon: MessageSquare },
+  { title: 'Home', url: '/', icon: MessageSquare },
+  { title: 'Chat', url: '/chat', icon: MessageSquare },
 ];
 
 const exploreNav = [
@@ -177,14 +178,20 @@ export const AppSidebar = () => {
       <nav className="flex-1 overflow-y-auto p-3 space-y-6">
         {/* Main CTA */}
         <div className="space-y-1">
-          {mainNav.map((item) => (
-            <NavItem
-              key={item.url}
-              item={item}
-              isActive={currentPath === item.url || currentPath === '/chat'}
-              collapsed={collapsed}
-            />
-          ))}
+          {mainNav.map((item) => {
+            const isActive = currentPath === item.url;
+            // Skip showing both Home and Chat if they'd both be highlighted
+            if (item.url === '/' && currentPath === '/chat') return null;
+            if (item.url === '/chat' && currentPath === '/') return null;
+            return (
+              <NavItem
+                key={item.url}
+                item={item}
+                isActive={isActive}
+                collapsed={collapsed}
+              />
+            );
+          })}
         </div>
 
         <div className="h-px bg-white/10" />

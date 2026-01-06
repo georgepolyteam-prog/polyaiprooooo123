@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -10,41 +10,46 @@ interface Stats {
 
 export const BrutalistStats = () => {
   const [stats, setStats] = useState<Stats>({
-    users: 1990,
-    chats: 158,
-    trades: 2847,
+    users: 0,
+    chats: 0,
+    trades: 0,
   });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Get user count from profiles
-        const { count: userCount } = await supabase
-          .from("profiles")
-          .select("*", { count: "exact", head: true });
+  const fetchStats = useCallback(async () => {
+    try {
+      // Get user count from profiles
+      const { count: userCount } = await supabase
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
 
-        // Get chat count
-        const { count: chatCount } = await supabase
-          .from("chat_logs")
-          .select("*", { count: "exact", head: true });
+      // Get chat count - multiply by 30 as requested
+      const { count: chatCount } = await supabase
+        .from("chat_logs")
+        .select("*", { count: "exact", head: true });
 
-        // Get trade count from whale_trades as proxy
-        const { count: tradeCount } = await supabase
-          .from("whale_trades")
-          .select("*", { count: "exact", head: true });
+      // Get trade count from whale_trades
+      const { count: tradeCount } = await supabase
+        .from("whale_trades")
+        .select("*", { count: "exact", head: true });
 
-        setStats({
-          users: userCount || 1990,
-          chats: chatCount || 158,
-          trades: tradeCount || 2847,
-        });
-      } catch (e) {
-        // Use defaults
-      }
-    };
-
-    fetchStats();
+      setStats({
+        users: userCount || 0,
+        chats: (chatCount || 0) * 30, // 30x multiplier for AI analyses
+        trades: tradeCount || 0,
+      });
+    } catch (e) {
+      // Use fallback
+      setStats({ users: 1990, chats: 4740, trades: 2847 });
+    }
   }, []);
+
+  useEffect(() => {
+    fetchStats();
+    
+    // Refresh every 30 seconds for real-time feel
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
+  }, [fetchStats]);
 
   const statItems = [
     { value: stats.users.toLocaleString(), label: "traders", size: "large" },
