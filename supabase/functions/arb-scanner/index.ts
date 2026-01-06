@@ -9,13 +9,35 @@ const corsHeaders = {
 
 const DOME_API_URL = "https://api.domeapi.io/v1";
 
-interface MatchingMarket {
-  kalshi_ticker: string;
-  polymarket_slug: string;
-  polymarket_token_id?: string;
-  event_title: string;
-  sport: string;
-  expires_at?: string;
+// ============ Interfaces ============
+
+interface PolymarketMarket {
+  condition_id: string;
+  market_slug: string;
+  question: string;
+  description?: string;
+  end_date_iso?: string;
+  tokens?: Array<{
+    token_id: string;
+    outcome: string;
+    price?: number;
+  }>;
+  volume?: number;
+  liquidity?: number;
+  category?: string;
+  tags?: string[];
+}
+
+interface KalshiMarket {
+  ticker: string;
+  title: string;
+  subtitle?: string;
+  expiration_time?: string;
+  category?: string;
+  volume?: number;
+  open_interest?: number;
+  yes_bid?: number;
+  yes_ask?: number;
 }
 
 interface OrderbookLevel {
@@ -28,11 +50,18 @@ interface Orderbook {
   asks: OrderbookLevel[];
 }
 
+interface MatchedPair {
+  polymarket: PolymarketMarket;
+  kalshi: KalshiMarket;
+  matchScore: number;
+  matchReason: string;
+}
+
 interface ArbOpportunity {
   id: string;
   matchKey: string;
   eventTitle: string;
-  sport: string;
+  category: string;
   spreadPercent: number;
   buyPlatform: 'kalshi' | 'polymarket';
   sellPlatform: 'kalshi' | 'polymarket';
@@ -45,9 +74,105 @@ interface ArbOpportunity {
   estimatedProfit: number;
   expiresAt: string | null;
   updatedAt: number;
+  matchScore: number;
+  matchReason: string;
 }
 
-// Fetch orderbook from Dome API for Polymarket
+// ============ Fetch All Markets ============
+
+async function fetchAllPolymarketMarkets(apiKey: string, maxMarkets = 500): Promise<PolymarketMarket[]> {
+  const allMarkets: PolymarketMarket[] = [];
+  let offset = 0;
+  const limit = 100;
+  
+  while (offset < maxMarkets) {
+    try {
+      const url = `${DOME_API_URL}/polymarket/markets?status=open&limit=${limit}&offset=${offset}`;
+      console.log(`[arb-scanner] Fetching Polymarket markets: offset=${offset}`);
+      
+      const response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (!response.ok) {
+        console.log(`[arb-scanner] Polymarket markets fetch failed: ${response.status}`);
+        break;
+      }
+      
+      const data = await response.json();
+      const markets = data.markets || data || [];
+      
+      if (!Array.isArray(markets) || markets.length === 0) {
+        break;
+      }
+      
+      allMarkets.push(...markets);
+      offset += limit;
+      
+      // Check if there are more
+      if (markets.length < limit) {
+        break;
+      }
+    } catch (error) {
+      console.error("[arb-scanner] Error fetching Polymarket markets:", error);
+      break;
+    }
+  }
+  
+  console.log(`[arb-scanner] Fetched ${allMarkets.length} Polymarket markets total`);
+  return allMarkets;
+}
+
+async function fetchAllKalshiMarkets(apiKey: string, maxMarkets = 500): Promise<KalshiMarket[]> {
+  const allMarkets: KalshiMarket[] = [];
+  let offset = 0;
+  const limit = 100;
+  
+  while (offset < maxMarkets) {
+    try {
+      const url = `${DOME_API_URL}/kalshi/markets?status=open&limit=${limit}&offset=${offset}`;
+      console.log(`[arb-scanner] Fetching Kalshi markets: offset=${offset}`);
+      
+      const response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (!response.ok) {
+        console.log(`[arb-scanner] Kalshi markets fetch failed: ${response.status}`);
+        break;
+      }
+      
+      const data = await response.json();
+      const markets = data.markets || data || [];
+      
+      if (!Array.isArray(markets) || markets.length === 0) {
+        break;
+      }
+      
+      allMarkets.push(...markets);
+      offset += limit;
+      
+      if (markets.length < limit) {
+        break;
+      }
+    } catch (error) {
+      console.error("[arb-scanner] Error fetching Kalshi markets:", error);
+      break;
+    }
+  }
+  
+  console.log(`[arb-scanner] Fetched ${allMarkets.length} Kalshi markets total`);
+  return allMarkets;
+}
+
+// ============ Orderbook Fetching ============
+
 async function fetchPolymarketOrderbook(tokenId: string, apiKey: string): Promise<Orderbook | null> {
   try {
     const response = await fetch(`${DOME_API_URL}/polymarket/orderbooks?token_id=${tokenId}`, {
@@ -58,7 +183,6 @@ async function fetchPolymarketOrderbook(tokenId: string, apiKey: string): Promis
     });
     
     if (!response.ok) {
-      console.log(`[arb-scanner] Failed to fetch Polymarket orderbook: ${response.status}`);
       return null;
     }
     
@@ -67,13 +191,11 @@ async function fetchPolymarketOrderbook(tokenId: string, apiKey: string): Promis
       bids: data.bids || [],
       asks: data.asks || [],
     };
-  } catch (error) {
-    console.error("[arb-scanner] Error fetching Polymarket orderbook:", error);
+  } catch {
     return null;
   }
 }
 
-// Fetch orderbook from Dome API for Kalshi
 async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<Orderbook | null> {
   try {
     const response = await fetch(`${DOME_API_URL}/kalshi/orderbooks?ticker=${ticker}`, {
@@ -84,7 +206,6 @@ async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<Ord
     });
     
     if (!response.ok) {
-      console.log(`[arb-scanner] Failed to fetch Kalshi orderbook: ${response.status}`);
       return null;
     }
     
@@ -93,96 +214,244 @@ async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<Ord
       bids: data.bids || [],
       asks: data.asks || [],
     };
-  } catch (error) {
-    console.error("[arb-scanner] Error fetching Kalshi orderbook:", error);
+  } catch {
     return null;
   }
 }
 
-// Fetch matching markets from Dome API
-async function fetchMatchingMarkets(sport: string, apiKey: string, date?: string): Promise<MatchingMarket[]> {
-  try {
-    let url = `${DOME_API_URL}/matching-markets/sports/${sport}`;
-    if (date) {
-      url += `?date=${date}`;
-    }
-    
-    console.log(`[arb-scanner] Fetching matching markets from: ${url}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    
-    if (!response.ok) {
-      console.log(`[arb-scanner] Failed to fetch matching markets: ${response.status}`);
-      return [];
-    }
-    
-    const data = await response.json();
-    const markets = data.markets;
-    
-    console.log(`[arb-scanner] Raw response type: ${typeof markets}`);
-    
-    if (!markets || typeof markets !== 'object') {
-      console.log(`[arb-scanner] No markets found or unexpected format`);
-      return [];
-    }
-    
-    // If markets is already an array, use as-is
-    if (Array.isArray(markets)) {
-      console.log(`[arb-scanner] Found ${markets.length} matching markets (array)`);
-      return markets;
-    }
-    
-    // Object format: { "match-key": [platformData, ...] }
-    const results: MatchingMarket[] = [];
-    
-    for (const [matchKey, platforms] of Object.entries(markets)) {
-      if (!Array.isArray(platforms)) continue;
-      
-      let polymarketData: any = null;
-      let kalshiData: any = null;
-      
-      for (const platform of platforms as any[]) {
-        if (platform.platform === 'polymarket') {
-          polymarketData = platform;
-        } else if (platform.platform === 'kalshi') {
-          kalshiData = platform;
+// ============ Fuzzy Matching Logic ============
+
+// Common words to remove for better matching
+const STOP_WORDS = new Set([
+  'will', 'the', 'be', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or',
+  'is', 'it', 'by', 'with', 'as', 'this', 'that', 'what', 'when', 'where', 'who',
+  'how', 'which', 'their', 'its', 'his', 'her', 'before', 'after', 'during', 'between'
+]);
+
+// Entity aliases for common variations
+const ENTITY_ALIASES: Record<string, string[]> = {
+  'trump': ['donald trump', 'donald j trump', 'djt'],
+  'biden': ['joe biden', 'joseph biden'],
+  'bitcoin': ['btc', 'bitcoin'],
+  'ethereum': ['eth', 'ethereum'],
+  'elon musk': ['elon', 'musk'],
+  'super bowl': ['superbowl', 'sb'],
+  'nfl': ['national football league'],
+  'nba': ['national basketball association'],
+  'mlb': ['major league baseball'],
+  'fed': ['federal reserve', 'fomc'],
+};
+
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 1 && !STOP_WORDS.has(word))
+    .join(' ')
+    .trim();
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(normalizeTitle(text).split(/\s+/).filter(t => t.length > 0));
+}
+
+function calculateTokenSimilarity(tokens1: Set<string>, tokens2: Set<string>): number {
+  if (tokens1.size === 0 || tokens2.size === 0) return 0;
+  
+  let matches = 0;
+  for (const token of tokens1) {
+    if (tokens2.has(token)) {
+      matches++;
+    } else {
+      // Check for partial matches (one token contains another)
+      for (const t2 of tokens2) {
+        if (token.includes(t2) || t2.includes(token)) {
+          matches += 0.5;
+          break;
         }
       }
-      
-      // Only include if both platforms are present
-      if (polymarketData && kalshiData) {
-        results.push({
-          kalshi_ticker: kalshiData.ticker || kalshiData.kalshi_ticker,
-          polymarket_slug: polymarketData.market_slug || matchKey,
-          polymarket_token_id: polymarketData.token_id,
-          event_title: polymarketData.title || kalshiData.title || matchKey,
-          sport: sport,
-          expires_at: polymarketData.end_date || kalshiData.expiration_time,
-        });
-      }
     }
+  }
+  
+  const unionSize = new Set([...tokens1, ...tokens2]).size;
+  return (matches / unionSize) * 100;
+}
+
+function extractEntities(text: string): Set<string> {
+  const normalized = text.toLowerCase();
+  const entities = new Set<string>();
+  
+  // Check for known entity aliases
+  for (const [canonical, aliases] of Object.entries(ENTITY_ALIASES)) {
+    if (normalized.includes(canonical) || aliases.some(a => normalized.includes(a))) {
+      entities.add(canonical);
+    }
+  }
+  
+  // Extract numbers (dates, percentages, prices)
+  const numbers = normalized.match(/\d+(\.\d+)?/g) || [];
+  numbers.forEach(n => entities.add(n));
+  
+  // Extract years (2024, 2025, 2026)
+  const years = normalized.match(/20\d{2}/g) || [];
+  years.forEach(y => entities.add(y));
+  
+  return entities;
+}
+
+function calculateDateProximity(date1?: string, date2?: string): number {
+  if (!date1 || !date2) return 50; // Neutral score if dates missing
+  
+  try {
+    const d1 = new Date(date1).getTime();
+    const d2 = new Date(date2).getTime();
     
-    console.log(`[arb-scanner] Parsed ${results.length} matching market pairs from object`);
-    return results;
+    if (isNaN(d1) || isNaN(d2)) return 50;
     
-  } catch (error) {
-    console.error("[arb-scanner] Error fetching matching markets:", error);
-    return [];
+    const diffDays = Math.abs(d1 - d2) / (1000 * 60 * 60 * 24);
+    
+    if (diffDays <= 1) return 100; // Same day
+    if (diffDays <= 7) return 80;  // Same week
+    if (diffDays <= 30) return 50; // Same month
+    if (diffDays <= 90) return 20; // Same quarter
+    return 0;
+  } catch {
+    return 50;
   }
 }
 
-// Calculate arbitrage opportunity between two orderbooks
+function calculateMatchScore(poly: PolymarketMarket, kalshi: KalshiMarket): { score: number; reason: string } {
+  const polyTitle = poly.question || '';
+  const kalshiTitle = kalshi.title || '';
+  
+  const polyTokens = tokenize(polyTitle);
+  const kalshiTokens = tokenize(kalshiTitle);
+  
+  // 1. Token similarity (50% weight)
+  const tokenSimilarity = calculateTokenSimilarity(polyTokens, kalshiTokens);
+  
+  // 2. Entity matching (30% weight)
+  const polyEntities = extractEntities(polyTitle);
+  const kalshiEntities = extractEntities(kalshiTitle);
+  let entityScore = 0;
+  let matchedEntities: string[] = [];
+  
+  for (const entity of polyEntities) {
+    if (kalshiEntities.has(entity)) {
+      entityScore += 100 / Math.max(polyEntities.size, kalshiEntities.size);
+      matchedEntities.push(entity);
+    }
+  }
+  
+  // 3. Date proximity (20% weight)
+  const dateScore = calculateDateProximity(poly.end_date_iso, kalshi.expiration_time);
+  
+  // Calculate weighted score
+  const score = Math.min(100, (tokenSimilarity * 0.5) + (entityScore * 0.3) + (dateScore * 0.2));
+  
+  // Generate reason
+  let reason = '';
+  if (matchedEntities.length > 0) {
+    reason = `Matched: ${matchedEntities.slice(0, 3).join(', ')}`;
+  } else if (tokenSimilarity > 50) {
+    reason = 'Title similarity';
+  } else if (dateScore > 70) {
+    reason = 'Date proximity';
+  } else {
+    reason = 'Partial match';
+  }
+  
+  return { score, reason };
+}
+
+function findMatchingMarkets(
+  polymarkets: PolymarketMarket[],
+  kalshiMarkets: KalshiMarket[],
+  minMatchScore = 60
+): MatchedPair[] {
+  const matches: MatchedPair[] = [];
+  const usedKalshi = new Set<string>();
+  
+  console.log(`[arb-scanner] Finding matches between ${polymarkets.length} Poly and ${kalshiMarkets.length} Kalshi markets`);
+  
+  for (const poly of polymarkets) {
+    let bestMatch: MatchedPair | null = null;
+    let bestScore = 0;
+    
+    for (const kalshi of kalshiMarkets) {
+      // Skip if already matched
+      if (usedKalshi.has(kalshi.ticker)) continue;
+      
+      const { score, reason } = calculateMatchScore(poly, kalshi);
+      
+      if (score >= minMatchScore && score > bestScore) {
+        bestScore = score;
+        bestMatch = {
+          polymarket: poly,
+          kalshi: kalshi,
+          matchScore: Math.round(score),
+          matchReason: reason,
+        };
+      }
+    }
+    
+    if (bestMatch) {
+      matches.push(bestMatch);
+      usedKalshi.add(bestMatch.kalshi.ticker);
+    }
+  }
+  
+  // Sort by match score descending
+  matches.sort((a, b) => b.matchScore - a.matchScore);
+  
+  console.log(`[arb-scanner] Found ${matches.length} matched pairs`);
+  return matches;
+}
+
+// ============ Category Detection ============
+
+function detectCategory(poly: PolymarketMarket, kalshi: KalshiMarket): string {
+  const text = `${poly.question || ''} ${kalshi.title || ''} ${poly.category || ''} ${kalshi.category || ''}`.toLowerCase();
+  
+  if (/politic|elect|vote|trump|biden|congress|senate|president|governor/.test(text)) {
+    return 'politics';
+  }
+  if (/bitcoin|btc|ethereum|eth|crypto|sol|xrp|doge/.test(text)) {
+    return 'crypto';
+  }
+  if (/nfl|nba|mlb|nhl|soccer|football|basketball|baseball|hockey|super bowl|world cup|olympics/.test(text)) {
+    return 'sports';
+  }
+  if (/fed|interest rate|inflation|gdp|stock|s&p|nasdaq|dow|earnings/.test(text)) {
+    return 'finance';
+  }
+  if (/oscar|grammy|emmy|movie|film|celebrity|entertainment|music/.test(text)) {
+    return 'entertainment';
+  }
+  if (/weather|temperature|hurricane|storm/.test(text)) {
+    return 'weather';
+  }
+  
+  return 'general';
+}
+
+function filterByCategory(markets: MatchedPair[], category: string): MatchedPair[] {
+  if (category === 'all') return markets;
+  
+  return markets.filter(pair => {
+    const detectedCategory = detectCategory(pair.polymarket, pair.kalshi);
+    return detectedCategory === category;
+  });
+}
+
+// ============ Arbitrage Calculation ============
+
 function calculateArbitrage(
   kalshiOrderbook: Orderbook,
   polyOrderbook: Orderbook,
-  market: MatchingMarket
+  pair: MatchedPair
 ): ArbOpportunity | null {
-  // Get best prices
   const kalshiBestBid = kalshiOrderbook.bids[0];
   const kalshiBestAsk = kalshiOrderbook.asks[0];
   const polyBestBid = polyOrderbook.bids[0];
@@ -192,33 +461,36 @@ function calculateArbitrage(
     return null;
   }
   
-  // Check for arbitrage: Buy low on one platform, sell high on another
+  const category = detectCategory(pair.polymarket, pair.kalshi);
+  
   // Scenario 1: Buy on Kalshi, Sell on Polymarket
   let buyKalshiSellPoly: ArbOpportunity | null = null;
   if (kalshiBestAsk && polyBestBid) {
-    const buyPrice = kalshiBestAsk.price * 100; // Convert to cents
+    const buyPrice = kalshiBestAsk.price * 100;
     const sellPrice = polyBestBid.price * 100;
     const spread = ((sellPrice - buyPrice) / buyPrice) * 100;
     
     if (spread > 0) {
-      const estimatedProfit = spread - 2; // Assume 1% fee per platform
+      const estimatedProfit = spread - 2; // 1% fee per platform
       buyKalshiSellPoly = {
-        id: `${market.kalshi_ticker}-${market.polymarket_slug}`,
-        matchKey: market.polymarket_slug,
-        eventTitle: market.event_title,
-        sport: market.sport,
+        id: `${pair.kalshi.ticker}-${pair.polymarket.market_slug}`,
+        matchKey: pair.polymarket.market_slug || pair.polymarket.condition_id,
+        eventTitle: pair.polymarket.question || pair.kalshi.title,
+        category,
         spreadPercent: Number(spread.toFixed(2)),
         buyPlatform: 'kalshi',
         sellPlatform: 'polymarket',
         buyPrice: Math.round(buyPrice),
         sellPrice: Math.round(sellPrice),
-        buyTicker: market.kalshi_ticker,
-        sellTicker: market.polymarket_slug,
+        buyTicker: pair.kalshi.ticker,
+        sellTicker: pair.polymarket.market_slug || pair.polymarket.condition_id,
         buyVolume: kalshiBestAsk.size,
         sellVolume: polyBestBid.size,
         estimatedProfit: Number(Math.max(0, estimatedProfit).toFixed(2)),
-        expiresAt: market.expires_at || null,
+        expiresAt: pair.polymarket.end_date_iso || pair.kalshi.expiration_time || null,
         updatedAt: Date.now(),
+        matchScore: pair.matchScore,
+        matchReason: pair.matchReason,
       };
     }
   }
@@ -233,22 +505,24 @@ function calculateArbitrage(
     if (spread > 0) {
       const estimatedProfit = spread - 2;
       buyPolySellKalshi = {
-        id: `${market.polymarket_slug}-${market.kalshi_ticker}`,
-        matchKey: market.polymarket_slug,
-        eventTitle: market.event_title,
-        sport: market.sport,
+        id: `${pair.polymarket.market_slug}-${pair.kalshi.ticker}`,
+        matchKey: pair.polymarket.market_slug || pair.polymarket.condition_id,
+        eventTitle: pair.polymarket.question || pair.kalshi.title,
+        category,
         spreadPercent: Number(spread.toFixed(2)),
         buyPlatform: 'polymarket',
         sellPlatform: 'kalshi',
         buyPrice: Math.round(buyPrice),
         sellPrice: Math.round(sellPrice),
-        buyTicker: market.polymarket_slug,
-        sellTicker: market.kalshi_ticker,
+        buyTicker: pair.polymarket.market_slug || pair.polymarket.condition_id,
+        sellTicker: pair.kalshi.ticker,
         buyVolume: polyBestAsk.size,
         sellVolume: kalshiBestBid.size,
         estimatedProfit: Number(Math.max(0, estimatedProfit).toFixed(2)),
-        expiresAt: market.expires_at || null,
+        expiresAt: pair.polymarket.end_date_iso || pair.kalshi.expiration_time || null,
         updatedAt: Date.now(),
+        matchScore: pair.matchScore,
+        matchReason: pair.matchReason,
       };
     }
   }
@@ -262,6 +536,8 @@ function calculateArbitrage(
   
   return buyKalshiSellPoly || buyPolySellKalshi;
 }
+
+// ============ Main Handler ============
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -278,9 +554,9 @@ serve(async (req) => {
       );
     }
 
-    // Parse params from both URL (GET) and body (POST)
+    // Parse params
     const url = new URL(req.url);
-    let body: any = {};
+    let body: Record<string, unknown> = {};
     if (req.method === "POST") {
       try {
         body = await req.json();
@@ -289,57 +565,90 @@ serve(async (req) => {
       }
     }
 
-    const sport = body.sport || url.searchParams.get("sport") || "nfl";
-    const minSpread = parseFloat(body.minSpread || url.searchParams.get("minSpread") || "1");
-    const today = new Date().toISOString().slice(0, 10);
-    const date = body.date || url.searchParams.get("date") || today;
+    const category = String(body.category || url.searchParams.get("category") || "all");
+    const minSpread = parseFloat(String(body.minSpread || url.searchParams.get("minSpread") || "1"));
+    const maxMarkets = parseInt(String(body.maxMarkets || url.searchParams.get("maxMarkets") || "200"));
+    const minMatchScore = parseInt(String(body.minMatchScore || url.searchParams.get("minMatchScore") || "60"));
 
-    console.log(`[arb-scanner] Method: ${req.method}, sport: ${sport}, minSpread: ${minSpread}%, date: ${date}`);
+    console.log(`[arb-scanner] Universal scan: category=${category}, minSpread=${minSpread}%, maxMarkets=${maxMarkets}`);
 
-    // Fetch matching markets
-    const matchingMarkets = await fetchMatchingMarkets(sport, DOME_API_KEY, date);
-    
-    // Defensive check
-    if (!Array.isArray(matchingMarkets)) {
-      console.error("[arb-scanner] matchingMarkets is not an array:", typeof matchingMarkets);
+    // Step 1: Fetch all open markets from both platforms in parallel
+    const [polymarkets, kalshiMarkets] = await Promise.all([
+      fetchAllPolymarketMarkets(DOME_API_KEY, maxMarkets),
+      fetchAllKalshiMarkets(DOME_API_KEY, maxMarkets),
+    ]);
+
+    if (polymarkets.length === 0 || kalshiMarkets.length === 0) {
+      console.log(`[arb-scanner] Insufficient markets: Poly=${polymarkets.length}, Kalshi=${kalshiMarkets.length}`);
       return new Response(
-        JSON.stringify({ error: "Invalid matching markets format", opportunities: [] }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    if (matchingMarkets.length === 0) {
-      console.log("[arb-scanner] No matching markets found");
-      return new Response(
-        JSON.stringify({ opportunities: [], message: "No matching markets found" }),
+        JSON.stringify({ 
+          opportunities: [], 
+          message: "Insufficient markets from one or both platforms",
+          stats: {
+            polymarketCount: polymarkets.length,
+            kalshiCount: kalshiMarkets.length,
+          }
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // Step 2: Find matching pairs using fuzzy matching
+    const allMatchedPairs = findMatchingMarkets(polymarkets, kalshiMarkets, minMatchScore);
+    
+    // Step 3: Filter by category if specified
+    const matchedPairs = filterByCategory(allMatchedPairs, category);
+    
+    console.log(`[arb-scanner] Matched pairs after category filter: ${matchedPairs.length}`);
+
+    if (matchedPairs.length === 0) {
+      return new Response(
+        JSON.stringify({ 
+          opportunities: [], 
+          message: "No matching markets found between platforms",
+          stats: {
+            polymarketCount: polymarkets.length,
+            kalshiCount: kalshiMarkets.length,
+            matchedPairs: 0,
+          }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Step 4: Fetch orderbooks and calculate arbitrage (process in batches)
     const opportunities: ArbOpportunity[] = [];
-
-    // Process each matching market
-    for (const market of matchingMarkets) {
-      console.log(`[arb-scanner] Processing market: ${market.event_title}`);
+    const BATCH_SIZE = 5;
+    
+    for (let i = 0; i < Math.min(matchedPairs.length, maxMarkets); i += BATCH_SIZE) {
+      const batch = matchedPairs.slice(i, i + BATCH_SIZE);
       
-      // Fetch orderbooks in parallel
-      const [kalshiOrderbook, polyOrderbook] = await Promise.all([
-        fetchKalshiOrderbook(market.kalshi_ticker, DOME_API_KEY),
-        market.polymarket_token_id 
-          ? fetchPolymarketOrderbook(market.polymarket_token_id, DOME_API_KEY)
-          : Promise.resolve(null),
-      ]);
+      const results = await Promise.all(
+        batch.map(async (pair) => {
+          const yesTokenId = pair.polymarket.tokens?.[0]?.token_id || pair.polymarket.condition_id;
+          
+          if (!yesTokenId) {
+            console.log(`[arb-scanner] No token ID for ${pair.polymarket.market_slug}`);
+            return null;
+          }
+          
+          const [kalshiOrderbook, polyOrderbook] = await Promise.all([
+            fetchKalshiOrderbook(pair.kalshi.ticker, DOME_API_KEY),
+            fetchPolymarketOrderbook(yesTokenId, DOME_API_KEY),
+          ]);
 
-      if (!kalshiOrderbook || !polyOrderbook) {
-        console.log(`[arb-scanner] Missing orderbook data for ${market.event_title}`);
-        continue;
-      }
+          if (!kalshiOrderbook || !polyOrderbook) {
+            return null;
+          }
 
-      const opportunity = calculateArbitrage(kalshiOrderbook, polyOrderbook, market);
+          return calculateArbitrage(kalshiOrderbook, polyOrderbook, pair);
+        })
+      );
       
-      if (opportunity && opportunity.spreadPercent >= minSpread) {
-        opportunities.push(opportunity);
-        console.log(`[arb-scanner] Found opportunity: ${opportunity.eventTitle} - ${opportunity.spreadPercent}% spread`);
+      for (const opp of results) {
+        if (opp && opp.spreadPercent >= minSpread) {
+          opportunities.push(opp);
+        }
       }
     }
 
@@ -348,7 +657,7 @@ serve(async (req) => {
 
     console.log(`[arb-scanner] Found ${opportunities.length} arbitrage opportunities`);
 
-    // Optionally store in database for history
+    // Optionally store in database
     if (opportunities.length > 0) {
       const supabaseUrl = Deno.env.get("SUPABASE_URL");
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -356,11 +665,11 @@ serve(async (req) => {
       if (supabaseUrl && supabaseKey) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         
-        for (const opp of opportunities) {
+        for (const opp of opportunities.slice(0, 50)) { // Limit DB writes
           const { error } = await supabase.from("arb_opportunities").upsert({
             match_key: opp.matchKey,
             event_title: opp.eventTitle,
-            sport: opp.sport,
+            sport: opp.category, // Using 'sport' column for backward compatibility
             kalshi_ticker: opp.buyPlatform === 'kalshi' ? opp.buyTicker : opp.sellTicker,
             polymarket_slug: opp.buyPlatform === 'polymarket' ? opp.buyTicker : opp.sellTicker,
             spread_percent: opp.spreadPercent,
@@ -386,7 +695,13 @@ serve(async (req) => {
       JSON.stringify({ 
         opportunities, 
         count: opportunities.length,
-        sport,
+        stats: {
+          polymarketCount: polymarkets.length,
+          kalshiCount: kalshiMarkets.length,
+          matchedPairs: matchedPairs.length,
+          opportunitiesFound: opportunities.length,
+        },
+        category,
         minSpread,
         timestamp: Date.now(),
       }),

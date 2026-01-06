@@ -17,8 +17,8 @@ import {
 import { cn } from '@/lib/utils';
 
 interface ArbFiltersProps {
-  sport: string;
-  onSportChange: (sport: string) => void;
+  category: string;
+  onCategoryChange: (category: string) => void;
   minSpread: number;
   onMinSpreadChange: (spread: number) => void;
   onRefresh: () => void;
@@ -26,17 +26,19 @@ interface ArbFiltersProps {
   lastUpdated?: number | null;
 }
 
-const SPORTS = [
-  { value: 'nfl', label: 'NFL' },
-  { value: 'nba', label: 'NBA' },
-  { value: 'mlb', label: 'MLB' },
-  { value: 'nhl', label: 'NHL' },
-  { value: 'soccer', label: 'Soccer' },
+const CATEGORIES = [
+  { value: 'all', label: 'All Markets' },
+  { value: 'politics', label: 'Politics' },
+  { value: 'crypto', label: 'Crypto' },
+  { value: 'sports', label: 'Sports' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'entertainment', label: 'Entertainment' },
+  { value: 'general', label: 'Other' },
 ];
 
 export function ArbFilters({
-  sport,
-  onSportChange,
+  category,
+  onCategoryChange,
   minSpread,
   onMinSpreadChange,
   onRefresh,
@@ -52,15 +54,15 @@ export function ArbFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {/* Sport Selector */}
-      <Select value={sport} onValueChange={onSportChange}>
-        <SelectTrigger className="w-[120px] h-9">
+      {/* Category Selector */}
+      <Select value={category} onValueChange={onCategoryChange}>
+        <SelectTrigger className="w-[140px] h-9">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {SPORTS.map((s) => (
-            <SelectItem key={s.value} value={s.value}>
-              {s.label}
+          {CATEGORIES.map((c) => (
+            <SelectItem key={c.value} value={c.value}>
+              {c.label}
             </SelectItem>
           ))}
         </SelectContent>

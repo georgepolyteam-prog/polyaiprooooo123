@@ -5,7 +5,7 @@ export interface ArbOpportunity {
   id: string;
   matchKey: string;
   eventTitle: string;
-  sport: string;
+  category: string;
   spreadPercent: number;
   buyPlatform: 'kalshi' | 'polymarket';
   sellPlatform: 'kalshi' | 'polymarket';
@@ -18,10 +18,19 @@ export interface ArbOpportunity {
   estimatedProfit: number;
   expiresAt: string | null;
   updatedAt: number;
+  matchScore?: number;
+  matchReason?: string;
+}
+
+interface ArbStats {
+  polymarketCount: number;
+  kalshiCount: number;
+  matchedPairs: number;
+  opportunitiesFound: number;
 }
 
 interface UseArbOpportunitiesOptions {
-  sport?: string;
+  category?: string;
   minSpread?: number;
   autoRefresh?: boolean;
   refreshInterval?: number;
@@ -29,13 +38,14 @@ interface UseArbOpportunitiesOptions {
 
 export function useArbOpportunities(options: UseArbOpportunitiesOptions = {}) {
   const {
-    sport = 'nfl',
+    category = 'all',
     minSpread = 1,
     autoRefresh = true,
     refreshInterval = 30000,
   } = options;
 
   const [opportunities, setOpportunities] = useState<ArbOpportunity[]>([]);
+  const [stats, setStats] = useState<ArbStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -45,7 +55,7 @@ export function useArbOpportunities(options: UseArbOpportunitiesOptions = {}) {
       setError(null);
       
       const { data, error: fnError } = await supabase.functions.invoke('arb-scanner', {
-        body: { sport, minSpread },
+        body: { category, minSpread },
       });
 
       if (fnError) {
@@ -57,6 +67,7 @@ export function useArbOpportunities(options: UseArbOpportunitiesOptions = {}) {
       }
 
       setOpportunities(data?.opportunities || []);
+      setStats(data?.stats || null);
       setLastUpdated(Date.now());
     } catch (err) {
       console.error('[useArbOpportunities] Error:', err);
@@ -64,7 +75,7 @@ export function useArbOpportunities(options: UseArbOpportunitiesOptions = {}) {
     } finally {
       setIsLoading(false);
     }
-  }, [sport, minSpread]);
+  }, [category, minSpread]);
 
   // Initial fetch
   useEffect(() => {
@@ -92,6 +103,7 @@ export function useArbOpportunities(options: UseArbOpportunitiesOptions = {}) {
   return {
     opportunities: filteredOpportunities,
     allOpportunities: opportunities,
+    stats,
     isLoading,
     error,
     lastUpdated,
