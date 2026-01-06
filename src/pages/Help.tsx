@@ -383,12 +383,38 @@ export default function Help() {
                 ))}
               </div>
               
+              {/* Terminal Guide */}
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Terminal Guide</h4>
+              <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-4 mb-8 border border-primary/20">
+                <p className="text-sm text-foreground mb-4">The Terminal (/terminal) is your professional trading interface with real-time data.</p>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {[
+                    { title: "Chart", desc: "Price history with 1D/7D/30D views. Right-click to set alerts." },
+                    { title: "Trade Panel", desc: "Place market or limit orders directly. Link wallet once to start." },
+                    { title: "Order Book", desc: "See live bid/ask spread and depth." },
+                    { title: "Trades Tab", desc: "View your complete trade history with time filters." },
+                    { title: "AI Analysis", desc: "Get instant insights on any market. Uses credits." },
+                    { title: "News Tab", desc: "AI-summarized news with source links." },
+                    { title: "Positions", desc: "Track open positions and P&L." },
+                    { title: "Alerts", desc: "Get notified when prices hit your targets." },
+                  ].map((item, i) => (
+                    <div key={i} className="flex gap-2">
+                      <span className="text-primary font-bold">•</span>
+                      <div>
+                        <span className="text-xs font-semibold text-foreground">{item.title}:</span>
+                        <span className="text-xs text-muted-foreground ml-1">{item.desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
               {/* Three Ways to Use */}
               <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">Three Ways to Use</h4>
               <div className="grid md:grid-cols-3 gap-3 mb-8">
                 {[
                   { icon: MessageCircle, title: "Chat", description: "Ask anything about any market", gradient: "from-cyan-500/20 to-blue-500/10" },
-                  { icon: BarChart3, title: "Dashboard", description: "Real-time orderbook & whale tracking", gradient: "from-purple-500/20 to-pink-500/10" },
+                  { icon: BarChart3, title: "Terminal", description: "Real-time orderbook & trading", gradient: "from-purple-500/20 to-pink-500/10" },
                   { icon: Trophy, title: "Leaderboard", description: "Track top profitable traders", gradient: "from-amber-500/20 to-orange-500/10" },
                 ].map((usage, i) => (
                   <div key={i} className={cn("p-4 rounded-xl bg-gradient-to-br border border-border/30", usage.gradient)}>

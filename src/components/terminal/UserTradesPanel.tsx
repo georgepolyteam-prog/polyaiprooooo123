@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
-import { Loader2, RefreshCw, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { Loader2, RefreshCw, Clock, TrendingUp, TrendingDown, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -8,6 +8,8 @@ import { ConnectWallet } from '@/components/ConnectWallet';
 import { useAuth } from '@/hooks/useAuth';
 import { TerminalAuthGate } from './TerminalAuthGate';
 import { format } from 'date-fns';
+
+type TimeFilter = '24h' | '7d' | '30d' | 'all';
 
 interface Trade {
   marketSlug: string;
@@ -25,12 +27,20 @@ export function UserTradesPanel() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('30d');
 
   const fetchTrades = useCallback(async () => {
     if (!address) return;
 
     setLoading(true);
     try {
+      // Calculate time filter
+      const now = Math.floor(Date.now() / 1000);
+      let start_time: number | undefined;
+      if (timeFilter === '24h') start_time = now - 86400;
+      else if (timeFilter === '7d') start_time = now - 7 * 86400;
+      else if (timeFilter === '30d') start_time = now - 30 * 86400;
+
       // Fetch from dome-user-data same as MyTrades history
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dome-user-data`,
@@ -43,6 +53,7 @@ export function UserTradesPanel() {
           body: JSON.stringify({
             user: address,
             type: 'all',
+            start_time,
             limit: 100,
           }),
         }
@@ -73,7 +84,7 @@ export function UserTradesPanel() {
       setLoading(false);
       setHasFetched(true);
     }
-  }, [address]);
+  }, [address, timeFilter]);
 
   useEffect(() => {
     if (isConnected && address && !hasFetched) {
@@ -86,6 +97,13 @@ export function UserTradesPanel() {
     setHasFetched(false);
     setTrades([]);
   }, [address]);
+
+  // Refetch when time filter changes
+  useEffect(() => {
+    if (hasFetched && isConnected && address) {
+      fetchTrades();
+    }
+  }, [timeFilter]);
 
   const formatTime = (ts: number) => {
     try {
@@ -122,75 +140,103 @@ export function UserTradesPanel() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
-      </div>
-    );
-  }
-
-  if (trades.length === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-6 text-center">
-        <Clock className="w-10 h-10 text-muted-foreground/50 mb-3" />
-        <p className="text-sm text-muted-foreground">No recent trades</p>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={fetchTrades}
-          className="mt-2 gap-1 text-xs"
-        >
-          <RefreshCw className="w-3 h-3" />
-          Refresh
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <ScrollArea className="h-full">
-      <div className="p-2 space-y-1">
-        {trades.map((trade, idx) => (
-          <div
-            key={`${trade.marketSlug}-${trade.timestamp}-${idx}`}
-            className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/30 hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div
+    <div className="h-full flex flex-col">
+      {/* Header with filters */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <Filter className="w-3 h-3 text-muted-foreground" />
+          <div className="flex items-center p-0.5 rounded-md bg-muted/40 border border-border/40">
+            {(['24h', '7d', '30d', 'all'] as const).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setTimeFilter(tf)}
                 className={cn(
-                  'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
-                  trade.side?.toUpperCase() === 'BUY' ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                  'px-2 py-0.5 text-[9px] font-medium rounded transition-all',
+                  timeFilter === tf
+                    ? 'bg-primary/20 text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {trade.side?.toUpperCase() === 'BUY' ? (
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <TrendingDown className="w-3.5 h-3.5 text-red-400" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium truncate text-foreground">{trade.marketTitle}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  <span
+                {tf.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={fetchTrades}
+          disabled={loading}
+          className="h-6 w-6"
+        >
+          <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
+        </Button>
+      </div>
+
+      {/* Content */}
+      {loading && trades.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-5 h-5 animate-spin text-primary/50" />
+        </div>
+      ) : trades.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <Clock className="w-8 h-8 text-muted-foreground/40 mb-2" />
+          <p className="text-xs text-muted-foreground">No trades found</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+            Try expanding the time range
+          </p>
+        </div>
+      ) : (
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-2 space-y-1">
+            {trades.map((trade, idx) => (
+              <div
+                key={`${trade.marketSlug}-${trade.timestamp}-${idx}`}
+                className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border/20 hover:bg-muted/40 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div
                     className={cn(
-                      'font-semibold',
-                      trade.side?.toUpperCase() === 'BUY' ? 'text-emerald-400' : 'text-red-400'
+                      'w-6 h-6 rounded-md flex items-center justify-center shrink-0',
+                      trade.side?.toUpperCase() === 'BUY' ? 'bg-emerald-500/15' : 'bg-red-500/15'
                     )}
                   >
-                    {trade.side?.toUpperCase()}
-                  </span>{' '}
-                  {trade.shares.toFixed(2)} @ {(trade.price * 100).toFixed(0)}¢
-                </p>
+                    {trade.side?.toUpperCase() === 'BUY' ? (
+                      <TrendingUp className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3 text-red-400" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-medium truncate text-foreground leading-tight">
+                      {trade.marketTitle}
+                    </p>
+                    <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                      <span
+                        className={cn(
+                          'font-semibold',
+                          trade.side?.toUpperCase() === 'BUY' ? 'text-emerald-400' : 'text-red-400'
+                        )}
+                      >
+                        {trade.side?.toUpperCase()}
+                      </span>
+                      <span>•</span>
+                      <span>{trade.shares.toFixed(1)} @ {(trade.price * 100).toFixed(0)}¢</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-2">
+                  <p className="text-[10px] font-mono font-medium text-foreground">
+                    ${trade.volume.toFixed(2)}
+                  </p>
+                  <p className="text-[8px] text-muted-foreground">{formatTime(trade.timestamp)}</p>
+                </div>
               </div>
-            </div>
-            <div className="text-right shrink-0 ml-2">
-              <p className="text-[11px] font-mono text-foreground">${trade.volume.toFixed(2)}</p>
-              <p className="text-[9px] text-muted-foreground">{formatTime(trade.timestamp)}</p>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </ScrollArea>
+        </ScrollArea>
+      )}
+    </div>
   );
 }
