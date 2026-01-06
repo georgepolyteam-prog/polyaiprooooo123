@@ -87,9 +87,9 @@ export default function ArbFinder() {
                 <Scale className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Universal Arbitrage Finder</h1>
+                <h1 className="text-2xl font-bold">Sports Arbitrage Finder</h1>
                 <p className="text-sm text-muted-foreground">
-                  Find cross-platform price discrepancies across all markets on Kalshi & Polymarket
+                  Find cross-platform price discrepancies on sports markets (Kalshi & Polymarket)
                 </p>
               </div>
             </div>
@@ -313,15 +313,22 @@ export default function ArbFinder() {
                   <Scale className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="font-semibold mb-2">No Opportunities Found</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                    No arbitrage opportunities currently meet your criteria. 
-                    Try lowering the minimum spread or selecting a different category.
+                    No sports arbitrage opportunities currently meet your criteria. 
+                    Try lowering the minimum spread or check back on game days.
                   </p>
                   {stats && (
                     <div className="mt-4 text-xs text-muted-foreground">
-                      Scanned {stats.polymarketCount} Polymarket & {stats.kalshiCount} Kalshi markets • 
-                      Found {stats.matchedPairs} matched pairs
+                      Found {stats.matchedPairs || 0} matched sports markets
                     </div>
                   )}
+                  <div className="mt-4 px-4 py-2 bg-muted/50 rounded-lg inline-block">
+                    <p className="text-xs text-muted-foreground">
+                      🏈 Currently supports: NFL, NBA, MLB, NHL, CFB, CBB
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Politics, crypto & other categories coming soon
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             ) : (

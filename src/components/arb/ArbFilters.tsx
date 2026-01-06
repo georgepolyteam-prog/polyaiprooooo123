@@ -26,14 +26,15 @@ interface ArbFiltersProps {
   lastUpdated?: number | null;
 }
 
+// Sports-only categories (Dome API matching-markets endpoint only supports sports)
 const CATEGORIES = [
-  { value: 'all', label: 'All Markets' },
-  { value: 'politics', label: 'Politics' },
-  { value: 'crypto', label: 'Crypto' },
-  { value: 'sports', label: 'Sports' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'entertainment', label: 'Entertainment' },
-  { value: 'general', label: 'Other' },
+  { value: 'all', label: 'All Sports' },
+  { value: 'nfl', label: 'NFL' },
+  { value: 'nba', label: 'NBA' },
+  { value: 'mlb', label: 'MLB' },
+  { value: 'nhl', label: 'NHL' },
+  { value: 'cfb', label: 'College Football' },
+  { value: 'cbb', label: 'College Basketball' },
 ];
 
 export function ArbFilters({
