@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Scale, TrendingUp, AlertCircle, Zap, BarChart3 } from 'lucide-react';
+import { Scale, TrendingUp, AlertCircle, Zap, BarChart3, Bug, Loader2 } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { ArbOpportunityCard } from '@/components/arb/ArbOpportunityCard';
 import { ArbFilters } from '@/components/arb/ArbFilters';
@@ -8,14 +8,21 @@ import { ArbAlertModal } from '@/components/arb/ArbAlertModal';
 import { ArbAlertsList } from '@/components/arb/ArbAlertsList';
 import { ProfitCalculator } from '@/components/arb/ProfitCalculator';
 import { useArbOpportunities } from '@/hooks/useArbOpportunities';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ArbFinder() {
   const [category, setCategory] = useState('all');
   const [minSpread, setMinSpread] = useState(1);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
+  
+  // Debug state
+  const [debugResponse, setDebugResponse] = useState<unknown>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   const {
     opportunities,
@@ -31,6 +38,39 @@ export default function ArbFinder() {
     refreshInterval: 30000,
   });
 
+  // Direct test of edge function
+  const testEdgeFunction = async () => {
+    setDebugLoading(true);
+    setDebugResponse(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('arb-scanner', {
+        body: { 
+          category: 'all', 
+          minSpread: 0.5,
+          minSimilarity: 70,
+          debug: true,
+          limit: 50,
+        },
+      });
+      
+      setDebugResponse({
+        success: !error,
+        error: error?.message,
+        data,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      setDebugResponse({
+        success: false,
+        error: e instanceof Error ? e.message : String(e),
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
+
   // Get selected opportunity for calculator (first one or empty)
   const selectedOpp = opportunities[0];
 
@@ -41,18 +81,84 @@ export default function ArbFinder() {
       <main className="flex-1 container max-w-7xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-primary/20">
-              <Scale className="w-6 h-6 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/20">
+                <Scale className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Universal Arbitrage Finder</h1>
+                <p className="text-sm text-muted-foreground">
+                  Find cross-platform price discrepancies across all markets on Kalshi & Polymarket
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">Universal Arbitrage Finder</h1>
-              <p className="text-sm text-muted-foreground">
-                Find cross-platform price discrepancies across all markets on Kalshi & Polymarket
-              </p>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDebug(!showDebug)}
+              className="gap-2"
+            >
+              <Bug className="w-4 h-4" />
+              {showDebug ? 'Hide Debug' : 'Debug'}
+            </Button>
           </div>
         </div>
+
+        {/* Debug Panel */}
+        {showDebug && (
+          <Card className="mb-6 border-yellow-500/30 bg-yellow-500/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Bug className="w-4 h-4" />
+                Debug Panel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Button 
+                  onClick={testEdgeFunction} 
+                  disabled={debugLoading}
+                  size="sm"
+                >
+                  {debugLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    'Test Edge Function'
+                  )}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setDebugResponse(null)}
+                >
+                  Clear
+                </Button>
+              </div>
+              
+              {debugResponse && (
+                <div className="bg-background rounded-lg p-4 overflow-auto max-h-96">
+                  <pre className="text-xs font-mono whitespace-pre-wrap">
+                    {JSON.stringify(debugResponse, null, 2)}
+                  </pre>
+                </div>
+              )}
+              
+              {/* Current hook state */}
+              <div className="text-xs space-y-1">
+                <div><strong>Hook State:</strong></div>
+                <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
+                <div>Error: {error || 'None'}</div>
+                <div>Opportunities: {opportunities.length}</div>
+                <div>Stats: {JSON.stringify(stats)}</div>
+                <div>Last Updated: {lastUpdated ? new Date(lastUpdated).toISOString() : 'Never'}</div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Bar */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
