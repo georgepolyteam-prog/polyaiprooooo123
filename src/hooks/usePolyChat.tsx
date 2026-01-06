@@ -661,11 +661,18 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     );
   }, [detailMode]);
 
+  // Clear only messages (keeps market context) - used when switching markets in terminal
   const clearMessages = useCallback(() => {
+    setMessages([]);
+    clearRetryState();
+  }, [clearRetryState]);
+
+  // Full reset - clears messages AND market context (for /chat page reset)
+  const resetChat = useCallback(() => {
     setMessages([]);
     setCurrentMarketContext(null);
     clearRetryState();
-  }, [clearRetryState]);
+  }, [clearRetryState, setCurrentMarketContext]);
 
   const dismissLoadBanner = useCallback(() => {
     setLoadState(prev => ({ ...prev, isHighLoad: false }));
@@ -691,6 +698,7 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
     deepResearch,
     irysMode,
     clearMessages,
+    resetChat,
     loadState,
     retryingIn,
     dismissLoadBanner,

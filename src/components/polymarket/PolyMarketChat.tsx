@@ -45,15 +45,16 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
   } = usePolyChat(session, null);
 
   // Update market context when market changes
+  // IMPORTANT: Clear messages FIRST, then set context (so context isn't cleared by clearMessages)
   useEffect(() => {
     if (market) {
+      clearMessages(); // Clears messages but keeps context
       setCurrentMarketContext({
         slug: market.slug,
         eventSlug: market.eventSlug,
         question: market.title,
         url: market.marketUrl,
       });
-      clearMessages();
     }
   }, [market.id, market.slug, setCurrentMarketContext, clearMessages]);
 
