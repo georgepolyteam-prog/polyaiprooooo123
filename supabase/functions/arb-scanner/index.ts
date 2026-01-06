@@ -144,44 +144,72 @@ async function fetchKalshiMarkets(apiKey: string, limit: number): Promise<{ mark
 }
 
 // Orderbook endpoints REQUIRE start_time and end_time (milliseconds)
-// We'll request last 60 seconds of history and take latest snapshot
+// Snapshots are periodic, NOT real-time. Use 24-hour window to find most recent snapshot.
+const ORDERBOOK_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour - skip if older
 
-async function fetchPolymarketOrderbook(tokenId: string, apiKey: string): Promise<{ ob: Orderbook | null; url: string; error?: string }> {
+interface OrderbookResult {
+  ob: Orderbook | null;
+  url: string;
+  error?: string;
+  snapshotTimestamp?: number;
+  snapshotAgeMinutes?: number;
+}
+
+async function fetchPolymarketOrderbook(tokenId: string, apiKey: string): Promise<OrderbookResult> {
   const now = Date.now();
-  const startTime = now - 60_000; // 1 minute ago
+  const startTime = now - ORDERBOOK_WINDOW_MS; // 24 hours ago
   const url = `${DOME_API_URL}/polymarket/orderbooks?token_id=${encodeURIComponent(tokenId)}&start_time=${startTime}&end_time=${now}&limit=1`;
   try {
     const res = await domeGet(url, apiKey);
     if (!res.ok) {
-      return { ob: null, url, error: `${res.status}: ${res.text?.slice(0, 100)}` };
+      return { ob: null, url, error: `${res.status}: ${res.text?.slice(0, 200)}` };
     }
     const snapshots = res.data?.snapshots || [];
     if (snapshots.length === 0) {
-      return { ob: null, url, error: "No snapshots in response" };
+      return { ob: null, url, error: "No snapshots in 24h window" };
     }
     const snap = snapshots[0];
+    const snapshotTs = snap.timestamp || snap.t || now;
+    const ageMs = now - snapshotTs;
+    const ageMinutes = Math.round(ageMs / 60000);
+    
+    // Check if snapshot is too stale
+    if (ageMs > STALE_THRESHOLD_MS) {
+      return { ob: null, url, error: `Snapshot too old: ${ageMinutes} min`, snapshotTimestamp: snapshotTs, snapshotAgeMinutes: ageMinutes };
+    }
+    
     const bids: OrderbookLevel[] = (snap.bids || []).map((b: any) => ({ price: parseFloat(b.price), size: parseFloat(b.size) }));
     const asks: OrderbookLevel[] = (snap.asks || []).map((a: any) => ({ price: parseFloat(a.price), size: parseFloat(a.size) }));
-    return { ob: { bids, asks }, url };
+    return { ob: { bids, asks }, url, snapshotTimestamp: snapshotTs, snapshotAgeMinutes: ageMinutes };
   } catch (e) {
     return { ob: null, url, error: String(e) };
   }
 }
 
-async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<{ ob: Orderbook | null; url: string; error?: string }> {
+async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<OrderbookResult> {
   const now = Date.now();
-  const startTime = now - 60_000;
+  const startTime = now - ORDERBOOK_WINDOW_MS; // 24 hours ago
   const url = `${DOME_API_URL}/kalshi/orderbooks?ticker=${encodeURIComponent(ticker)}&start_time=${startTime}&end_time=${now}&limit=1`;
   try {
     const res = await domeGet(url, apiKey);
     if (!res.ok) {
-      return { ob: null, url, error: `${res.status}: ${res.text?.slice(0, 100)}` };
+      return { ob: null, url, error: `${res.status}: ${res.text?.slice(0, 200)}` };
     }
     const snapshots = res.data?.snapshots || [];
     if (snapshots.length === 0) {
-      return { ob: null, url, error: "No snapshots in response" };
+      return { ob: null, url, error: "No snapshots in 24h window" };
     }
     const snap = snapshots[0];
+    const snapshotTs = snap.timestamp || snap.t || now;
+    const ageMs = now - snapshotTs;
+    const ageMinutes = Math.round(ageMs / 60000);
+    
+    // Check if snapshot is too stale
+    if (ageMs > STALE_THRESHOLD_MS) {
+      return { ob: null, url, error: `Snapshot too old: ${ageMinutes} min`, snapshotTimestamp: snapshotTs, snapshotAgeMinutes: ageMinutes };
+    }
+    
     // Kalshi format: yes: [[price, size], ...], no: [[price, size], ...]
     const orderbook = snap.orderbook || snap;
     const yesBids = orderbook.yes || [];
@@ -195,7 +223,7 @@ async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<{ o
       if (Array.isArray(level)) return { price: 1 - parseFloat(level[0]), size: parseFloat(level[1]) }; // NO price = 1 - YES price for asks
       return { price: 0, size: 0 };
     }).filter((l: OrderbookLevel) => l.price > 0);
-    return { ob: { bids, asks }, url };
+    return { ob: { bids, asks }, url, snapshotTimestamp: snapshotTs, snapshotAgeMinutes: ageMinutes };
   } catch (e) {
     return { ob: null, url, error: String(e) };
   }
@@ -575,7 +603,7 @@ serve(async (req) => {
 
     // Fetch orderbooks
     const opportunities: ArbOpportunity[] = [];
-    const orderbookErrors: { pair: string; polyUrl: string; polyError?: string; kalshiUrl: string; kalshiError?: string }[] = [];
+    const orderbookErrors: { pair: string; polyUrl: string; polyError?: string; polyAgeMin?: number; kalshiUrl: string; kalshiError?: string; kalshiAgeMin?: number }[] = [];
     let obAttempted = 0;
     let obOk = 0;
 
@@ -593,18 +621,22 @@ serve(async (req) => {
           fetchKalshiOrderbook(ticker, apiKey),
         ]);
 
-        const pairName = `${pair.polyTitle.slice(0, 30)}...`;
+        const pairName = `${pair.polyTitle.slice(0, 40)}`;
         if (!polyResult.ob || !kalshiResult.ob) {
           orderbookErrors.push({
             pair: pairName,
             polyUrl: polyResult.url,
             polyError: polyResult.error,
+            polyAgeMin: polyResult.snapshotAgeMinutes,
             kalshiUrl: kalshiResult.url,
             kalshiError: kalshiResult.error,
+            kalshiAgeMin: kalshiResult.snapshotAgeMinutes,
           });
+          log(`OB FAIL: ${pairName} - Poly: ${polyResult.error || 'ok'}, Kalshi: ${kalshiResult.error || 'ok'}`);
           return null;
         }
 
+        log(`OB OK: ${pairName} - Poly age: ${polyResult.snapshotAgeMinutes}min, Kalshi age: ${kalshiResult.snapshotAgeMinutes}min`);
         obOk++;
         return calcArb(pair, polyResult.ob, kalshiResult.ob);
       }));
