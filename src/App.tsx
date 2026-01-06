@@ -10,6 +10,7 @@ import { HighTrafficBanner } from "@/components/HighTrafficBanner";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { AppSidebar } from "@/components/AppSidebar";
 import Index from "./pages/Index";
+import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Leaderboard from "./pages/Leaderboard";
@@ -53,7 +54,7 @@ const AppContent = () => {
           {/* Main Content Area */}
           <main className="flex-1 flex flex-col min-w-0">
             <Routes>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<Home />} />
               <Route path="/chat" element={<Index />} />
               <Route path="/markets" element={<Markets />} />
               <Route path="/trades" element={<LiveTrades />} />
