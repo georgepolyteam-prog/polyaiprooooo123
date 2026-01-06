@@ -16,7 +16,7 @@ interface ArbOpportunityCardProps {
 export function ArbOpportunityCard({ opportunity, onSetAlert }: ArbOpportunityCardProps) {
   const {
     eventTitle,
-    sport,
+    category,
     spreadPercent,
     buyPlatform,
     sellPlatform,
@@ -24,6 +24,8 @@ export function ArbOpportunityCard({ opportunity, onSetAlert }: ArbOpportunityCa
     sellPrice,
     estimatedProfit,
     expiresAt,
+    matchScore,
+    matchReason,
   } = opportunity;
 
   const getSpreadColor = (spread: number) => {
@@ -61,8 +63,13 @@ export function ArbOpportunityCard({ opportunity, onSetAlert }: ArbOpportunityCa
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <Badge variant="outline" className="text-xs uppercase">
-                  {sport}
+                  {category}
                 </Badge>
+                {matchScore && (
+                  <Badge variant="secondary" className="text-xs">
+                    {matchScore}% match
+                  </Badge>
+                )}
                 {timeRemaining && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="w-3 h-3" />
@@ -73,6 +80,9 @@ export function ArbOpportunityCard({ opportunity, onSetAlert }: ArbOpportunityCa
               <h3 className="font-semibold text-sm text-foreground truncate">
                 {eventTitle}
               </h3>
+              {matchReason && (
+                <p className="text-xs text-muted-foreground mt-0.5">{matchReason}</p>
+              )}
             </div>
             <Badge className={cn('text-sm font-bold', getSpreadColor(spreadPercent))}>
               <TrendingUp className="w-3 h-3 mr-1" />

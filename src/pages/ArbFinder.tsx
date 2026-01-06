@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Scale, TrendingUp, AlertCircle, Zap } from 'lucide-react';
+import { Scale, TrendingUp, AlertCircle, Zap, BarChart3 } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { ArbOpportunityCard } from '@/components/arb/ArbOpportunityCard';
 import { ArbFilters } from '@/components/arb/ArbFilters';
@@ -13,18 +13,19 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ArbFinder() {
-  const [sport, setSport] = useState('nfl');
+  const [category, setCategory] = useState('all');
   const [minSpread, setMinSpread] = useState(1);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
 
   const {
     opportunities,
+    stats,
     isLoading,
     error,
     lastUpdated,
     refresh,
   } = useArbOpportunities({
-    sport,
+    category,
     minSpread,
     autoRefresh: true,
     refreshInterval: 30000,
@@ -45,16 +46,16 @@ export default function ArbFinder() {
               <Scale className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Arbitrage Finder</h1>
+              <h1 className="text-2xl font-bold">Universal Arbitrage Finder</h1>
               <p className="text-sm text-muted-foreground">
-                Find cross-platform price discrepancies between Kalshi & Polymarket
+                Find cross-platform price discrepancies across all markets on Kalshi & Polymarket
               </p>
             </div>
           </div>
         </div>
 
         {/* Stats Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <StatCard
             icon={<TrendingUp className="w-4 h-4" />}
             label="Best Spread"
@@ -65,6 +66,11 @@ export default function ArbFinder() {
             icon={<Scale className="w-4 h-4" />}
             label="Opportunities"
             value={opportunities.length.toString()}
+          />
+          <StatCard
+            icon={<BarChart3 className="w-4 h-4" />}
+            label="Matched Pairs"
+            value={stats?.matchedPairs?.toString() || '--'}
           />
           <StatCard
             icon={<Zap className="w-4 h-4" />}
@@ -81,8 +87,8 @@ export default function ArbFinder() {
         {/* Filters */}
         <div className="mb-6">
           <ArbFilters
-            sport={sport}
-            onSportChange={setSport}
+            category={category}
+            onCategoryChange={setCategory}
             minSpread={minSpread}
             onMinSpreadChange={setMinSpread}
             onRefresh={refresh}
@@ -129,8 +135,14 @@ export default function ArbFinder() {
                   <h3 className="font-semibold mb-2">No Opportunities Found</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                     No arbitrage opportunities currently meet your criteria. 
-                    Try lowering the minimum spread or checking a different sport.
+                    Try lowering the minimum spread or selecting a different category.
                   </p>
+                  {stats && (
+                    <div className="mt-4 text-xs text-muted-foreground">
+                      Scanned {stats.polymarketCount} Polymarket & {stats.kalshiCount} Kalshi markets • 
+                      Found {stats.matchedPairs} matched pairs
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ) : (
