@@ -22,6 +22,9 @@ interface PolymarketMarket {
   side_a?: PolymarketSide;
   side_b?: PolymarketSide;
   status?: string;
+  volume?: number;
+  volume_24h?: number;
+  liquidity?: number;
 }
 
 interface KalshiMarket {
@@ -79,6 +82,7 @@ interface ArbOpportunity {
   updatedAt: number;
   matchScore: number;
   matchReason: string;
+  dataAgeMinutes?: number;
 }
 
 // ============ Logging ============
@@ -113,15 +117,36 @@ function extractArr(d: any): any[] {
   return [];
 }
 
+// Filter constants for high-quality markets
+const MIN_VOLUME_USD = 5000; // Minimum $5k volume
+const MAX_DAYS_TO_CLOSE = 30; // Markets closing within 30 days
+
 async function fetchPolymarketMarkets(apiKey: string, limit: number): Promise<{ markets: PolymarketMarket[]; error?: string }> {
-  const url = `${DOME_API_URL}/polymarket/markets?status=open&limit=${limit}`;
+  // Request more markets and filter client-side, sort by volume
+  const url = `${DOME_API_URL}/polymarket/markets?status=open&limit=${limit}&sort=volume&order=desc`;
   log(`Fetching Polymarket: ${url}`);
   try {
     const res = await domeGet(url, apiKey);
     if (!res.ok) return { markets: [], error: `Poly ${res.status}: ${res.text}` };
-    const arr = extractArr(res.data).slice(0, limit);
-    log(`Polymarket fetched: ${arr.length}`);
-    if (arr[0]) log("Poly sample:", arr[0]);
+    let arr = extractArr(res.data);
+    
+    // Filter for high-volume, short-term markets
+    const now = Date.now();
+    const maxCloseTime = now + MAX_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000;
+    
+    arr = arr.filter((m: PolymarketMarket) => {
+      const vol = m.volume || m.volume_24h || 0;
+      const endTime = m.end_time ? m.end_time * 1000 : Infinity;
+      // Keep if: has volume >= MIN and closes within MAX_DAYS
+      return vol >= MIN_VOLUME_USD && endTime <= maxCloseTime;
+    });
+    
+    // Sort by volume descending
+    arr.sort((a: PolymarketMarket, b: PolymarketMarket) => ((b.volume || b.volume_24h || 0) - (a.volume || a.volume_24h || 0)));
+    arr = arr.slice(0, limit);
+    
+    log(`Polymarket fetched: ${arr.length} (filtered for vol>=$${MIN_VOLUME_USD}, closes within ${MAX_DAYS_TO_CLOSE}d)`);
+    if (arr[0]) log("Poly top market:", { title: arr[0].title, volume: arr[0].volume || arr[0].volume_24h, end_time: arr[0].end_time });
     return { markets: arr };
   } catch (e) {
     return { markets: [], error: String(e) };
@@ -129,14 +154,30 @@ async function fetchPolymarketMarkets(apiKey: string, limit: number): Promise<{ 
 }
 
 async function fetchKalshiMarkets(apiKey: string, limit: number): Promise<{ markets: KalshiMarket[]; error?: string }> {
-  const url = `${DOME_API_URL}/kalshi/markets?status=open&limit=${limit}`;
+  // Request more markets and filter client-side, sort by volume
+  const url = `${DOME_API_URL}/kalshi/markets?status=open&limit=${limit}&sort=volume&order=desc`;
   log(`Fetching Kalshi: ${url}`);
   try {
     const res = await domeGet(url, apiKey);
     if (!res.ok) return { markets: [], error: `Kalshi ${res.status}: ${res.text}` };
-    const arr = extractArr(res.data).slice(0, limit);
-    log(`Kalshi fetched: ${arr.length}`);
-    if (arr[0]) log("Kalshi sample:", arr[0]);
+    let arr = extractArr(res.data);
+    
+    // Filter for high-volume, short-term markets
+    const now = Date.now();
+    const maxCloseTime = now + MAX_DAYS_TO_CLOSE * 24 * 60 * 60 * 1000;
+    
+    arr = arr.filter((m: KalshiMarket) => {
+      const vol = m.volume || m.volume_24h || 0;
+      const closeTime = m.close_time ? m.close_time * 1000 : (m.end_time ? m.end_time * 1000 : Infinity);
+      return vol >= MIN_VOLUME_USD && closeTime <= maxCloseTime;
+    });
+    
+    // Sort by volume descending
+    arr.sort((a: KalshiMarket, b: KalshiMarket) => ((b.volume || b.volume_24h || 0) - (a.volume || a.volume_24h || 0)));
+    arr = arr.slice(0, limit);
+    
+    log(`Kalshi fetched: ${arr.length} (filtered for vol>=$${MIN_VOLUME_USD}, closes within ${MAX_DAYS_TO_CLOSE}d)`);
+    if (arr[0]) log("Kalshi top market:", { title: arr[0].title, volume: arr[0].volume || arr[0].volume_24h, close_time: arr[0].close_time });
     return { markets: arr };
   } catch (e) {
     return { markets: [], error: String(e) };
@@ -146,7 +187,7 @@ async function fetchKalshiMarkets(apiKey: string, limit: number): Promise<{ mark
 // Orderbook endpoints REQUIRE start_time and end_time (milliseconds)
 // Snapshots are periodic, NOT real-time. Use 24-hour window to find most recent snapshot.
 const ORDERBOOK_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
-const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour - skip if older
+const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours - more relaxed for active markets
 
 interface OrderbookResult {
   ob: Orderbook | null;
@@ -477,7 +518,7 @@ function calcSpread(buy: number, sell: number): number {
   return buy > 0 ? ((sell - buy) / buy) * 100 : 0;
 }
 
-function calcArb(pair: MatchedPair, polyOb: Orderbook, kalshiOb: Orderbook): ArbOpportunity | null {
+function calcArb(pair: MatchedPair, polyOb: Orderbook, kalshiOb: Orderbook, dataAgeMinutes?: number): ArbOpportunity | null {
   const pBid = polyOb.bids[0];
   const pAsk = polyOb.asks[0];
   const kBid = kalshiOb.bids[0];
@@ -512,6 +553,7 @@ function calcArb(pair: MatchedPair, polyOb: Orderbook, kalshiOb: Orderbook): Arb
       updatedAt: Date.now(),
       matchScore: pair.score,
       matchReason: pair.reason,
+      dataAgeMinutes,
     });
   }
 
@@ -539,6 +581,7 @@ function calcArb(pair: MatchedPair, polyOb: Orderbook, kalshiOb: Orderbook): Arb
       updatedAt: Date.now(),
       matchScore: pair.score,
       matchReason: pair.reason,
+      dataAgeMinutes,
     });
   }
 
@@ -567,7 +610,7 @@ serve(async (req) => {
 
     const minSpread = parseFloat(String(body.minSpread ?? "1"));
     const minSimilarity = parseFloat(String(body.minSimilarity ?? "60"));
-    const limit = Math.min(200, Math.max(1, parseInt(String(body.limit ?? "100"), 10)));
+    const limit = Math.min(300, Math.max(1, parseInt(String(body.limit ?? "200"), 10)));
     const debug = Boolean(body.debug);
     const category = String(body.category ?? "all");
 
@@ -636,9 +679,10 @@ serve(async (req) => {
           return null;
         }
 
+        const maxAge = Math.max(polyResult.snapshotAgeMinutes || 0, kalshiResult.snapshotAgeMinutes || 0);
         log(`OB OK: ${pairName} - Poly age: ${polyResult.snapshotAgeMinutes}min, Kalshi age: ${kalshiResult.snapshotAgeMinutes}min`);
         obOk++;
-        return calcArb(pair, polyResult.ob, kalshiResult.ob);
+        return calcArb(pair, polyResult.ob, kalshiResult.ob, maxAge);
       }));
 
       for (const opp of results) {
