@@ -638,6 +638,26 @@ export default function Kalshi() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* Geo-blocking Notice Banner - Restricted Jurisdictions */}
+      <div className="bg-destructive/10 border-b border-destructive/30">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-start gap-3">
+          <div className="p-1.5 rounded-md bg-destructive/20 mt-0.5">
+            <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-foreground font-medium">
+              Kalshi Trading Restrictions
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Please ensure you are geo-blocking the US and restricted Kalshi jurisdictions before trading.{' '}
+              <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
+                View full list of restricted regions →
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Dismissible Kalshi Disclaimer Banner */}
       <AnimatePresence>
         {!sessionStorage.getItem('kalshi_disclaimer_dismissed') && (
