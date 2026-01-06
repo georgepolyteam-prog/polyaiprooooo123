@@ -355,11 +355,21 @@ export function KalshiCandlestickChart({
         )}
         
         {candles.length === 0 && !isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No chart data available</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">This market may not have price history</p>
+          <div className="absolute inset-0 flex items-center justify-center bg-card/30 backdrop-blur-sm">
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-4 mb-3">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">YES</p>
+                  <p className="text-2xl font-bold font-mono text-emerald-500">--</p>
+                </div>
+                <div className="w-px h-8 bg-border/50" />
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">NO</p>
+                  <p className="text-2xl font-bold font-mono text-red-500">--</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Limited price history</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">Chart data will appear as trades occur</p>
             </div>
           </div>
         )}

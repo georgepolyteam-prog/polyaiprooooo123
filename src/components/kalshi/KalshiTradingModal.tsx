@@ -424,6 +424,8 @@ export function KalshiTradingModal({
         setLiquidityError('Low liquidity detected');
       } else if (errorMsg.includes('insufficient') || errorMsg.includes('InsufficientFunds') || errorMsg.includes('0x1')) {
         errorMessage = 'Insufficient USDC balance. Add USDC to your Solana wallet.';
+      } else if (errorMsg.includes('AccountNotFound') || errorMsg.includes('account not found') || errorMsg.includes('could not find account') || errorMsg.includes('0x0')) {
+        errorMessage = 'Your wallet needs SOL for transaction fees. Please add at least 0.01 SOL to your wallet.';
       } else if (errorMsg.includes('User rejected') || errorMsg.includes('rejected')) {
         errorMessage = 'Transaction cancelled by user.';
       } else if (errorMsg.includes('Slippage') || errorMsg.includes('slippage')) {

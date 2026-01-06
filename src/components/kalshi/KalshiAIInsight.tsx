@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, TrendingUp, TrendingDown, Loader2, Brain, AlertTriangle, Send, MessageCircle, ArrowLeft, Bot, User, Zap } from 'lucide-react';
+import { Sparkles, TrendingUp, TrendingDown, Loader2, Brain, AlertTriangle, Send, MessageCircle, ArrowLeft, User, Zap } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,13 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
+
+// Claude icon component
+const ClaudeIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6zm4 4h-2v-2h2v2zm0-4h-2V7h2v6z" />
+  </svg>
+);
 
 export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightProps) {
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
@@ -153,10 +160,10 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                 <ArrowLeft className="w-4 h-4" />
               </Button>
             )}
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
-              {isChatMode ? <MessageCircle className="w-4 h-4 text-purple-400" /> : <Sparkles className="w-4 h-4 text-purple-400" />}
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+              {isChatMode ? <MessageCircle className="w-4 h-4 text-primary" /> : <Sparkles className="w-4 h-4 text-primary" />}
             </div>
-            {isChatMode ? 'AI Chat' : 'AI Analysis'}
+            {isChatMode ? 'Chat with Claude' : 'AI Analysis'}
           </DialogTitle>
         </DialogHeader>
 
@@ -197,11 +204,11 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                     "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
                     msg.role === 'user' 
                       ? 'bg-primary/20' 
-                      : 'bg-purple-500/20'
+                      : 'bg-primary/10'
                   )}>
                     {msg.role === 'user' 
                       ? <User className="w-3.5 h-3.5 text-primary" />
-                      : <Bot className="w-3.5 h-3.5 text-purple-400" />
+                      : <span className="text-xs font-bold text-primary">C</span>
                     }
                   </div>
                   <div className={cn(
@@ -222,8 +229,8 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                   animate={{ opacity: 1 }}
                   className="flex gap-2"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                    <Bot className="w-3.5 h-3.5 text-purple-400" />
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <span className="text-xs font-bold text-primary">C</span>
                   </div>
                   <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border/50">
                     <div className="flex gap-1">
@@ -267,15 +274,15 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                   animate={{ opacity: 1 }}
                   className="flex flex-col items-center py-6"
                 >
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mb-4">
-                    <Brain className="w-8 h-8 text-purple-400" />
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center mb-4">
+                    <Brain className="w-8 h-8 text-primary" />
                   </div>
                   <p className="text-muted-foreground text-center mb-6 max-w-sm text-sm">
                     Get AI-powered insights including probability assessment, key factors, and trading recommendations.
                   </p>
                   <Button 
                     onClick={analyzeMarket}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl px-6"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl px-6"
                   >
                     <Sparkles className="w-4 h-4 mr-2" />
                     Analyze Market
@@ -290,8 +297,8 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                   className="flex flex-col items-center py-10"
                 >
                   <div className="relative">
-                    <div className="absolute inset-0 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
-                    <Loader2 className="relative w-10 h-10 text-purple-400 animate-spin" />
+                    <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse" />
+                    <Loader2 className="relative w-10 h-10 text-primary animate-spin" />
                   </div>
                   <p className="text-muted-foreground mt-4 text-sm">Analyzing market data...</p>
                 </motion.div>
@@ -414,7 +421,7 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                       <Button
                         onClick={() => setIsChatMode(true)}
                         variant="outline"
-                        className="h-11 rounded-xl border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10 hover:border-purple-500/50 text-purple-400 group"
+                        className="h-11 rounded-xl border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 text-primary group"
                       >
                         <MessageCircle className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
                         Ask Follow-up
@@ -448,14 +455,14 @@ export function KalshiAIInsight({ market, onClose, onTrade }: KalshiAIInsightPro
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Ask about this market..."
-                className="flex-1 h-10 rounded-xl bg-muted/40 border-border/50 focus:border-purple-500/50 text-sm"
+                className="flex-1 h-10 rounded-xl bg-muted/40 border-border/50 focus:border-primary/50 text-sm"
                 disabled={isChatLoading}
               />
               <Button
                 type="submit"
                 size="icon"
                 disabled={!chatInput.trim() || isChatLoading}
-                className="h-10 w-10 rounded-xl bg-purple-500 hover:bg-purple-600 text-white shrink-0"
+                className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
               >
                 <Send className="w-4 h-4" />
               </Button>
