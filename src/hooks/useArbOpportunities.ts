@@ -45,32 +45,18 @@ export function useArbOpportunities(options: UseArbOpportunitiesOptions = {}) {
       setError(null);
       
       const { data, error: fnError } = await supabase.functions.invoke('arb-scanner', {
-        body: {},
-        headers: {},
+        body: { sport, minSpread },
       });
 
-      // Add query params via URL since invoke doesn't support them directly
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/arb-scanner?sport=${sport}&minSpread=${minSpread}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch opportunities: ${response.status}`);
+      if (fnError) {
+        throw new Error(fnError.message || 'Failed to fetch opportunities');
       }
 
-      const result = await response.json();
-      
-      if (result.error) {
-        throw new Error(result.error);
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
-      setOpportunities(result.opportunities || []);
+      setOpportunities(data?.opportunities || []);
       setLastUpdated(Date.now());
     } catch (err) {
       console.error('[useArbOpportunities] Error:', err);
