@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { VersionedTransaction, Connection } from '@solana/web3.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle, CheckCircle, DollarSign, Zap, ArrowRight, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Wallet, Sparkles, ExternalLink, AlertTriangle, CheckCircle, DollarSign, Zap, ArrowRight, X, MapPinOff } from 'lucide-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { cn } from '@/lib/utils';
 import { useDflowApi, type KalshiMarket } from '@/hooks/useDflowApi';
@@ -42,6 +42,8 @@ interface KalshiTradingModalProps {
   sellMint?: string;
   sellDecimals?: number;
   maxShares?: number;
+  isGeoRestricted?: boolean;
+  geoCountryName?: string | null;
 }
 
 type OrderStep = 'idle' | 'quote' | 'simulate' | 'sign' | 'submit' | 'confirm' | 'done' | 'error';
@@ -180,6 +182,8 @@ export function KalshiTradingModal({
   sellMint,
   sellDecimals = 6,
   maxShares,
+  isGeoRestricted = false,
+  geoCountryName,
 }: KalshiTradingModalProps) {
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection } = useConnection();
@@ -550,8 +554,32 @@ export function KalshiTradingModal({
         )}
       </AnimatePresence>
 
+      {/* Geo-Restriction Notice */}
+      {isGeoRestricted && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/20">
+              <MapPinOff className="w-5 h-5 text-amber-500" />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-foreground text-sm">Trading Restricted</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Trading is not available in {geoCountryName || 'your region'}. You can view market data but cannot place trades.
+              </p>
+              <a 
+                href="/kalshi-disclaimer" 
+                className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
+              >
+                View restricted regions
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error Warning */}
-      {(simulationError || liquidityError) && orderStep === 'idle' && (
+      {(simulationError || liquidityError) && orderStep === 'idle' && !isGeoRestricted && (
         <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
           <span className="text-sm text-amber-400">{simulationError || liquidityError}</span>
@@ -807,34 +835,44 @@ export function KalshiTradingModal({
       </p>
 
       {/* Trade Button */}
-      <motion.div whileTap={{ scale: 0.98 }}>
+      {isGeoRestricted ? (
         <Button
-          onClick={executeTrade}
-          disabled={!connected || !amount || parseFloat(amount) <= 0 || executing}
-          className={cn(
-            'w-full h-14 text-lg font-bold rounded-xl',
-            'transition-all duration-200',
-            isSellMode
-              ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
-              : side === 'YES' 
-                ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
-                : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20',
-            'disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none'
-          )}
+          disabled
+          className="w-full h-14 text-lg font-bold rounded-xl bg-muted text-muted-foreground cursor-not-allowed"
         >
-          {executing ? (
-            <>
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <Zap className="w-5 h-5 mr-2" />
-              {isSellMode ? `Sell ${side}` : `Buy ${side} @ ${price}¢`}
-            </>
-          )}
+          <MapPinOff className="w-5 h-5 mr-2" />
+          Trading Restricted in {geoCountryName || 'Your Region'}
         </Button>
-      </motion.div>
+      ) : (
+        <motion.div whileTap={{ scale: 0.98 }}>
+          <Button
+            onClick={executeTrade}
+            disabled={!connected || !amount || parseFloat(amount) <= 0 || executing}
+            className={cn(
+              'w-full h-14 text-lg font-bold rounded-xl',
+              'transition-all duration-200',
+              isSellMode
+                ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
+                : side === 'YES' 
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
+                  : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none'
+            )}
+          >
+            {executing ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Zap className="w-5 h-5 mr-2" />
+                {isSellMode ? `Sell ${side}` : `Buy ${side} @ ${price}¢`}
+              </>
+            )}
+          </Button>
+        </motion.div>
+      )}
 
       {/* Disclaimer */}
       <p className="text-xs text-center text-muted-foreground/60">

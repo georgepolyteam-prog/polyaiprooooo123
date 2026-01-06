@@ -45,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import kalshiLogo from "@/assets/kalshi-logo-green.jpeg";
 import solanaLogo from "@/assets/solana-logo.png";
+import { useGeoRestriction } from "@/hooks/useGeoRestriction";
 
 // Demo markets for when API is unavailable
 const DEMO_MARKETS: KalshiMarket[] = [
@@ -162,6 +163,7 @@ export default function Kalshi() {
     searchEvents,
     getTagsByCategories,
   } = useDflowApi();
+  const { isRestricted: isGeoRestricted, countryName: geoCountryName, loading: geoLoading } = useGeoRestriction();
   const [markets, setMarkets] = useState<KalshiMarket[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<KalshiMarket | null>(null);
   const [aiMarket, setAiMarket] = useState<KalshiMarket | null>(null);
@@ -638,25 +640,27 @@ export default function Kalshi() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
-      {/* Geo-blocking Notice Banner - Restricted Jurisdictions */}
-      <div className="bg-destructive/10 border-b border-destructive/30">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-start gap-3">
-          <div className="p-1.5 rounded-md bg-destructive/20 mt-0.5">
-            <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-foreground font-medium">
-              Kalshi Trading Restrictions
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Please ensure you are geo-blocking the US and restricted Kalshi jurisdictions before trading.{' '}
-              <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
-                View full list of restricted regions →
-              </Link>
-            </p>
+      {/* Geo-restriction Banner - Only show when restricted */}
+      {isGeoRestricted && !geoLoading && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-start gap-3">
+            <div className="p-1.5 rounded-md bg-amber-500/20 mt-0.5">
+              <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-foreground font-medium">
+                Viewing Only Mode
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Trading is restricted in {geoCountryName}. You can view markets but cannot place trades.{' '}
+                <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
+                  View restricted regions →
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Dismissible Kalshi Disclaimer Banner */}
       <AnimatePresence>
@@ -1071,6 +1075,8 @@ export default function Kalshi() {
           market={selectedMarket}
           onClose={() => setSelectedMarket(null)}
           onAIAnalysis={() => setAiMarket(selectedMarket)}
+          isGeoRestricted={isGeoRestricted}
+          geoCountryName={geoCountryName}
           onOrderSubmitted={(order) => {
             const newOrders = [order, ...recentOrders].slice(0, 20);
             setRecentOrders(newOrders);
@@ -1110,6 +1116,8 @@ export default function Kalshi() {
           sellMint={sellPosition.sideMint}
           sellDecimals={sellPosition.decimals}
           maxShares={sellPosition.quantity}
+          isGeoRestricted={isGeoRestricted}
+          geoCountryName={geoCountryName}
           onOrderSubmitted={(order) => {
             const newOrders = [order, ...recentOrders].slice(0, 20);
             setRecentOrders(newOrders);
