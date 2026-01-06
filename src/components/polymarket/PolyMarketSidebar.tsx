@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Loader2, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,9 @@ interface PolyMarketSidebarProps {
   loading?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
 }
 
 export function PolyMarketSidebar({
@@ -23,10 +26,14 @@ export function PolyMarketSidebar({
   loading = false,
   collapsed = false,
   onToggleCollapse,
+  onLoadMore,
+  hasMore = false,
+  loadingMore = false,
 }: PolyMarketSidebarProps) {
   const [search, setSearch] = useState('');
   const [apiResults, setApiResults] = useState<PolyMarket[]>([]);
   const [searching, setSearching] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Debounced API search for ALL Polymarket markets when query >= 3 chars
   useEffect(() => {
@@ -133,6 +140,23 @@ export function PolyMarketSidebar({
 
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Infinite scroll - observe the load more trigger
+  useEffect(() => {
+    if (!loadMoreRef.current || !onLoadMore || !hasMore || loadingMore || search.length >= 3) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [onLoadMore, hasMore, loadingMore, search]);
 
   // Local filter for < 3 chars
   const filteredMarkets = useMemo(() => {
@@ -287,6 +311,20 @@ export function PolyMarketSidebar({
                 </motion.button>
               ))}
             </AnimatePresence>
+            
+            {/* Load more trigger */}
+            {search.length < 3 && hasMore && (
+              <div ref={loadMoreRef} className="py-4 flex justify-center">
+                {loadingMore ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-xs">Loading more...</span>
+                  </div>
+                ) : (
+                  <div className="h-4" /> 
+                )}
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

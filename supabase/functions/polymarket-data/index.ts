@@ -402,6 +402,7 @@ serve(async (req) => {
       action,
       marketSlug,
       limit = 50,
+      offset = 0,
       query,
       order = "volume24hr",
       ascending = false,
@@ -411,7 +412,7 @@ serve(async (req) => {
 
     // ===== GET EVENTS ACTION (for Markets page) =====
     if (action === "getEvents") {
-      console.log("[GetEvents] Fetching events for Markets page...");
+      console.log("[GetEvents] Fetching events for Markets page...", { limit, offset });
 
       // Polymarket API only supports these order values: id, volume, liquidity
       // Map client sortBy to valid API order params
@@ -427,6 +428,7 @@ serve(async (req) => {
         closed: String(closed),
         active: "true", // Only fetch active markets
         limit: String(limit),
+        offset: String(offset),
         order: apiOrder,
         ascending: String(ascending),
       });

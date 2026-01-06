@@ -48,6 +48,9 @@ export default function PolymarketTerminal() {
     connected,
     loading,
     loadingMarketData,
+    loadingMore,
+    hasMore,
+    loadMoreMarkets,
     error,
     refetchOrderbook,
     reconnect,
@@ -93,6 +96,9 @@ export default function PolymarketTerminal() {
                     setShowMobileSidebar(false);
                   }}
                   loading={loading}
+                  onLoadMore={loadMoreMarkets}
+                  hasMore={hasMore}
+                  loadingMore={loadingMore}
                 />
               </SheetContent>
             </Sheet>
@@ -214,6 +220,9 @@ export default function PolymarketTerminal() {
               onSelectMarket={setSelectedMarket}
               loading={loading}
               onToggleCollapse={() => setSidebarCollapsed(true)}
+              onLoadMore={loadMoreMarkets}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
             />
           </motion.div>
         ) : (
@@ -231,6 +240,9 @@ export default function PolymarketTerminal() {
               loading={loading}
               collapsed
               onToggleCollapse={() => setSidebarCollapsed(false)}
+              onLoadMore={loadMoreMarkets}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
             />
           </motion.div>
         )}
