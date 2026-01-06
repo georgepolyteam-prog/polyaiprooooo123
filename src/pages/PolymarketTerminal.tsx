@@ -16,6 +16,10 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
+  Clock,
+  DollarSign,
+  Users,
+  ChevronDown,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -31,7 +35,6 @@ import { PolyMarketChat } from '@/components/polymarket/PolyMarketChat';
 import { PolyMarketNews } from '@/components/polymarket/PolyMarketNews';
 import { PolyMarketChart } from '@/components/polymarket/PolyMarketChart';
 import { PolyTradePanel } from '@/components/polymarket/PolyTradePanel';
-import { PolyConnectionHealth } from '@/components/polymarket/PolyConnectionHealth';
 import { TradeDetailModal } from '@/components/trades/TradeDetailModal';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -70,6 +73,7 @@ export default function PolymarketTerminal() {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [whalesOnly, setWhalesOnly] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+  const [rightTab, setRightTab] = useState<'orderbook' | 'trades'>('orderbook');
 
   // Convert terminal Trade to TradeDetailModal format
   const convertTradeForModal = (trade: Trade) => ({
@@ -88,10 +92,17 @@ export default function PolymarketTerminal() {
     image: selectedMarket?.image,
     resolved_url: selectedMarket?.marketUrl,
   });
+
   const formatVolume = (vol: number) => {
-    if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`;
-    if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`;
+    if (vol >= 1000000) return `$${(vol / 1000000).toFixed(2)}M`;
+    if (vol >= 1000) return `$${(vol / 1000).toFixed(1)}K`;
     return `$${vol.toFixed(0)}`;
+  };
+
+  const formatLiquidity = (liq: number) => {
+    if (liq >= 1000000) return `$${(liq / 1000000).toFixed(2)}M`;
+    if (liq >= 1000) return `$${(liq / 1000).toFixed(1)}K`;
+    return `$${liq.toFixed(0)}`;
   };
 
   // Filter trades for whale trades
@@ -104,7 +115,7 @@ export default function PolymarketTerminal() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* Mobile Header */}
-        <div className="flex items-center justify-between p-3 border-b border-border/30 bg-card/80 backdrop-blur-xl sticky top-0 z-40">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-card sticky top-0 z-40">
           <div className="flex items-center gap-2">
             <Sheet open={showMobileSidebar} onOpenChange={setShowMobileSidebar}>
               <SheetTrigger asChild>
@@ -112,7 +123,7 @@ export default function PolymarketTerminal() {
                   <LayoutGrid className="w-4 h-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-80 p-0">
+              <SheetContent side="left" className="w-80 p-0 bg-card border-border">
                 <PolyMarketSidebar
                   markets={markets}
                   selectedMarket={selectedMarket}
@@ -135,17 +146,22 @@ export default function PolymarketTerminal() {
           </div>
           
           <div className="flex items-center gap-2">
-            <PolyConnectionHealth connected={connected} reconnectAttempts={reconnectAttempts} lastEventTime={lastMessageTime} onReconnect={reconnect} compact />
+            {connected && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-medium text-emerald-500">Live</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Market Title */}
         {selectedMarket && (
-          <header className="px-3 py-2 border-b border-border/30 bg-card/50">
-            <h1 className="text-sm font-medium text-foreground line-clamp-2">
+          <div className="px-3 py-2 border-b border-border/50 bg-card">
+            <h1 className="text-sm font-medium text-foreground line-clamp-1">
               {selectedMarket.title}
             </h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-3 mt-1">
               <span
                 className={cn(
                   'text-lg font-bold font-mono',
@@ -162,33 +178,32 @@ export default function PolymarketTerminal() {
                 className="ml-auto text-xs text-primary flex items-center gap-1"
               >
                 <ExternalLink className="w-3 h-3" />
-                View on Polymarket
+                Trade
               </a>
             </div>
-          </header>
+          </div>
         )}
 
         {/* Mobile Tabs */}
         <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as any)} className="flex-1 flex flex-col">
-          <TabsList className="mx-3 mt-2 grid grid-cols-3 bg-muted/40">
-            <TabsTrigger value="data">Data</TabsTrigger>
-            <TabsTrigger value="trades">Trades</TabsTrigger>
-            <TabsTrigger value="chat">AI Chat</TabsTrigger>
+          <TabsList className="mx-3 mt-2 grid grid-cols-3 bg-muted/50 h-9">
+            <TabsTrigger value="data" className="text-xs">Chart</TabsTrigger>
+            <TabsTrigger value="trades" className="text-xs">Trades</TabsTrigger>
+            <TabsTrigger value="chat" className="text-xs">AI</TabsTrigger>
           </TabsList>
           
-           <TabsContent value="data" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
-             {selectedMarket ? (
-               <>
-                 <PolyMarketChart market={selectedMarket} compact />
-                 <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} compact loading={loadingMarketData} />
-                 <PolyMarketNews market={selectedMarket} compact />
-               </>
-             ) : (
-               <div className="flex items-center justify-center py-12">
-                 <p className="text-sm text-muted-foreground">Select a market to view data</p>
-               </div>
-             )}
-           </TabsContent>
+          <TabsContent value="data" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
+            {selectedMarket ? (
+              <>
+                <PolyMarketChart market={selectedMarket} compact />
+                <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} compact loading={loadingMarketData} />
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-sm text-muted-foreground">Select a market</p>
+              </div>
+            )}
+          </TabsContent>
           
           <TabsContent value="trades" className="flex-1 m-0 p-3 space-y-3 overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
@@ -197,7 +212,7 @@ export default function PolymarketTerminal() {
                 variant={whalesOnly ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setWhalesOnly((p) => !p)}
-                className="h-7 gap-1 text-[10px]"
+                className="h-6 gap-1 text-[10px] px-2"
               >
                 <Filter className="w-3 h-3" /> Whales
               </Button>
@@ -211,7 +226,7 @@ export default function PolymarketTerminal() {
               <PolyMarketChat market={selectedMarket} />
             ) : (
               <div className="flex items-center justify-center py-12">
-                <p className="text-sm text-muted-foreground">Select a market to chat</p>
+                <p className="text-sm text-muted-foreground">Select a market</p>
               </div>
             )}
           </TabsContent>
@@ -220,24 +235,18 @@ export default function PolymarketTerminal() {
     );
   }
 
-  // Desktop layout
+  // Desktop layout - Hyperliquid-inspired professional trading terminal
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Subtle background effects */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[100px]" />
-      </div>
-
-      {/* Market Sidebar */}
+    <div className="h-screen bg-[hsl(220,20%,4%)] flex overflow-hidden">
+      {/* Market Sidebar - Collapsible */}
       <AnimatePresence mode="wait">
         {!sidebarCollapsed ? (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 288, opacity: 1 }}
+            animate={{ width: 260, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="relative z-10 shrink-0"
+            transition={{ duration: 0.15 }}
+            className="shrink-0 border-r border-border/50"
           >
             <PolyMarketSidebar
               markets={markets}
@@ -255,8 +264,8 @@ export default function PolymarketTerminal() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 48, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="relative z-10 shrink-0"
+            transition={{ duration: 0.15 }}
+            className="shrink-0 border-r border-border/50"
           >
             <PolyMarketSidebar
               markets={markets}
@@ -274,236 +283,274 @@ export default function PolymarketTerminal() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 relative z-10">
-        {/* Top Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-card/60 backdrop-blur-xl shrink-0">
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Navigation Bar */}
+        <header className="flex items-center justify-between h-12 px-4 border-b border-border/50 bg-card shrink-0">
           <div className="flex items-center gap-4">
             {sidebarCollapsed && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setSidebarCollapsed(false)}
-                className="h-8 w-8"
+                className="h-7 w-7"
               >
                 <PanelLeft className="w-4 h-4" />
               </Button>
             )}
             
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <img src={polyLogo} alt="Polymarket" className="w-8 h-8 rounded-lg shadow-lg" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background animate-pulse" />
-              </div>
-              <div>
-                <h1 className="font-bold text-lg text-foreground tracking-tight">Polymarket Terminal</h1>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Live Trading Dashboard</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <img src={polyLogo} alt="Polymarket" className="w-6 h-6 rounded" />
+              <span className="font-semibold text-foreground">Terminal</span>
             </div>
             
-            <Link to="/live-trades" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-muted/50 transition-colors">
-              <ArrowLeft className="w-3 h-3" />
-              Live Trades
-            </Link>
+            <nav className="flex items-center gap-1 ml-4">
+              <Link to="/" className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded hover:bg-muted/50 transition-colors">
+                Home
+              </Link>
+              <Link to="/live-trades" className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded hover:bg-muted/50 transition-colors">
+                Live Trades
+              </Link>
+              <Link to="/leaderboard" className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded hover:bg-muted/50 transition-colors">
+                Leaderboard
+              </Link>
+            </nav>
           </div>
           
-          <div className="flex items-center gap-4">
-            <PolyConnectionHealth connected={connected} reconnectAttempts={reconnectAttempts} lastEventTime={lastMessageTime} onReconnect={reconnect} />
-
-            <Button
-              variant={whalesOnly ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setWhalesOnly((p) => !p)}
-              className={cn(
-                "h-9 gap-2 text-xs font-medium transition-all",
-                whalesOnly && "bg-primary shadow-lg shadow-primary/25"
-              )}
-            >
-              {whalesOnly ? '🐋' : <Filter className="w-3.5 h-3.5" />}
-              {whalesOnly ? 'Whales Only' : 'All Trades'}
-            </Button>
+          <div className="flex items-center gap-3">
+            {/* Connection Status */}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-medium text-emerald-500">
+                {loadingMarketData ? 'Syncing' : 'Live'}
+              </span>
+            </div>
             
             {selectedMarket && (
               <a
                 href={selectedMarket.marketUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm font-medium"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-medium"
               >
-                <Zap className="w-4 h-4" />
-                Trade on Polymarket
+                Trade
+                <ExternalLink className="w-3 h-3" />
               </a>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* Content Area */}
-        <main className="flex-1 overflow-y-auto">
-          <h1 className="sr-only">Polymarket trading terminal</h1>
-          
-          <div className="p-6">
-            {error && !selectedMarket ? (
-              <div className="flex-1 flex items-center justify-center min-h-[400px]">
-                <div className="text-center text-muted-foreground">
-                  <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">{error}</p>
-                  <p className="text-sm mt-2">Select a market from the sidebar to continue</p>
-                </div>
+        {/* Market Info Bar */}
+        {selectedMarket && (
+          <div className="flex items-center gap-6 h-14 px-4 border-b border-border/50 bg-card/50 shrink-0">
+            {/* Market Title with dropdown indicator */}
+            <div className="flex items-center gap-2 min-w-0">
+              {selectedMarket.image && (
+                <img src={selectedMarket.image} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+              )}
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-foreground truncate max-w-[300px]">
+                  {selectedMarket.title}
+                </h1>
               </div>
-            ) : selectedMarket ? (
-              <>
-                {/* Market Header Card */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-6 p-5 rounded-2xl bg-gradient-to-r from-card/80 to-card/60 border border-border/50 backdrop-blur-xl mb-6 shadow-xl shadow-black/5"
-                >
-                  {selectedMarket.image && (
-                    <img
-                      src={selectedMarket.image}
-                      alt=""
-                      className="w-14 h-14 rounded-xl object-cover shadow-lg"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-lg font-semibold text-foreground line-clamp-1">
-                      {selectedMarket.title}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Vol: {formatVolume(selectedMarket.volume24h || selectedMarket.volume)}
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'text-3xl font-bold font-mono',
-                        selectedMarket.yesPrice >= 50 ? 'text-emerald-400' : 'text-red-400',
-                      )}>
-                        {selectedMarket.yesPrice}¢
-                      </span>
-                      {selectedMarket.yesPrice >= 50 ? (
-                        <TrendingUp className="w-6 h-6 text-emerald-400" />
-                      ) : (
-                        <TrendingDown className="w-6 h-6 text-red-400" />
-                      )}
-                    </div>
-                    
-                    <div className="h-10 w-px bg-border/50" />
-                    
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-                      {loadingMarketData ? (
-                        <>
-                          <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                          <span className="text-xs font-medium text-primary">Updating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Radio className="w-3 h-3 text-primary animate-pulse" />
-                          <span className="text-xs font-medium text-primary">
-                            {lastMessageTime ? `Updated ${formatDistanceToNow(lastMessageTime)} ago` : 'Live Data'}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-                
-                {/* Error Banner with Retry */}
-                {fetchError && (
-                  <div className="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-destructive/10 border border-destructive/20">
-                    <AlertTriangle className="w-4 h-4 text-destructive" />
-                    <span className="text-sm text-destructive flex-1">{fetchError}</span>
-                    <Button size="sm" variant="outline" onClick={retryFetch} className="gap-2">
-                      <RefreshCw className="w-3 h-3" />
-                      Retry
-                    </Button>
-                  </div>
-                )}
-
-                {/* Stats Row */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="grid grid-cols-4 gap-4 mb-6"
-                >
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-card/60 border border-border/40">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Activity className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Trades</span>
-                      <p className="text-lg font-bold text-foreground font-mono">{stats.tradeCount}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-card/60 border border-border/40">
-                    <div className="p-2 rounded-lg bg-emerald-500/10">
-                      <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Buys</span>
-                      <p className="text-lg font-bold text-emerald-500 font-mono">{stats.buyCount}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-card/60 border border-border/40">
-                    <div className="p-2 rounded-lg bg-red-500/10">
-                      <TrendingDown className="w-4 h-4 text-red-500" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Sells</span>
-                      <p className="text-lg font-bold text-red-500 font-mono">{stats.sellCount}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-card/60 border border-border/40">
-                    <div className="p-2 rounded-lg bg-secondary/10">
-                      <BarChart3 className="w-4 h-4 text-secondary" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">24h Vol</span>
-                      <p className="text-lg font-bold text-foreground font-mono">{formatVolume(selectedMarket.volume24h || selectedMarket.volume)}</p>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Chart + Trading Panel Row */}
-                <div className="grid grid-cols-3 gap-6 mb-6">
-                  <div className="col-span-2">
-                    <PolyMarketChart market={selectedMarket} />
-                  </div>
-                  <div>
-                    <PolyTradePanel market={selectedMarket} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-6 mb-6">
-                  <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} loading={loadingMarketData} />
-                  <PolyTradeFeed trades={filteredTrades} maxTrades={12} connected={connected} loading={loadingMarketData} onTradeClick={setSelectedTrade} />
-                  <PolyMarketChat market={selectedMarket} />
-                </div>
-
-                {/* News Section */}
-                <PolyMarketNews market={selectedMarket} />
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center min-h-[400px]">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center text-muted-foreground"
-                >
-                  <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/50 flex items-center justify-center">
-                    <LayoutGrid className="w-10 h-10 opacity-50" />
-                  </div>
-                  <p className="text-lg font-medium">Select a market from the sidebar</p>
-                  <p className="text-sm mt-2 opacity-70">Choose a market to view live data, charts, and AI analysis</p>
-                </motion.div>
+            </div>
+            
+            {/* Stats Row - Hyperliquid style */}
+            <div className="flex items-center gap-6 ml-auto">
+              {/* Yes Price */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">Yes</span>
+                <span className={cn(
+                  "text-lg font-bold font-mono",
+                  selectedMarket.yesPrice >= 50 ? "text-emerald-400" : "text-red-400"
+                )}>
+                  {selectedMarket.yesPrice}¢
+                </span>
               </div>
-            )}
+              
+              {/* No Price */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">No</span>
+                <span className={cn(
+                  "text-lg font-bold font-mono",
+                  selectedMarket.noPrice >= 50 ? "text-emerald-400" : "text-red-400"
+                )}>
+                  {selectedMarket.noPrice}¢
+                </span>
+              </div>
+              
+              <div className="h-8 w-px bg-border/50" />
+              
+              {/* 24h Volume */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">24h Volume</span>
+                <span className="text-sm font-semibold text-foreground font-mono">
+                  {formatVolume(selectedMarket.volume24h || 0)}
+                </span>
+              </div>
+              
+              {/* Liquidity */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">Liquidity</span>
+                <span className="text-sm font-semibold text-foreground font-mono">
+                  {formatLiquidity(selectedMarket.liquidity || 0)}
+                </span>
+              </div>
+              
+              {/* Total Volume */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">Total Vol</span>
+                <span className="text-sm font-semibold text-foreground font-mono">
+                  {formatVolume(selectedMarket.volume || 0)}
+                </span>
+              </div>
+              
+              {/* Trades Count */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">Trades</span>
+                <span className="text-sm font-semibold text-foreground font-mono">
+                  {stats.tradeCount}
+                </span>
+              </div>
+              
+              {/* Last Update */}
+              <div className="text-center">
+                <span className="text-[10px] text-muted-foreground block">Updated</span>
+                <span className="text-xs text-muted-foreground">
+                  {lastMessageTime ? formatDistanceToNow(lastMessageTime, { addSuffix: false }) : '--'}
+                </span>
+              </div>
+            </div>
           </div>
-        </main>
+        )}
+
+        {/* Error Alert Banner */}
+        {fetchError && (
+          <div className="flex items-center gap-3 px-4 py-2 bg-destructive/10 border-b border-destructive/20">
+            <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+            <span className="text-sm text-destructive flex-1">{fetchError}</span>
+            <Button size="sm" variant="outline" onClick={retryFetch} className="h-7 gap-1.5 text-xs">
+              <RefreshCw className="w-3 h-3" />
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex min-h-0">
+          {error && !selectedMarket ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <AlertCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">{error}</p>
+                <p className="text-sm mt-2">Select a market from the sidebar</p>
+              </div>
+            </div>
+          ) : selectedMarket ? (
+            <>
+              {/* Left Column: Chart */}
+              <div className="flex-1 flex flex-col min-w-0 border-r border-border/50">
+                {/* Chart */}
+                <div className="flex-1 min-h-0">
+                  <PolyMarketChart market={selectedMarket} />
+                </div>
+                
+                {/* Bottom Tabs: AI Chat + News */}
+                <div className="h-[280px] border-t border-border/50 shrink-0">
+                  <Tabs defaultValue="chat" className="h-full flex flex-col">
+                    <TabsList className="h-9 px-2 justify-start bg-card border-b border-border/50 rounded-none w-full">
+                      <TabsTrigger value="chat" className="text-xs h-7 px-3 data-[state=active]:bg-muted">
+                        AI Analysis
+                      </TabsTrigger>
+                      <TabsTrigger value="news" className="text-xs h-7 px-3 data-[state=active]:bg-muted">
+                        News
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="chat" className="flex-1 m-0 min-h-0 overflow-hidden">
+                      <PolyMarketChat market={selectedMarket} />
+                    </TabsContent>
+                    <TabsContent value="news" className="flex-1 m-0 p-3 overflow-y-auto">
+                      <PolyMarketNews market={selectedMarket} compact />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+
+              {/* Right Column: Orderbook + Trades + Trade Panel */}
+              <div className="w-[340px] flex flex-col shrink-0">
+                {/* Orderbook/Trades Tabs */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex items-center h-9 px-2 bg-card border-b border-border/50">
+                    <button
+                      onClick={() => setRightTab('orderbook')}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded transition-colors",
+                        rightTab === 'orderbook' 
+                          ? "bg-muted text-foreground" 
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Order Book
+                    </button>
+                    <button
+                      onClick={() => setRightTab('trades')}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded transition-colors",
+                        rightTab === 'trades' 
+                          ? "bg-muted text-foreground" 
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Trades
+                    </button>
+                    <div className="ml-auto">
+                      <Button
+                        variant={whalesOnly ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setWhalesOnly((p) => !p)}
+                        className="h-6 gap-1 text-[10px] px-2"
+                      >
+                        🐋 {whalesOnly ? 'On' : 'Off'}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-hidden">
+                    {rightTab === 'orderbook' ? (
+                      <PolyOrderbook 
+                        orderbook={orderbook} 
+                        onRefresh={refetchOrderbook} 
+                        loading={loadingMarketData}
+                      />
+                    ) : (
+                      <PolyTradeFeed 
+                        trades={filteredTrades} 
+                        maxTrades={20} 
+                        connected={connected} 
+                        loading={loadingMarketData} 
+                        onTradeClick={setSelectedTrade}
+                      />
+                    )}
+                  </div>
+                </div>
+                
+                {/* Trade Panel */}
+                <div className="h-[280px] border-t border-border/50 shrink-0">
+                  <PolyTradePanel market={selectedMarket} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-muted/50 flex items-center justify-center">
+                  <LayoutGrid className="w-8 h-8 opacity-50" />
+                </div>
+                <p className="text-lg font-medium">Select a market</p>
+                <p className="text-sm mt-1 opacity-70">Choose from the sidebar to start</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Trade Detail Modal */}
