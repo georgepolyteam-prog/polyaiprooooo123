@@ -92,8 +92,11 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
   const irysMode = mode === 'historical';
   const [loadState, setLoadState] = useState<LoadState>({ isHighLoad: false });
   const [retryingIn, setRetryingIn] = useState(0);
-  const [currentMarketContext, setCurrentMarketContext] = useState<CurrentMarketContext | null>(null);
+  const [currentMarketContext, setCurrentMarketContextState] = useState<CurrentMarketContext | null>(null);
   const [sidebarMarketData, setSidebarMarketData] = useState<any>(null);
+  
+  // Ref-based context for immediate access in sendMessage (avoids stale closures)
+  const immediateContextRef = useRef<CurrentMarketContext | null>(null);
   const [analysisStep, setAnalysisStep] = useState<AnalysisStep>('idle');
   const [queueState, setQueueState] = useState<QueueState>({
     isQueued: false,
@@ -122,6 +125,22 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Wrapper to set both state and ref for market context
+  const setCurrentMarketContext = useCallback((contextOrUpdater: CurrentMarketContext | null | ((prev: CurrentMarketContext | null) => CurrentMarketContext | null)) => {
+    if (typeof contextOrUpdater === 'function') {
+      // Callback form - update via state setter and sync ref
+      setCurrentMarketContextState(prev => {
+        const newContext = contextOrUpdater(prev);
+        immediateContextRef.current = newContext;
+        return newContext;
+      });
+    } else {
+      // Direct value form
+      immediateContextRef.current = contextOrUpdater;
+      setCurrentMarketContextState(contextOrUpdater);
+    }
+  }, []);
 
   const clearRetryState = useCallback(() => {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
@@ -302,7 +321,8 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
           messages: currentMessages,
           detailMode,
           conversationId,
-          currentMarket: currentMarketContext,
+          // Use ref for immediate access (avoids stale state from closure)
+          currentMarket: immediateContextRef.current || currentMarketContext,
           sidebarData: sidebarMarketData,
           // Auth context for the edge function
           authToken,
