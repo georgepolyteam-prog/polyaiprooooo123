@@ -143,12 +143,14 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
       wickDownColor: "#ef4444",
     });
 
+    const normalizePrice = (v: number) => (v > 1.5 ? v / 100 : v);
+
     const chartData: CandlestickData[] = candles.map((c) => ({
       time: c.time as Time,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
+      open: normalizePrice(c.open),
+      high: normalizePrice(c.high),
+      low: normalizePrice(c.low),
+      close: normalizePrice(c.close),
     }));
 
     series.setData(chartData);
@@ -157,30 +159,33 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     chartRef.current = chart;
     seriesRef.current = series;
 
-    // Track visible price range for alert positioning
+    // Track visible price range for context-menu pricing
     const updateVisibleRange = () => {
       if (!seriesRef.current) return;
       try {
-        const priceScale = chart.priceScale('right');
-        // Get the visible logical range for price
         const visibleTimeRange = chart.timeScale().getVisibleLogicalRange();
-        if (visibleTimeRange) {
-          // Get price range from the visible data
-          const prices = chartData
-            .filter((_, i) => i >= Math.floor(visibleTimeRange.from) && i <= Math.ceil(visibleTimeRange.to))
-            .flatMap(c => [c.high as number, c.low as number]);
-          
-          if (prices.length > 0) {
-            const min = Math.min(...prices);
-            const max = Math.max(...prices);
-            const padding = (max - min) * 0.05;
-            setVisibleRange({
-              min: Math.max(0, min - padding),
-              max: Math.min(1, max + padding),
-            });
-          }
-        }
-      } catch (err) {
+        if (!visibleTimeRange) return;
+
+        const prices = chartData
+          .filter(
+            (_, i) => i >= Math.floor(visibleTimeRange.from) && i <= Math.ceil(visibleTimeRange.to)
+          )
+          .flatMap((c) => [c.high as number, c.low as number]);
+
+        if (prices.length === 0) return;
+
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+
+        // Match the chart's scaleMargins feel, but avoid collapsing to a zero range.
+        const baseRange = Math.max(max - min, 0.001);
+        const padding = baseRange * 0.05;
+
+        setVisibleRange({
+          min: min - padding,
+          max: max + padding,
+        });
+      } catch {
         // Ignore errors during range calculation
       }
     };
@@ -214,56 +219,53 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     };
   }, [candles, loading, error]);
 
-  // Handle right-click on chart for context menu - calculate price from visible range
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    
-    if (!chartRef.current || !chartContainerRef.current || !onCreateAlert) return;
-    
-    const rect = chartContainerRef.current.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    
-    // Get the visible logical range (time range)
-    const timeScale = chartRef.current.timeScale();
-    const logicalRange = timeScale.getVisibleLogicalRange();
-    
-    if (!logicalRange) return;
+  // Handle right-click on chart for context menu - map Y coordinate into the *visible* price range
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
 
-    // Get all visible candles in the current view
-    const visibleCandles = candles.slice(
-      Math.max(0, Math.floor(logicalRange.from)), 
-      Math.min(candles.length, Math.ceil(logicalRange.to) + 1)
-    );
-    
-    if (visibleCandles.length === 0) return;
+      if (!chartRef.current || !chartContainerRef.current || !onCreateAlert) return;
 
-    // Find the actual price range (high/low) of visible candles
-    const visiblePrices = visibleCandles.flatMap(c => [c.high, c.low]);
-    const minPrice = Math.min(...visiblePrices);
-    const maxPrice = Math.max(...visiblePrices);
-    
-    // Add padding to match chart's auto-scale behavior (5% like scaleMargins)
-    const priceRange = maxPrice - minPrice;
-    const padding = priceRange * 0.05;
-    const paddedMin = minPrice - padding;
-    const paddedMax = maxPrice + padding;
-    const paddedRange = paddedMax - paddedMin;
-    
-    // Calculate price based on Y position within the chart height
-    // Y=0 (top) = maxPrice, Y=chartHeight (bottom) = minPrice
-    const chartHeight = rect.height;
-    const clickedPrice = paddedMax - ((y / chartHeight) * paddedRange);
-    
-    // Convert to cents (0-100 range) and clamp
-    const priceInCents = Math.round(clickedPrice * 100);
-    const finalPrice = Math.max(1, Math.min(99, priceInCents));
+      const rect = chartContainerRef.current.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const chartHeight = rect.height;
 
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      price: finalPrice,
-    });
-  }, [candles, onCreateAlert]);
+      // Prefer the range derived from the chart's current viewport (kept in sync on pan/zoom/resize)
+      // This avoids relying on candle slicing logic that can drift from what the chart is actually rendering.
+      const range = visibleRange;
+      if (!range || !isFinite(range.min) || !isFinite(range.max) || range.max <= range.min) {
+        if (import.meta.env.DEV) {
+          console.log('[Chart] Context menu: missing/invalid visibleRange', range);
+        }
+        return;
+      }
+
+      // Y=0 (top) -> max, Y=height (bottom) -> min
+      const clickedPrice = range.max - (y / chartHeight) * (range.max - range.min);
+
+      // Convert to cents (0-100) and clamp
+      const priceInCents = Math.round(clickedPrice * 100);
+      const finalPrice = Math.max(1, Math.min(99, priceInCents));
+
+      if (import.meta.env.DEV) {
+        console.log('[Chart] Context menu price', {
+          y,
+          chartHeight,
+          range,
+          clickedPrice,
+          priceInCents,
+          finalPrice,
+        });
+      }
+
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        price: finalPrice,
+      });
+    },
+    [onCreateAlert, visibleRange]
+  );
 
   // Calculate alert line positions using series.priceToCoordinate for accurate positioning
   const getAlertLinePosition = useCallback((alertPrice: number) => {
