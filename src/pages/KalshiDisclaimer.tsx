@@ -1,17 +1,16 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, AlertTriangle, Shield, Globe, Users, Zap, Scale, FileText } from "lucide-react";
+import { ArrowLeft, Info, Shield, Globe, Users, Zap, Scale, FileText, Gavel, Database, CheckCircle } from "lucide-react";
 import { Footer } from "@/components/Footer";
 
+// Updated Restricted Jurisdictions from Kalshi Member Agreement v1.6
 const RESTRICTED_JURISDICTIONS = [
-  "Afghanistan", "Albania", "Australia", "Barbados", "Belarus", "Belgium", "Bosnia and Herzegovina",
-  "Bulgaria", "Burkina Faso", "Canada", "Cayman Islands", "Central African Republic", "China",
-  "Côte d'Ivoire (Ivory Coast)", "Croatia", "Cuba", "Democratic People's Republic of Korea (North Korea)",
-  "Democratic Republic of the Congo", "France", "Germany", "Haiti", "Hong Kong", "Iran", "Iraq",
-  "Italy", "Jamaica", "Jordan", "Kosovo", "Lebanon", "Libya", "Mali", "Malta", "Mexico", "Morocco",
-  "Myanmar (Burma)", "Nicaragua", "Pakistan", "Panama", "Philippines", "Poland", "Russia",
-  "Senegal", "Singapore", "South Africa", "South Sudan", "Spain", "Switzerland", "Syria",
-  "Tanzania", "Trinidad and Tobago", "Turkey", "Uganda", "Ukraine", "United Arab Emirates",
-  "United Kingdom", "Venezuela", "Vietnam", "Yemen", "Zimbabwe"
+  "Afghanistan", "Algeria", "Angola", "Australia", "Belarus", "Belgium", "Bolivia", "Bulgaria",
+  "Burkina Faso", "Cameroon", "Canada", "Central African Republic", "Côte d'Ivoire", "Cuba",
+  "Democratic Republic of the Congo", "Ethiopia", "France", "Haiti", "Iran", "Iraq", "Italy",
+  "Kenya", "Laos", "Lebanon", "Libya", "Mali", "Monaco", "Mozambique", "Myanmar (Burma)",
+  "Namibia", "Nicaragua", "Niger", "North Korea", "People's Republic of China", "Poland",
+  "Russia", "Singapore", "Somalia", "South Sudan", "Sudan", "Switzerland", "Syria", "Taiwan",
+  "Thailand", "Ukraine", "United Arab Emirates", "United Kingdom", "Venezuela", "Yemen", "Zimbabwe"
 ];
 
 export default function KalshiDisclaimer() {
@@ -35,16 +34,18 @@ export default function KalshiDisclaimer() {
 
       {/* Content */}
       <main className="relative max-w-4xl mx-auto px-4 py-8 pb-16">
-        {/* Warning Banner */}
-        <div className="mb-8 p-6 rounded-2xl bg-destructive/10 border-2 border-destructive/30">
+        {/* Professional Notice Banner */}
+        <div className="mb-8 p-6 rounded-2xl bg-card/80 border border-border/50 backdrop-blur-sm">
           <div className="flex items-start gap-4">
-            <AlertTriangle className="w-8 h-8 text-destructive flex-shrink-0" />
+            <div className="p-2 rounded-xl bg-primary/10">
+              <Info className="w-6 h-6 text-primary flex-shrink-0" />
+            </div>
             <div>
-              <h1 className="text-2xl font-bold text-destructive mb-2">
-                THIRD-PARTY INTERFACE DISCLAIMER
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Third-Party Interface Notice
               </h1>
-              <p className="text-foreground/90 text-lg">
-                <strong>Poly is NOT Kalshi.</strong> We provide a third-party interface to access Kalshi markets 
+              <p className="text-muted-foreground text-lg">
+                <strong className="text-foreground">Poly is not Kalshi.</strong> We provide a third-party interface to access Kalshi markets 
                 via DFlow on the Solana blockchain. Your use of this interface is subject to additional risks 
                 beyond those of trading directly on Kalshi.
               </p>
@@ -52,17 +53,68 @@ export default function KalshiDisclaimer() {
           </div>
         </div>
 
-        {/* DFlow/Solana Integration */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        {/* Event Contract Risk - Section III from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <Zap className="w-6 h-6 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Scale className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Event Contract Trading Risk</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
+            <p className="font-medium text-foreground">
+              The risk of loss in trading Event Contracts on Kalshi can be substantial and is a highly speculative activity involving volatile markets.
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>Trading may incur fees which will add to losses and may significantly reduce earnings</li>
+              <li>Each Event Contract has specific rules that dictate trading period, settlement, payout, and outcome determination</li>
+              <li>You are responsible for reading, understanding, and accepting the terms of an Event Contract prior to trading</li>
+              <li>Event contracts may lose all value if the underlying event does not occur as predicted</li>
+              <li>You should only trade with funds you can afford to lose entirely</li>
+            </ul>
+            <p className="text-sm">
+              Kalshi event contracts are regulated by the CFTC as a designated contract market (DCM).
+            </p>
+          </div>
+        </section>
+
+        {/* Electronic Trading Risk - Section IV from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Zap className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Electronic Trading Risks</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
+            <p>
+              Trading through the internet involves many interrelated systems, including hardware, software, 
+              telephonic, cable, and power generation, all of which are subject to failure or malfunction.
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li><strong className="text-foreground">System Unavailability:</strong> It may not be possible to enter new orders, execute existing orders, modify or cancel orders, or access market data</li>
+              <li><strong className="text-foreground">Catastrophic Failures:</strong> Orders and their priority in the order queue may be lost</li>
+              <li><strong className="text-foreground">Trading Cessation:</strong> Trading of a particular Event Contract may cease due to lack of bids or offers</li>
+              <li><strong className="text-foreground">Contract Expiration:</strong> Event Contracts will expire pursuant to their terms even if the system is not accessible</li>
+            </ul>
+            <p className="text-sm">
+              You freely assume these risks and hold Kalshi, DFlow, and their affiliates harmless against any losses resulting from these risks.
+            </p>
+          </div>
+        </section>
+
+        {/* DFlow/Solana Integration */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Database className="w-5 h-5 text-primary" />
+            </div>
             <h2 className="text-xl font-semibold">DFlow & Solana Integration</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
             <p>
               <strong className="text-foreground">How Trading Works:</strong> When you trade Kalshi markets 
-              through Poly, your orders are executed on the Solana blockchain via DFlow's infrastructure. 
-              This is different from trading directly on Kalshi's exchange.
+              through Poly, your orders are executed on the Solana blockchain via DFlow's infrastructure.
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>Trades settle on Solana, not Kalshi's native settlement system</li>
@@ -71,166 +123,253 @@ export default function KalshiDisclaimer() {
               <li>Network congestion may affect execution timing and fees</li>
               <li>Wallet security is your responsibility—lost keys mean lost funds</li>
             </ul>
-            <p className="text-warning">
+            <p className="text-sm">
               DFlow and Poly are independent of Kalshi. Issues with DFlow's routing, Solana network 
               congestion, or smart contract behavior are outside Kalshi's control.
             </p>
           </div>
         </section>
 
-        {/* Event Contract Risk */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        {/* Member Obligations - Section V from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <AlertTriangle className="w-6 h-6 text-warning" />
-            <h2 className="text-xl font-semibold">Event Contract Trading Risk</h2>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <CheckCircle className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Member Obligations</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
-            <p className="text-destructive font-medium">
-              TRADING EVENT CONTRACTS IS HIGHLY SPECULATIVE AND INVOLVES SUBSTANTIAL RISK OF LOSS.
-            </p>
+            <p>By trading on Kalshi markets, you agree to:</p>
             <ul className="list-disc pl-6 space-y-2">
-              <li>Event contracts may lose all value if the underlying event does not occur as predicted</li>
-              <li>Markets can be extremely volatile with rapid price swings</li>
-              <li>Past performance is not indicative of future results</li>
-              <li>You should only trade with funds you can afford to lose entirely</li>
-              <li>Each contract has specific rules governing settlement—read them before trading</li>
+              <li>Pay all applicable fees and charges as specified on the Kalshi website</li>
+              <li>Be bound by and comply with the Kalshi Rulebook (as amended from time to time)</li>
+              <li>Consent and be subject to the jurisdiction of Kalshi and its Terms</li>
+              <li>Consent to Kalshi utilizing a Derivatives Clearing Organization (DCO) of its choosing for clearing services</li>
+              <li>Not allow any person not identified to Kalshi to access or use the Services</li>
             </ul>
+          </div>
+        </section>
+
+        {/* Representations & Warranties - Section VI from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Shield className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Representations & Warranties</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
+            <p>By trading, you represent and warrant that:</p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>If you are an individual, you are of the age of majority in your state of residence</li>
+              <li>You have all requisite legal authority and capacity to enter into these agreements</li>
+              <li>You are in compliance with the Commodity Exchange Act (CEA), CFTC regulations, and all applicable laws</li>
+              <li>You are not statutorily disqualified from acting as a Member</li>
+              <li>You are not domiciled in, organized in, or located in any Restricted Jurisdiction</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* Arbitration Requirement - Section VII from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Gavel className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Arbitration & Dispute Resolution</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
             <p>
-              Kalshi event contracts are <strong>not</strong> traditional securities or derivatives. 
-              They are binary outcome contracts regulated by the CFTC as a designated contract market (DCM).
+              You acknowledge and agree that you will abide by and be subject to the Kalshi Rulebook, 
+              including the <strong className="text-foreground">obligation to submit to arbitration</strong> for dispute resolution.
+            </p>
+            <p>
+              Your status as a Member may be limited, conditioned, restricted, or terminated by Kalshi 
+              in accordance with the Kalshi Rulebook.
             </p>
           </div>
         </section>
 
-        {/* Electronic Trading Risk */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        {/* Market Makers - Section VII.T from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <Zap className="w-6 h-6 text-orange-500" />
-            <h2 className="text-xl font-semibold">Electronic Trading Risks</h2>
-          </div>
-          <div className="space-y-4 text-muted-foreground">
-            <ul className="list-disc pl-6 space-y-2">
-              <li><strong>System Failures:</strong> Hardware, software, or network malfunctions may prevent order execution</li>
-              <li><strong>Order Cancellation:</strong> Orders may be cancelled or modified due to system errors</li>
-              <li><strong>Price Delays:</strong> Market data may be delayed or inaccurate during high volatility</li>
-              <li><strong>Platform Unavailability:</strong> DFlow, Solana, or Kalshi may be unavailable at critical times</li>
-              <li><strong>Execution Differences:</strong> Fill prices may differ from displayed quotes</li>
-              <li><strong>Wallet Issues:</strong> Solana wallet connections may fail or timeout during transactions</li>
-            </ul>
-            <p>
-              You acknowledge that electronic trading carries inherent risks that may result in financial loss 
-              beyond your control.
-            </p>
-          </div>
-        </section>
-
-        {/* Market Makers */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
-          <div className="flex items-center gap-3 mb-4">
-            <Users className="w-6 h-6 text-blue-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
             <h2 className="text-xl font-semibold">Market Maker Disclosure</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
             <p>
-              Kalshi maintains approved market maker programs. These participants may have advantages 
-              not available to regular traders:
+              Kalshi's Rulebook allows Kalshi to implement market maker programs. Market makers may receive benefits including:
             </p>
             <ul className="list-disc pl-6 space-y-2">
-              <li>Reduced trading fees or fee rebates</li>
-              <li>Access to specialized risk management tools</li>
-              <li>Priority order execution during certain periods</li>
-              <li>Direct market access and lower latency</li>
+              <li>Discounts on fees, rebates, or revenue share from fees</li>
+              <li>Sophisticated risk management tools (e.g., order cancellation on disconnect)</li>
+              <li>Greater throughput to the Exchange</li>
             </ul>
-            <p className="text-warning">
-              By trading on Kalshi markets, you acknowledge that you may be trading against sophisticated 
-              market makers with technological and informational advantages.
+            <p className="text-sm">
+              These benefits may enable market makers to price their quotes in ways materially different from 
+              other members and may give them trading advantages. Outside of required times, market makers 
+              are not required to maintain maximum spread size and minimum depth.
             </p>
           </div>
         </section>
 
-        {/* Restricted Jurisdictions */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        {/* Investment of Member Funds - Section VIII from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <Globe className="w-6 h-6 text-red-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Database className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Investment of Member Funds</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
+            <p>
+              Except as prohibited by CFTC regulations, all cash and other property in your Member Account 
+              or otherwise held by Kalshi's Derivatives Clearing Organization on your behalf may, from time to time, 
+              without notice to you, be invested by Kalshi consistent with Commission Regulations, 
+              including Regulations 22.2(e)(1) and 1.25.
+            </p>
+          </div>
+        </section>
+
+        {/* Data Use Consent - Section XII from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Database className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Data Use Consent</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
+            <p>
+              By trading, you grant Kalshi a worldwide, perpetual, irrevocable, royalty-free license to store, 
+              use, copy, display, disseminate, and create derivative works from:
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>The price and quantity data for each transaction you enter into</li>
+              <li>Each bid, offer, and/or order you provide via the Services</li>
+            </ul>
+            <p className="text-sm">
+              You acknowledge that Kalshi may use such information for business, marketing, and other purposes.
+            </p>
+          </div>
+        </section>
+
+        {/* Restricted Jurisdictions - Section VI from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-muted">
+              <Globe className="w-5 h-5 text-muted-foreground" />
+            </div>
             <h2 className="text-xl font-semibold">Restricted Jurisdictions</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
-            <p className="text-destructive font-medium">
-              Trading on Kalshi is PROHIBITED for residents of the following jurisdictions:
+            <p className="font-medium text-foreground">
+              Trading is prohibited for residents of the following jurisdictions:
             </p>
-            <div className="bg-destructive/5 rounded-lg p-4 border border-destructive/20">
+            <div className="bg-muted/30 rounded-lg p-4 border border-border/30">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
                 {RESTRICTED_JURISDICTIONS.map((country) => (
-                  <span key={country} className="text-foreground/80">• {country}</span>
+                  <span key={country} className="text-muted-foreground">• {country}</span>
                 ))}
               </div>
             </div>
-            <p>
-              <strong>You are solely responsible</strong> for ensuring your use of Kalshi markets complies 
-              with all applicable laws in your jurisdiction. Poly does not verify your location or 
-              enforce geographic restrictions—compliance is your responsibility.
-            </p>
-            <p className="text-warning text-sm">
-              This list may not be complete. Additional US state-level restrictions may apply. 
-              Consult the official Kalshi Member Agreement for the current list.
+            <p className="text-sm">
+              <strong className="text-foreground">You are solely responsible</strong> for ensuring your use of Kalshi markets complies 
+              with all applicable laws in your jurisdiction. This includes any jurisdiction or territory subject to 
+              comprehensive country-wide, territory-wide, or regional economic sanctions imposed by the United States.
             </p>
           </div>
         </section>
 
-        {/* Liability Limitations */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        {/* No Warranty - Section XIV from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <Scale className="w-6 h-6 text-purple-500" />
-            <h2 className="text-xl font-semibold">Liability Limitations</h2>
+            <div className="p-2 rounded-lg bg-muted">
+              <Info className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold">No Warranty</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
             <p>
-              <strong>Poly, its affiliates, and partners disclaim all liability for:</strong>
+              Kalshi, its affiliates, and its software, hardware, and service providers provide the Kalshi Platform 
+              <strong className="text-foreground"> "AS IS" and without any warranty or condition</strong>, express, implied, or statutory.
+            </p>
+            <p className="text-sm">
+              Kalshi specifically disclaims any implied warranty of title, merchantability, fitness for a particular purpose, and non-infringement.
+            </p>
+          </div>
+        </section>
+
+        {/* Liability Limitations - Section XI from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-muted">
+              <Scale className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold">Limitations on Liability</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
+            <p>
+              <strong className="text-foreground">Poly, Kalshi, DFlow, and their affiliates disclaim all liability for:</strong>
             </p>
             <ul className="list-disc pl-6 space-y-2">
-              <li>Actions or omissions by Kalshi, DFlow, or Solana network</li>
-              <li>Trading losses, regardless of cause</li>
+              <li>Consequential, special, or punitive damages</li>
+              <li>Trading losses, loss of anticipated profits, or loss of trading incentives</li>
+              <li>Loss by reason of shutdown in operation or increased expenses</li>
               <li>System failures, delays, or unavailability</li>
               <li>Errors in market data, pricing, or analysis</li>
-              <li>Consequences of your trading decisions</li>
               <li>Smart contract vulnerabilities or exploits</li>
-              <li>Wallet security breaches or lost funds</li>
             </ul>
-            <p>
-              <strong>Maximum Liability:</strong> To the fullest extent permitted by law, our total 
-              liability is limited to the fees you paid to Poly (if any) in the preceding 12 months.
+            <p className="text-sm">
+              <strong className="text-foreground">Maximum Liability:</strong> Kalshi's aggregate maximum liability shall not exceed the lesser of 
+              the purchase price of any assets through the Platform, or the aggregate fees paid to Kalshi in the preceding 12 months.
             </p>
           </div>
         </section>
 
-        {/* Identity Verification */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        {/* Identity Verification - Section XVIII from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <Shield className="w-6 h-6 text-green-500" />
-            <h2 className="text-xl font-semibold">Identity Verification (USA PATRIOT Act)</h2>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Shield className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">USA PATRIOT Act Notice</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
             <p>
-              Under the USA PATRIOT Act and anti-money laundering (AML) regulations, Kalshi and/or DFlow 
-              may require you to provide identity verification information. This may include:
+              Pursuant to the requirements of the USA PATRIOT Act, Kalshi is required to obtain, verify, and record 
+              information that identifies you, including your name, address, and other information that will allow 
+              Kalshi to identify you in accordance with the USA PATRIOT Act.
             </p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Government-issued photo identification</li>
-              <li>Proof of address</li>
-              <li>Social Security Number or Tax ID</li>
-              <li>Source of funds documentation</li>
-            </ul>
+          </div>
+        </section>
+
+        {/* Governing Law - Section XIX from Agreement */}
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-muted">
+              <Gavel className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold">Governing Law</h2>
+          </div>
+          <div className="space-y-4 text-muted-foreground">
             <p>
-              Failure to provide requested information may result in account restrictions or closure.
+              The Kalshi Member Agreement is governed by the <strong className="text-foreground">laws of the State of New York</strong>. 
+              Any dispute between Kalshi and you arising from or in connection with this Agreement will be settled 
+              in accordance with the procedures set forth in the Kalshi Rulebook.
             </p>
           </div>
         </section>
 
         {/* Additional Terms */}
-        <section className="mb-8 p-6 rounded-xl bg-card/50 border border-border/50">
+        <section className="mb-6 p-6 rounded-xl bg-card/50 border border-border/50">
           <div className="flex items-center gap-3 mb-4">
-            <FileText className="w-6 h-6 text-muted-foreground" />
-            <h2 className="text-xl font-semibold">Additional Terms</h2>
+            <div className="p-2 rounded-lg bg-muted">
+              <FileText className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold">Additional Terms & Agreements</h2>
           </div>
           <div className="space-y-4 text-muted-foreground">
             <p>
@@ -239,12 +378,17 @@ export default function KalshiDisclaimer() {
             <ul className="list-disc pl-6 space-y-2">
               <li>
                 <Link to="https://kalshi.com/legal/member-agreement" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                  Kalshi Member Agreement
+                  Kalshi Member Agreement (v1.6)
                 </Link>
               </li>
               <li>
                 <Link to="https://kalshi.com/legal/exchange-rules" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                  Kalshi Exchange Rules
+                  KalshiEX Rulebook
+                </Link>
+              </li>
+              <li>
+                <Link to="https://kalshi.com/regulatory" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  Kalshi Regulatory Documents
                 </Link>
               </li>
               <li>
@@ -270,12 +414,15 @@ export default function KalshiDisclaimer() {
         <section className="p-6 rounded-xl bg-primary/5 border border-primary/20">
           <p className="text-center text-foreground">
             <strong>By trading Kalshi markets through Poly, you acknowledge that you have read, understood, 
-            and agree to all disclosures above.</strong> If you do not agree, do not use this interface.
+            and agree to all disclosures above and the complete Kalshi Member Agreement.</strong>
+          </p>
+          <p className="text-center text-sm text-muted-foreground mt-2">
+            If you do not agree, do not use this interface.
           </p>
           <div className="flex justify-center gap-4 mt-4">
             <Link 
               to="/kalshi" 
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors font-medium"
             >
               I Understand, Continue to Markets
             </Link>
