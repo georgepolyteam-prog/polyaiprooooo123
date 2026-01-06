@@ -47,6 +47,7 @@ export default function PolymarketTerminal() {
     stats,
     connected,
     loading,
+    loadingMarketData,
     error,
     refetchOrderbook,
     reconnect,
@@ -148,7 +149,7 @@ export default function PolymarketTerminal() {
              {selectedMarket ? (
                <>
                  <PolyMarketChart market={selectedMarket} compact />
-                 <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} compact />
+                 <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} compact loading={loadingMarketData} />
                  <PolyMarketNews market={selectedMarket} compact />
                </>
              ) : (
@@ -170,7 +171,7 @@ export default function PolymarketTerminal() {
                 <Filter className="w-3 h-3" /> Whales
               </Button>
             </div>
-            <PolyTradeFeed trades={filteredTrades} maxTrades={20} connected={connected} />
+            <PolyTradeFeed trades={filteredTrades} maxTrades={20} connected={connected} loading={loadingMarketData} />
             {selectedMarket && <PolyTradePanel market={selectedMarket} compact />}
           </TabsContent>
           
@@ -417,10 +418,9 @@ export default function PolymarketTerminal() {
                   </div>
                 </div>
 
-                {/* Bottom Grid: Orderbook | Live Trades | AI Chat */}
                 <div className="grid grid-cols-3 gap-6 mb-6">
-                  <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} />
-                  <PolyTradeFeed trades={filteredTrades} maxTrades={12} connected={connected} />
+                  <PolyOrderbook orderbook={orderbook} onRefresh={refetchOrderbook} loading={loadingMarketData} />
+                  <PolyTradeFeed trades={filteredTrades} maxTrades={12} connected={connected} loading={loadingMarketData} />
                   <PolyMarketChat market={selectedMarket} />
                 </div>
 

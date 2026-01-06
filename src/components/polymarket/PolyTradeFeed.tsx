@@ -1,16 +1,18 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, TrendingUp, TrendingDown, AlertCircle, Radio } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, AlertCircle, Radio, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type Trade } from '@/hooks/usePolymarketTerminal';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface PolyTradeFeedProps {
   trades: Trade[];
   maxTrades?: number;
   connected?: boolean;
+  loading?: boolean;
 }
 
-export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: PolyTradeFeedProps) {
+export function PolyTradeFeed({ trades, maxTrades = 15, connected = false, loading = false }: PolyTradeFeedProps) {
   const displayTrades = useMemo(() => {
     return trades.slice(0, maxTrades);
   }, [trades, maxTrades]);
@@ -51,7 +53,13 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
           </div>
           <span className="text-sm font-semibold text-foreground">Live Trades</span>
         </div>
-        {connected && (
+        {loading && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border/30">
+            <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Loading</span>
+          </div>
+        )}
+        {!loading && connected && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
             <span className="text-[10px] font-medium text-emerald-500 uppercase tracking-wider">Live</span>
@@ -59,7 +67,28 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
         )}
       </div>
 
-      {displayTrades.length === 0 ? (
+      {loading && displayTrades.length === 0 ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-background/50 border border-border/30">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-8 h-8 rounded-lg" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-12" />
+                  <Skeleton className="h-3 w-10" />
+                </div>
+                <Skeleton className="h-3 w-10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : displayTrades.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <AlertCircle className="w-8 h-8 text-muted-foreground/50 mb-2" />
           <p className="text-sm text-muted-foreground">No trades yet</p>

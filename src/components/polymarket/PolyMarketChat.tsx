@@ -1,12 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Loader2, User, Sparkles } from 'lucide-react';
+import { Send, Loader2, User, Sparkles, Lock, Coins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { type PolyMarket } from '@/hooks/usePolymarketTerminal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuth } from '@/hooks/useAuth';
+import { useCredits } from '@/hooks/useCredits';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import polyLogo from '@/assets/poly-logo-new.png';
 
@@ -26,6 +30,12 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
   const [input, setInput] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const { user, session } = useAuth();
+  const { credits, hasCredits, useCredit, isLoading: creditsLoading } = useCredits();
+  const navigate = useNavigate();
+  
+  const isAuthenticated = !!session?.access_token;
 
   // Reset messages when market changes
   useEffect(() => {
@@ -44,6 +54,24 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
+    
+    // Check authentication
+    if (!isAuthenticated) {
+      toast.error('Please sign in to chat');
+      return;
+    }
+    
+    // Check credits
+    if (!hasCredits(1)) {
+      toast.error('Out of credits', {
+        description: 'Add more credits to continue chatting',
+        action: {
+          label: 'Get Credits',
+          onClick: () => navigate('/credits'),
+        },
+      });
+      return;
+    }
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -62,7 +90,7 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
         { role: 'user', content: input.trim() },
       ];
 
-      // Use poly-chat with market context - this gives full AI capabilities
+      // Use poly-chat with market context and auth token
       const { data, error } = await supabase.functions.invoke('poly-chat', {
         body: {
           messages: chatMessages,
@@ -70,10 +98,15 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
           conditionId: market.conditionId,
           userMessage: input.trim(),
           skipAnalysis: false,
+          authToken: session?.access_token,
+          authType: 'supabase',
         },
       });
 
       if (error) throw error;
+
+      // Deduct credit on success
+      await useCredit(1);
 
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
@@ -82,16 +115,24 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Chat error:', err);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          role: 'assistant',
-          content: 'Sorry, there was an error processing your message. Please try again.',
-        },
-      ]);
+      
+      // Handle specific errors
+      if (err?.message?.includes('401') || err?.message?.includes('Authentication')) {
+        toast.error('Session expired', { description: 'Please sign in again' });
+      } else if (err?.message?.includes('402')) {
+        toast.error('Out of credits');
+      } else {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            role: 'assistant',
+            content: 'Sorry, there was an error processing your message. Please try again.',
+          },
+        ]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -110,6 +151,34 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
     'Should I buy YES or NO?',
     'Show recent news',
   ];
+
+  // Not authenticated state
+  if (!isAuthenticated) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={cn(
+          'rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl flex flex-col items-center justify-center overflow-hidden shadow-xl shadow-black/5',
+          compact ? 'h-[280px]' : 'h-[420px]'
+        )}
+      >
+        <div className="flex flex-col items-center text-center p-6">
+          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+            <Lock className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Sign in to Chat</h3>
+          <p className="text-sm text-muted-foreground mb-4 max-w-[200px]">
+            Get AI-powered analysis for this market
+          </p>
+          <Button onClick={() => navigate('/auth')} className="gap-2">
+            <Sparkles className="w-4 h-4" />
+            Sign In
+          </Button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -130,9 +199,17 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
           <span className="text-sm font-semibold text-foreground">AI Analysis</span>
           <p className="text-[10px] text-muted-foreground">Powered by Poly</p>
         </div>
-        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20">
-          <Sparkles className="w-3 h-3 text-primary" />
-          <span className="text-[10px] font-medium text-primary">Live</span>
+        <div className="flex items-center gap-2">
+          {!creditsLoading && (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-muted/50 border border-border/30">
+              <Coins className="w-3 h-3 text-amber-500" />
+              <span className="text-[10px] font-medium text-muted-foreground">{credits}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20">
+            <Sparkles className="w-3 h-3 text-primary" />
+            <span className="text-[10px] font-medium text-primary">Live</span>
+          </div>
         </div>
       </div>
 
@@ -235,14 +312,14 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this market..."
+            placeholder={hasCredits(1) ? "Ask about this market..." : "Add credits to chat..."}
             className="h-10 text-sm bg-background/50 border-border/30 focus:border-primary/50 transition-colors"
-            disabled={isLoading}
+            disabled={isLoading || !hasCredits(1)}
           />
           <Button
             size="icon"
             onClick={sendMessage}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || !hasCredits(1)}
             className="h-10 w-10 shrink-0 shadow-lg shadow-primary/20"
           >
             {isLoading ? (
