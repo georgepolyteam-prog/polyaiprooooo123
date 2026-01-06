@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wifi, WifiOff, RefreshCw, Clock } from 'lucide-react';
+import { Radio, Clock, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -14,12 +14,12 @@ interface PolyConnectionHealthProps {
 
 export function PolyConnectionHealth({
   connected,
-  reconnectAttempts = 0,
   lastEventTime,
   onReconnect,
   compact = false,
 }: PolyConnectionHealthProps) {
   const [secondsAgo, setSecondsAgo] = useState<number | null>(null);
+  const [pulse, setPulse] = useState(false);
 
   useEffect(() => {
     if (!lastEventTime) {
@@ -35,24 +35,38 @@ export function PolyConnectionHealth({
     return () => clearInterval(id);
   }, [lastEventTime]);
 
+  // Pulse animation when data updates
+  useEffect(() => {
+    if (lastEventTime) {
+      setPulse(true);
+      const timer = setTimeout(() => setPulse(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [lastEventTime]);
+
   const formatAgo = (s: number | null) => {
     if (s === null) return '--';
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m`;
   };
 
+  const isStale = secondsAgo !== null && secondsAgo > 10;
+
   if (compact) {
     return (
       <div
         className={cn(
           'flex items-center gap-1.5 px-2 py-1 rounded-full border text-[10px] font-medium transition-colors',
-          connected
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-            : 'bg-red-500/10 border-red-500/30 text-red-400'
+          isStale
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
         )}
       >
-        {connected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3 animate-pulse" />}
-        {connected ? 'LIVE' : reconnectAttempts > 0 ? `Retry ${reconnectAttempts}` : 'Disconnected'}
+        <Radio className={cn('w-3 h-3', pulse && 'animate-pulse')} />
+        <span>Live</span>
+        {secondsAgo !== null && (
+          <span className="text-muted-foreground">{formatAgo(secondsAgo)}</span>
+        )}
       </div>
     );
   }
@@ -66,30 +80,26 @@ export function PolyConnectionHealth({
       <div
         className={cn(
           'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-colors',
-          connected
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-            : 'bg-red-500/10 border-red-500/30 text-red-400'
+          isStale
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
         )}
       >
-        {connected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-        <span className="font-medium">{connected ? 'Connected' : 'Disconnected'}</span>
+        <Radio className={cn('w-3.5 h-3.5', pulse && 'animate-pulse')} />
+        <span className="font-medium">Live</span>
       </div>
 
-      {connected && secondsAgo !== null && (
+      {secondsAgo !== null && (
         <div className="flex items-center gap-1 text-muted-foreground">
           <Clock className="w-3 h-3" />
-          <span>Last: {formatAgo(secondsAgo)} ago</span>
+          <span>Updated {formatAgo(secondsAgo)} ago</span>
         </div>
       )}
 
-      {!connected && reconnectAttempts > 0 && (
-        <span className="text-muted-foreground">Attempt {reconnectAttempts}</span>
-      )}
-
-      {!connected && onReconnect && (
+      {isStale && onReconnect && (
         <Button variant="ghost" size="sm" onClick={onReconnect} className="h-7 px-2 gap-1">
           <RefreshCw className="w-3 h-3" />
-          Reconnect
+          Refresh
         </Button>
       )}
     </motion.div>
