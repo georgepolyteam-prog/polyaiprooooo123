@@ -551,6 +551,57 @@ export type Database = {
         }
         Relationships: []
       }
+      user_price_alerts: {
+        Row: {
+          condition_id: string
+          created_at: string
+          direction: string
+          id: string
+          is_active: boolean
+          market_image: string | null
+          market_slug: string
+          market_title: string
+          target_price: number
+          token_id: string | null
+          triggered_at: string | null
+          triggered_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          condition_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          is_active?: boolean
+          market_image?: string | null
+          market_slug: string
+          market_title: string
+          target_price: number
+          token_id?: string | null
+          triggered_at?: string | null
+          triggered_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          condition_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          is_active?: boolean
+          market_image?: string | null
+          market_slug?: string
+          market_title?: string
+          target_price?: number
+          token_id?: string | null
+          triggered_at?: string | null
+          triggered_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
