@@ -74,7 +74,19 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
     
     const message = input.value.trim();
     input.value = '';
-    sendMessage(message);
+    
+    // Ensure context is set right before sending (handles any timing issues)
+    setCurrentMarketContext({
+      slug: market.slug,
+      eventSlug: market.eventSlug,
+      question: market.title,
+      url: market.marketUrl,
+    });
+    
+    // Small delay to ensure context is set in ref before sendMessage reads it
+    setTimeout(() => {
+      sendMessage(message);
+    }, 10);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -305,6 +317,7 @@ export function PolyMarketChat({ market, compact = false }: PolyMarketChatProps)
         messages={messages}
         isLoading={isLoading}
         sendMessage={sendMessage}
+        setCurrentMarketContext={setCurrentMarketContext}
         mode={mode}
         setMode={setMode}
         credits={credits}

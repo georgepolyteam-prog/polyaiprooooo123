@@ -309,6 +309,10 @@ export const usePolyChat = (session?: Session | null, walletAddress?: string | n
       hasWallet: !!effectiveWallet, 
       authType 
     });
+    
+    // Debug: Log market context being sent
+    const marketContextToSend = immediateContextRef.current || currentMarketContext;
+    console.log('[Chat] Market context being sent:', marketContextToSend);
 
     try {
       const response = await fetch(CHAT_URL, {

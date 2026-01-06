@@ -22,6 +22,7 @@ interface PolyMarketChatExpandedProps {
   messages: Message[];
   isLoading: boolean;
   sendMessage: (message: string) => void;
+  setCurrentMarketContext: (context: { slug: string; eventSlug?: string; question?: string; url?: string; } | null) => void;
   mode: ChatMode;
   setMode: (mode: ChatMode) => void;
   credits: number;
@@ -37,6 +38,7 @@ export function PolyMarketChatExpanded({
   messages,
   isLoading,
   sendMessage,
+  setCurrentMarketContext,
   mode,
   setMode,
   credits,
@@ -70,7 +72,19 @@ export function PolyMarketChatExpanded({
     
     const message = input.value.trim();
     input.value = '';
-    sendMessage(message);
+    
+    // Ensure context is set right before sending (handles any timing issues)
+    setCurrentMarketContext({
+      slug: market.slug,
+      eventSlug: market.eventSlug,
+      question: market.title,
+      url: market.marketUrl,
+    });
+    
+    // Small delay to ensure context is set in ref before sendMessage reads it
+    setTimeout(() => {
+      sendMessage(message);
+    }, 10);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
