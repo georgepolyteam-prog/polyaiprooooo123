@@ -47,7 +47,8 @@ export function ChartContextMenu({
   const adjustedX = Math.min(x, window.innerWidth - 200);
   const adjustedY = Math.min(y, window.innerHeight - 120);
 
-  const formattedPrice = Math.round(price * 100);
+  // Price is already in cents (0-100), just round it
+  const formattedPrice = Math.round(price);
 
   const handleClick = (direction: 'above' | 'below') => {
     if (!user) {
