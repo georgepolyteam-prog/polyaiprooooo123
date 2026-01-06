@@ -175,17 +175,42 @@ export default function ArbFinder() {
                     <div className="font-semibold mb-2">Top comparison attempts (debug)</div>
                     <div className="space-y-2">
                       {(((debugResponse as any)?.data?.debug?.topMatches ?? []) as any[]).slice(0, 10).map((m, idx) => (
-                        <div key={idx} className="border border-border rounded p-2">
-                          <div className="font-medium">#{idx + 1} — score {m.score}% (sim {m.similarity} / overlap {m.wordOverlap}) — {m.passed ? 'PASS' : 'FAIL'}</div>
+                        <div key={idx} className={`border rounded p-2 ${m.passed ? 'border-green-500/50 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                          <div className="font-medium">#{idx + 1} — score {m.score}% — {m.passed ? '✅ PASS' : '❌ FAIL'}</div>
                           <div className="mt-1">Poly: {m.polyTitle}</div>
                           <div>Kalshi: {m.kalshiTitle}</div>
-                          <div className="mt-1 text-muted-foreground">Norm poly: {m.polyNorm}</div>
-                          <div className="text-muted-foreground">Norm kalshi: {m.kalshiNorm}</div>
+                          {m.polyEntities?.length > 0 && (
+                            <div className="mt-1 text-muted-foreground">Poly entities: {m.polyEntities.join(', ')}</div>
+                          )}
+                          {m.kalshiEntities?.length > 0 && (
+                            <div className="text-muted-foreground">Kalshi entities: {m.kalshiEntities.join(', ')}</div>
+                          )}
+                          {m.entityMismatch?.length > 0 && (
+                            <div className="text-red-400">Entity mismatch: {m.entityMismatch.join(', ')}</div>
+                          )}
                           <div className="mt-1 text-muted-foreground">{m.why}</div>
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {/* Orderbook errors */}
+                  {((debugResponse as any)?.data?.debug?.orderbookErrors ?? []).length > 0 && (
+                    <div className="bg-background rounded-lg p-3 text-xs">
+                      <div className="font-semibold mb-2 text-red-400">Orderbook Fetch Errors</div>
+                      <div className="space-y-2">
+                        {(((debugResponse as any)?.data?.debug?.orderbookErrors ?? []) as any[]).map((err, idx) => (
+                          <div key={idx} className="border border-red-500/30 rounded p-2 bg-red-500/5">
+                            <div className="font-medium">{err.pair}</div>
+                            <div className="mt-1 text-muted-foreground break-all">Poly URL: {err.polyUrl}</div>
+                            {err.polyError && <div className="text-red-400">Poly error: {err.polyError}</div>}
+                            <div className="mt-1 text-muted-foreground break-all">Kalshi URL: {err.kalshiUrl}</div>
+                            {err.kalshiError && <div className="text-red-400">Kalshi error: {err.kalshiError}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="bg-background rounded-lg p-4 overflow-auto max-h-96">
                     <pre className="text-xs font-mono whitespace-pre-wrap">
