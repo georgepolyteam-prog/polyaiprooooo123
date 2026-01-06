@@ -71,6 +71,9 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
 
+  // Request ID ref to prevent stale responses from overwriting state
+  const requestIdRef = useRef(0);
+
   // Fetch top markets on mount
   useEffect(() => {
     const fetchMarkets = async () => {
@@ -184,18 +187,29 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     fetchMarkets();
   }, []);
 
-  // Fetch market data (orderbook + trades) via polling
+  // Fetch market data (orderbook + trades) via polling with stale-response protection
   const fetchMarketData = useCallback(async () => {
     if (!selectedMarket?.marketUrl) return;
+
+    // Increment request ID and capture current values for this request
+    const currentRequestId = ++requestIdRef.current;
+    const requestMarketSlug = selectedMarket.slug;
+    const requestMarketUrl = selectedMarket.marketUrl;
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('market-dashboard', {
         body: {
-          marketUrl: selectedMarket.marketUrl,
+          marketUrl: requestMarketUrl,
           yesTokenId: selectedMarket.yesTokenId ?? undefined,
           noTokenId: selectedMarket.noTokenId ?? undefined,
         },
       });
+
+      // STALE RESPONSE CHECK: If request ID changed, discard this response
+      if (currentRequestId !== requestIdRef.current) {
+        console.log('[PolyTerminal] Discarding stale response for:', requestMarketSlug);
+        return;
+      }
 
       if (fnError) throw fnError;
 
@@ -240,42 +254,46 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
         setOrderbook(null);
       }
 
-      // Process trades from recentTrades
+      // Process trades from recentTrades - ALWAYS update (even if empty)
       const recent = Array.isArray(data?.recentTrades) ? (data.recentTrades as any[]) : [];
-      if (recent.length > 0) {
-        const transformedTrades: Trade[] = recent.map((t: any, idx: number) => {
-          const tsMs = t.timestamp ? new Date(t.timestamp).getTime() : Date.now();
-          const price01 = Number.isFinite(Number(t.rawPrice)) ? Number(t.rawPrice) : Number(t.price ?? 0) / 100;
-          const shares = Number(t.shares ?? 0);
-          return {
-            id: String(t.id ?? `${selectedMarket.slug}-${tsMs}-${idx}`),
-            token_id: '',
-            token_label: String(t.outcome || 'YES') === 'NO' ? 'No' : 'Yes',
-            side: String(t.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
-            market_slug: selectedMarket.slug,
-            condition_id: selectedMarket.conditionId,
-            shares,
-            shares_normalized: shares,
-            price: price01,
-            tx_hash: '',
-            title: selectedMarket.title,
-            timestamp: Math.floor(tsMs / 1000),
-            order_hash: '',
-            user: String(t.wallet || ''),
-            taker: '',
-            image: selectedMarket.image,
-          };
-        });
-        setTrades(transformedTrades);
-      }
+      const transformedTrades: Trade[] = recent.map((t: any, idx: number) => {
+        const tsMs = t.timestamp ? new Date(t.timestamp).getTime() : Date.now();
+        const price01 = Number.isFinite(Number(t.rawPrice)) ? Number(t.rawPrice) : Number(t.price ?? 0) / 100;
+        const shares = Number(t.shares ?? 0);
+        return {
+          id: String(t.id ?? `${requestMarketSlug}-${tsMs}-${idx}`),
+          token_id: '',
+          token_label: String(t.outcome || 'YES') === 'NO' ? 'No' : 'Yes',
+          side: String(t.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY',
+          market_slug: requestMarketSlug,
+          condition_id: selectedMarket.conditionId,
+          shares,
+          shares_normalized: shares,
+          price: price01,
+          tx_hash: '',
+          title: selectedMarket.title,
+          timestamp: Math.floor(tsMs / 1000),
+          order_hash: '',
+          user: String(t.wallet || ''),
+          taker: '',
+          image: selectedMarket.image,
+        };
+      });
+      
+      // Always set trades - if empty, clears old data
+      setTrades(transformedTrades);
     } catch (err) {
-      console.error('[PolyTerminal] Failed to fetch market data:', err);
+      // Only log error if this is still the current request
+      if (currentRequestId === requestIdRef.current) {
+        console.error('[PolyTerminal] Failed to fetch market data:', err);
+      }
     }
   }, [selectedMarket]);
 
   // Clear trades when market changes
   useEffect(() => {
     if (selectedMarket) {
+      // Clear stale data immediately when market changes
       setTrades([]);
       setOrderbook(null);
       fetchMarketData();

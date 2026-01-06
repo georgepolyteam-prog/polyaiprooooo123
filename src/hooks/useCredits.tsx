@@ -25,15 +25,20 @@ export const useCredits = () => {
         .from('user_credits')
         .select('credits_balance, total_deposited, total_spent')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error fetching credits:', error);
+        setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
+      } else if (data) {
+        setCredits(data);
+      } else {
+        // No row exists yet - that's fine, use defaults
+        setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
       }
-
-      setCredits(data || { credits_balance: 0, total_deposited: 0, total_spent: 0 });
     } catch (err) {
       console.error('Error fetching credits:', err);
+      setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
     } finally {
       setIsLoading(false);
     }
