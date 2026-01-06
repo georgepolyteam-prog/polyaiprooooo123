@@ -122,8 +122,54 @@ async function fetchMatchingMarkets(sport: string, apiKey: string, date?: string
     }
     
     const data = await response.json();
-    console.log(`[arb-scanner] Found ${data.markets?.length || 0} matching markets`);
-    return data.markets || [];
+    const markets = data.markets;
+    
+    console.log(`[arb-scanner] Raw response type: ${typeof markets}`);
+    
+    if (!markets || typeof markets !== 'object') {
+      console.log(`[arb-scanner] No markets found or unexpected format`);
+      return [];
+    }
+    
+    // If markets is already an array, use as-is
+    if (Array.isArray(markets)) {
+      console.log(`[arb-scanner] Found ${markets.length} matching markets (array)`);
+      return markets;
+    }
+    
+    // Object format: { "match-key": [platformData, ...] }
+    const results: MatchingMarket[] = [];
+    
+    for (const [matchKey, platforms] of Object.entries(markets)) {
+      if (!Array.isArray(platforms)) continue;
+      
+      let polymarketData: any = null;
+      let kalshiData: any = null;
+      
+      for (const platform of platforms as any[]) {
+        if (platform.platform === 'polymarket') {
+          polymarketData = platform;
+        } else if (platform.platform === 'kalshi') {
+          kalshiData = platform;
+        }
+      }
+      
+      // Only include if both platforms are present
+      if (polymarketData && kalshiData) {
+        results.push({
+          kalshi_ticker: kalshiData.ticker || kalshiData.kalshi_ticker,
+          polymarket_slug: polymarketData.market_slug || matchKey,
+          polymarket_token_id: polymarketData.token_id,
+          event_title: polymarketData.title || kalshiData.title || matchKey,
+          sport: sport,
+          expires_at: polymarketData.end_date || kalshiData.expiration_time,
+        });
+      }
+    }
+    
+    console.log(`[arb-scanner] Parsed ${results.length} matching market pairs from object`);
+    return results;
+    
   } catch (error) {
     console.error("[arb-scanner] Error fetching matching markets:", error);
     return [];
