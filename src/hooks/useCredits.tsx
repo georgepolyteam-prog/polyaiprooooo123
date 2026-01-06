@@ -27,9 +27,17 @@ export const useCredits = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
+      // Handle specific error codes gracefully (RLS denial, no rows, etc.)
       if (error) {
-        console.error('Error fetching credits:', error);
-        setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
+        // PGRST116 = "JSON object requested, multiple (or no) rows returned" 
+        // 406 errors happen when RLS blocks access
+        if (error.code === 'PGRST116' || error.message?.includes('406')) {
+          console.log('[Credits] No credits row found or RLS blocked, using defaults');
+          setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
+        } else {
+          console.error('[Credits] Error fetching credits:', error);
+          setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
+        }
       } else if (data) {
         setCredits(data);
       } else {
@@ -37,7 +45,7 @@ export const useCredits = () => {
         setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
       }
     } catch (err) {
-      console.error('Error fetching credits:', err);
+      console.error('[Credits] Unexpected error:', err);
       setCredits({ credits_balance: 0, total_deposited: 0, total_spent: 0 });
     } finally {
       setIsLoading(false);

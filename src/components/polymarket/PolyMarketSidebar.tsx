@@ -38,6 +38,7 @@ export function PolyMarketSidebar({
 
     setSearching(true);
     const timer = setTimeout(async () => {
+      console.log('[Sidebar] Starting search for:', search);
       try {
         const { data, error } = await supabase.functions.invoke('polymarket-data', {
           body: {
@@ -47,9 +48,13 @@ export function PolyMarketSidebar({
           },
         });
 
+        console.log('[Sidebar] Search response:', { data, error });
+
         if (error) throw error;
 
-        const events = data?.events || data?.markets || [];
+        // The API returns markets directly at the top level
+        const markets = data?.markets || data?.events || [];
+        console.log('[Sidebar] Found markets:', markets.length);
         
         const toCents = (p: unknown): number => {
           const n = typeof p === 'number' ? p : parseFloat(String(p ?? '0'));
@@ -58,50 +63,54 @@ export function PolyMarketSidebar({
         };
 
         // Transform API results to PolyMarket format
-        const transformed: PolyMarket[] = events.flatMap((event: any) => {
-          const outcomes = Array.isArray(event.outcomes) ? event.outcomes : [];
-          const eventSlug = event.slug || '';
+        const transformed: PolyMarket[] = markets.flatMap((market: any) => {
+          const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
+          const eventSlug = market.eventSlug || market.slug || '';
+          const marketSlug = market.slug || '';
 
-          if (outcomes.length === 0) {
+          // If no nested outcomes, treat as a single market
+          if (outcomes.length === 0 || typeof outcomes[0] === 'string') {
+            const yesCents = toCents(market.yesPrice || market.outcomePrices?.[0] || 50);
             return [{
-              id: event.id || eventSlug,
-              conditionId: event.conditionId || '',
-              slug: eventSlug,
+              id: market.conditionId || market.id || eventSlug,
+              conditionId: market.conditionId || '',
+              slug: marketSlug,
               eventSlug,
-              marketUrl: eventSlug ? `https://polymarket.com/event/${eventSlug}` : '',
-              title: event.title,
-              question: event.title,
-              description: event.description,
-              image: event.image,
-              volume24h: Number(event.volume24hr || 0),
-              volume: Number(event.volume || 0),
-              liquidity: Number(event.liquidity || 0),
-              endDate: event.endDate,
-              yesPrice: 50,
-              noPrice: 50,
-              yesTokenId: null,
-              noTokenId: null,
+              marketUrl: market.marketUrl || (eventSlug ? `https://polymarket.com/event/${eventSlug}${marketSlug ? `/${marketSlug}` : ''}` : ''),
+              title: market.question || market.title,
+              question: market.question || market.title,
+              description: market.description,
+              image: market.image,
+              volume24h: Number(market.volume24hr || market.volume24h || 0),
+              volume: Number(market.volume || 0),
+              liquidity: Number(market.liquidity || 0),
+              endDate: market.endDate,
+              yesPrice: yesCents,
+              noPrice: 100 - yesCents,
+              yesTokenId: market.yesTokenId ?? null,
+              noTokenId: market.noTokenId ?? null,
             }];
           }
 
+          // Handle nested outcomes
           return outcomes.map((outcome: any) => {
-            const marketSlug = outcome.slug || '';
+            const outcomeSlug = outcome.slug || '';
             const yesCents = toCents(outcome.yesPrice);
 
             return {
-              id: outcome.conditionId || `${event.id}-${marketSlug}`,
+              id: outcome.conditionId || `${market.id}-${outcomeSlug}`,
               conditionId: outcome.conditionId || '',
-              slug: marketSlug,
+              slug: outcomeSlug,
               eventSlug,
-              marketUrl: eventSlug && marketSlug ? `https://polymarket.com/event/${eventSlug}/${marketSlug}` : (eventSlug ? `https://polymarket.com/event/${eventSlug}` : ''),
-              title: outcome.question || event.title,
-              question: outcome.question || event.title,
-              description: event.description,
-              image: outcome.image || event.image,
+              marketUrl: eventSlug && outcomeSlug ? `https://polymarket.com/event/${eventSlug}/${outcomeSlug}` : (eventSlug ? `https://polymarket.com/event/${eventSlug}` : ''),
+              title: outcome.question || market.title,
+              question: outcome.question || market.title,
+              description: market.description,
+              image: outcome.image || market.image,
               volume24h: Number(outcome.volume24hr || 0),
-              volume: Number(outcome.volume || event.volume || 0),
-              liquidity: Number(outcome.liquidity || event.liquidity || 0),
-              endDate: outcome.endDate || event.endDate,
+              volume: Number(outcome.volume || market.volume || 0),
+              liquidity: Number(outcome.liquidity || market.liquidity || 0),
+              endDate: outcome.endDate || market.endDate,
               yesPrice: yesCents,
               noPrice: 100 - yesCents,
               yesTokenId: outcome.yesTokenId ?? null,
@@ -111,7 +120,9 @@ export function PolyMarketSidebar({
           });
         });
 
-        setApiResults(transformed.filter((m: PolyMarket) => Boolean(m.title)));
+        const filtered = transformed.filter((m: PolyMarket) => Boolean(m.title));
+        console.log('[Sidebar] Transformed markets:', filtered.length);
+        setApiResults(filtered);
       } catch (err) {
         console.error('[Sidebar] Search error:', err);
         setApiResults([]);
