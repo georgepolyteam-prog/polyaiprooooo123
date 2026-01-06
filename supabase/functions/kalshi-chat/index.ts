@@ -25,7 +25,7 @@ serve(async (req) => {
     }
 
     // Build system message with market context
-    const systemMessage = `You are an expert prediction market analyst having a conversation about a specific market.
+    const systemMessage = `You are Claude, an expert prediction market analyst having a conversation about a specific market.
 
 MARKET CONTEXT:
 - Question: "${marketTitle}"
