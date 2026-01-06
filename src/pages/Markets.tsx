@@ -421,7 +421,7 @@ const Markets = () => {
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse" />
                     Live
                   </span>
-                  <span className="inline-flex items-center bg-amber-500/15 text-amber-500/80 border border-amber-500/20 px-2.5 py-1 text-xs font-medium rounded-full pointer-events-none select-none">
+                  <span className="inline-flex items-center bg-secondary/15 text-secondary border border-secondary/30 px-2.5 py-1 text-xs font-medium rounded-full pointer-events-none select-none">
                     <Beaker className="w-3 h-3 mr-1.5" />
                     Early Access
                   </span>
@@ -429,9 +429,13 @@ const Markets = () => {
                 
                 <div className="flex items-center gap-4">
                   <p className="text-muted-foreground text-sm sm:text-base max-w-md">
-                    Click any card for live data, charts & AI insights
+                    <span className="hidden sm:inline">Click any card for live data, charts & AI insights</span>
+                    <span className="sm:hidden flex items-center gap-1.5">
+                      <ArrowUpRight className="w-3.5 h-3.5 text-primary" />
+                      Tap to explore markets
+                    </span>
                   </p>
-                  <Link to="/help" className="text-xs text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25">
+                  <Link to="/help" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full bg-muted/50 border border-border/50 hover:bg-muted hover:border-border">
                     <Bug className="w-3 h-3" />
                     Report a Bug
                   </Link>
@@ -702,7 +706,7 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
 
   return (
     <div 
-      className="market-card-premium group bg-card/80 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+      className="market-card-premium group bg-card/80 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 hover:scale-[1.01] active:scale-[0.99]"
       onClick={handleCardClick}
     >
       {/* Header with Image */}
@@ -718,6 +722,14 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
           <div className="w-full h-full bg-gradient-to-br from-primary/20 via-secondary/10 to-accent/5" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+        
+        {/* Click hint overlay - appears on hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-background/20 backdrop-blur-[2px]">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/90 text-primary-foreground text-xs font-medium shadow-lg">
+            <ArrowUpRight className="w-3.5 h-3.5" />
+            View Details
+          </div>
+        </div>
         
         {/* Polymarket Badge */}
         <div className="absolute bottom-3 left-3">
@@ -735,7 +747,7 @@ const MarketEventCard = memo(({ event, onClick, onTrade, onAskPoly, onShowAllOut
             </Badge>
           )}
           {isHighVolume && (
-            <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs gap-1 border-0 shadow-lg shadow-amber-500/20">
+            <Badge className="bg-gradient-to-r from-primary to-secondary text-primary-foreground text-xs gap-1 border-0 shadow-lg shadow-primary/20">
               <Flame className="w-3 h-3" />
               Hot
             </Badge>
