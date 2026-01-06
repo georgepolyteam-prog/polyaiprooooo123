@@ -45,12 +45,12 @@ export default function ArbFinder() {
     
     try {
       const { data, error } = await supabase.functions.invoke('arb-scanner', {
-        body: { 
-          category: 'all', 
+        body: {
+          category: 'all',
           minSpread: 0.5,
-          minSimilarity: 70,
+          minSimilarity: 60,
           debug: true,
-          limit: 50,
+          limit: 100,
         },
       });
       
@@ -140,16 +140,64 @@ export default function ArbFinder() {
               </div>
               
               {debugResponse && (
-                <div className="bg-background rounded-lg p-4 overflow-auto max-h-96">
-                  <pre className="text-xs font-mono whitespace-pre-wrap">
-                    {JSON.stringify(debugResponse, null, 2)}
-                  </pre>
+                <div className="space-y-3">
+                  <div className="bg-background rounded-lg p-3 text-xs">
+                    <div className="font-semibold mb-1">Manual test summary</div>
+                    <div>Markets: {(debugResponse as any)?.data?.stats?.polymarketCount ?? '--'} Poly • {(debugResponse as any)?.data?.stats?.kalshiCount ?? '--'} Kalshi</div>
+                    <div>Comparisons: {(debugResponse as any)?.data?.stats?.comparisonAttempts ?? '--'}</div>
+                    <div>Matched pairs: {(debugResponse as any)?.data?.stats?.matchedPairs ?? '--'}</div>
+                    <div>Opportunities: {(debugResponse as any)?.data?.stats?.opportunitiesFound ?? '--'}</div>
+                  </div>
+
+                  <div className="bg-background rounded-lg p-3 text-xs">
+                    <div className="font-semibold mb-1">Sample titles</div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div>
+                        <div className="font-medium mb-1">Polymarket</div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {(((debugResponse as any)?.data?.debug?.samplePolymarketTitles ?? []) as string[]).slice(0, 5).map((t, idx) => (
+                            <li key={idx}>{t}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-medium mb-1">Kalshi</div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {(((debugResponse as any)?.data?.debug?.sampleKalshiTitles ?? []) as string[]).slice(0, 5).map((t, idx) => (
+                            <li key={idx}>{t}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-background rounded-lg p-3 text-xs">
+                    <div className="font-semibold mb-2">Top comparison attempts (debug)</div>
+                    <div className="space-y-2">
+                      {(((debugResponse as any)?.data?.debug?.topMatches ?? []) as any[]).slice(0, 10).map((m, idx) => (
+                        <div key={idx} className="border border-border rounded p-2">
+                          <div className="font-medium">#{idx + 1} — score {m.score}% (sim {m.similarity} / overlap {m.wordOverlap}) — {m.passed ? 'PASS' : 'FAIL'}</div>
+                          <div className="mt-1">Poly: {m.polyTitle}</div>
+                          <div>Kalshi: {m.kalshiTitle}</div>
+                          <div className="mt-1 text-muted-foreground">Norm poly: {m.polyNorm}</div>
+                          <div className="text-muted-foreground">Norm kalshi: {m.kalshiNorm}</div>
+                          <div className="mt-1 text-muted-foreground">{m.why}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-background rounded-lg p-4 overflow-auto max-h-96">
+                    <pre className="text-xs font-mono whitespace-pre-wrap">
+                      {JSON.stringify(debugResponse, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               )}
-              
-              {/* Current hook state */}
+
+              {/* Current hook state (auto-refresh scan) */}
               <div className="text-xs space-y-1">
-                <div><strong>Hook State:</strong></div>
+                <div><strong>Hook State (auto-refresh scan):</strong></div>
                 <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
                 <div>Error: {error || 'None'}</div>
                 <div>Opportunities: {opportunities.length}</div>
