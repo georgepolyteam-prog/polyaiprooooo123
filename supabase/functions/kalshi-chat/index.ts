@@ -24,33 +24,51 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Build system message with market context
-    const systemMessage = `You are Claude, an expert prediction market analyst having a conversation about a specific market.
+    // Build comprehensive system message with full market context
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
 
-MARKET CONTEXT:
-- Question: "${marketTitle}"
-- Current YES Price: ${yesPrice}¢ (market implies ${yesPrice}% chance)
-- Current NO Price: ${noPrice}¢ (market implies ${noPrice}% chance)  
-- Trading Volume: $${(volume || 0).toLocaleString()}
-${closeTime ? `- Closes: ${new Date(closeTime).toLocaleDateString()}` : ''}
+    const systemMessage = `You are Claude, an expert prediction market analyst and trading advisor. You're having a focused conversation about a specific Kalshi/DFlow prediction market. Be helpful, insightful, and actionable.
 
-${initialAnalysis ? `INITIAL AI ANALYSIS:
-- AI Probability: ${initialAnalysis.probability}%
-- Sentiment: ${initialAnalysis.sentiment}
-- Confidence: ${initialAnalysis.confidence}
-- Recommendation: ${initialAnalysis.recommendation}
-- Key Factors: ${initialAnalysis.keyFactors?.join(', ')}
-- Reasoning: ${initialAnalysis.reasoning}` : ''}
+TODAY'S DATE: ${currentDate}
 
-RULES:
-- Keep responses concise and helpful (2-4 sentences max unless asked for detail)
-- Be direct about your analysis and reasoning
-- If asked about trading strategy, provide actionable advice
-- Always remember: Users can only BUY YES or BUY NO contracts (not "sell" for new positions)
-- Reference the initial analysis when relevant
-- If unsure about something specific, be honest about limitations`;
+═══════════════════════════════════════════════════════════════
+MARKET BEING DISCUSSED
+═══════════════════════════════════════════════════════════════
+📊 Question: "${marketTitle}"
+💰 Current YES Price: ${yesPrice}¢ (market implies ${yesPrice}% probability)
+💰 Current NO Price: ${noPrice}¢ (market implies ${noPrice}% probability)
+📈 Trading Volume: $${(volume || 0).toLocaleString()}
+${closeTime ? `⏰ Market Closes: ${new Date(closeTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
 
-    // Prepare conversation with system context
+${initialAnalysis ? `═══════════════════════════════════════════════════════════════
+INITIAL AI ANALYSIS (for reference)
+═══════════════════════════════════════════════════════════════
+🎯 AI Probability Estimate: ${initialAnalysis.probability}%
+📊 Market Sentiment: ${initialAnalysis.sentiment}
+🔒 Confidence Level: ${initialAnalysis.confidence}
+💡 Recommendation: ${initialAnalysis.recommendation}
+${initialAnalysis.keyFactors?.length ? `🔑 Key Factors:\n${initialAnalysis.keyFactors.map((f: string) => `   • ${f}`).join('\n')}` : ''}
+${initialAnalysis.reasoning ? `\n📝 Reasoning: ${initialAnalysis.reasoning}` : ''}` : ''}
+
+═══════════════════════════════════════════════════════════════
+YOUR GUIDELINES
+═══════════════════════════════════════════════════════════════
+1. Be conversational but substantive - this is a follow-up chat, not a formal report
+2. Reference the market context and initial analysis when relevant
+3. Provide actionable trading insights when asked
+4. Explain your reasoning clearly
+5. Be honest about uncertainty - prediction markets are inherently uncertain
+6. Remember: On Kalshi/DFlow, users can BUY YES or BUY NO contracts
+7. Consider recent news, historical patterns, and market dynamics
+8. If the user asks about entry points, discuss price levels and timing
+9. Keep responses focused but thorough - aim for 2-4 paragraphs unless more detail is requested`;
+
+    // Prepare full conversation with system context
     const conversationMessages: ChatMessage[] = [
       { role: 'system', content: systemMessage },
       ...messages.map((m: ChatMessage) => ({
@@ -60,6 +78,7 @@ RULES:
     ];
 
     console.log('[kalshi-chat] Processing chat with', messages.length, 'messages for market:', marketTitle);
+    console.log('[kalshi-chat] Using openai/gpt-5 for high-quality responses');
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -68,23 +87,24 @@ RULES:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'openai/gpt-5',
         messages: conversationMessages,
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 1500,
       }),
     });
 
     if (!response.ok) {
       const status = response.status;
+      console.error('[kalshi-chat] API error:', status);
       if (status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
+        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: 'API credits exhausted.' }), {
+        return new Response(JSON.stringify({ error: 'API credits exhausted. Please try again later.' }), {
           status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -99,13 +119,13 @@ RULES:
       throw new Error('No content in AI response');
     }
 
-    console.log('[kalshi-chat] Response generated successfully');
+    console.log('[kalshi-chat] ✅ Response generated successfully, length:', content.length);
 
     return new Response(JSON.stringify({ message: content }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Kalshi chat error:', error);
+    console.error('[kalshi-chat] Error:', error);
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'Chat failed' 
     }), {
