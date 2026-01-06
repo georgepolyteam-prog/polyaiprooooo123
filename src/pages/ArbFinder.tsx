@@ -50,7 +50,7 @@ export default function ArbFinder() {
           minSpread: 0.5,
           minSimilarity: 60,
           debug: true,
-          limit: 100,
+          limit: 200,
         },
       });
       
