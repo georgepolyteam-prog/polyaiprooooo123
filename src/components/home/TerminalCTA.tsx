@@ -106,22 +106,25 @@ export const TerminalCTA = () => {
             {/* Response */}
             {showResponse && (
               <div className="mt-4 space-y-1">
-                {responseLines.map((line, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className={`
-                      ${line === "" ? "h-2" : ""}
-                      ${line.startsWith("Result:") ? "text-emerald-400 font-semibold" : "text-muted-foreground"}
-                      ${line.startsWith("Volume:") ? "text-foreground" : ""}
-                      ${line.startsWith("Top signal:") ? "text-primary" : ""}
-                    `}
-                  >
-                    {line && <span className="text-muted-foreground/50 mr-2">›</span>}
-                    {line}
-                  </motion.div>
-                ))}
+                {responseLines.map((line, i) => {
+                  const safeeLine = line ?? "";
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`
+                        ${safeeLine === "" ? "h-2" : ""}
+                        ${safeeLine.startsWith("Result:") ? "text-emerald-400 font-semibold" : "text-muted-foreground"}
+                        ${safeeLine.startsWith("Volume:") ? "text-foreground" : ""}
+                        ${safeeLine.startsWith("Top signal:") ? "text-primary" : ""}
+                      `}
+                    >
+                      {safeeLine && <span className="text-muted-foreground/50 mr-2">›</span>}
+                      {safeeLine}
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </div>
