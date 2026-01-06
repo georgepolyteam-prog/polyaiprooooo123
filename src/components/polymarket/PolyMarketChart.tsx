@@ -17,10 +17,9 @@ interface Candle {
 
 interface PolyMarketChartProps {
   market: PolyMarket;
-  compact?: boolean;
 }
 
-export function PolyMarketChart({ market, compact = false }: PolyMarketChartProps) {
+export function PolyMarketChart({ market }: PolyMarketChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -98,6 +97,11 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
 
     if (candles.length === 0) return;
 
+    // Get actual container dimensions
+    const rect = chartContainerRef.current.getBoundingClientRect();
+    const chartHeight = rect.height || 300;
+    const chartWidth = rect.width || chartContainerRef.current.clientWidth;
+
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -109,8 +113,8 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         vertLines: { color: "rgba(63, 63, 70, 0.15)" },
         horzLines: { color: "rgba(63, 63, 70, 0.15)" },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: compact ? 220 : 300,
+      width: chartWidth,
+      height: chartHeight,
       rightPriceScale: {
         borderColor: "rgba(63, 63, 70, 0.3)",
         scaleMargins: { top: 0.05, bottom: 0.05 },
@@ -144,20 +148,26 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
     chart.timeScale().fitContent();
     chartRef.current = chart;
 
-    const handleResize = () => {
+    // ResizeObserver for dynamic sizing
+    const resizeObserver = new ResizeObserver((entries) => {
       if (!chartContainerRef.current || !chartRef.current) return;
-      chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
-    };
+      const entry = entries[0];
+      if (entry) {
+        const { width, height } = entry.contentRect;
+        chartRef.current.applyOptions({ width, height });
+      }
+    });
 
-    window.addEventListener("resize", handleResize);
+    resizeObserver.observe(chartContainerRef.current);
+
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
       }
     };
-  }, [candles, loading, error, compact]);
+  }, [candles, loading, error]);
 
   return (
     <section className="h-full flex flex-col">
