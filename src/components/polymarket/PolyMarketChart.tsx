@@ -214,36 +214,56 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     };
   }, [candles, loading, error]);
 
-  // Handle right-click on chart for context menu - use series.coordinateToPrice for accurate conversion
+  // Handle right-click on chart for context menu - calculate price from visible range
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     
-    if (!chartRef.current || !seriesRef.current || !onCreateAlert) return;
+    if (!chartRef.current || !chartContainerRef.current || !onCreateAlert) return;
     
-    const rect = chartContainerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    // Get y coordinate relative to chart container
+    const rect = chartContainerRef.current.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    try {
-      // Use the series' coordinateToPrice method for accurate price at y position
-      const rawPrice = seriesRef.current.coordinateToPrice(y);
-      
-      if (rawPrice !== null && !isNaN(rawPrice)) {
-        // rawPrice is in 0-1 range, convert to cents (0-100) for context menu
-        const priceInCents = Math.round(Math.max(1, Math.min(99, rawPrice * 100)));
-        
-        setContextMenu({
-          x: e.clientX,
-          y: e.clientY,
-          price: priceInCents, // Pass cents directly, not decimal
-        });
-      }
-    } catch (err) {
-      console.error('[Chart] Context menu price calculation failed:', err);
-    }
-  }, [onCreateAlert]);
+    // Get the visible logical range (time range)
+    const timeScale = chartRef.current.timeScale();
+    const logicalRange = timeScale.getVisibleLogicalRange();
+    
+    if (!logicalRange) return;
+
+    // Get all visible candles in the current view
+    const visibleCandles = candles.slice(
+      Math.max(0, Math.floor(logicalRange.from)), 
+      Math.min(candles.length, Math.ceil(logicalRange.to) + 1)
+    );
+    
+    if (visibleCandles.length === 0) return;
+
+    // Find the actual price range (high/low) of visible candles
+    const visiblePrices = visibleCandles.flatMap(c => [c.high, c.low]);
+    const minPrice = Math.min(...visiblePrices);
+    const maxPrice = Math.max(...visiblePrices);
+    
+    // Add padding to match chart's auto-scale behavior (5% like scaleMargins)
+    const priceRange = maxPrice - minPrice;
+    const padding = priceRange * 0.05;
+    const paddedMin = minPrice - padding;
+    const paddedMax = maxPrice + padding;
+    const paddedRange = paddedMax - paddedMin;
+    
+    // Calculate price based on Y position within the chart height
+    // Y=0 (top) = maxPrice, Y=chartHeight (bottom) = minPrice
+    const chartHeight = rect.height;
+    const clickedPrice = paddedMax - ((y / chartHeight) * paddedRange);
+    
+    // Convert to cents (0-100 range) and clamp
+    const priceInCents = Math.round(clickedPrice * 100);
+    const finalPrice = Math.max(1, Math.min(99, priceInCents));
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      price: finalPrice,
+    });
+  }, [candles, onCreateAlert]);
 
   // Calculate alert line positions using series.priceToCoordinate for accurate positioning
   const getAlertLinePosition = useCallback((alertPrice: number) => {
