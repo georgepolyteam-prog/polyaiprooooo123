@@ -68,11 +68,13 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMarketData, setLoadingMarketData] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
 
   // Request ID ref to prevent stale responses from overwriting state
   const requestIdRef = useRef(0);
+  const isFirstFetchRef = useRef(true);
 
   // Fetch top markets on mount
   useEffect(() => {
@@ -196,6 +198,11 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     const requestMarketSlug = selectedMarket.slug;
     const requestMarketUrl = selectedMarket.marketUrl;
 
+    // Only show loading on first fetch for this market
+    if (isFirstFetchRef.current) {
+      setLoadingMarketData(true);
+    }
+
     try {
       const { data, error: fnError } = await supabase.functions.invoke('market-dashboard', {
         body: {
@@ -282,10 +289,15 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
       
       // Always set trades - if empty, clears old data
       setTrades(transformedTrades);
+      isFirstFetchRef.current = false;
     } catch (err) {
       // Only log error if this is still the current request
       if (currentRequestId === requestIdRef.current) {
         console.error('[PolyTerminal] Failed to fetch market data:', err);
+      }
+    } finally {
+      if (currentRequestId === requestIdRef.current) {
+        setLoadingMarketData(false);
       }
     }
   }, [selectedMarket]);
@@ -296,6 +308,8 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
       // Clear stale data immediately when market changes
       setTrades([]);
       setOrderbook(null);
+      isFirstFetchRef.current = true; // Reset first fetch flag
+      setLoadingMarketData(true);
       fetchMarketData();
     }
   }, [selectedMarket?.slug]);
@@ -335,6 +349,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     stats,
     connected: true, // Always "connected" since we use polling
     loading,
+    loadingMarketData,
     error,
     refetchOrderbook: fetchMarketData,
     reconnect: fetchMarketData,
