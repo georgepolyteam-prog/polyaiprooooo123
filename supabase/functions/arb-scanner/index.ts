@@ -118,9 +118,10 @@ function extractArr(d: any): any[] {
 }
 
 // Filter constants for high-quality markets
-const MIN_VOLUME_API = 10000; // API filter: $10k+ volume
+const MIN_VOLUME_API = 1000; // API filter: $1k+ volume (lowered for more results)
 const MAX_DAYS_TO_CLOSE = 30; // Markets closing within 30 days
 const API_PAGE_LIMIT = 100; // Dome API hard limit per request
+const PAGES_TO_FETCH = 3; // Always fetch 3 pages = up to 300 markets
 
 async function fetchPolymarketMarketsPage(apiKey: string, offset: number): Promise<{ markets: PolymarketMarket[]; error?: string }> {
   const url = `${DOME_API_URL}/polymarket/markets?status=open&min_volume=${MIN_VOLUME_API}&limit=${API_PAGE_LIMIT}&offset=${offset}`;
@@ -135,11 +136,10 @@ async function fetchPolymarketMarketsPage(apiKey: string, offset: number): Promi
 }
 
 async function fetchPolymarketMarkets(apiKey: string, targetCount: number): Promise<{ markets: PolymarketMarket[]; error?: string }> {
-  // Make multiple paginated calls to get up to targetCount markets
-  const pagesToFetch = Math.ceil(targetCount / API_PAGE_LIMIT);
-  const offsets = Array.from({ length: pagesToFetch }, (_, i) => i * API_PAGE_LIMIT);
+  // Always fetch PAGES_TO_FETCH pages (3 x 100 = 300 markets max)
+  const offsets = Array.from({ length: PAGES_TO_FETCH }, (_, i) => i * API_PAGE_LIMIT);
   
-  log(`Polymarket: fetching ${pagesToFetch} pages for ~${targetCount} markets`);
+  log(`Polymarket: fetching ${PAGES_TO_FETCH} pages (offsets: ${offsets.join(', ')}) for up to 300 markets`);
   
   const results = await Promise.all(offsets.map(offset => fetchPolymarketMarketsPage(apiKey, offset)));
   
@@ -183,11 +183,10 @@ async function fetchKalshiMarketsPage(apiKey: string, offset: number): Promise<{
 }
 
 async function fetchKalshiMarkets(apiKey: string, targetCount: number): Promise<{ markets: KalshiMarket[]; error?: string }> {
-  // Make multiple paginated calls to get up to targetCount markets
-  const pagesToFetch = Math.ceil(targetCount / API_PAGE_LIMIT);
-  const offsets = Array.from({ length: pagesToFetch }, (_, i) => i * API_PAGE_LIMIT);
+  // Always fetch PAGES_TO_FETCH pages (3 x 100 = 300 markets max)
+  const offsets = Array.from({ length: PAGES_TO_FETCH }, (_, i) => i * API_PAGE_LIMIT);
   
-  log(`Kalshi: fetching ${pagesToFetch} pages for ~${targetCount} markets`);
+  log(`Kalshi: fetching ${PAGES_TO_FETCH} pages (offsets: ${offsets.join(', ')}) for up to 300 markets`);
   
   const results = await Promise.all(offsets.map(offset => fetchKalshiMarketsPage(apiKey, offset)));
   
@@ -394,6 +393,30 @@ function detectCategory(t1: string, t2: string): string {
   return "general";
 }
 
+// Detect if two markets are INVERSE (opposite bets on same outcome)
+// e.g., "Will Bitcoin DIP to $100k" vs "Will Bitcoin be ABOVE $100k"
+function isInversePair(title1: string, title2: string): { isInverse: boolean; reason: string } {
+  const t1 = title1.toLowerCase();
+  const t2 = title2.toLowerCase();
+  
+  // Keywords indicating DOWN/negative direction
+  const downKeywords = ['dip', 'drop', 'fall', 'below', 'under', 'crash', 'decline', 'decrease', 'down'];
+  // Keywords indicating UP/positive direction
+  const upKeywords = ['above', 'rise', 'reach', 'exceed', 'over', 'hit', 'break', 'surpass', 'up'];
+  
+  const t1HasDown = downKeywords.some(k => t1.includes(k));
+  const t1HasUp = upKeywords.some(k => t1.includes(k));
+  const t2HasDown = downKeywords.some(k => t2.includes(k));
+  const t2HasUp = upKeywords.some(k => t2.includes(k));
+  
+  // If one title has UP keywords and the other has DOWN keywords, they're inverse
+  if ((t1HasDown && t2HasUp) || (t1HasUp && t2HasDown)) {
+    return { isInverse: true, reason: `Inverse: "${t1HasDown ? 'down' : 'up'}" vs "${t2HasDown ? 'down' : 'up'}" keywords` };
+  }
+  
+  return { isInverse: false, reason: '' };
+}
+
 function pickPolyYesTokenId(m: PolymarketMarket): string {
   const a = m.side_a;
   const b = m.side_b;
@@ -413,6 +436,8 @@ type DebugRow = {
   kalshiEntities: string[];
   entityMatch: boolean;
   entityMismatch: string[];
+  isInverse: boolean;
+  inverseReason: string;
   why: string;
 };
 
@@ -486,11 +511,21 @@ function findMatches(
         }
       }
 
+      // Check for inverse pairs (opposite bets)
+      const inverseCheck = isInversePair(polyTitle, kalshiTitle);
+
       const entityMatch = matchedEntities.length > 0 || (pEntities.length === 0 && kEntities.length === 0);
-      const passed = score >= minScore && entityMatch;
-      const why = passed
-        ? `PASS: score=${score.toFixed(0)}, entities=${matchedEntities.join(",")}`
-        : `FAIL: score=${score.toFixed(0)}${!entityMatch ? ", entity mismatch" : ""}`;
+      // SKIP inverse pairs - they're opposite bets, not same market
+      const passed = score >= minScore && entityMatch && !inverseCheck.isInverse;
+      
+      let why = '';
+      if (inverseCheck.isInverse) {
+        why = `SKIP INVERSE: ${inverseCheck.reason}`;
+      } else if (passed) {
+        why = `PASS: score=${score.toFixed(0)}, entities=${matchedEntities.join(",")}`;
+      } else {
+        why = `FAIL: score=${score.toFixed(0)}${!entityMatch ? ", entity mismatch" : ""}`;
+      }
 
       const row: DebugRow = {
         score: Math.round(score),
@@ -503,6 +538,8 @@ function findMatches(
         kalshiEntities: kEntities,
         entityMatch,
         entityMismatch: mismatchedEntities,
+        isInverse: inverseCheck.isInverse,
+        inverseReason: inverseCheck.reason,
         why,
       };
 
@@ -681,8 +718,11 @@ serve(async (req) => {
     // Fetch orderbooks
     const opportunities: ArbOpportunity[] = [];
     const orderbookErrors: { pair: string; polyUrl: string; polyError?: string; polyAgeMin?: number; kalshiUrl: string; kalshiError?: string; kalshiAgeMin?: number }[] = [];
+    const spreadAnalysis: { pair: string; polyBid?: number; polyAsk?: number; kalshiBid?: number; kalshiAsk?: number; spread1?: number; spread2?: number; reason: string }[] = [];
     let obAttempted = 0;
     let obOk = 0;
+    let noSpreadCount = 0;
+    let belowMinSpreadCount = 0;
 
     const batchSize = 3;
     for (let i = 0; i < matches.length; i += batchSize) {
@@ -690,7 +730,7 @@ serve(async (req) => {
       const results = await Promise.all(batch.map(async (pair) => {
         const ticker = pair.kalshi.market_ticker || "";
         const tokenId = pair.polyYesTokenId;
-        if (!ticker || !tokenId) return null;
+        if (!ticker || !tokenId) return { opp: null, analysis: null };
 
         obAttempted++;
         const [polyResult, kalshiResult] = await Promise.all([
@@ -710,16 +750,57 @@ serve(async (req) => {
             kalshiAgeMin: kalshiResult.snapshotAgeMinutes,
           });
           log(`OB FAIL: ${pairName} - Poly: ${polyResult.error || 'ok'}, Kalshi: ${kalshiResult.error || 'ok'}`);
-          return null;
+          return { opp: null, analysis: { pair: pairName, reason: `OB fetch failed: Poly=${polyResult.error}, Kalshi=${kalshiResult.error}` } };
         }
 
         const maxAge = Math.max(polyResult.snapshotAgeMinutes || 0, kalshiResult.snapshotAgeMinutes || 0);
         log(`OB OK: ${pairName} - Poly age: ${polyResult.snapshotAgeMinutes}min, Kalshi age: ${kalshiResult.snapshotAgeMinutes}min`);
         obOk++;
-        return calcArb(pair, polyResult.ob, kalshiResult.ob, maxAge);
+        
+        // Analyze the spread even if no arb
+        const pBid = polyResult.ob.bids[0];
+        const pAsk = polyResult.ob.asks[0];
+        const kBid = kalshiResult.ob.bids[0];
+        const kAsk = kalshiResult.ob.asks[0];
+        
+        const analysis: typeof spreadAnalysis[0] = {
+          pair: pairName,
+          polyBid: pBid ? Math.round(pBid.price * 100) : undefined,
+          polyAsk: pAsk ? Math.round(pAsk.price * 100) : undefined,
+          kalshiBid: kBid ? Math.round(kBid.price * 100) : undefined,
+          kalshiAsk: kAsk ? Math.round(kAsk.price * 100) : undefined,
+          reason: '',
+        };
+        
+        // Check for arb opportunities
+        let hasArb = false;
+        if (kAsk && pBid && pBid.price > kAsk.price) {
+          analysis.spread1 = Number((((pBid.price - kAsk.price) / kAsk.price) * 100).toFixed(2));
+          hasArb = true;
+        }
+        if (pAsk && kBid && kBid.price > pAsk.price) {
+          analysis.spread2 = Number((((kBid.price - pAsk.price) / pAsk.price) * 100).toFixed(2));
+          hasArb = true;
+        }
+        
+        if (!hasArb) {
+          analysis.reason = 'No arb: prices not crossed';
+          noSpreadCount++;
+        } else {
+          const maxSpread = Math.max(analysis.spread1 || 0, analysis.spread2 || 0);
+          if (maxSpread < minSpread) {
+            analysis.reason = `Spread ${maxSpread}% < min ${minSpread}%`;
+            belowMinSpreadCount++;
+          } else {
+            analysis.reason = `ARB FOUND: ${maxSpread}%`;
+          }
+        }
+        
+        return { opp: calcArb(pair, polyResult.ob, kalshiResult.ob, maxAge), analysis };
       }));
 
-      for (const opp of results) {
+      for (const { opp, analysis } of results) {
+        if (analysis) spreadAnalysis.push(analysis);
         if (!opp) continue;
         if (opp.spreadPercent < minSpread) continue;
         if (category !== "all" && opp.category !== category) continue;
@@ -742,6 +823,8 @@ serve(async (req) => {
         comparisonAttempts: attempts,
         orderbookPairsAttempted: obAttempted,
         orderbookPairsOk: obOk,
+        noSpreadCount,
+        belowMinSpreadCount,
         opportunitiesFound: opportunities.length,
         elapsedMs,
       },
@@ -754,6 +837,7 @@ serve(async (req) => {
         comparisonAttempts: attempts,
         topMatches: topRows,
         orderbookErrors: orderbookErrors.slice(0, 10),
+        spreadAnalysis: spreadAnalysis.slice(0, 15),
       } : undefined,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
