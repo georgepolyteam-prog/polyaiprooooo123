@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createChart, ColorType, IChartApi, Time } from "lightweight-charts";
 import { Loader2, BarChart3, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import type { PolyMarket } from "@/hooks/usePolymarketTerminal";
+import type { PriceAlert } from "@/hooks/useAlerts";
+import { ChartContextMenu } from "@/components/terminal/ChartContextMenu";
 
 type Timeframe = "1D" | "7D" | "30D";
 
@@ -17,9 +19,11 @@ interface Candle {
 
 interface PolyMarketChartProps {
   market: PolyMarket;
+  alerts?: PriceAlert[];
+  onCreateAlert?: (price: number, direction: 'above' | 'below') => void;
 }
 
-export function PolyMarketChart({ market }: PolyMarketChartProps) {
+export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMarketChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -27,6 +31,7 @@ export function PolyMarketChart({ market }: PolyMarketChartProps) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; price: number } | null>(null);
 
   const { startTime, endTime, interval } = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
@@ -169,33 +174,58 @@ export function PolyMarketChart({ market }: PolyMarketChartProps) {
     };
   }, [candles, loading, error]);
 
+  // Handle right-click on chart for context menu
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (!chartRef.current || !onCreateAlert) return;
+    
+    const rect = chartContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    // Get price at click position
+    const y = e.clientY - rect.top;
+    const priceScale = chartRef.current.priceScale('right');
+    
+    // Approximate price from y position (this is a rough estimate)
+    const chartHeight = rect.height;
+    const priceRange = { min: 0, max: 1 }; // Price is 0-1
+    const price = priceRange.max - (y / chartHeight) * (priceRange.max - priceRange.min);
+    
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      price: Math.max(0.01, Math.min(0.99, price)),
+    });
+  }, [onCreateAlert]);
+
   return (
     <section className="h-full flex flex-col">
-      {/* Minimal header - Hyperliquid style */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-foreground">Price Chart</span>
-          <span className="text-xs text-muted-foreground">YES</span>
+      {/* Minimal header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/30 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-foreground">Price</span>
+          <span className="text-[10px] text-muted-foreground">YES</span>
           {candles.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Live</span>
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10">
+              <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Live</span>
             </div>
           )}
         </div>
 
-        {/* Timeframe selector - sleek segmented control */}
-        <div className="flex items-center rounded-lg bg-muted/30 border border-border/40 p-0.5">
+        {/* Timeframe selector */}
+        <div className="flex items-center rounded-md bg-muted/30 border border-border/40 p-0.5">
           {(["1D", "7D", "30D"] as const).map((tf) => (
             <button
               key={tf}
               type="button"
               onClick={() => setTimeframe(tf)}
               className={cn(
-                "relative px-4 py-1.5 rounded-md text-xs font-bold tracking-wide transition-all duration-200",
+                "px-3 py-1 rounded text-[10px] font-bold tracking-wide transition-all",
                 timeframe === tf
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {tf}
@@ -204,28 +234,62 @@ export function PolyMarketChart({ market }: PolyMarketChartProps) {
         </div>
       </div>
 
-      {/* Chart area - fills remaining height */}
-      <div className="flex-1 min-h-0">
+      {/* Chart area */}
+      <div className="flex-1 min-h-0 relative">
         {loading ? (
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
-            <span className="text-xs">Loading chart data...</span>
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
+            <span className="text-[10px]">Loading chart...</span>
           </div>
         ) : error ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground text-center px-6">
-            <AlertCircle className="w-8 h-8 opacity-60" />
-            <span className="text-xs">{error}</span>
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground text-center px-4">
+            <AlertCircle className="w-6 h-6 opacity-60" />
+            <span className="text-[10px]">{error}</span>
           </div>
         ) : candles.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
-            <BarChart3 className="w-8 h-8 opacity-50" />
-            <span className="text-xs">No chart data available</span>
-            <span className="text-[10px] opacity-70">Price history will appear here</span>
+            <BarChart3 className="w-6 h-6 opacity-50" />
+            <span className="text-[10px]">No chart data</span>
           </div>
         ) : (
-          <div ref={chartContainerRef} className="h-full w-full" />
+          <div 
+            ref={chartContainerRef} 
+            className="h-full w-full" 
+            onContextMenu={handleContextMenu}
+          />
+        )}
+
+        {/* Alert lines on chart */}
+        {alerts.length > 0 && candles.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {alerts.map((alert) => {
+              const pct = (1 - alert.targetPrice / 100) * 100;
+              return (
+                <div
+                  key={alert.id}
+                  className="absolute left-0 right-0 border-t border-dashed border-yellow-500/70 z-10"
+                  style={{ top: `${pct}%` }}
+                >
+                  <span className="absolute right-2 -top-2.5 bg-yellow-500 text-black text-[9px] px-1.5 py-0.5 rounded font-bold">
+                    {alert.targetPrice}¢
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && onCreateAlert && (
+        <ChartContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          price={contextMenu.price}
+          onClose={() => setContextMenu(null)}
+          onSetAlert={onCreateAlert}
+        />
+      )}
     </section>
   );
 }
