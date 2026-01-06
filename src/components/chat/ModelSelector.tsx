@@ -158,7 +158,7 @@ export const ModelSelector = ({ mode, onModeChange, disabled }: ModelSelectorPro
             "z-50 bg-[#0d1117] border border-white/10 overflow-hidden",
             isMobile 
               ? "fixed bottom-0 left-0 right-0 rounded-t-2xl animate-in slide-in-from-bottom duration-300"
-              : "absolute bottom-full left-0 mb-2 min-w-[260px] rounded-xl shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200"
+              : "absolute top-full left-0 mt-2 min-w-[260px] rounded-xl shadow-xl animate-in fade-in slide-in-from-top-2 duration-200"
           )}>
             {/* Mobile handle */}
             {isMobile && (

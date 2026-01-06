@@ -2,6 +2,22 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { terminalCache } from '@/lib/terminal-cache';
 
+// Custom hook to track tab visibility
+function useTabVisibility() {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(document.visibilityState === 'visible');
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  return isVisible;
+}
+
 export interface PolyMarket {
   id: string;
   conditionId: string;
@@ -77,6 +93,9 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  
+  const isTabVisible = useTabVisibility();
 
   // Request ID ref to prevent stale responses from overwriting state
   const requestIdRef = useRef(0);
@@ -387,6 +406,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     }
 
     try {
+      setFetchError(null);
       const result = await fetchMarketDataForMarket(selectedMarket);
 
       // STALE RESPONSE CHECK
@@ -408,6 +428,7 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     } catch (err) {
       if (currentRequestId === requestIdRef.current) {
         console.error('[PolyTerminal] Failed to fetch market data:', err);
+        setFetchError('Failed to load market data');
       }
     } finally {
       if (currentRequestId === requestIdRef.current) {
@@ -435,19 +456,26 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
       // Clear stale data immediately when market changes
       setTrades([]);
       setOrderbook(null);
+      setFetchError(null);
       isFirstFetchRef.current = true; // Reset first fetch flag
       setLoadingMarketData(true);
       fetchMarketData();
     }
   }, [selectedMarket?.slug]);
 
-  // Poll every 2 seconds for live updates
+  // Poll every 2 seconds for live updates (only when tab is visible)
   useEffect(() => {
-    if (!enabled || !selectedMarket) return;
+    if (!enabled || !selectedMarket || !isTabVisible) return;
 
     const interval = setInterval(fetchMarketData, 2000);
     return () => clearInterval(interval);
-  }, [enabled, selectedMarket, fetchMarketData]);
+  }, [enabled, selectedMarket, isTabVisible, fetchMarketData]);
+
+  // Retry function for manual refresh
+  const retryFetch = useCallback(() => {
+    setFetchError(null);
+    if (selectedMarket) fetchMarketData();
+  }, [selectedMarket, fetchMarketData]);
 
   // Calculate stats from trades
   const stats = useMemo(() => {
@@ -481,6 +509,8 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     hasMore,
     loadMoreMarkets,
     error,
+    fetchError,
+    retryFetch,
     refetchOrderbook: fetchMarketData,
     reconnect: fetchMarketData,
     reconnectAttempts: 0,
