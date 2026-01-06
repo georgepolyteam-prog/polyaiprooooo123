@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { SolanaWalletProvider } from "@/providers/SolanaWalletProvider";
@@ -40,20 +40,24 @@ import Partnerships from "./pages/Partnerships";
 
 const AppContent = () => {
   const { isHighTraffic } = useUserPresence();
+  const location = useLocation();
+  
+  // Hide main sidebar on terminal pages (they have their own sidebar)
+  const isTerminalRoute = location.pathname === '/terminal' || 
+                          location.pathname === '/kalshi-terminal';
 
   return (
     <>
       <HighTrafficBanner isVisible={isHighTraffic} />
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <div className="min-h-screen flex w-full">
-          {/* Desktop Sidebar - Must be inside BrowserRouter for useLocation to work */}
-          <AppSidebar />
-          
-          {/* Main Content Area */}
-          <main className="flex-1 flex flex-col min-w-0">
-            <Routes>
+      <div className="min-h-screen flex w-full">
+        {/* Desktop Sidebar - Hide on terminal routes */}
+        {!isTerminalRoute && <AppSidebar />}
+        
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col min-w-0">
+          <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/chat" element={<Index />} />
               <Route path="/markets" element={<Markets />} />
@@ -87,8 +91,7 @@ const AppContent = () => {
             </Routes>
           </main>
         </div>
-        <MobileBottomNav />
-      </BrowserRouter>
+        {!isTerminalRoute && <MobileBottomNav />}
     </>
   );
 };
@@ -98,7 +101,9 @@ const App = () => (
     <WalletProvider>
       <ThemeProvider>
         <TooltipProvider>
-          <AppContent />
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
         </TooltipProvider>
       </ThemeProvider>
     </WalletProvider>

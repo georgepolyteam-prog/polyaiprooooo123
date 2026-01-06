@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, ColorType, IChartApi, Time } from "lightweight-charts";
-import { Loader2, BarChart3, AlertCircle, Radio } from "lucide-react";
+import { Loader2, BarChart3, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import type { PolyMarket } from "@/hooks/usePolymarketTerminal";
@@ -103,6 +103,7 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#a1a1aa",
         fontFamily: "inherit",
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: "rgba(63, 63, 70, 0.15)" },
@@ -159,34 +160,31 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
   }, [candles, loading, error, compact]);
 
   return (
-    <section className="p-5 rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl shadow-xl shadow-black/5">
-      <div className="flex items-center justify-between mb-4">
+    <section className="h-full flex flex-col">
+      {/* Minimal header - Hyperliquid style */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-primary/10">
-            <BarChart3 className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">Price Chart</h2>
-            <p className="text-[10px] text-muted-foreground">YES outcome price history</p>
-          </div>
+          <span className="text-sm font-medium text-foreground">Price Chart</span>
+          <span className="text-xs text-muted-foreground">YES</span>
           {candles.length > 0 && (
-            <div className="flex items-center gap-1.5 ml-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-              <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-medium text-emerald-500 uppercase tracking-wider">Live</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Live</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/50 border border-border/30">
+        {/* Timeframe selector - sleek segmented control */}
+        <div className="flex items-center rounded-lg bg-muted/30 border border-border/40 p-0.5">
           {(["1D", "7D", "30D"] as const).map((tf) => (
             <button
               key={tf}
               type="button"
               onClick={() => setTimeframe(tf)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                "relative px-4 py-1.5 rounded-md text-xs font-bold tracking-wide transition-all duration-200",
                 timeframe === tf
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
               )}
             >
@@ -196,10 +194,8 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         </div>
       </div>
 
-      <div className={cn(
-        "rounded-xl border border-border/30 overflow-hidden bg-background/30",
-        compact ? "h-[220px]" : "h-[300px]"
-      )}>
+      {/* Chart area - fills remaining height */}
+      <div className="flex-1 min-h-0">
         {loading ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
