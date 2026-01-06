@@ -17,29 +17,23 @@ export const BrutalistStats = () => {
 
   const fetchStats = useCallback(async () => {
     try {
-      // Get user count from profiles
-      const { count: userCount } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true });
+      const { data, error } = await supabase.functions.invoke("public-stats");
+      
+      if (error) {
+        console.error("Error fetching public stats:", error);
+        return; // Keep fallback values
+      }
 
-      // Get chat count - multiply by 30 as requested
-      const { count: chatCount } = await supabase
-        .from("chat_logs")
-        .select("*", { count: "exact", head: true });
-
-      // Get trade count from whale_trades
-      const { count: tradeCount } = await supabase
-        .from("whale_trades")
-        .select("*", { count: "exact", head: true });
-
-      setStats({
-        users: userCount || 0,
-        chats: (chatCount || 0) * 30, // 30x multiplier for AI analyses
-        trades: tradeCount || 0,
-      });
+      if (data && typeof data.users === "number") {
+        setStats({
+          users: data.users || 1990,
+          chats: data.analyses || 4740,
+          trades: data.trades || 2847,
+        });
+      }
     } catch (e) {
-      // Use fallback
-      setStats({ users: 1990, chats: 4740, trades: 2847 });
+      console.error("Failed to fetch stats:", e);
+      // Keep fallback values on error
     }
   }, []);
 

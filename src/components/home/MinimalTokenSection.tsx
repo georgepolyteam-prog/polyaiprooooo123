@@ -23,7 +23,7 @@ export const MinimalTokenSection = () => {
 
   return (
     <section className="relative px-6 md:px-12 lg:px-20 py-24 md:py-32 bg-muted/20">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Section label */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -90,7 +90,7 @@ export const MinimalTokenSection = () => {
           transition={{ delay: 0.3 }}
           className="rounded-xl border border-border overflow-hidden bg-card"
         >
-          <div className="relative w-full" style={{ paddingBottom: '50%' }}>
+          <div className="relative w-full pb-[85%] md:pb-[50%]">
             <iframe
               src={`https://dexscreener.com/solana/${CONTRACT_ADDRESS}?embed=1&theme=dark&info=0`}
               className="absolute top-0 left-0 w-full h-full border-0"

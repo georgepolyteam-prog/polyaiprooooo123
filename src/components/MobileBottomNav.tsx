@@ -9,15 +9,16 @@ import { ConnectWallet } from "@/components/ConnectWallet";
 const navItems = [
   { id: "markets", label: "Markets", icon: BarChart3, path: "/markets" },
   { id: "live-trades", label: "Live", icon: Activity, path: "/live-trades" },
-  { id: "chat", label: "Chat", icon: MessageSquare, path: "/", isCenter: true },
+  { id: "chat", label: "Chat", icon: MessageSquare, path: "/chat", isCenter: true },
   { id: "my-trades", label: "Trades", icon: Wallet, path: "/my-trades" },
   { id: "menu", label: "Menu", icon: Menu, path: null },
 ];
 
 const menuItems = [
+  { id: "home", label: "Home", icon: LineChart, path: "/" },
   { id: "markets", label: "Browse Markets", icon: BarChart3, path: "/markets" },
   { id: "live-trades", label: "Live Trades", icon: Activity, path: "/live-trades" },
-  { id: "chat", label: "Chat (Home)", icon: MessageSquare, path: "/" },
+  { id: "chat", label: "AI Chat", icon: MessageSquare, path: "/chat" },
   { id: "my-trades", label: "My Trades", icon: Wallet, path: "/my-trades" },
   { id: "leaderboard", label: "Top Traders", icon: Trophy, path: "/leaderboard" },
   { id: "builders", label: "Top Builders", icon: Hammer, path: "/builders" },
