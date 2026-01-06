@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, TrendingUp, TrendingDown, AlertCircle, ExternalLink } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, AlertCircle, Radio } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type Trade } from '@/hooks/usePolymarketTerminal';
 
@@ -39,14 +39,22 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
   };
 
   return (
-    <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-      <div className="flex items-center gap-2 mb-3">
-        <Activity className="w-4 h-4 text-primary" />
-        <span className="text-sm font-medium text-foreground">Live Trades</span>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-4 rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl shadow-xl shadow-black/5"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Activity className="w-4 h-4 text-primary" />
+          </div>
+          <span className="text-sm font-semibold text-foreground">Live Trades</span>
+        </div>
         {connected && (
-          <div className="ml-auto flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-muted-foreground">LIVE</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-medium text-emerald-500 uppercase tracking-wider">Live</span>
           </div>
         )}
       </div>
@@ -54,13 +62,13 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
       {displayTrades.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <AlertCircle className="w-8 h-8 text-muted-foreground/50 mb-2" />
-          <p className="text-sm text-muted-foreground">No trades found</p>
+          <p className="text-sm text-muted-foreground">No trades yet</p>
           <p className="text-xs text-muted-foreground/70 mt-1">
             {connected ? 'Waiting for new trades...' : 'Connecting to live feed...'}
           </p>
         </div>
       ) : (
-        <div className="space-y-1.5 max-h-80 overflow-y-auto">
+        <div className="space-y-2 max-h-80 overflow-y-auto">
           <AnimatePresence mode="popLayout">
             {displayTrades.map((trade, idx) => {
               const volume = trade.price * (trade.shares_normalized || trade.shares);
@@ -74,21 +82,26 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
                   exit={{ opacity: 0, x: 20, height: 0 }}
                   transition={{ duration: 0.2 }}
                   className={cn(
-                    'flex items-center justify-between p-2 rounded-lg',
-                    'bg-background/50 border border-border/30',
-                    idx === 0 && 'ring-1 ring-primary/30',
-                    isWhale && 'ring-1 ring-amber-500/50'
+                    'flex items-center justify-between p-3 rounded-xl',
+                    'bg-background/50 border border-border/30 hover:border-border/50 transition-colors',
+                    idx === 0 && 'ring-1 ring-primary/20 bg-primary/5',
+                    isWhale && 'ring-1 ring-amber-500/30 bg-amber-500/5'
                   )}
                 >
-                  <div className="flex items-center gap-2">
-                    {trade.side === 'BUY' ? (
-                      <TrendingUp className="w-4 h-4 text-emerald-400" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-red-400" />
-                    )}
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'p-2 rounded-lg',
+                      trade.side === 'BUY' ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                    )}>
+                      {trade.side === 'BUY' ? (
+                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4 text-red-400" />
+                      )}
+                    </div>
                     <div className="flex flex-col">
                       <span className={cn(
-                        'text-sm font-medium uppercase',
+                        'text-sm font-semibold uppercase',
                         trade.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'
                       )}>
                         {trade.side} {trade.token_label || 'YES'}
@@ -98,23 +111,23 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
                       </span>
                     </div>
                     {isWhale && (
-                      <span className="text-xs">🐋</span>
+                      <span className="text-sm">🐋</span>
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-3 text-right">
+                  <div className="flex items-center gap-4 text-right">
                     <div className="flex flex-col items-end">
-                      <span className="text-sm font-mono text-foreground">
+                      <span className="text-sm font-bold font-mono text-foreground">
                         {(trade.price * 100).toFixed(0)}¢
                       </span>
                       <span className={cn(
-                        'text-xs font-medium',
+                        'text-xs font-medium font-mono',
                         isWhale ? 'text-amber-400' : 'text-muted-foreground'
                       )}>
                         {formatVolume(trade.price, trade.shares_normalized || trade.shares)}
                       </span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground/60 w-12 text-right">
+                    <span className="text-[10px] text-muted-foreground/60 w-14 text-right">
                       {formatTime(trade.timestamp)}
                     </span>
                   </div>
@@ -124,6 +137,6 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false }: Pol
           </AnimatePresence>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

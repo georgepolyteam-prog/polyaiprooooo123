@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createChart, ColorType, IChartApi, Time } from "lightweight-charts";
-import { Loader2, BarChart3, AlertCircle } from "lucide-react";
+import { Loader2, BarChart3, AlertCircle, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import type { PolyMarket } from "@/hooks/usePolymarketTerminal";
@@ -44,6 +44,14 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
       setError(null);
 
       try {
+        // Need conditionId for candlesticks endpoint
+        if (!market.conditionId) {
+          console.log('[Chart] No conditionId available for market');
+          setCandles([]);
+          setLoading(false);
+          return;
+        }
+
         const { data, error: fnError } = await supabase.functions.invoke("market-candlesticks", {
           body: {
             conditionId: market.conditionId,
@@ -57,8 +65,10 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         if (fnError) throw fnError;
 
         const raw = (data?.candlesticks || []) as Candle[];
+        console.log(`[Chart] Received ${raw.length} candles for ${market.slug}`);
         if (!cancelled) setCandles(raw);
       } catch (e) {
+        console.error('[Chart] Error fetching candles:', e);
         if (!cancelled) {
           const msg = e instanceof Error ? e.message : "Failed to load chart";
           setError(msg);
@@ -69,12 +79,12 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
       }
     }
 
-    if (market?.conditionId) fetchCandles();
+    fetchCandles();
 
     return () => {
       cancelled = true;
     };
-  }, [market.conditionId, market.yesTokenId, startTime, endTime, interval]);
+  }, [market.conditionId, market.yesTokenId, market.slug, startTime, endTime, interval]);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -95,17 +105,17 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         fontFamily: "inherit",
       },
       grid: {
-        vertLines: { color: "rgba(63, 63, 70, 0.25)" },
-        horzLines: { color: "rgba(63, 63, 70, 0.25)" },
+        vertLines: { color: "rgba(63, 63, 70, 0.15)" },
+        horzLines: { color: "rgba(63, 63, 70, 0.15)" },
       },
       width: chartContainerRef.current.clientWidth,
-      height: compact ? 220 : 280,
+      height: compact ? 220 : 300,
       rightPriceScale: {
-        borderColor: "rgba(63, 63, 70, 0.5)",
+        borderColor: "rgba(63, 63, 70, 0.3)",
         scaleMargins: { top: 0.05, bottom: 0.05 },
       },
       timeScale: {
-        borderColor: "rgba(63, 63, 70, 0.5)",
+        borderColor: "rgba(63, 63, 70, 0.3)",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -149,24 +159,35 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
   }, [candles, loading, error, compact]);
 
   return (
-    <section className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-medium text-foreground">Price Chart</h2>
+    <section className="p-5 rounded-2xl bg-gradient-to-b from-card/80 to-card/60 border border-border/50 backdrop-blur-xl shadow-xl shadow-black/5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10">
+            <BarChart3 className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Price Chart</h2>
+            <p className="text-[10px] text-muted-foreground">YES outcome price history</p>
+          </div>
+          {candles.length > 0 && (
+            <div className="flex items-center gap-1.5 ml-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-medium text-emerald-500 uppercase tracking-wider">Live</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-background/40 border border-border/30">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/50 border border-border/30">
           {(["1D", "7D", "30D"] as const).map((tf) => (
             <button
               key={tf}
               type="button"
               onClick={() => setTimeframe(tf)}
               className={cn(
-                "px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                 timeframe === tf
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
               )}
             >
               {tf}
@@ -175,11 +196,14 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         </div>
       </div>
 
-      <div className={cn("rounded-xl border border-border/40 overflow-hidden bg-background/30", compact ? "h-[220px]" : "h-[280px]")}>
+      <div className={cn(
+        "rounded-xl border border-border/30 overflow-hidden bg-background/30",
+        compact ? "h-[220px]" : "h-[300px]"
+      )}>
         {loading ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <span className="text-xs">Loading chart…</span>
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
+            <span className="text-xs">Loading chart data...</span>
           </div>
         ) : error ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground text-center px-6">
@@ -189,7 +213,8 @@ export function PolyMarketChart({ market, compact = false }: PolyMarketChartProp
         ) : candles.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <BarChart3 className="w-8 h-8 opacity-50" />
-            <span className="text-xs">No chart data</span>
+            <span className="text-xs">No chart data available</span>
+            <span className="text-[10px] opacity-70">Price history will appear here</span>
           </div>
         ) : (
           <div ref={chartContainerRef} className="h-full w-full" />
