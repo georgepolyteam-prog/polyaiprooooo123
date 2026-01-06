@@ -180,9 +180,6 @@ export const AppSidebar = () => {
         <div className="space-y-1">
           {mainNav.map((item) => {
             const isActive = currentPath === item.url;
-            // Skip showing both Home and Chat if they'd both be highlighted
-            if (item.url === '/' && currentPath === '/chat') return null;
-            if (item.url === '/chat' && currentPath === '/') return null;
             return (
               <NavItem
                 key={item.url}
