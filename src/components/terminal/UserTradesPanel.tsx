@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { Loader2, RefreshCw, Clock, TrendingUp, TrendingDown, Filter } from 'lucide-react';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConnectWallet } from '@/components/ConnectWallet';
-import { useAuth } from '@/hooks/useAuth';
-import { TerminalAuthGate } from './TerminalAuthGate';
-import { format } from 'date-fns';
 
 type TimeFilter = '24h' | '7d' | '30d' | 'all';
 
@@ -22,7 +20,6 @@ interface Trade {
 }
 
 export function UserTradesPanel() {
-  const { user } = useAuth();
   const { address, isConnected } = useAccount();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,43 +38,67 @@ export function UserTradesPanel() {
       else if (timeFilter === '7d') start_time = now - 7 * 86400;
       else if (timeFilter === '30d') start_time = now - 30 * 86400;
 
-      // Fetch from dome-user-data same as MyTrades history
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dome-user-data`,
+      const domePromise = fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dome-user-data`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user: address,
+          type: 'all',
+          start_time,
+          limit: 100,
+        }),
+      });
+
+      const profilePromise = fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-profile?address=${address}&timeframe=${timeFilter}`,
         {
-          method: 'POST',
           headers: {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            user: address,
-            type: 'all',
-            start_time,
-            limit: 100,
-          }),
         }
       );
 
-      if (!response.ok) throw new Error('Failed to fetch');
-      const result = await response.json();
+      const [domeResponse, profileResponse] = await Promise.all([domePromise, profilePromise]);
 
-      // Map orders array from dome-user-data
-      const domeOrders = result.orders || [];
-      const mapped: Trade[] = domeOrders.map((o: any) => ({
-        marketSlug: o.market_slug || '',
-        marketTitle: o.market_title || 'Unknown Market',
-        side: o.side || 'BUY',
-        volume: parseFloat(String(o.price || 0)) * parseFloat(String(o.size || 0)),
-        price: parseFloat(String(o.price || 0)),
-        shares: parseFloat(String(o.size || 0)),
-        timestamp: typeof o.timestamp === 'string' ? parseInt(o.timestamp) : o.timestamp || 0,
-      }));
+      let nextTrades: Trade[] = [];
+
+      // Prefer Dome orders (same as MyTrades)
+      if (domeResponse.ok) {
+        const domeResult = await domeResponse.json();
+        const domeOrders = domeResult?.orders || [];
+        nextTrades = domeOrders.map((o: any) => ({
+          marketSlug: o.market_slug || '',
+          marketTitle: o.market_title || 'Unknown Market',
+          side: o.side || 'BUY',
+          volume: parseFloat(String(o.price || 0)) * parseFloat(String(o.size || 0)),
+          price: parseFloat(String(o.price || 0)),
+          shares: parseFloat(String(o.size || 0)),
+          timestamp: typeof o.timestamp === 'string' ? parseInt(o.timestamp) : o.timestamp || 0,
+        }));
+      }
+
+      // Fallback to wallet-profile recent trades if Dome returns nothing (same as MyTrades)
+      if (nextTrades.length === 0 && profileResponse.ok) {
+        const profileResult = await profileResponse.json();
+        const recentTrades = Array.isArray(profileResult?.recentTrades) ? profileResult.recentTrades : [];
+        nextTrades = recentTrades.map((t: any) => ({
+          marketSlug: t.marketSlug ?? t.market_slug ?? '',
+          marketTitle: t.marketTitle ?? t.market_title ?? 'Unknown Market',
+          side: t.side ?? 'BUY',
+          volume: Number(t.volume ?? 0),
+          price: Number(t.price ?? 0),
+          shares: Number(t.shares ?? 0),
+          timestamp: Number(t.timestamp ?? 0),
+        }));
+      }
 
       // Sort by timestamp descending (newest first)
-      mapped.sort((a, b) => b.timestamp - a.timestamp);
-
-      setTrades(mapped);
+      nextTrades.sort((a, b) => b.timestamp - a.timestamp);
+      setTrades(nextTrades);
     } catch (e) {
       console.error('[Trades] Error:', e);
     } finally {
@@ -115,17 +136,6 @@ export function UserTradesPanel() {
       return 'Unknown';
     }
   };
-
-  // Not signed in
-  if (!user) {
-    return (
-      <TerminalAuthGate
-        title="View Trade History"
-        description="Sign in to see your recent trades"
-        icon={<Clock className="w-7 h-7 text-primary" />}
-      />
-    );
-  }
 
   // Not wallet connected
   if (!isConnected) {
