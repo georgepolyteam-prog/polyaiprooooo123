@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, TrendingUp, TrendingDown, AlertCircle, Radio, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertCircle, Radio, Loader2, Waves } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type Trade } from '@/hooks/usePolymarketTerminal';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,9 +10,10 @@ interface PolyTradeFeedProps {
   maxTrades?: number;
   connected?: boolean;
   loading?: boolean;
+  onTradeClick?: (trade: Trade) => void;
 }
 
-export function PolyTradeFeed({ trades, maxTrades = 15, connected = false, loading = false }: PolyTradeFeedProps) {
+export function PolyTradeFeed({ trades, maxTrades = 15, connected = false, loading = false, onTradeClick }: PolyTradeFeedProps) {
   const displayTrades = useMemo(() => {
     return trades.slice(0, maxTrades);
   }, [trades, maxTrades]);
@@ -49,9 +50,9 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false, loadi
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-primary/10">
-            <Activity className="w-4 h-4 text-primary" />
+            <Waves className="w-4 h-4 text-primary" />
           </div>
-          <span className="text-sm font-semibold text-foreground">Live Trades</span>
+          <span className="text-sm font-semibold text-foreground">Recent Trades</span>
         </div>
         {loading && (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border/30">
@@ -110,11 +111,13 @@ export function PolyTradeFeed({ trades, maxTrades = 15, connected = false, loadi
                   animate={{ opacity: 1, x: 0, height: 'auto' }}
                   exit={{ opacity: 0, x: 20, height: 0 }}
                   transition={{ duration: 0.2 }}
+                  onClick={() => onTradeClick?.(trade)}
                   className={cn(
                     'flex items-center justify-between p-3 rounded-xl',
                     'bg-background/50 border border-border/30 hover:border-border/50 transition-colors',
                     idx === 0 && 'ring-1 ring-primary/20 bg-primary/5',
-                    isWhale && 'ring-1 ring-amber-500/30 bg-amber-500/5'
+                    isWhale && 'ring-1 ring-amber-500/30 bg-amber-500/5',
+                    onTradeClick && 'cursor-pointer hover:bg-muted/30'
                   )}
                 >
                   <div className="flex items-center gap-3">
