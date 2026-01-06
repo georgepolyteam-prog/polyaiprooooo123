@@ -278,15 +278,35 @@ serve(async (req) => {
       );
     }
 
+    // Parse params from both URL (GET) and body (POST)
     const url = new URL(req.url);
-    const sport = url.searchParams.get("sport") || "nfl";
-    const minSpread = parseFloat(url.searchParams.get("minSpread") || "1");
-    const date = url.searchParams.get("date") || undefined;
+    let body: any = {};
+    if (req.method === "POST") {
+      try {
+        body = await req.json();
+      } catch {
+        body = {};
+      }
+    }
 
-    console.log(`[arb-scanner] Scanning for ${sport} arb opportunities, minSpread: ${minSpread}%`);
+    const sport = body.sport || url.searchParams.get("sport") || "nfl";
+    const minSpread = parseFloat(body.minSpread || url.searchParams.get("minSpread") || "1");
+    const today = new Date().toISOString().slice(0, 10);
+    const date = body.date || url.searchParams.get("date") || today;
+
+    console.log(`[arb-scanner] Method: ${req.method}, sport: ${sport}, minSpread: ${minSpread}%, date: ${date}`);
 
     // Fetch matching markets
     const matchingMarkets = await fetchMatchingMarkets(sport, DOME_API_KEY, date);
+    
+    // Defensive check
+    if (!Array.isArray(matchingMarkets)) {
+      console.error("[arb-scanner] matchingMarkets is not an array:", typeof matchingMarkets);
+      return new Response(
+        JSON.stringify({ error: "Invalid matching markets format", opportunities: [] }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     if (matchingMarkets.length === 0) {
       console.log("[arb-scanner] No matching markets found");
