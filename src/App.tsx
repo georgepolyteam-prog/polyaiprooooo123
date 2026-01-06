@@ -36,6 +36,7 @@ import Kalshi from "./pages/Kalshi";
 import KalshiTerminal from "./pages/KalshiTerminal";
 import KalshiDisclaimer from "./pages/KalshiDisclaimer";
 import PolymarketTerminal from "./pages/PolymarketTerminal";
+import ArbFinder from "./pages/ArbFinder";
 import Partnerships from "./pages/Partnerships";
 
 const AppContent = () => {
@@ -85,6 +86,7 @@ const AppContent = () => {
               <Route path="/terminal" element={<PolymarketTerminal />} />
               <Route path="/kalshi-terminal" element={<KalshiTerminal />} />
               <Route path="/partnerships" element={<Partnerships />} />
+              <Route path="/arb" element={<ArbFinder />} />
               <Route path="/adminpanel" element={<AdminPanel />} />
               <Route path="/adminpanel" element={<AdminPanel />} />
               <Route path="*" element={<NotFound />} />

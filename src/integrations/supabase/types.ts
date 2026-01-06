@@ -14,6 +14,105 @@ export type Database = {
   }
   public: {
     Tables: {
+      arb_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          min_spread_percent: number | null
+          sport: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          min_spread_percent?: number | null
+          sport?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          min_spread_percent?: number | null
+          sport?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      arb_opportunities: {
+        Row: {
+          buy_platform: string
+          buy_price: number
+          buy_volume: number | null
+          discovered_at: string | null
+          event_title: string
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          kalshi_ticker: string
+          match_key: string
+          polymarket_slug: string
+          polymarket_token_id: string | null
+          sell_platform: string
+          sell_price: number
+          sell_volume: number | null
+          sport: string | null
+          spread_percent: number
+          updated_at: string | null
+        }
+        Insert: {
+          buy_platform: string
+          buy_price: number
+          buy_volume?: number | null
+          discovered_at?: string | null
+          event_title: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          kalshi_ticker: string
+          match_key: string
+          polymarket_slug: string
+          polymarket_token_id?: string | null
+          sell_platform: string
+          sell_price: number
+          sell_volume?: number | null
+          sport?: string | null
+          spread_percent: number
+          updated_at?: string | null
+        }
+        Update: {
+          buy_platform?: string
+          buy_price?: number
+          buy_volume?: number | null
+          discovered_at?: string | null
+          event_title?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          kalshi_ticker?: string
+          match_key?: string
+          polymarket_slug?: string
+          polymarket_token_id?: string | null
+          sell_platform?: string
+          sell_price?: number
+          sell_volume?: number | null
+          sport?: string | null
+          spread_percent?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       chat_logs: {
         Row: {
           conversation_id: string | null
