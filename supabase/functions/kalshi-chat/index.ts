@@ -1,14 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.52.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-
 interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant';
   content: string;
 }
 
@@ -20,11 +19,13 @@ serve(async (req) => {
   try {
     const { messages, marketTitle, yesPrice, noPrice, volume, closeTime, initialAnalysis } = await req.json();
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY is not configured');
     }
 
-    // Build comprehensive system message with full market context
+    const anthropic = new Anthropic({ apiKey });
+
     const currentDate = new Date().toLocaleDateString('en-US', { 
       weekday: 'long', 
       year: 'numeric', 
@@ -68,52 +69,25 @@ YOUR GUIDELINES
 8. If the user asks about entry points, discuss price levels and timing
 9. Keep responses focused but thorough - aim for 2-4 paragraphs unless more detail is requested`;
 
-    // Prepare full conversation with system context
-    const conversationMessages: ChatMessage[] = [
-      { role: 'system', content: systemMessage },
-      ...messages.map((m: ChatMessage) => ({
-        role: m.role,
-        content: m.content
-      }))
-    ];
+    // Convert messages to Anthropic format
+    const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: string }> = messages.map((m: ChatMessage) => ({
+      role: m.role,
+      content: m.content
+    }));
 
     console.log('[kalshi-chat] Processing chat with', messages.length, 'messages for market:', marketTitle);
-    console.log('[kalshi-chat] Using openai/gpt-5 for high-quality responses');
+    console.log('[kalshi-chat] Using Claude claude-sonnet-4-20250514 via Anthropic SDK');
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-5',
-        messages: conversationMessages,
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      system: systemMessage,
+      messages: anthropicMessages,
     });
 
-    if (!response.ok) {
-      const status = response.status;
-      console.error('[kalshi-chat] API error:', status);
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: 'API credits exhausted. Please try again later.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw new Error(`AI API error: ${status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = response.content[0]?.type === 'text' 
+      ? response.content[0].text 
+      : '';
 
     if (!content) {
       throw new Error('No content in AI response');
