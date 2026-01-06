@@ -463,11 +463,11 @@ export function usePolymarketTerminal({ enabled = true }: UsePolymarketTerminalO
     }
   }, [selectedMarket?.slug]);
 
-  // Poll every 2 seconds for live updates (only when tab is visible)
+  // Poll every 3 seconds for live updates (only when tab is visible)
   useEffect(() => {
     if (!enabled || !selectedMarket || !isTabVisible) return;
 
-    const interval = setInterval(fetchMarketData, 2000);
+    const interval = setInterval(fetchMarketData, 3000);
     return () => clearInterval(interval);
   }, [enabled, selectedMarket, isTabVisible, fetchMarketData]);
 
