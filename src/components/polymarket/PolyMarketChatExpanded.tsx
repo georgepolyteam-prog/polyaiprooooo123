@@ -14,6 +14,120 @@ import type { Message, AnalysisStep } from '@/hooks/usePolyChat';
 
 import polyLogo from '@/assets/poly-logo-new.png';
 
+// Markdown formatting helper (matches /chat page format)
+const formatInlineText = (text: string): React.ReactNode => {
+  const boldRegex = /\*\*(.*?)\*\*/g;
+  const tempText = text.replace(boldRegex, (_, content) => `<<<BOLD_START>>>${content}<<<BOLD_END>>>`);
+  const parts = tempText.split(/(<<<BOLD_START>>>.*?<<<BOLD_END>>>)/);
+
+  return parts.map((part, idx) => {
+    if (part.startsWith("<<<BOLD_START>>>") && part.endsWith("<<<BOLD_END>>>")) {
+      const content = part.slice(16, -14);
+      return <strong key={idx} className="font-semibold text-foreground">{content}</strong>;
+    }
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    if (urlRegex.test(part)) {
+      const urlParts = part.split(urlRegex);
+      return urlParts.map((urlPart, i) => {
+        if (/(https?:\/\/[^\s]+)/.test(urlPart)) {
+          return (
+            <a
+              key={`${idx}-${i}`}
+              href={urlPart}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              {urlPart}
+            </a>
+          );
+        }
+        return urlPart;
+      });
+    }
+
+    return part;
+  });
+};
+
+const formatText = (text: string) => {
+  const lines = text.split("\n");
+
+  return lines.map((line, index) => {
+    const trimmedLine = line.trim();
+    
+    if (trimmedLine === "") return <div key={index} className="h-2" />;
+    
+    // Main header: ## Title
+    if (trimmedLine.startsWith("## ")) {
+      const headerText = trimmedLine.slice(3);
+      return (
+        <h2 key={index} className="text-base font-bold text-foreground mt-4 mb-2 first:mt-0">
+          {formatInlineText(headerText)}
+        </h2>
+      );
+    }
+    
+    // Sub header: ### Subtitle
+    if (trimmedLine.startsWith("### ")) {
+      const headerText = trimmedLine.slice(4);
+      return (
+        <h3 key={index} className="text-sm font-semibold text-foreground mt-3 mb-1 border-l-2 border-primary/50 pl-2">
+          {formatInlineText(headerText)}
+        </h3>
+      );
+    }
+    
+    // Key-value bold line: **Label:** Value
+    if (trimmedLine.startsWith("**") && trimmedLine.includes(":**")) {
+      return (
+        <div key={index} className="py-1 px-2 my-0.5 rounded bg-muted/40 text-sm">
+          {formatInlineText(trimmedLine)}
+        </div>
+      );
+    }
+
+    // Emoji headers
+    if (/^[🎯💭⚠️📊🏁📈⚡🔥✨💡🚨]/.test(trimmedLine)) {
+      return (
+        <div key={index} className="font-semibold text-foreground mt-3 mb-1 text-sm">
+          {formatInlineText(trimmedLine)}
+        </div>
+      );
+    }
+    
+    // Bullet points
+    if (trimmedLine.startsWith("• ") || trimmedLine.startsWith("- ") || trimmedLine.startsWith("* ")) {
+      const bulletContent = trimmedLine.slice(2);
+      return (
+        <div key={index} className="flex gap-2 ml-2 my-0.5">
+          <span className="text-primary mt-0.5 text-xs">•</span>
+          <span className="text-foreground/90 text-sm leading-relaxed">{formatInlineText(bulletContent)}</span>
+        </div>
+      );
+    }
+    
+    // Numbered lists
+    const numberMatch = trimmedLine.match(/^(\d+)\.\s+(.+)/);
+    if (numberMatch) {
+      return (
+        <div key={index} className="flex gap-2 ml-2 my-0.5">
+          <span className="text-primary/70 font-medium min-w-[1.2rem] text-sm">{numberMatch[1]}.</span>
+          <span className="text-foreground/90 text-sm leading-relaxed">{formatInlineText(numberMatch[2])}</span>
+        </div>
+      );
+    }
+
+    // Regular paragraph
+    return (
+      <p key={index} className="text-foreground/90 my-1 leading-relaxed text-sm">
+        {formatInlineText(trimmedLine)}
+      </p>
+    );
+  });
+};
+
 interface PolyMarketChatExpandedProps {
   market: PolyMarket;
   open: boolean;
@@ -199,13 +313,17 @@ export function PolyMarketChatExpanded({
                       
                       <div
                         className={cn(
-                          'max-w-[80%] px-5 py-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed',
+                          'max-w-[80%] px-5 py-3 rounded-2xl leading-relaxed',
                           msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground rounded-br-md shadow-lg shadow-primary/20'
-                            : 'bg-muted/50 text-foreground rounded-bl-md border border-border/50'
+                            ? 'bg-primary text-primary-foreground rounded-br-md shadow-lg shadow-primary/20 text-sm'
+                            : 'bg-muted/50 rounded-bl-md border border-border/50'
                         )}
                       >
-                        {msg.content}
+                        {msg.role === 'user' ? (
+                          msg.content
+                        ) : (
+                          <div className="prose-compact">{formatText(msg.content)}</div>
+                        )}
                         {msg.isStreaming && (
                           <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/60 animate-pulse" />
                         )}

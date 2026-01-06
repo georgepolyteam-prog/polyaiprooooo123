@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { createChart, ColorType, IChartApi, Time } from "lightweight-charts";
+import { createChart, ColorType, IChartApi, ISeriesApi, Time, CandlestickData } from "lightweight-charts";
 import { Loader2, BarChart3, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -26,12 +26,14 @@ interface PolyMarketChartProps {
 export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMarketChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
   const [timeframe, setTimeframe] = useState<Timeframe>("7D");
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; price: number } | null>(null);
+  const [visibleRange, setVisibleRange] = useState<{ min: number; max: number } | null>(null);
 
   const { startTime, endTime, interval } = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
@@ -98,6 +100,7 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     if (chartRef.current) {
       chartRef.current.remove();
       chartRef.current = null;
+      seriesRef.current = null;
     }
 
     if (candles.length === 0) return;
@@ -140,18 +143,53 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
       wickDownColor: "#ef4444",
     });
 
-    series.setData(
-      candles.map((c) => ({
-        time: c.time as Time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      })),
-    );
+    const chartData: CandlestickData[] = candles.map((c) => ({
+      time: c.time as Time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }));
+
+    series.setData(chartData);
 
     chart.timeScale().fitContent();
     chartRef.current = chart;
+    seriesRef.current = series;
+
+    // Track visible price range for alert positioning
+    const updateVisibleRange = () => {
+      if (!seriesRef.current) return;
+      try {
+        const priceScale = chart.priceScale('right');
+        // Get the visible logical range for price
+        const visibleTimeRange = chart.timeScale().getVisibleLogicalRange();
+        if (visibleTimeRange) {
+          // Get price range from the visible data
+          const prices = chartData
+            .filter((_, i) => i >= Math.floor(visibleTimeRange.from) && i <= Math.ceil(visibleTimeRange.to))
+            .flatMap(c => [c.high as number, c.low as number]);
+          
+          if (prices.length > 0) {
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            const padding = (max - min) * 0.05;
+            setVisibleRange({
+              min: Math.max(0, min - padding),
+              max: Math.min(1, max + padding),
+            });
+          }
+        }
+      } catch (err) {
+        // Ignore errors during range calculation
+      }
+    };
+
+    // Update range on zoom/pan
+    chart.timeScale().subscribeVisibleLogicalRangeChange(updateVisibleRange);
+    
+    // Initial range
+    updateVisibleRange();
 
     // ResizeObserver for dynamic sizing
     const resizeObserver = new ResizeObserver((entries) => {
@@ -160,6 +198,7 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
       if (entry) {
         const { width, height } = entry.contentRect;
         chartRef.current.applyOptions({ width, height });
+        updateVisibleRange();
       }
     });
 
@@ -170,41 +209,28 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
+        seriesRef.current = null;
       }
     };
   }, [candles, loading, error]);
 
-  // Handle right-click on chart for context menu
+  // Handle right-click on chart for context menu - use series.coordinateToPrice for accurate conversion
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     
-    if (!chartRef.current || !onCreateAlert) return;
+    if (!chartRef.current || !seriesRef.current || !onCreateAlert) return;
     
     const rect = chartContainerRef.current?.getBoundingClientRect();
     if (!rect) return;
     
-    // Get price at click position using the chart's coordinate conversion
+    // Get y coordinate relative to chart container
     const y = e.clientY - rect.top;
     
-    // Use the chart's time scale and price scale for accurate conversion
     try {
-      // Get the series and use coordinateToPrice for accurate price
-      const series = chartRef.current.priceScale('right');
+      // Use the series' coordinateToPrice method for accurate price at y position
+      const price = seriesRef.current.coordinateToPrice(y);
       
-      // Calculate price based on visible price range from candles
-      if (candles.length > 0) {
-        const visibleData = candles.slice(-50); // Use recent candles for price range
-        const minPrice = Math.min(...visibleData.map(c => c.low));
-        const maxPrice = Math.max(...visibleData.map(c => c.high));
-        const padding = (maxPrice - minPrice) * 0.05;
-        const effectiveMin = Math.max(0, minPrice - padding);
-        const effectiveMax = Math.min(1, maxPrice + padding);
-        
-        // Convert y position to price
-        const chartHeight = rect.height;
-        const priceRatio = y / chartHeight;
-        const price = effectiveMax - priceRatio * (effectiveMax - effectiveMin);
-        
+      if (price !== null && !isNaN(price)) {
         setContextMenu({
           x: e.clientX,
           y: e.clientY,
@@ -214,7 +240,27 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     } catch (err) {
       console.error('[Chart] Context menu price calculation failed:', err);
     }
-  }, [onCreateAlert, candles]);
+  }, [onCreateAlert]);
+
+  // Calculate alert line positions using series.priceToCoordinate for accurate positioning
+  const getAlertLinePosition = useCallback((alertPrice: number) => {
+    if (!seriesRef.current || !chartContainerRef.current) return null;
+    
+    try {
+      const y = seriesRef.current.priceToCoordinate(alertPrice);
+      if (y === null) return null;
+      
+      const rect = chartContainerRef.current.getBoundingClientRect();
+      const pct = (y / rect.height) * 100;
+      
+      // Hide if out of visible area
+      if (pct < 0 || pct > 100) return null;
+      
+      return pct;
+    } catch {
+      return null;
+    }
+  }, []);
 
   return (
     <section className="h-full flex flex-col">
@@ -231,18 +277,22 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
           )}
         </div>
 
-        {/* Timeframe selector */}
-        <div className="flex items-center rounded-md bg-muted/30 border border-border/40 p-0.5">
+        {/* Professional Timeframe selector */}
+        <div className="flex items-center p-0.5 rounded-lg bg-muted/40 border border-border/50">
           {(["1D", "7D", "30D"] as const).map((tf) => (
             <button
               key={tf}
               type="button"
               onClick={() => setTimeframe(tf)}
               className={cn(
-                "px-3 py-1 rounded text-[10px] font-bold tracking-wide transition-all",
+                "relative px-3 py-1 rounded-md text-[10px] font-bold tracking-wide transition-all duration-200",
                 timeframe === tf
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
+                  ? [
+                      "bg-gradient-to-r from-primary/20 to-primary/10",
+                      "text-primary shadow-sm",
+                      "before:absolute before:inset-0 before:rounded-md before:ring-1 before:ring-primary/40",
+                    ]
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
               )}
             >
               {tf}
@@ -276,28 +326,20 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
           />
         )}
 
-        {/* Alert lines - positioned using chart's actual price range */}
-        {alerts.length > 0 && candles.length > 0 && chartRef.current && (
+        {/* Alert lines - positioned using series.priceToCoordinate for accuracy */}
+        {alerts.length > 0 && candles.length > 0 && seriesRef.current && (
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             {alerts.map((alert) => {
-              // Calculate position based on visible price range
-              const visibleData = candles.slice(-50);
-              const minPrice = Math.min(...visibleData.map(c => c.low));
-              const maxPrice = Math.max(...visibleData.map(c => c.high));
-              const padding = (maxPrice - minPrice) * 0.05;
-              const effectiveMin = Math.max(0, minPrice - padding);
-              const effectiveMax = Math.min(1, maxPrice + padding);
-              
               const alertPriceDecimal = alert.targetPrice / 100;
-              const pct = ((effectiveMax - alertPriceDecimal) / (effectiveMax - effectiveMin)) * 100;
+              const pct = getAlertLinePosition(alertPriceDecimal);
               
               // Hide if out of visible range
-              if (pct < 0 || pct > 100) return null;
+              if (pct === null) return null;
               
               return (
                 <div
                   key={alert.id}
-                  className="absolute left-0 right-0 border-t border-dashed border-yellow-500/70 z-10"
+                  className="absolute left-0 right-0 border-t border-dashed border-yellow-500/70 z-10 transition-all duration-150"
                   style={{ top: `${pct}%` }}
                 >
                   <span className="absolute right-2 -top-2.5 bg-yellow-500 text-black text-[9px] px-1.5 py-0.5 rounded font-bold">

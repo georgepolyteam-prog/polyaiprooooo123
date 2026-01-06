@@ -3,7 +3,6 @@ import {
   LayoutGrid,
   PanelLeft,
   AlertCircle,
-  ExternalLink,
   TrendingUp,
   TrendingDown,
   RefreshCw,
@@ -11,7 +10,7 @@ import {
   Briefcase,
   Clock,
   FileText,
-  GripHorizontal,
+  HelpCircle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -342,17 +341,13 @@ export default function PolymarketTerminal() {
               </span>
             </div>
 
-            {selectedMarket && (
-              <a
-                href={selectedMarket.marketUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-xs font-medium"
-              >
-                Trade
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
+            <Link
+              to="/help"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors text-xs font-medium border border-border/50"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Help
+            </Link>
           </div>
         </header>
 
