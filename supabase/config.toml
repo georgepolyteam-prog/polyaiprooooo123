@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.kalshi-analysis]
 verify_jwt = false
+
+[functions.public-stats]
+verify_jwt = false
