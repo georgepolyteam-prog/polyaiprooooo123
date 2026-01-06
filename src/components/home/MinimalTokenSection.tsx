@@ -3,13 +3,13 @@ import { motion } from "framer-motion";
 import { Copy, Check, ExternalLink } from "lucide-react";
 import solanaLogo from "@/assets/solana-logo.png";
 
-const CONTRACT_ADDRESS = "7MezGMZ5AR9fCK4CyokGYKc9gJGKq2WYZpQrryWRpump";
-const DEXSCREENER_URL = "https://dexscreener.com/solana/7MezGMZ5AR9fCK4CyokGYKc9gJGKq2WYZpQrryWRpump";
+const CONTRACT_ADDRESS = "982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump";
+const DEXSCREENER_URL = "https://dexscreener.com/solana/982rmGDwnrekE1QjdMFGn7y6cm8ajaU5Ziq5BrZtpump";
 
 const buyLinks = [
-  { name: "Raydium", url: `https://raydium.io/swap/?inputMint=sol&outputMint=${CONTRACT_ADDRESS}` },
-  { name: "Jupiter", url: `https://jup.ag/swap/SOL-${CONTRACT_ADDRESS}` },
+  { name: "Binance Web3", url: `https://web3.binance.com/sv/token/sol/${CONTRACT_ADDRESS}` },
   { name: "Pump.fun", url: `https://pump.fun/coin/${CONTRACT_ADDRESS}` },
+  { name: "OKX Wallet", url: `https://www.okx.com/web3/dex-swap#inputChain=501&inputCurrency=So11111111111111111111111111111111111111112&outputChain=501&outputCurrency=${CONTRACT_ADDRESS}` },
 ];
 
 export const MinimalTokenSection = () => {

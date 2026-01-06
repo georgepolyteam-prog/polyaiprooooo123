@@ -57,16 +57,15 @@ export const HeroStatement = () => {
           <span className="text-primary">smarter.</span>
         </motion.h1>
 
-        {/* Subtext - monospace, understated */}
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4 }}
           className="font-mono text-sm md:text-base text-muted-foreground max-w-md mb-12"
         >
-          AI-powered analysis for Polymarket & Kalshi.
+          The all-in-one platform for prediction market traders.
           <br />
-          Built for traders who want an edge.
+          AI research. Live data. Execution.
         </motion.p>
 
         {/* CTA - minimal, not screaming */}
@@ -84,10 +83,10 @@ export const HeroStatement = () => {
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
           <Link
-            to="/terminal"
+            to="/markets"
             className="font-mono text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            or enter terminal →
+            or browse markets →
           </Link>
         </motion.div>
 
