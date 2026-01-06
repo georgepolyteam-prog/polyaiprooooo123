@@ -31,6 +31,7 @@ export function UserTradesPanel() {
 
     setLoading(true);
     try {
+      // Fetch from dome-user-data same as MyTrades history
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dome-user-data`,
         {
@@ -42,7 +43,7 @@ export function UserTradesPanel() {
           body: JSON.stringify({
             user: address,
             type: 'all',
-            limit: 50,
+            limit: 100,
           }),
         }
       );
@@ -50,7 +51,9 @@ export function UserTradesPanel() {
       if (!response.ok) throw new Error('Failed to fetch');
       const result = await response.json();
 
-      const mapped: Trade[] = (result.orders || []).map((o: any) => ({
+      // Map orders array from dome-user-data
+      const domeOrders = result.orders || [];
+      const mapped: Trade[] = domeOrders.map((o: any) => ({
         marketSlug: o.market_slug || '',
         marketTitle: o.market_title || 'Unknown Market',
         side: o.side || 'BUY',
@@ -59,6 +62,9 @@ export function UserTradesPanel() {
         shares: parseFloat(String(o.size || 0)),
         timestamp: typeof o.timestamp === 'string' ? parseInt(o.timestamp) : o.timestamp || 0,
       }));
+
+      // Sort by timestamp descending (newest first)
+      mapped.sort((a, b) => b.timestamp - a.timestamp);
 
       setTrades(mapped);
     } catch (e) {
@@ -75,10 +81,18 @@ export function UserTradesPanel() {
     }
   }, [isConnected, address, hasFetched, fetchTrades]);
 
+  // Reset when address changes
+  useEffect(() => {
+    setHasFetched(false);
+    setTrades([]);
+  }, [address]);
+
   const formatTime = (ts: number) => {
     try {
       if (!ts || isNaN(ts)) return 'Unknown';
-      return format(new Date(ts * 1000), 'MMM d, HH:mm');
+      // Handle both seconds and milliseconds timestamps
+      const date = ts > 9999999999 ? new Date(ts) : new Date(ts * 1000);
+      return format(date, 'MMM d, HH:mm');
     } catch {
       return 'Unknown';
     }
@@ -140,23 +154,23 @@ export function UserTradesPanel() {
         {trades.map((trade, idx) => (
           <div
             key={`${trade.marketSlug}-${trade.timestamp}-${idx}`}
-            className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/30 hover:bg-muted/50 transition-colors"
+            className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/30 hover:bg-muted/50 transition-colors"
           >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <div
                 className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                  'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
                   trade.side?.toUpperCase() === 'BUY' ? 'bg-emerald-500/10' : 'bg-red-500/10'
                 )}
               >
                 {trade.side?.toUpperCase() === 'BUY' ? (
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                 ) : (
-                  <TrendingDown className="w-4 h-4 text-red-400" />
+                  <TrendingDown className="w-3.5 h-3.5 text-red-400" />
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium truncate">{trade.marketTitle}</p>
+                <p className="text-[11px] font-medium truncate text-foreground">{trade.marketTitle}</p>
                 <p className="text-[10px] text-muted-foreground">
                   <span
                     className={cn(
@@ -171,8 +185,8 @@ export function UserTradesPanel() {
               </div>
             </div>
             <div className="text-right shrink-0 ml-2">
-              <p className="text-xs font-mono text-foreground">${trade.volume.toFixed(2)}</p>
-              <p className="text-[10px] text-muted-foreground">{formatTime(trade.timestamp)}</p>
+              <p className="text-[11px] font-mono text-foreground">${trade.volume.toFixed(2)}</p>
+              <p className="text-[9px] text-muted-foreground">{formatTime(trade.timestamp)}</p>
             </div>
           </div>
         ))}
