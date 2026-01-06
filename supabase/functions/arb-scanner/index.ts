@@ -8,36 +8,36 @@ const corsHeaders = {
 
 const DOME_API_URL = "https://api.domeapi.io/v1";
 
-// ============ Interfaces ============
+// ============ Types (match real Dome payloads we see in logs) ============
+
+type PolymarketSide = {
+  id: string;
+  label: string;
+};
 
 interface PolymarketMarket {
-  condition_id?: string;
   market_slug?: string;
-  question?: string;
   title?: string;
-  description?: string;
-  end_date_iso?: string;
-  end_date?: string;
-  tokens?: Array<{
-    token_id: string;
-    outcome: string;
-    price?: number;
-  }>;
-  volume?: number;
-  liquidity?: number;
-  category?: string;
+  condition_id?: string;
+  start_time?: number;
+  end_time?: number;
   tags?: string[];
+  side_a?: PolymarketSide; // { id, label }
+  side_b?: PolymarketSide;
+  status?: string;
 }
 
 interface KalshiMarket {
-  ticker?: string;
+  event_ticker?: string;
+  market_ticker?: string; // this is the one we need for orderbooks + dedupe
   title?: string;
-  subtitle?: string;
-  expiration_time?: string;
-  category?: string;
+  start_time?: number;
+  end_time?: number;
+  close_time?: number;
+  status?: string;
+  last_price?: number;
   volume?: number;
-  yes_bid?: number;
-  yes_ask?: number;
+  volume_24h?: number;
 }
 
 interface OrderbookLevel {
@@ -53,9 +53,15 @@ interface Orderbook {
 interface MatchedPair {
   polymarket: PolymarketMarket;
   kalshi: KalshiMarket;
-  matchScore: number;
-  matchReason: string;
-  polyTokenId: string;
+  score: number; // 0-100
+  similarity: number;
+  wordOverlap: number;
+  reason: string;
+  polyYesTokenId: string;
+  polyTitle: string;
+  kalshiTitle: string;
+  polyNorm: string;
+  kalshiNorm: string;
 }
 
 interface ArbOpportunity {
@@ -64,8 +70,8 @@ interface ArbOpportunity {
   eventTitle: string;
   category: string;
   spreadPercent: number;
-  buyPlatform: 'kalshi' | 'polymarket';
-  sellPlatform: 'kalshi' | 'polymarket';
+  buyPlatform: "kalshi" | "polymarket";
+  sellPlatform: "kalshi" | "polymarket";
   buyPrice: number;
   sellPrice: number;
   buyTicker: string;
@@ -90,609 +96,647 @@ function log(message: string, data?: unknown) {
   }
 }
 
-// ============ Fetch All Markets ============
+// ============ Fetch helpers (with pagination) ============
 
-async function fetchPolymarketMarkets(apiKey: string, limit = 100): Promise<{ markets: PolymarketMarket[]; error?: string }> {
-  try {
-    const url = `${DOME_API_URL}/polymarket/markets?status=open&limit=${limit}`;
-    log(`Fetching Polymarket markets from: ${url}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    
-    log(`Polymarket response status: ${response.status}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      log(`Polymarket API error: ${errorText}`);
-      return { markets: [], error: `Polymarket API returned ${response.status}: ${errorText}` };
-    }
-    
-    const data = await response.json();
-    log(`Polymarket raw response type: ${typeof data}`);
-    log(`Polymarket raw response keys: ${Object.keys(data || {})}`);
-    
-    // Handle different response formats
-    let markets: PolymarketMarket[] = [];
-    if (Array.isArray(data)) {
-      markets = data;
-    } else if (data?.markets && Array.isArray(data.markets)) {
-      markets = data.markets;
-    } else if (data?.data && Array.isArray(data.data)) {
-      markets = data.data;
-    }
-    
-    log(`Polymarket parsed ${markets.length} markets`);
-    
-    // Log first market structure for debugging
-    if (markets.length > 0) {
-      log(`Polymarket sample market keys: ${Object.keys(markets[0])}`);
-      log(`Polymarket sample market:`, markets[0]);
-    }
-    
-    return { markets };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    log(`Polymarket fetch error: ${errorMessage}`);
-    return { markets: [], error: errorMessage };
+async function domeGetJson(url: string, apiKey: string): Promise<{ ok: boolean; status: number; data: any; text?: string }> {
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, status: res.status, data: null, text };
   }
+
+  const data = await res.json();
+  return { ok: true, status: res.status, data };
 }
 
-async function fetchKalshiMarkets(apiKey: string, limit = 100): Promise<{ markets: KalshiMarket[]; error?: string }> {
-  try {
-    const url = `${DOME_API_URL}/kalshi/markets?status=open&limit=${limit}`;
-    log(`Fetching Kalshi markets from: ${url}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    
-    log(`Kalshi response status: ${response.status}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      log(`Kalshi API error: ${errorText}`);
-      return { markets: [], error: `Kalshi API returned ${response.status}: ${errorText}` };
-    }
-    
-    const data = await response.json();
-    log(`Kalshi raw response type: ${typeof data}`);
-    log(`Kalshi raw response keys: ${Object.keys(data || {})}`);
-    
-    // Handle different response formats
-    let markets: KalshiMarket[] = [];
-    if (Array.isArray(data)) {
-      markets = data;
-    } else if (data?.markets && Array.isArray(data.markets)) {
-      markets = data.markets;
-    } else if (data?.data && Array.isArray(data.data)) {
-      markets = data.data;
-    }
-    
-    log(`Kalshi parsed ${markets.length} markets`);
-    
-    // Log first market structure for debugging
-    if (markets.length > 0) {
-      log(`Kalshi sample market keys: ${Object.keys(markets[0])}`);
-      log(`Kalshi sample market:`, markets[0]);
-    }
-    
-    return { markets };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    log(`Kalshi fetch error: ${errorMessage}`);
-    return { markets: [], error: errorMessage };
-  }
+function extractMarketsArray(payload: any): any[] {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.markets)) return payload.markets;
+  if (Array.isArray(payload.data)) return payload.data;
+  return [];
 }
 
-// ============ Orderbook Fetching ============
+async function fetchPolymarketMarkets(apiKey: string, targetLimit: number): Promise<{ markets: PolymarketMarket[]; error?: string } > {
+  const markets: PolymarketMarket[] = [];
+  const pageSize = Math.min(100, Math.max(1, targetLimit));
+
+  let offset = 0;
+  while (markets.length < targetLimit) {
+    const url = `${DOME_API_URL}/polymarket/markets?status=open&limit=${pageSize}&offset=${offset}`;
+    log(`Fetching Polymarket markets: ${url}`);
+
+    try {
+      const res = await domeGetJson(url, apiKey);
+      log(`Polymarket markets status: ${res.status}`);
+      if (!res.ok) {
+        log(`Polymarket markets error body: ${res.text || ""}`);
+        return { markets, error: `Polymarket markets ${res.status}` };
+      }
+
+      const arr = extractMarketsArray(res.data);
+      if (arr.length === 0) break;
+
+      markets.push(...arr);
+      if (arr.length < pageSize) break;
+
+      offset += arr.length;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log(`Polymarket markets fetch exception: ${msg}`);
+      return { markets, error: msg };
+    }
+  }
+
+  const sliced = markets.slice(0, targetLimit);
+  log(`Polymarket markets fetched: ${sliced.length}`);
+  if (sliced[0]) {
+    log(`Polymarket sample keys: ${Object.keys(sliced[0] as any).join(",")}`);
+    log(`Polymarket sample:`, sliced[0]);
+  }
+  return { markets: sliced };
+}
+
+async function fetchKalshiMarkets(apiKey: string, targetLimit: number): Promise<{ markets: KalshiMarket[]; error?: string } > {
+  const markets: KalshiMarket[] = [];
+  const pageSize = Math.min(100, Math.max(1, targetLimit));
+
+  let offset = 0;
+  while (markets.length < targetLimit) {
+    const url = `${DOME_API_URL}/kalshi/markets?status=open&limit=${pageSize}&offset=${offset}`;
+    log(`Fetching Kalshi markets: ${url}`);
+
+    try {
+      const res = await domeGetJson(url, apiKey);
+      log(`Kalshi markets status: ${res.status}`);
+      if (!res.ok) {
+        log(`Kalshi markets error body: ${res.text || ""}`);
+        return { markets, error: `Kalshi markets ${res.status}` };
+      }
+
+      const arr = extractMarketsArray(res.data);
+      if (arr.length === 0) break;
+
+      markets.push(...arr);
+      if (arr.length < pageSize) break;
+
+      offset += arr.length;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log(`Kalshi markets fetch exception: ${msg}`);
+      return { markets, error: msg };
+    }
+  }
+
+  const sliced = markets.slice(0, targetLimit);
+  log(`Kalshi markets fetched: ${sliced.length}`);
+  if (sliced[0]) {
+    log(`Kalshi sample keys: ${Object.keys(sliced[0] as any).join(",")}`);
+    log(`Kalshi sample:`, sliced[0]);
+  }
+  return { markets: sliced };
+}
 
 async function fetchPolymarketOrderbook(tokenId: string, apiKey: string): Promise<Orderbook | null> {
   try {
-    const url = `${DOME_API_URL}/polymarket/orderbooks?token_id=${tokenId}`;
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    
-    if (!response.ok) {
-      log(`Polymarket orderbook failed for ${tokenId}: ${response.status}`);
+    const url = `${DOME_API_URL}/polymarket/orderbooks?token_id=${encodeURIComponent(tokenId)}`;
+    const res = await domeGetJson(url, apiKey);
+    if (!res.ok) {
+      log(`Polymarket orderbook failed (${res.status}) token_id=${tokenId}`);
       return null;
     }
-    
-    const data = await response.json();
-    return {
-      bids: Array.isArray(data.bids) ? data.bids : [],
-      asks: Array.isArray(data.asks) ? data.asks : [],
-    };
-  } catch (error) {
-    log(`Polymarket orderbook error for ${tokenId}: ${error}`);
+
+    const bids = Array.isArray(res.data?.bids) ? res.data.bids : [];
+    const asks = Array.isArray(res.data?.asks) ? res.data.asks : [];
+    return { bids, asks };
+  } catch (e) {
+    log(`Polymarket orderbook exception token_id=${tokenId}: ${String(e)}`);
     return null;
   }
 }
 
-async function fetchKalshiOrderbook(ticker: string, apiKey: string): Promise<Orderbook | null> {
+async function fetchKalshiOrderbook(marketTicker: string, apiKey: string): Promise<Orderbook | null> {
   try {
-    const url = `${DOME_API_URL}/kalshi/orderbooks?ticker=${ticker}`;
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    
-    if (!response.ok) {
-      log(`Kalshi orderbook failed for ${ticker}: ${response.status}`);
+    const url = `${DOME_API_URL}/kalshi/orderbooks?ticker=${encodeURIComponent(marketTicker)}`;
+    const res = await domeGetJson(url, apiKey);
+    if (!res.ok) {
+      log(`Kalshi orderbook failed (${res.status}) ticker=${marketTicker}`);
       return null;
     }
-    
-    const data = await response.json();
-    return {
-      bids: Array.isArray(data.bids) ? data.bids : [],
-      asks: Array.isArray(data.asks) ? data.asks : [],
-    };
-  } catch (error) {
-    log(`Kalshi orderbook error for ${ticker}: ${error}`);
+
+    const bids = Array.isArray(res.data?.bids) ? res.data.bids : [];
+    const asks = Array.isArray(res.data?.asks) ? res.data.asks : [];
+    return { bids, asks };
+  } catch (e) {
+    log(`Kalshi orderbook exception ticker=${marketTicker}: ${String(e)}`);
     return null;
   }
 }
 
-// ============ Fuzzy String Matching ============
+// ============ Matching helpers ============
 
 function normalizeText(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function getTokens(text: string): string[] {
-  const stopWords = new Set([
-    'will', 'the', 'be', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or',
-    'is', 'it', 'by', 'with', 'as', 'this', 'that', 'before', 'after', 'during'
+function tokenize(text: string): string[] {
+  const stop = new Set([
+    "will",
+    "the",
+    "be",
+    "a",
+    "an",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "and",
+    "or",
+    "is",
+    "it",
+    "by",
+    "with",
+    "as",
+    "this",
+    "that",
+    "after",
+    "before",
+    "during",
+    "from",
   ]);
-  
+
   return normalizeText(text)
-    .split(' ')
-    .filter(word => word.length > 1 && !stopWords.has(word));
+    .split(" ")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 1 && !stop.has(t));
 }
 
-function calculateTitleSimilarity(title1: string, title2: string): number {
-  if (!title1 || !title2) return 0;
-  
-  const tokens1 = getTokens(title1);
-  const tokens2 = getTokens(title2);
-  
-  if (tokens1.length === 0 || tokens2.length === 0) return 0;
-  
-  // Count matching tokens
-  let matches = 0;
-  for (const t1 of tokens1) {
-    for (const t2 of tokens2) {
-      if (t1 === t2) {
-        matches++;
-        break;
-      }
-      // Partial match (one contains the other)
-      if (t1.length > 3 && t2.length > 3) {
-        if (t1.includes(t2) || t2.includes(t1)) {
-          matches += 0.5;
-          break;
-        }
-      }
-    }
-  }
-  
-  // Jaccard-like similarity
-  const union = new Set([...tokens1, ...tokens2]).size;
-  const similarity = (matches / union) * 100;
-  
-  return Math.min(100, similarity);
+function jaccardSimilarity(tokensA: string[], tokensB: string[]): number {
+  if (tokensA.length === 0 || tokensB.length === 0) return 0;
+
+  const a = new Set(tokensA);
+  const b = new Set(tokensB);
+
+  let intersection = 0;
+  for (const t of a) if (b.has(t)) intersection++;
+
+  const union = new Set([...a, ...b]).size;
+  return (intersection / union) * 100;
 }
 
-function detectCategory(title1: string, title2: string): string {
-  const combined = `${title1} ${title2}`.toLowerCase();
-  
-  if (/trump|biden|elect|vote|congress|senate|president|democrat|republican/.test(combined)) {
-    return 'politics';
-  }
-  if (/bitcoin|btc|ethereum|eth|crypto|solana|sol/.test(combined)) {
-    return 'crypto';
-  }
-  if (/nfl|nba|mlb|nhl|super bowl|world series|championship|game|team/.test(combined)) {
-    return 'sports';
-  }
-  if (/interest rate|fed|inflation|gdp|stock|market/.test(combined)) {
-    return 'finance';
-  }
-  
-  return 'general';
+function wordOverlapPercent(tokensA: string[], tokensB: string[]): number {
+  if (tokensA.length === 0 || tokensB.length === 0) return 0;
+
+  const a = new Set(tokensA);
+  const b = new Set(tokensB);
+
+  let intersection = 0;
+  for (const t of a) if (b.has(t)) intersection++;
+
+  const denom = Math.min(a.size, b.size) || 1;
+  return (intersection / denom) * 100;
 }
 
-// ============ Find Matching Markets ============
+function detectCategory(polyTitle: string, kalshiTitle: string): string {
+  const combined = `${polyTitle} ${kalshiTitle}`.toLowerCase();
+
+  if (/trump|biden|elect|vote|congress|senate|president|democrat|republican/.test(combined)) return "politics";
+  if (/bitcoin|btc|ethereum|eth|crypto|solana|sol/.test(combined)) return "crypto";
+  if (/nfl|nba|mlb|nhl|super bowl|world series|championship|game|team/.test(combined)) return "sports";
+  if (/interest rate|fed|inflation|gdp|stock|market/.test(combined)) return "finance";
+  return "general";
+}
+
+function pickPolymarketYesTokenId(m: PolymarketMarket): string {
+  // Based on actual payload: side_a.label="Yes" with id being token_id
+  const a = m.side_a;
+  const b = m.side_b;
+
+  if (a?.id && a.label?.toLowerCase() === "yes") return a.id;
+  if (b?.id && b.label?.toLowerCase() === "yes") return b.id;
+
+  // fallback: still return side_a.id if exists (common)
+  if (a?.id) return a.id;
+  if (b?.id) return b.id;
+  return "";
+}
+
+type ComparisonDebugRow = {
+  score: number;
+  similarity: number;
+  wordOverlap: number;
+  passed: boolean;
+  polyTitle: string;
+  kalshiTitle: string;
+  polyNorm: string;
+  kalshiNorm: string;
+  why: string;
+};
+
+function pushTopComparisons(top: ComparisonDebugRow[], row: ComparisonDebugRow, limit: number) {
+  if (top.length < limit) {
+    top.push(row);
+    top.sort((a, b) => b.score - a.score);
+    return;
+  }
+  if (row.score <= top[top.length - 1].score) return;
+  top[top.length - 1] = row;
+  top.sort((a, b) => b.score - a.score);
+}
 
 function findMatchingMarkets(
-  polymarkets: PolymarketMarket[],
+  polyMarkets: PolymarketMarket[],
   kalshiMarkets: KalshiMarket[],
-  minSimilarity: number,
+  minScore: number,
   debug: boolean
-): MatchedPair[] {
+): { matches: MatchedPair[]; comparisonAttempts: number; topComparisons: ComparisonDebugRow[] } {
   const matches: MatchedPair[] = [];
   const usedKalshi = new Set<string>();
-  
-  log(`Starting matching: ${polymarkets.length} Poly x ${kalshiMarkets.length} Kalshi`);
-  
-  let comparisonCount = 0;
-  
-  for (const poly of polymarkets) {
-    const polyTitle = poly.question || poly.title || '';
-    if (!polyTitle) continue;
-    
-    // Get YES token ID
-    let polyTokenId = '';
-    if (poly.tokens && poly.tokens.length > 0) {
-      const yesToken = poly.tokens.find(t => t.outcome?.toLowerCase() === 'yes') || poly.tokens[0];
-      polyTokenId = yesToken?.token_id || '';
-    }
-    if (!polyTokenId && poly.condition_id) {
-      polyTokenId = poly.condition_id;
-    }
-    
-    if (!polyTokenId) {
-      if (debug) log(`Skipping Poly market (no token): ${polyTitle.substring(0, 50)}`);
-      continue;
-    }
-    
-    let bestMatch: { kalshi: KalshiMarket; score: number } | null = null;
-    
-    for (const kalshi of kalshiMarkets) {
-      const kalshiTicker = kalshi.ticker || '';
-      if (!kalshiTicker || usedKalshi.has(kalshiTicker)) continue;
-      
-      const kalshiTitle = kalshi.title || '';
-      if (!kalshiTitle) continue;
-      
-      comparisonCount++;
-      
-      const similarity = calculateTitleSimilarity(polyTitle, kalshiTitle);
-      
-      if (debug && similarity > 50) {
-        log(`Potential match (${similarity.toFixed(0)}%): "${polyTitle.substring(0, 40)}" vs "${kalshiTitle.substring(0, 40)}"`);
+
+  const topComparisons: ComparisonDebugRow[] = [];
+  let comparisonAttempts = 0;
+
+  log(`Matching: ${polyMarkets.length} Polymarket x ${kalshiMarkets.length} Kalshi`);
+
+  // Pre-filter: only Kalshi with market_ticker + title
+  const kalshiCandidates = kalshiMarkets.filter((k) => Boolean(k.market_ticker && k.title));
+  const polyCandidates = polyMarkets.filter((p) => Boolean((p.title || p.market_slug) && pickPolymarketYesTokenId(p)));
+
+  log(`Candidates: poly=${polyCandidates.length}, kalshi=${kalshiCandidates.length}`);
+
+  for (const p of polyCandidates) {
+    const polyTitle = p.title || "";
+    const polyYesTokenId = pickPolymarketYesTokenId(p);
+
+    const pTokens = tokenize(polyTitle);
+    const pNorm = normalizeText(polyTitle);
+
+    let best: MatchedPair | null = null;
+
+    for (const k of kalshiCandidates) {
+      const kalshiTicker = k.market_ticker!;
+      if (usedKalshi.has(kalshiTicker)) continue;
+
+      const kalshiTitle = k.title || "";
+      const kTokens = tokenize(kalshiTitle);
+      const kNorm = normalizeText(kalshiTitle);
+
+      comparisonAttempts++;
+
+      const similarity = jaccardSimilarity(pTokens, kTokens);
+      const overlap = wordOverlapPercent(pTokens, kTokens);
+      const score = Math.max(similarity, overlap);
+
+      const passed = score >= minScore;
+      const why = passed
+        ? `pass: score=${score.toFixed(1)} (sim=${similarity.toFixed(1)}, overlap=${overlap.toFixed(1)})`
+        : `fail: score=${score.toFixed(1)} < ${minScore}`;
+
+      if (debug) {
+        pushTopComparisons(
+          topComparisons,
+          {
+            score: Number(score.toFixed(2)),
+            similarity: Number(similarity.toFixed(2)),
+            wordOverlap: Number(overlap.toFixed(2)),
+            passed,
+            polyTitle,
+            kalshiTitle,
+            polyNorm: pNorm,
+            kalshiNorm: kNorm,
+            why,
+          },
+          20
+        );
       }
-      
-      if (similarity >= minSimilarity && (!bestMatch || similarity > bestMatch.score)) {
-        bestMatch = { kalshi, score: similarity };
+
+      if (passed && (!best || score > best.score)) {
+        best = {
+          polymarket: p,
+          kalshi: k,
+          score: Number(score.toFixed(2)),
+          similarity: Number(similarity.toFixed(2)),
+          wordOverlap: Number(overlap.toFixed(2)),
+          reason: `score=${score.toFixed(0)} (sim=${similarity.toFixed(0)}, overlap=${overlap.toFixed(0)})`,
+          polyYesTokenId,
+          polyTitle,
+          kalshiTitle,
+          polyNorm: pNorm,
+          kalshiNorm: kNorm,
+        };
       }
     }
-    
-    if (bestMatch) {
-      usedKalshi.add(bestMatch.kalshi.ticker!);
-      matches.push({
-        polymarket: poly,
-        kalshi: bestMatch.kalshi,
-        matchScore: Math.round(bestMatch.score),
-        matchReason: `${Math.round(bestMatch.score)}% title similarity`,
-        polyTokenId,
-      });
-      
-      log(`MATCHED: "${polyTitle.substring(0, 50)}" <-> "${bestMatch.kalshi.title?.substring(0, 50)}" (${bestMatch.score.toFixed(0)}%)`);
+
+    if (best) {
+      usedKalshi.add(best.kalshi.market_ticker!);
+      matches.push(best);
+      log(`MATCH: ${best.score.toFixed(1)}% :: "${best.polyTitle.slice(0, 60)}" <-> "${best.kalshiTitle.slice(0, 60)}"`);
     }
   }
-  
-  log(`Completed ${comparisonCount} comparisons, found ${matches.length} matches`);
-  
-  return matches.sort((a, b) => b.matchScore - a.matchScore);
+
+  log(`comparisonAttempts=${comparisonAttempts}, matches=${matches.length}`);
+
+  matches.sort((a, b) => b.score - a.score);
+  return { matches, comparisonAttempts, topComparisons };
 }
 
-// ============ Calculate Arbitrage ============
+// ============ Arbitrage calculation ============
 
-function calculateArbitrage(
-  pair: MatchedPair,
-  polyOrderbook: Orderbook,
-  kalshiOrderbook: Orderbook
-): ArbOpportunity | null {
-  const polyBestBid = polyOrderbook.bids[0];
-  const polyBestAsk = polyOrderbook.asks[0];
-  const kalshiBestBid = kalshiOrderbook.bids[0];
-  const kalshiBestAsk = kalshiOrderbook.asks[0];
-  
+function calcSpread(buyCents: number, sellCents: number): number {
+  if (buyCents <= 0) return 0;
+  return ((sellCents - buyCents) / buyCents) * 100;
+}
+
+function calculateArbitrage(pair: MatchedPair, polyOb: Orderbook, kalshiOb: Orderbook): ArbOpportunity | null {
+  const polyBestBid = polyOb.bids[0];
+  const polyBestAsk = polyOb.asks[0];
+  const kalshiBestBid = kalshiOb.bids[0];
+  const kalshiBestAsk = kalshiOb.asks[0];
+
+  if (!polyBestBid && !polyBestAsk && !kalshiBestBid && !kalshiBestAsk) return null;
+
   const opportunities: ArbOpportunity[] = [];
-  const category = detectCategory(
-    pair.polymarket.question || pair.polymarket.title || '',
-    pair.kalshi.title || ''
-  );
-  
-  // Scenario 1: Buy on Kalshi (ask), Sell on Polymarket (bid)
+  const eventTitle = pair.polyTitle || pair.kalshiTitle || "Unknown";
+  const expiresAt = pair.polymarket.end_time ? new Date(pair.polymarket.end_time * 1000).toISOString() : (pair.kalshi.end_time ? new Date(pair.kalshi.end_time * 1000).toISOString() : null);
+  const category = detectCategory(pair.polyTitle, pair.kalshiTitle);
+
+  // Buy Kalshi ask, sell Polymarket bid
   if (kalshiBestAsk && polyBestBid) {
-    const buyPrice = kalshiBestAsk.price * 100;
-    const sellPrice = polyBestBid.price * 100;
-    
+    const buyPrice = Math.round(kalshiBestAsk.price * 100);
+    const sellPrice = Math.round(polyBestBid.price * 100);
     if (sellPrice > buyPrice) {
-      const spread = ((sellPrice - buyPrice) / buyPrice) * 100;
+      const spread = calcSpread(buyPrice, sellPrice);
       opportunities.push({
-        id: `${pair.kalshi.ticker}-${pair.polymarket.market_slug || pair.polymarket.condition_id}`,
-        matchKey: pair.polymarket.market_slug || pair.polymarket.condition_id || '',
-        eventTitle: pair.polymarket.question || pair.polymarket.title || pair.kalshi.title || 'Unknown',
+        id: `${pair.kalshi.market_ticker}-${pair.polymarket.market_slug || pair.polymarket.condition_id}`,
+        matchKey: pair.polymarket.market_slug || pair.polymarket.condition_id || pair.kalshi.market_ticker || "",
+        eventTitle,
         category,
         spreadPercent: Number(spread.toFixed(2)),
-        buyPlatform: 'kalshi',
-        sellPlatform: 'polymarket',
-        buyPrice: Math.round(buyPrice),
-        sellPrice: Math.round(sellPrice),
-        buyTicker: pair.kalshi.ticker || '',
-        sellTicker: pair.polymarket.market_slug || pair.polymarket.condition_id || '',
+        buyPlatform: "kalshi",
+        sellPlatform: "polymarket",
+        buyPrice,
+        sellPrice,
+        buyTicker: pair.kalshi.market_ticker || "",
+        sellTicker: pair.polymarket.market_slug || pair.polymarket.condition_id || "",
         buyVolume: kalshiBestAsk.size,
         sellVolume: polyBestBid.size,
         estimatedProfit: Number(Math.max(0, spread - 2).toFixed(2)),
-        expiresAt: pair.polymarket.end_date_iso || pair.polymarket.end_date || pair.kalshi.expiration_time || null,
+        expiresAt,
         updatedAt: Date.now(),
-        matchScore: pair.matchScore,
-        matchReason: pair.matchReason,
+        matchScore: Math.round(pair.score),
+        matchReason: pair.reason,
       });
     }
   }
-  
-  // Scenario 2: Buy on Polymarket (ask), Sell on Kalshi (bid)
+
+  // Buy Polymarket ask, sell Kalshi bid
   if (polyBestAsk && kalshiBestBid) {
-    const buyPrice = polyBestAsk.price * 100;
-    const sellPrice = kalshiBestBid.price * 100;
-    
+    const buyPrice = Math.round(polyBestAsk.price * 100);
+    const sellPrice = Math.round(kalshiBestBid.price * 100);
     if (sellPrice > buyPrice) {
-      const spread = ((sellPrice - buyPrice) / buyPrice) * 100;
+      const spread = calcSpread(buyPrice, sellPrice);
       opportunities.push({
-        id: `${pair.polymarket.market_slug || pair.polymarket.condition_id}-${pair.kalshi.ticker}`,
-        matchKey: pair.polymarket.market_slug || pair.polymarket.condition_id || '',
-        eventTitle: pair.polymarket.question || pair.polymarket.title || pair.kalshi.title || 'Unknown',
+        id: `${pair.polymarket.market_slug || pair.polymarket.condition_id}-${pair.kalshi.market_ticker}`,
+        matchKey: pair.polymarket.market_slug || pair.polymarket.condition_id || pair.kalshi.market_ticker || "",
+        eventTitle,
         category,
         spreadPercent: Number(spread.toFixed(2)),
-        buyPlatform: 'polymarket',
-        sellPlatform: 'kalshi',
-        buyPrice: Math.round(buyPrice),
-        sellPrice: Math.round(sellPrice),
-        buyTicker: pair.polymarket.market_slug || pair.polymarket.condition_id || '',
-        sellTicker: pair.kalshi.ticker || '',
+        buyPlatform: "polymarket",
+        sellPlatform: "kalshi",
+        buyPrice,
+        sellPrice,
+        buyTicker: pair.polymarket.market_slug || pair.polymarket.condition_id || "",
+        sellTicker: pair.kalshi.market_ticker || "",
         buyVolume: polyBestAsk.size,
         sellVolume: kalshiBestBid.size,
         estimatedProfit: Number(Math.max(0, spread - 2).toFixed(2)),
-        expiresAt: pair.polymarket.end_date_iso || pair.polymarket.end_date || pair.kalshi.expiration_time || null,
+        expiresAt,
         updatedAt: Date.now(),
-        matchScore: pair.matchScore,
-        matchReason: pair.matchReason,
+        matchScore: Math.round(pair.score),
+        matchReason: pair.reason,
       });
     }
   }
-  
-  // Return best opportunity
+
   if (opportunities.length === 0) return null;
-  return opportunities.sort((a, b) => b.spreadPercent - a.spreadPercent)[0];
+  opportunities.sort((a, b) => b.spreadPercent - a.spreadPercent);
+  return opportunities[0];
 }
 
-// ============ Main Handler ============
+// ============ Main handler ============
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const startTime = Date.now();
+  const start = Date.now();
   log("=== ARB SCANNER START ===");
 
+  // IMPORTANT: never throw 500; always return empty opportunities on failure
   try {
-    const DOME_API_KEY = Deno.env.get("DOME_API_KEY");
-    if (!DOME_API_KEY) {
-      log("ERROR: DOME_API_KEY not configured");
+    const apiKey = Deno.env.get("DOME_API_KEY") || "";
+    if (!apiKey) {
+      log("Missing DOME_API_KEY");
       return new Response(
-        JSON.stringify({ 
-          opportunities: [], 
-          error: "API key not configured",
-          debug: { step: "init", message: "DOME_API_KEY missing" }
-        }),
+        JSON.stringify({ opportunities: [], error: "DOME_API_KEY missing" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    log("DOME_API_KEY present");
 
-    // Parse params
     let body: Record<string, unknown> = {};
     if (req.method === "POST") {
       try {
         body = await req.json();
-        log("Request body:", body);
-      } catch (e) {
-        log("Failed to parse body, using defaults");
+      } catch {
         body = {};
       }
     }
 
-    const minSpread = parseFloat(String(body.minSpread || "1"));
-    const minSimilarity = parseFloat(String(body.minSimilarity || "80"));
-    const category = String(body.category || "all");
+    const minSpread = Number.parseFloat(String(body.minSpread ?? "1"));
+    const minSimilarity = Number.parseFloat(String(body.minSimilarity ?? "60"));
+    const limit = Math.max(1, Math.min(500, Number.parseInt(String(body.limit ?? "100"), 10) || 100));
     const debug = Boolean(body.debug);
-    const limit = parseInt(String(body.limit || "100"));
-    
-    log(`Params: minSpread=${minSpread}%, minSimilarity=${minSimilarity}%, category=${category}, debug=${debug}, limit=${limit}`);
+    const category = String(body.category ?? "all");
 
-    // Step 1: Fetch markets from both platforms
-    log("Step 1: Fetching markets from both platforms...");
-    
-    const [polyResult, kalshiResult] = await Promise.all([
-      fetchPolymarketMarkets(DOME_API_KEY, limit),
-      fetchKalshiMarkets(DOME_API_KEY, limit),
+    log(`Params: limit=${limit}, minSpread=${minSpread}, minSimilarity=${minSimilarity}, category=${category}, debug=${debug}`);
+
+    // 1) Fetch markets
+    const [polyRes, kalshiRes] = await Promise.all([
+      fetchPolymarketMarkets(apiKey, limit),
+      fetchKalshiMarkets(apiKey, limit),
     ]);
-    
-    const debugInfo: Record<string, unknown> = {
-      polymarketCount: polyResult.markets.length,
-      kalshiCount: kalshiResult.markets.length,
-      polymarketError: polyResult.error || null,
-      kalshiError: kalshiResult.error || null,
-    };
-    
-    if (polyResult.markets.length === 0 && kalshiResult.markets.length === 0) {
-      log("No markets from either platform");
+
+    const samplePolymarketTitles = polyRes.markets
+      .map((m) => m.title)
+      .filter(Boolean)
+      .slice(0, 5);
+
+    const sampleKalshiTitles = kalshiRes.markets
+      .map((m) => m.title)
+      .filter(Boolean)
+      .slice(0, 5);
+
+    log(`Fetched markets: polymarket=${polyRes.markets.length}, kalshi=${kalshiRes.markets.length}`);
+
+    if (polyRes.markets.length === 0 || kalshiRes.markets.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          opportunities: [], 
-          message: "No markets available from either platform",
-          debug: debugInfo,
+        JSON.stringify({
+          opportunities: [],
+          message: "Insufficient markets from one or both platforms",
           stats: {
-            polymarketCount: 0,
-            kalshiCount: 0,
+            polymarketCount: polyRes.markets.length,
+            kalshiCount: kalshiRes.markets.length,
             matchedPairs: 0,
             opportunitiesFound: 0,
-            elapsedMs: Date.now() - startTime,
-          }
+            elapsedMs: Date.now() - start,
+          },
+          debug: debug
+            ? {
+                samplePolymarketTitles,
+                sampleKalshiTitles,
+                polymarketError: polyRes.error || null,
+                kalshiError: kalshiRes.error || null,
+              }
+            : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Step 2: Find matching markets
-    log("Step 2: Finding matching markets...");
-    
-    const matchedPairs = findMatchingMarkets(
-      polyResult.markets,
-      kalshiResult.markets,
+    // 2) Match
+    const { matches, comparisonAttempts, topComparisons } = findMatchingMarkets(
+      polyRes.markets,
+      kalshiRes.markets,
       minSimilarity,
       debug
     );
-    
-    debugInfo.matchedPairs = matchedPairs.length;
-    debugInfo.topMatches = matchedPairs.slice(0, 5).map(p => ({
-      poly: (p.polymarket.question || p.polymarket.title || '').substring(0, 50),
-      kalshi: (p.kalshi.title || '').substring(0, 50),
-      score: p.matchScore,
-    }));
-    
-    if (matchedPairs.length === 0) {
-      log("No matching markets found");
+
+    const topMatches = debug
+      ? topComparisons.slice(0, 20)
+      : undefined;
+
+    if (matches.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          opportunities: [], 
+        JSON.stringify({
+          opportunities: [],
           message: "No matching markets found between platforms",
-          debug: debugInfo,
           stats: {
-            polymarketCount: polyResult.markets.length,
-            kalshiCount: kalshiResult.markets.length,
+            polymarketCount: polyRes.markets.length,
+            kalshiCount: kalshiRes.markets.length,
             matchedPairs: 0,
             opportunitiesFound: 0,
-            elapsedMs: Date.now() - startTime,
-          }
+            elapsedMs: Date.now() - start,
+          },
+          debug: debug
+            ? {
+                samplePolymarketTitles,
+                sampleKalshiTitles,
+                comparisonAttempts,
+                topMatches,
+                note: "topMatches includes top 20 comparison attempts even if below threshold",
+              }
+            : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Step 3: Fetch orderbooks and calculate arbitrage
-    log("Step 3: Fetching orderbooks and calculating spreads...");
-    
+    // 3) Fetch orderbooks & compute spreads (batch)
     const opportunities: ArbOpportunity[] = [];
-    let orderbooksFetched = 0;
-    let orderbookErrors = 0;
-    
-    // Process in batches to avoid overwhelming the API
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < matchedPairs.length; i += BATCH_SIZE) {
-      const batch = matchedPairs.slice(i, i + BATCH_SIZE);
-      
+    let orderbookPairsAttempted = 0;
+    let orderbookPairsOk = 0;
+
+    const batchSize = 5;
+    for (let i = 0; i < matches.length; i += batchSize) {
+      const batch = matches.slice(i, i + batchSize);
+
       const results = await Promise.all(
         batch.map(async (pair) => {
-          try {
-            const [polyOb, kalshiOb] = await Promise.all([
-              fetchPolymarketOrderbook(pair.polyTokenId, DOME_API_KEY),
-              fetchKalshiOrderbook(pair.kalshi.ticker || '', DOME_API_KEY),
-            ]);
-            
-            orderbooksFetched++;
-            
-            if (!polyOb || !kalshiOb) {
-              orderbookErrors++;
-              return null;
-            }
-            
-            return calculateArbitrage(pair, polyOb, kalshiOb);
-          } catch (e) {
-            orderbookErrors++;
-            log(`Orderbook error for pair: ${e}`);
-            return null;
-          }
+          const kalshiTicker = pair.kalshi.market_ticker || "";
+          const polyTokenId = pair.polyYesTokenId;
+
+          if (!kalshiTicker || !polyTokenId) return null;
+
+          orderbookPairsAttempted++;
+
+          const [polyOb, kalshiOb] = await Promise.all([
+            fetchPolymarketOrderbook(polyTokenId, apiKey),
+            fetchKalshiOrderbook(kalshiTicker, apiKey),
+          ]);
+
+          if (!polyOb || !kalshiOb) return null;
+          orderbookPairsOk++;
+
+          return calculateArbitrage(pair, polyOb, kalshiOb);
         })
       );
-      
+
       for (const opp of results) {
-        if (opp && opp.spreadPercent >= minSpread) {
-          // Apply category filter
-          if (category === 'all' || opp.category === category) {
-            opportunities.push(opp);
-            log(`Found opportunity: ${opp.eventTitle.substring(0, 50)} - ${opp.spreadPercent}% spread`);
-          }
-        }
+        if (!opp) continue;
+        if (opp.spreadPercent < minSpread) continue;
+        if (category !== "all" && opp.category !== category) continue;
+        opportunities.push(opp);
       }
     }
-    
-    // Sort by spread
+
     opportunities.sort((a, b) => b.spreadPercent - a.spreadPercent);
-    
-    debugInfo.orderbooksFetched = orderbooksFetched;
-    debugInfo.orderbookErrors = orderbookErrors;
-    debugInfo.opportunitiesFound = opportunities.length;
-    
-    const elapsedMs = Date.now() - startTime;
-    log(`=== ARB SCANNER COMPLETE === ${opportunities.length} opportunities found in ${elapsedMs}ms`);
+
+    const elapsedMs = Date.now() - start;
+    log(`Done: opportunities=${opportunities.length} (matchedPairs=${matches.length}) in ${elapsedMs}ms`);
 
     return new Response(
-      JSON.stringify({ 
-        opportunities, 
+      JSON.stringify({
+        opportunities,
         count: opportunities.length,
-        debug: debug ? debugInfo : undefined,
         stats: {
-          polymarketCount: polyResult.markets.length,
-          kalshiCount: kalshiResult.markets.length,
-          matchedPairs: matchedPairs.length,
+          polymarketCount: polyRes.markets.length,
+          kalshiCount: kalshiRes.markets.length,
+          matchedPairs: matches.length,
           opportunitiesFound: opportunities.length,
+          comparisonAttempts,
+          orderbookPairsAttempted,
+          orderbookPairsOk,
           elapsedMs,
         },
         category,
         minSpread,
         timestamp: Date.now(),
+        debug: debug
+          ? {
+              samplePolymarketTitles,
+              sampleKalshiTitles,
+              comparisonAttempts,
+              topMatches,
+            }
+          : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    
-    log(`FATAL ERROR: ${errorMessage}`);
-    if (errorStack) log(`Stack: ${errorStack}`);
-    
-    // Return 200 with empty opportunities instead of 500
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log(`FATAL (caught): ${msg}`);
     return new Response(
-      JSON.stringify({ 
-        opportunities: [], 
-        error: errorMessage,
-        debug: {
-          step: "fatal",
-          message: errorMessage,
-          stack: errorStack,
-        },
+      JSON.stringify({
+        opportunities: [],
+        error: msg,
         stats: {
           polymarketCount: 0,
           kalshiCount: 0,
           matchedPairs: 0,
           opportunitiesFound: 0,
-          elapsedMs: Date.now() - startTime,
-        }
+          elapsedMs: Date.now() - start,
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
