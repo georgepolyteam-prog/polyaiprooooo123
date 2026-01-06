@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 export const HeroStatement = () => {
   return (
-    <section className="relative min-h-[85vh] flex flex-col justify-center px-6 md:px-12 lg:px-20 overflow-hidden">
+    <section className="relative min-h-[60vh] md:min-h-[85vh] flex flex-col justify-center px-6 md:px-12 lg:px-20 overflow-hidden pt-16 md:pt-0">
       {/* Subtle background elements */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Single gradient orb - not particle spam */}
@@ -95,7 +95,7 @@ export const HeroStatement = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.8 }}
-          className="absolute bottom-8 left-0 flex items-center gap-3"
+          className="flex items-center gap-3 mt-12 md:mt-16"
         >
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
