@@ -228,13 +228,16 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     
     try {
       // Use the series' coordinateToPrice method for accurate price at y position
-      const price = seriesRef.current.coordinateToPrice(y);
+      const rawPrice = seriesRef.current.coordinateToPrice(y);
       
-      if (price !== null && !isNaN(price)) {
+      if (rawPrice !== null && !isNaN(rawPrice)) {
+        // rawPrice is in 0-1 range, convert to cents (0-100) for context menu
+        const priceInCents = Math.round(Math.max(1, Math.min(99, rawPrice * 100)));
+        
         setContextMenu({
           x: e.clientX,
           y: e.clientY,
-          price: Math.max(0.01, Math.min(0.99, price)),
+          price: priceInCents, // Pass cents directly, not decimal
         });
       }
     } catch (err) {
