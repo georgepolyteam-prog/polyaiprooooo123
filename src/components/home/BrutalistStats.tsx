@@ -10,9 +10,9 @@ interface Stats {
 
 export const BrutalistStats = () => {
   const [stats, setStats] = useState<Stats>({
-    users: 0,
-    chats: 0,
-    trades: 0,
+    users: 1990,
+    chats: 4740,
+    trades: 2847,
   });
 
   const fetchStats = useCallback(async () => {

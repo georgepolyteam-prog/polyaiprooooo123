@@ -90,10 +90,10 @@ export const MinimalTokenSection = () => {
           transition={{ delay: 0.3 }}
           className="rounded-xl border border-border overflow-hidden bg-card"
         >
-          <div className="aspect-[16/9] md:aspect-[21/9]">
+          <div className="relative w-full" style={{ paddingBottom: '50%' }}>
             <iframe
-              src={`https://dexscreener.com/solana/${CONTRACT_ADDRESS}?embed=1&loadChartSettings=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=0&chartType=usd&interval=15`}
-              className="w-full h-full"
+              src={`https://dexscreener.com/solana/${CONTRACT_ADDRESS}?embed=1&theme=dark&info=0`}
+              className="absolute top-0 left-0 w-full h-full border-0"
               title="DEXScreener Chart"
             />
           </div>
