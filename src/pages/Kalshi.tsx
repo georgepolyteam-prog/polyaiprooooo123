@@ -645,13 +645,15 @@ export default function Kalshi() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="relative bg-warning/10 border-b border-warning/30"
+            className="relative bg-muted/50 border-b border-border/50"
           >
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
-                <p className="text-sm text-foreground/90 truncate sm:whitespace-normal">
-                  <span className="font-medium">Third-party interface.</span>{' '}
+                <div className="p-1 rounded-md bg-primary/10">
+                  <Shield className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                </div>
+                <p className="text-sm text-muted-foreground truncate sm:whitespace-normal">
+                  <span className="font-medium text-foreground">Third-party interface.</span>{' '}
                   <span className="hidden sm:inline">Trades execute via DFlow on Solana—not directly on Kalshi. </span>
                   <Link to="/kalshi-disclaimer" className="text-primary hover:underline font-medium">
                     Read full disclaimer
@@ -663,10 +665,10 @@ export default function Kalshi() {
                   sessionStorage.setItem('kalshi_disclaimer_dismissed', 'true');
                   window.dispatchEvent(new Event('storage'));
                 }}
-                className="p-1.5 hover:bg-warning/20 rounded-lg transition-colors flex-shrink-0"
+                className="p-1.5 hover:bg-muted rounded-lg transition-colors flex-shrink-0"
                 aria-label="Dismiss disclaimer"
               >
-                <X className="w-4 h-4 text-warning" />
+                <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
           </motion.div>
@@ -675,8 +677,8 @@ export default function Kalshi() {
 
       {/* CLEAN KALSHI-STYLE HERO */}
       <section className="relative overflow-hidden border-b border-border/30">
-        {/* Subtle gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/5 via-transparent to-transparent" />
+        {/* Subtle gradient background - matching homepage teal */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
 
         {/* Grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
@@ -687,8 +689,8 @@ export default function Kalshi() {
             {/* Logo & Title */}
             <div className="flex items-center gap-3 sm:gap-4">
               <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="relative">
-                <div className="absolute inset-0 bg-blue-500/20 rounded-2xl blur-xl" />
-                <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/20 flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-xl" />
+                <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
                   <img src={kalshiLogo} alt="Kalshi" className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl object-cover" />
                 </div>
               </motion.div>
@@ -706,7 +708,7 @@ export default function Kalshi() {
                   transition={{ delay: 0.1 }}
                   className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2"
                 >
-                  <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-500" />
+                  <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-primary" />
                   Trade on Solana via DFlow
                 </motion.p>
               </div>
@@ -718,27 +720,27 @@ export default function Kalshi() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 via-purple-600/5 to-purple-500/10 border border-purple-500/30 backdrop-blur-sm"
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border border-primary/30 backdrop-blur-sm"
               >
-                <span className="text-xs font-medium bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
+                <span className="text-xs font-medium text-primary">
                   Powered by DFlow
                 </span>
-                <div className="w-px h-3 bg-gradient-to-b from-transparent via-purple-500/50 to-transparent" />
+                <div className="w-px h-3 bg-gradient-to-b from-transparent via-primary/50 to-transparent" />
                 <img src={solanaLogo} alt="Solana" className="w-4 h-4" />
               </motion.div>
 
               {!connected ? (
-                <WalletMultiButton className="!h-10 sm:!h-11 !px-4 sm:!px-5 !rounded-xl !bg-gradient-to-r !from-purple-600 !to-purple-700 hover:!from-purple-700 hover:!to-purple-800 !shadow-lg hover:!shadow-purple-500/30 !border !border-purple-500/50 hover:!border-purple-400/70 !text-white !font-medium !text-sm !transition-all duration-300 !transform hover:!scale-[1.02]" />
+                <WalletMultiButton className="!h-10 sm:!h-11 !px-4 sm:!px-5 !rounded-xl !bg-primary hover:!bg-primary/90 !shadow-lg hover:!shadow-primary/30 !border !border-primary/50 hover:!border-primary/70 !text-primary-foreground !font-medium !text-sm !transition-all duration-300 !transform hover:!scale-[1.02]" />
               ) : (
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/30 hover:border-purple-400/50 transition-all cursor-pointer group backdrop-blur-sm"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 hover:border-primary/50 transition-all cursor-pointer group backdrop-blur-sm"
                 >
                   <div className="relative">
-                    <div className="absolute inset-0 bg-purple-500 rounded-full blur animate-pulse" />
-                    <div className="relative w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-purple-300" />
+                    <div className="absolute inset-0 bg-primary rounded-full blur animate-pulse" />
+                    <div className="relative w-2 h-2 rounded-full bg-primary" />
                   </div>
-                  <span className="text-sm font-medium bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent group-hover:from-purple-500 group-hover:to-purple-400 transition-all">
+                  <span className="text-sm font-medium text-primary group-hover:text-primary/80 transition-all">
                     {publicKey?.toBase58().slice(0, 4)}...{publicKey?.toBase58().slice(-4)}
                   </span>
                 </motion.div>
