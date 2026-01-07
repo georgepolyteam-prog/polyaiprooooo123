@@ -21,8 +21,16 @@ import {
   RefreshCw,
   Wallet,
   Link2,
-  ShoppingCart
+  ShoppingCart,
+  Bug,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,7 +58,7 @@ const ArbIntelligence = () => {
   const [copied, setCopied] = useState(false);
   const [tradeAmount, setTradeAmount] = useState('10');
   const [isExecutingTrade, setIsExecutingTrade] = useState<'yes' | 'no' | null>(null);
-  
+  const [showDebug, setShowDebug] = useState(false);
   const { findArbitrage, result, isLoading, error, reset } = useArbitrageFinder();
 
   // Solana wallet for Kalshi trades
@@ -393,10 +401,136 @@ const ArbIntelligence = () => {
                 <span>
                   Search query: <span className="text-foreground font-medium">"{result.searchQuery}"</span>
                 </span>
-                <span>
-                  {result.searchResultsCount} results found
-                </span>
+                <div className="flex items-center gap-2">
+                  <span>{result.searchResultsCount} results found</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowDebug(!showDebug)}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <Bug className="w-3 h-3" />
+                    Debug
+                    {showDebug ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </Button>
+                </div>
               </div>
+
+              {/* Debug Panel */}
+              <Collapsible open={showDebug} onOpenChange={setShowDebug}>
+                <CollapsibleContent className="space-y-4">
+                  <Card className="border-orange-500/30 bg-orange-500/5">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2 text-orange-500">
+                        <Bug className="w-4 h-4" />
+                        Debug Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-xs">
+                      {/* AI Reasoning */}
+                      {result.debug?.reasoning && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">AI Reasoning:</p>
+                          <p className="bg-background/50 p-2 rounded border">{result.debug.reasoning}</p>
+                        </div>
+                      )}
+
+                      {/* Candidate Markets */}
+                      {result.debug?.candidateTitles && result.debug.candidateTitles.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            Candidate Markets Found ({result.debug.candidateTitles.length}):
+                          </p>
+                          <ul className="bg-background/50 p-2 rounded border space-y-1">
+                            {result.debug.candidateTitles.map((title, i) => (
+                              <li key={i} className="text-muted-foreground">
+                                {i + 1}. {title}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Search URLs */}
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {result.debug?.kalshiSearchUrl && (
+                          <div>
+                            <p className="font-semibold text-muted-foreground mb-1">Kalshi Search URL:</p>
+                            <code className="bg-background/50 p-2 rounded border block break-all text-[10px]">
+                              {result.debug.kalshiSearchUrl}
+                            </code>
+                          </div>
+                        )}
+                        {result.debug?.polymarketSearchUrl && (
+                          <div>
+                            <p className="font-semibold text-muted-foreground mb-1">Polymarket Search URL:</p>
+                            <code className="bg-background/50 p-2 rounded border block break-all text-[10px]">
+                              {result.debug.polymarketSearchUrl}
+                            </code>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* All Source Markets */}
+                      {result.debug?.allSourceMarkets && result.debug.allSourceMarkets.length > 1 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            All Source Markets ({result.debug.allSourceMarkets.length}):
+                          </p>
+                          <div className="bg-background/50 p-2 rounded border space-y-1 max-h-40 overflow-y-auto">
+                            {result.debug.allSourceMarkets.map((m, i) => (
+                              <div key={i} className="flex justify-between items-center text-muted-foreground">
+                                <span className="truncate flex-1">{m.title}</span>
+                                <span className="ml-2 text-green-500">{(m.yesPrice * 100).toFixed(1)}¢</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Raw API Responses */}
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {result.debug?.sourceApiResponse && (
+                          <div>
+                            <p className="font-semibold text-muted-foreground mb-1">Source API Response:</p>
+                            <pre className="bg-black/50 p-2 rounded border overflow-auto max-h-48 text-[10px] text-green-400">
+                              {JSON.stringify(result.debug.sourceApiResponse, null, 2).slice(0, 2000)}
+                              {JSON.stringify(result.debug.sourceApiResponse).length > 2000 && '...'}
+                            </pre>
+                          </div>
+                        )}
+                        {(result.debug?.kalshiResponse || result.debug?.polymarketResponse) && (
+                          <div>
+                            <p className="font-semibold text-muted-foreground mb-1">Search API Response:</p>
+                            <pre className="bg-black/50 p-2 rounded border overflow-auto max-h-48 text-[10px] text-blue-400">
+                              {JSON.stringify(result.debug.kalshiResponse || result.debug.polymarketResponse, null, 2).slice(0, 2000)}
+                              {JSON.stringify(result.debug.kalshiResponse || result.debug.polymarketResponse).length > 2000 && '...'}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* AI Input/Output */}
+                      {result.debug?.aiInput && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">AI Input Prompt:</p>
+                          <pre className="bg-black/50 p-2 rounded border overflow-auto max-h-32 text-[10px] text-yellow-400 whitespace-pre-wrap">
+                            {result.debug.aiInput}
+                          </pre>
+                        </div>
+                      )}
+                      {result.debug?.aiOutput && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">AI Raw Output:</p>
+                          <pre className="bg-black/50 p-2 rounded border overflow-auto max-h-32 text-[10px] text-purple-400 whitespace-pre-wrap">
+                            {result.debug.aiOutput}
+                          </pre>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </CollapsibleContent>
+              </Collapsible>
 
               {/* Market Comparison */}
               <div className="grid md:grid-cols-2 gap-6">
