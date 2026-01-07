@@ -57,6 +57,7 @@ interface DebugInfo {
   parsedUrlInfo?: any;
   searchQueries?: string[];
   kalshiSearchAttempts?: SearchAttempt[];
+  polymarketSearchAttempts?: SearchAttempt[];
 }
 
 // Parse URL to detect platform and extract identifiers
@@ -517,13 +518,12 @@ Example output: ["Venezuela leader 2026", "Venezuela head of state", "Venezuela 
   return uniqueQueries.slice(0, 8); // Limit to 8 queries
 }
 
-// Search Polymarket via Gamma API
-async function searchPolymarket(query: string): Promise<{ markets: MarketData[]; rawResponse: any; url: string }> {
+// Search Polymarket via Gamma API - single query
+async function searchPolymarket(query: string): Promise<{ markets: MarketData[]; rawResponse: any; url: string; status: number }> {
   const url = `${GAMMA_API_BASE}/events?_q=${encodeURIComponent(query)}&active=true&closed=false&limit=10`;
   
   try {
     console.log(`[Polymarket] Searching via Gamma: ${query}`);
-    console.log(`[Polymarket] URL: ${url}`);
     
     const response = await fetch(url);
     const rawText = await response.text();
@@ -533,26 +533,26 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
       rawResponse = JSON.parse(rawText);
     } catch {
       console.error(`[Polymarket] Invalid JSON search response`);
-      return { markets: [], rawResponse: rawText.slice(0, 1000), url };
+      return { markets: [], rawResponse: rawText.slice(0, 1000), url, status: response.status };
     }
 
     if (!response.ok) {
       console.error(`[Polymarket] Search failed: ${response.status}`);
-      return { markets: [], rawResponse, url };
+      return { markets: [], rawResponse, url, status: response.status };
     }
 
     const events = rawResponse;
     console.log(`[Polymarket] Gamma search found ${events?.length || 0} results`);
 
     if (!events || !Array.isArray(events)) {
-      return { markets: [], rawResponse, url };
+      return { markets: [], rawResponse, url, status: response.status };
     }
 
     const markets: MarketData[] = [];
     
     for (const event of events.slice(0, 5)) {
       const eventMarkets = event.markets || [];
-      for (const market of eventMarkets.slice(0, 3)) {
+      for (const market of eventMarkets.slice(0, 5)) {
         let yesPrice = 0.5;
         let noPrice = 0.5;
         
@@ -586,11 +586,66 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
       }
     }
 
-    return { markets, rawResponse, url };
+    return { markets, rawResponse, url, status: response.status };
   } catch (error) {
     console.error(`[Polymarket] Search error:`, error);
-    return { markets: [], rawResponse: { error: String(error) }, url };
+    return { markets: [], rawResponse: { error: String(error) }, url, status: 0 };
   }
+}
+
+// Search Polymarket with multiple queries and union results
+async function searchPolymarketMulti(queries: string[]): Promise<{ 
+  markets: MarketData[]; 
+  rawResponse: any; 
+  searchAttempts: SearchAttempt[];
+  primaryUrl: string;
+}> {
+  const searchAttempts: SearchAttempt[] = [];
+  const allMarkets: MarketData[] = [];
+  const seenSlugs = new Set<string>();
+  
+  console.log(`[Polymarket] Multi-search with ${queries.length} queries:`, queries);
+  
+  // Run all queries in parallel for speed
+  const results = await Promise.all(
+    queries.slice(0, 6).map(async (query) => {
+      const result = await searchPolymarket(query);
+      return { query, result };
+    })
+  );
+  
+  for (const { query, result } of results) {
+    const eventCount = Array.isArray(result.rawResponse) ? result.rawResponse.length : 0;
+    let marketCount = 0;
+    
+    for (const market of result.markets) {
+      const key = `${market.slug}-${market.title}`;
+      if (!seenSlugs.has(key)) {
+        seenSlugs.add(key);
+        allMarkets.push(market);
+        marketCount++;
+      }
+    }
+    
+    searchAttempts.push({
+      query,
+      url: result.url,
+      status: result.status,
+      eventCount,
+      marketCount
+    });
+    
+    console.log(`[Polymarket] Query "${query}": ${eventCount} events, ${marketCount} new markets`);
+  }
+  
+  console.log(`[Polymarket] Total unique markets from all queries: ${allMarkets.length}`);
+  
+  return { 
+    markets: allMarkets, 
+    rawResponse: { searchAttempts },
+    searchAttempts,
+    primaryUrl: searchAttempts[0]?.url || ''
+  };
 }
 
 // Search Kalshi with multiple queries and union results
@@ -662,30 +717,7 @@ async function searchKalshiMulti(queries: string[]): Promise<{
                 console.log(`[Kalshi] /events/${eventTicker} failed:`, e);
               }
               
-              // Try 2: Query events endpoint with ticker filter
-              if (eventMarkets.length === 0) {
-                try {
-                  const altUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&limit=10`;
-                  const altResp = await fetch(altUrl, {
-                    headers: { 'x-api-key': DFLOW_API_KEY || '' }
-                  });
-                  if (altResp.ok) {
-                    const altData = await altResp.json();
-                    const altEvents = altData.events || [];
-                    // Find matching event by title similarity
-                    const matchingEvent = altEvents.find((e: any) => 
-                      e.title?.toLowerCase().includes(event.title?.toLowerCase()?.substring(0, 20)) ||
-                      e.event_ticker === eventTicker
-                    );
-                    if (matchingEvent?.markets) {
-                      eventMarkets = matchingEvent.markets;
-                      console.log(`[Kalshi] Got ${eventMarkets.length} markets via title match`);
-                    }
-                  }
-                } catch (e) {
-                  console.log(`[Kalshi] Alt events search failed:`, e);
-                }
-              }
+              // Skip additional fallback - too slow for multi-query
             }
             
             for (const market of eventMarkets.slice(0, 10)) {
@@ -970,9 +1002,20 @@ serve(async (req) => {
 
     console.log(`[ArbitrageFinder] Source market: ${sourceMarket?.title}, Total markets: ${allSourceMarkets.length}`);
 
+    // Use EVENT-level title for better cross-platform matching
+    let eventTitle: string;
+    if (parsed.platform === 'kalshi') {
+      // For Kalshi, get the event title from eventsResponse
+      eventTitle = debug.sourceApiResponse?.eventsResponse?.events?.[0]?.title || sourceMarket!.eventTitle || sourceMarket!.title;
+    } else {
+      // For Polymarket, get the event title from the first event
+      eventTitle = debug.sourceApiResponse?.[0]?.title || sourceMarket!.eventTitle || sourceMarket!.title;
+    }
+    console.log(`[ArbitrageFinder] Using event title for search: "${eventTitle}"`);
+
     // Generate multiple search queries for better matching
     const description = debug.sourceApiResponse?.description || debug.sourceApiResponse?.[0]?.description;
-    const searchQueries = await generateSearchQueries(sourceMarket!.title, description);
+    const searchQueries = await generateSearchQueries(eventTitle, description);
     debug.searchQueries = searchQueries;
 
     let searchResults: MarketData[] = [];
@@ -985,12 +1028,13 @@ serve(async (req) => {
       debug.allCandidateMarkets = result.markets;
       debug.kalshiSearchAttempts = result.searchAttempts;
     } else {
-      // For Kalshi->Polymarket, use first query (could enhance later)
-      const result = await searchPolymarket(searchQueries[0] || sourceMarket!.title);
+      // For Kalshi->Polymarket, use multi-query search
+      const result = await searchPolymarketMulti(searchQueries);
       searchResults = result.markets;
-      debug.polymarketSearchUrl = result.url;
+      debug.polymarketSearchUrl = result.primaryUrl;
       debug.polymarketResponse = result.rawResponse;
       debug.allCandidateMarkets = result.markets;
+      (debug as any).polymarketSearchAttempts = result.searchAttempts;
     }
 
     debug.candidateTitles = searchResults.map(r => `${r.title} (YES: ${(r.yesPrice*100).toFixed(1)}¢)`);
