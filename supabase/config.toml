@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.arb-scanner]
 verify_jwt = false
+
+[functions.arbitrage-finder]
+verify_jwt = false
