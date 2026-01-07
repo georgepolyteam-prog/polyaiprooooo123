@@ -627,47 +627,81 @@ async function searchKalshiMulti(queries: string[]): Promise<{
         const rawText = await response.text();
         try {
           rawResponse = JSON.parse(rawText);
-          const events = rawResponse.events || rawResponse.data || rawResponse || [];
+          // DFlow search returns { events: [...] }
+          const events = Array.isArray(rawResponse) ? rawResponse : (rawResponse.events || rawResponse.data || []);
           eventCount = events.length;
           
+          console.log(`[Kalshi] Search "${query}" returned ${eventCount} events, raw keys: ${Object.keys(rawResponse || {}).join(', ')}`);
+          
           // Process events - check for nested markets
-          for (const event of events.slice(0, 5)) {
+          for (const event of events.slice(0, 8)) {
             let eventMarkets = event.markets || [];
+            const eventTicker = event.event_ticker || event.ticker || event.series_ticker || event.seriesTicker;
             
-            // If no nested markets, fetch them
-            if (eventMarkets.length === 0) {
-              const eventTicker = event.ticker || event.series_ticker || event.seriesTicker;
-              if (eventTicker) {
+            console.log(`[Kalshi] Event "${event.title?.substring(0, 50)}..." ticker=${eventTicker}, has ${eventMarkets.length} inline markets`);
+            
+            // If no nested markets, fetch them using various approaches
+            if (eventMarkets.length === 0 && eventTicker) {
+              // Try 1: Fetch by event_ticker directly 
+              try {
+                const eventUrl = `${DFLOW_BASE_URL}/events/${eventTicker}?withNestedMarkets=true`;
+                console.log(`[Kalshi] Fetching event details: ${eventUrl}`);
+                const eventResp = await fetch(eventUrl, {
+                  headers: { 'x-api-key': DFLOW_API_KEY || '' }
+                });
+                if (eventResp.ok) {
+                  const eventData = await eventResp.json();
+                  // Response could be { event: {...} } or direct event object
+                  const eventObj = eventData.event || eventData;
+                  if (eventObj?.markets && eventObj.markets.length > 0) {
+                    eventMarkets = eventObj.markets;
+                    console.log(`[Kalshi] Got ${eventMarkets.length} markets via /events/${eventTicker}`);
+                  }
+                }
+              } catch (e) {
+                console.log(`[Kalshi] /events/${eventTicker} failed:`, e);
+              }
+              
+              // Try 2: Query events endpoint with ticker filter
+              if (eventMarkets.length === 0) {
                 try {
-                  const eventUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&seriesTickers=${eventTicker}&limit=1`;
-                  const eventResp = await fetch(eventUrl, {
+                  const altUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&limit=10`;
+                  const altResp = await fetch(altUrl, {
                     headers: { 'x-api-key': DFLOW_API_KEY || '' }
                   });
-                  if (eventResp.ok) {
-                    const eventData = await eventResp.json();
-                    const detailEvents = eventData.events || [];
-                    if (detailEvents[0]?.markets) {
-                      eventMarkets = detailEvents[0].markets;
+                  if (altResp.ok) {
+                    const altData = await altResp.json();
+                    const altEvents = altData.events || [];
+                    // Find matching event by title similarity
+                    const matchingEvent = altEvents.find((e: any) => 
+                      e.title?.toLowerCase().includes(event.title?.toLowerCase()?.substring(0, 20)) ||
+                      e.event_ticker === eventTicker
+                    );
+                    if (matchingEvent?.markets) {
+                      eventMarkets = matchingEvent.markets;
+                      console.log(`[Kalshi] Got ${eventMarkets.length} markets via title match`);
                     }
                   }
                 } catch (e) {
-                  console.log(`[Kalshi] Failed to fetch nested markets for ${eventTicker}`);
+                  console.log(`[Kalshi] Alt events search failed:`, e);
                 }
               }
             }
             
             for (const market of eventMarkets.slice(0, 10)) {
-              const ticker = market.ticker || '';
+              const ticker = market.ticker || market.market_ticker || '';
               if (ticker && !seenTickers.has(ticker)) {
                 seenTickers.add(ticker);
+                const yesPrice = market.yes_price ?? market.yes_ask ?? market.last_price ?? 0.5;
+                const noPrice = market.no_price ?? market.no_ask ?? (1 - yesPrice);
                 allMarkets.push({
                   platform: 'kalshi',
-                  title: market.title || market.subtitle || '',
+                  title: market.title || market.subtitle || market.question || '',
                   eventTitle: event.title,
                   slug: ticker,
-                  yesPrice: market.yes_price || market.last_price || 0.5,
-                  noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
-                  volume: market.volume,
+                  yesPrice,
+                  noPrice,
+                  volume: market.volume || market.volume_24h,
                   url: `https://kalshi.com/markets/${ticker}`,
                   ticker
                 });
@@ -675,8 +709,8 @@ async function searchKalshiMulti(queries: string[]): Promise<{
               }
             }
           }
-        } catch {
-          console.log(`[Kalshi] Invalid JSON for query "${query}"`);
+        } catch (parseError) {
+          console.log(`[Kalshi] Invalid JSON for query "${query}":`, parseError);
         }
       }
       
