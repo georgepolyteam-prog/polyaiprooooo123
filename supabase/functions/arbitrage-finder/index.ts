@@ -138,7 +138,7 @@ async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: Marke
   try {
     console.log(`[Polymarket] Fetching event via Gamma: ${slug}`);
     
-    const response = await fetch(`${GAMMA_API_BASE}/events?slug=${encodeURIComponent(slug)}`);
+    const response = await fetchWithTimeout(`${GAMMA_API_BASE}/events?slug=${encodeURIComponent(slug)}`, {}, 10000);
     const rawText = await response.text();
     let rawResponse: any;
     
@@ -235,12 +235,12 @@ async function fetchKalshiData(ticker: string, seriesTicker?: string): Promise<{
     const marketUrl = `${DFLOW_BASE_URL}/markets/${ticker}`;
     console.log(`[Kalshi] Attempt 1 - Market URL: ${marketUrl}`);
     
-    const response = await fetch(marketUrl, {
+    const response = await fetchWithTimeout(marketUrl, {
       headers: {
         'x-api-key': DFLOW_API_KEY || '',
         'Content-Type': 'application/json'
       }
-    });
+    }, 8000);
 
     const rawText = await response.text();
     let rawResponse: any;
@@ -280,12 +280,12 @@ async function fetchKalshiData(ticker: string, seriesTicker?: string): Promise<{
     const eventsUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&seriesTickers=${eventSeriesTicker}&status=active&limit=5`;
     console.log(`[Kalshi] Attempt 2 - Events with nested markets: ${eventsUrl}`);
     
-    const eventsResponse = await fetch(eventsUrl, {
+    const eventsResponse = await fetchWithTimeout(eventsUrl, {
       headers: {
         'x-api-key': DFLOW_API_KEY || '',
         'Content-Type': 'application/json'
       }
-    });
+    }, 8000);
     
     const eventsText = await eventsResponse.text();
     let eventsData: any;
@@ -348,12 +348,12 @@ async function fetchKalshiData(ticker: string, seriesTicker?: string): Promise<{
     const searchUrl = `${DFLOW_BASE_URL}/search?q=${encodeURIComponent(eventSeriesTicker)}`;
     console.log(`[Kalshi] Attempt 3 - Search fallback: ${searchUrl}`);
     
-    const searchResponse = await fetch(searchUrl, {
+    const searchResponse = await fetchWithTimeout(searchUrl, {
       headers: {
         'x-api-key': DFLOW_API_KEY || '',
         'Content-Type': 'application/json'
       }
-    });
+    }, 8000);
     
     const searchText = await searchResponse.text();
     let searchData: any;
@@ -389,12 +389,12 @@ async function fetchKalshiData(ticker: string, seriesTicker?: string): Promise<{
       console.log(`[Kalshi] Fetching event details: ${eventDetailUrl}`);
       
       try {
-        const eventDetailResp = await fetch(eventDetailUrl, {
+        const eventDetailResp = await fetchWithTimeout(eventDetailUrl, {
           headers: {
             'x-api-key': DFLOW_API_KEY || '',
             'Content-Type': 'application/json'
           }
-        });
+        }, 6000);
         
         if (eventDetailResp.ok) {
           const eventDetailData = await eventDetailResp.json();
@@ -439,7 +439,7 @@ async function fetchKalshiData(ticker: string, seriesTicker?: string): Promise<{
 // Call Claude API for AI tasks
 async function callClaude(systemPrompt: string, userMessage: string, maxTokens: number = 500): Promise<string | null> {
   try {
-    const response = await fetch(ANTHROPIC_API_URL, {
+    const response = await fetchWithTimeout(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
         'x-api-key': ANTHROPIC_API_KEY || '',
@@ -454,7 +454,7 @@ async function callClaude(systemPrompt: string, userMessage: string, maxTokens: 
           { role: 'user', content: userMessage }
         ]
       })
-    });
+    }, 20000);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -539,14 +539,33 @@ Example output: ["Venezuela leader 2026", "Venezuela head of state", "Venezuela 
   return uniqueQueries.slice(0, 8); // Limit to 8 queries
 }
 
-// Search Polymarket via Gamma API - single query
+// Calculate relevance score for an event title based on query terms
+function calculateEventRelevance(eventTitle: string, query: string): number {
+  if (!eventTitle || !query) return 0;
+  
+  const eventTitleLower = eventTitle.toLowerCase();
+  const queryTerms = query.toLowerCase()
+    .split(/\s+/)
+    .filter(term => term.length > 2); // Skip very short words like "to", "on", "be"
+  
+  let score = 0;
+  for (const term of queryTerms) {
+    if (eventTitleLower.includes(term)) {
+      score++;
+    }
+  }
+  
+  return score;
+}
+
+// Search Polymarket via Gamma API - single query with RELEVANCE SCORING
 async function searchPolymarket(query: string): Promise<{ markets: MarketData[]; rawResponse: any; url: string; status: number }> {
   const url = `${GAMMA_API_BASE}/events?_q=${encodeURIComponent(query)}&active=true&closed=false&limit=10`;
   
   try {
     console.log(`[Polymarket] Searching via Gamma: ${query}`);
     
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, {}, 10000);
     const rawText = await response.text();
     let rawResponse: any;
     
@@ -563,17 +582,41 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
     }
 
     const events = rawResponse;
-    console.log(`[Polymarket] Gamma search found ${events?.length || 0} results`);
+    console.log(`[Polymarket] Gamma search found ${events?.length || 0} events for query "${query}"`);
 
     if (!events || !Array.isArray(events)) {
       return { markets: [], rawResponse, url, status: response.status };
     }
 
+    // CRITICAL FIX: Score events by relevance and prioritize matching ones
+    const scoredEvents = events.map((event: any) => ({
+      event,
+      score: calculateEventRelevance(event.title || '', query)
+    }));
+    
+    // Sort by score descending (most relevant first)
+    scoredEvents.sort((a, b) => b.score - a.score);
+    
+    // Log top 5 event relevance scores
+    console.log(`[Polymarket] Event relevance scores for "${query}":`);
+    scoredEvents.slice(0, 5).forEach((se, idx) => {
+      console.log(`  ${idx + 1}. Score ${se.score}: "${se.event.title?.substring(0, 60)}..."`);
+    });
+
     const markets: MarketData[] = [];
     
-    // Increase limits for multi-outcome markets (was 5/5, now 10/50)
-    for (const event of events.slice(0, 10)) {
+    // Only take events with score > 0 (at least one query term matches), or top 3 if all have 0
+    const relevantEvents = scoredEvents.filter(se => se.score > 0);
+    const eventsToProcess = relevantEvents.length > 0 
+      ? relevantEvents.slice(0, 5) 
+      : scoredEvents.slice(0, 3); // Fallback to top 3 if no matches
+    
+    console.log(`[Polymarket] Processing ${eventsToProcess.length} relevant events (filtered from ${events.length})`);
+    
+    for (const { event, score } of eventsToProcess) {
       const eventMarkets = event.markets || [];
+      console.log(`[Polymarket] Event "${event.title?.substring(0, 50)}..." (score: ${score}) has ${eventMarkets.length} markets`);
+      
       for (const market of eventMarkets.slice(0, 50)) {
         let yesPrice = 0.5;
         let noPrice = 0.5;
@@ -608,6 +651,7 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
       }
     }
 
+    console.log(`[Polymarket] Total markets from relevant events: ${markets.length}`);
     return { markets, rawResponse, url, status: response.status };
   } catch (error) {
     console.error(`[Polymarket] Search error:`, error);
@@ -701,12 +745,12 @@ async function searchKalshiMulti(queries: string[]): Promise<{
     try {
       console.log(`[Kalshi] Searching: "${query}"`);
       
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           'x-api-key': DFLOW_API_KEY || '',
           'Content-Type': 'application/json'
         }
-      });
+      }, 8000);
 
       let rawResponse: any = {};
       let eventCount = 0;
@@ -735,9 +779,9 @@ async function searchKalshiMulti(queries: string[]): Promise<{
               try {
                 const eventUrl = `${DFLOW_BASE_URL}/events/${eventTicker}?withNestedMarkets=true`;
                 console.log(`[Kalshi] Fetching event details: ${eventUrl}`);
-                const eventResp = await fetch(eventUrl, {
+                const eventResp = await fetchWithTimeout(eventUrl, {
                   headers: { 'x-api-key': DFLOW_API_KEY || '' }
-                });
+                }, 6000);
                 if (eventResp.ok) {
                   const eventData = await eventResp.json();
                   // Response could be { event: {...} } or direct event object
