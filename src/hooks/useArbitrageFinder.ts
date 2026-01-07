@@ -53,6 +53,14 @@ export interface FetchAttempt {
   note: string;
 }
 
+export interface SearchAttempt {
+  query: string;
+  url: string;
+  status: number;
+  eventCount: number;
+  marketCount: number;
+}
+
 export interface DebugInfo {
   reasoning?: string;
   candidateTitles?: string[];
@@ -68,6 +76,8 @@ export interface DebugInfo {
   kalshiFetchAttempts?: FetchAttempt[];
   polymarketTokenIdNotes?: string[];
   parsedUrlInfo?: any;
+  searchQueries?: string[];
+  kalshiSearchAttempts?: SearchAttempt[];
 }
 
 export interface ArbitrageResult {
@@ -77,6 +87,7 @@ export interface ArbitrageResult {
   matchedMarket?: MatchedMarket;
   arbitrage?: ArbitrageOpportunity;
   searchQuery?: string;
+  searchQueries?: string[];
   searchResultsCount?: number;
   error?: string;
   debug?: DebugInfo;
