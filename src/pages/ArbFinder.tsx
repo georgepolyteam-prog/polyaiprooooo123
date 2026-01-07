@@ -143,10 +143,9 @@ export default function ArbFinder() {
                 <div className="space-y-3">
                   <div className="bg-background rounded-lg p-3 text-xs">
                     <div className="font-semibold mb-1">Manual test summary</div>
-                    <div>Markets: {(debugResponse as any)?.data?.stats?.polymarketCount ?? '--'} Poly • {(debugResponse as any)?.data?.stats?.kalshiCount ?? '--'} Kalshi</div>
-                    <div>Comparisons: {(debugResponse as any)?.data?.stats?.comparisonAttempts ?? '--'}</div>
                     <div>Matched pairs: {(debugResponse as any)?.data?.stats?.matchedPairs ?? '--'}</div>
                     <div>Opportunities: {(debugResponse as any)?.data?.stats?.opportunitiesFound ?? '--'}</div>
+                    <div>Orderbooks OK: {(debugResponse as any)?.data?.stats?.orderbookPairsOk ?? '--'} / {(debugResponse as any)?.data?.stats?.orderbookPairsAttempted ?? '--'}</div>
                   </div>
 
                   <div className="bg-background rounded-lg p-3 text-xs">
