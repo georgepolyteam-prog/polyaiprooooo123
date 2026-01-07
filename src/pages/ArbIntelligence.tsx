@@ -389,7 +389,7 @@ const ArbIntelligence = () => {
 
         {/* Results */}
         <AnimatePresence>
-          {result?.success && result.sourceMarket && (
+          {result?.success && (result.sourceMarket || (result.sourceMarkets && result.sourceMarkets.length > 0)) && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -427,6 +427,55 @@ const ArbIntelligence = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4 text-xs">
+                      {/* Parsed URL Info */}
+                      {result.debug?.parsedUrlInfo && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">Parsed URL:</p>
+                          <pre className="bg-background/50 p-2 rounded border text-[10px]">
+                            {JSON.stringify(result.debug.parsedUrlInfo, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+
+                      {/* Kalshi Fetch Attempts */}
+                      {result.debug?.kalshiFetchAttempts && result.debug.kalshiFetchAttempts.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            Kalshi Fetch Attempts ({result.debug.kalshiFetchAttempts.length}):
+                          </p>
+                          <div className="space-y-2">
+                            {result.debug.kalshiFetchAttempts.map((attempt, i) => (
+                              <div key={i} className="bg-background/50 p-2 rounded border">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant={attempt.status === 200 ? "default" : "destructive"} className="text-[10px]">
+                                    {attempt.status}
+                                  </Badge>
+                                  <span className="text-muted-foreground">{attempt.note}</span>
+                                </div>
+                                <code className="block break-all text-[10px] text-blue-400">{attempt.url}</code>
+                                {attempt.bodyPreview && (
+                                  <pre className="mt-1 text-[9px] text-muted-foreground overflow-hidden max-h-16">
+                                    {attempt.bodyPreview}
+                                  </pre>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Polymarket Token ID Notes */}
+                      {result.debug?.polymarketTokenIdNotes && result.debug.polymarketTokenIdNotes.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">Polymarket Token IDs:</p>
+                          <ul className="bg-background/50 p-2 rounded border space-y-1 text-[10px]">
+                            {result.debug.polymarketTokenIdNotes.map((note, i) => (
+                              <li key={i} className="text-muted-foreground">{note}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
                       {/* AI Reasoning */}
                       {result.debug?.reasoning && (
                         <div>
@@ -472,16 +521,35 @@ const ArbIntelligence = () => {
                       </div>
 
                       {/* All Source Markets */}
-                      {result.debug?.allSourceMarkets && result.debug.allSourceMarkets.length > 1 && (
+                      {result.sourceMarkets && result.sourceMarkets.length > 0 && (
                         <div>
                           <p className="font-semibold text-muted-foreground mb-1">
-                            All Source Markets ({result.debug.allSourceMarkets.length}):
+                            All Source Markets ({result.sourceMarkets.length}):
                           </p>
                           <div className="bg-background/50 p-2 rounded border space-y-1 max-h-40 overflow-y-auto">
-                            {result.debug.allSourceMarkets.map((m, i) => (
-                              <div key={i} className="flex justify-between items-center text-muted-foreground">
+                            {result.sourceMarkets.map((m, i) => (
+                              <div key={i} className="flex justify-between items-center text-muted-foreground text-[10px]">
                                 <span className="truncate flex-1">{m.title}</span>
                                 <span className="ml-2 text-green-500">{(m.yesPrice * 100).toFixed(1)}¢</span>
+                                <span className="ml-2 text-muted-foreground/50">{m.ticker || m.tokenId?.slice(0,10) || 'N/A'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* All Candidate Markets */}
+                      {result.debug?.allCandidateMarkets && result.debug.allCandidateMarkets.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            All Candidate Markets ({result.debug.allCandidateMarkets.length}):
+                          </p>
+                          <div className="bg-background/50 p-2 rounded border space-y-1 max-h-40 overflow-y-auto">
+                            {result.debug.allCandidateMarkets.map((m, i) => (
+                              <div key={i} className="flex justify-between items-center text-muted-foreground text-[10px]">
+                                <span className="truncate flex-1">{m.title}</span>
+                                <span className="ml-2 text-green-500">{(m.yesPrice * 100).toFixed(1)}¢</span>
+                                <span className="ml-2 text-muted-foreground/50">{m.ticker || m.tokenId?.slice(0,10) || 'N/A'}</span>
                               </div>
                             ))}
                           </div>
