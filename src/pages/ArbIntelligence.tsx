@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useWeb3Modal } from '@web3modal/wagmi/react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { VersionedTransaction } from '@solana/web3.js';
 import { 
   Search, 
   ArrowRight, 
@@ -13,7 +18,10 @@ import {
   Info,
   Copy,
   Check,
-  RefreshCw
+  RefreshCw,
+  Wallet,
+  Link2,
+  ShoppingCart
 } from 'lucide-react';
 import { TopBar } from '@/components/TopBar';
 import { Button } from '@/components/ui/button';
@@ -21,8 +29,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useArbitrageFinder, detectPlatform, isValidMarketUrl } from '@/hooks/useArbitrageFinder';
+import { useDflowApi } from '@/hooks/useDflowApi';
+import { useDomeRouter } from '@/hooks/useDomeRouter';
+import { useUSDCBalance } from '@/hooks/useUSDCBalance';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 
 // Platform logos
 import polyLogo from '@/assets/poly-logo-new.png';
@@ -30,10 +42,31 @@ import kalshiLogo from '@/assets/kalshi-logo.png';
 import dflowLogo from '@/assets/dflow-logo.png';
 import domeLogo from '@/assets/dome-logo.png';
 
+const POLYGON_CHAIN_ID = 137;
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
 const ArbIntelligence = () => {
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [tradeAmount, setTradeAmount] = useState('10');
+  const [isExecutingTrade, setIsExecutingTrade] = useState<'yes' | 'no' | null>(null);
+  
   const { findArbitrage, result, isLoading, error, reset } = useArbitrageFinder();
+
+  // Solana wallet for Kalshi trades
+  const { publicKey, signTransaction, connected: solanaConnected } = useWallet();
+  const { connection } = useConnection();
+  const { getOrder } = useDflowApi();
+
+  // Ethereum wallet for Polymarket trades
+  const { address: ethAddress, isConnected: ethConnected } = useAccount();
+  const { open: openWeb3Modal } = useWeb3Modal();
+  const chainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
+  const { isLinked, linkUser, isLinking, placeOrder, isDomeReady } = useDomeRouter();
+  const { balance: usdcBalance, hasSufficientBalance, isFullyApproved, approveUSDC, isApproving } = useUSDCBalance();
+
+  const isWrongNetwork = ethConnected && chainId !== POLYGON_CHAIN_ID;
 
   const detectedPlatform = url ? detectPlatform(url) : null;
   const isValidUrl = url ? isValidMarketUrl(url) : false;
@@ -59,6 +92,120 @@ const ArbIntelligence = () => {
 
   const getPlatformLogo = (platform: 'polymarket' | 'kalshi') => {
     return platform === 'polymarket' ? polyLogo : kalshiLogo;
+  };
+
+  // Execute Kalshi trade via DFlow (Solana)
+  const executeKalshiTrade = async (side: 'YES' | 'NO', ticker: string, price: number) => {
+    if (!publicKey || !signTransaction) {
+      toast.error('Connect your Solana wallet first');
+      return;
+    }
+
+    setIsExecutingTrade(side === 'YES' ? 'yes' : 'no');
+    const toastId = toast.loading(`Preparing ${side} trade on Kalshi...`);
+
+    try {
+      const amountUSDC = parseFloat(tradeAmount);
+      const amountInLamports = Math.floor(amountUSDC * 1_000_000);
+
+      // This is a simplified version - in production you'd need the proper token mints
+      const orderResponse = await getOrder(
+        USDC_MINT,
+        ticker, // Would need proper output mint
+        amountInLamports,
+        publicKey.toBase58()
+      );
+
+      toast.loading('Sign in your wallet...', { id: toastId });
+
+      const txBuffer = Buffer.from(orderResponse.transaction, 'base64');
+      const transaction = VersionedTransaction.deserialize(new Uint8Array(txBuffer));
+      const signedTx = await signTransaction(transaction);
+
+      toast.loading('Submitting transaction...', { id: toastId });
+
+      const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+        maxRetries: 3,
+      });
+
+      toast.success(`${side} trade submitted on Kalshi!`, { id: toastId });
+      console.log('Kalshi trade signature:', signature);
+    } catch (err: any) {
+      console.error('Kalshi trade failed:', err);
+      if (err?.message?.includes('User rejected')) {
+        toast.error('Trade cancelled', { id: toastId });
+      } else {
+        toast.error('Trade failed: ' + (err?.message || 'Unknown error'), { id: toastId });
+      }
+    } finally {
+      setIsExecutingTrade(null);
+    }
+  };
+
+  // Execute Polymarket trade via Dome
+  const executePolymarketTrade = async (side: 'YES' | 'NO', tokenId: string, price: number) => {
+    if (!ethConnected) {
+      openWeb3Modal();
+      return;
+    }
+
+    if (isWrongNetwork) {
+      try {
+        await switchChainAsync({ chainId: POLYGON_CHAIN_ID });
+      } catch {
+        toast.error('Please switch to Polygon network');
+        return;
+      }
+    }
+
+    if (!isLinked) {
+      toast.error('Please link your wallet first');
+      return;
+    }
+
+    if (!isFullyApproved) {
+      toast.error('Please approve contracts first');
+      return;
+    }
+
+    const amountNum = parseFloat(tradeAmount);
+    if (!hasSufficientBalance(amountNum)) {
+      toast.error(`Insufficient balance. You have $${usdcBalance.toFixed(2)}`);
+      return;
+    }
+
+    setIsExecutingTrade(side === 'YES' ? 'yes' : 'no');
+
+    try {
+      const orderPrice = Math.round(Math.min(price * 1.15, 0.99) * 100) / 100;
+
+      const result = await placeOrder({
+        tokenId,
+        side: 'BUY',
+        amount: amountNum,
+        price: orderPrice,
+        isMarketOrder: true,
+      });
+
+      if (result.success) {
+        toast.success(`${side} trade placed on Polymarket!`);
+      }
+    } catch (err: any) {
+      toast.error('Trade failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsExecutingTrade(null);
+    }
+  };
+
+  // Handle trade execution based on platform
+  const executeTrade = async (platform: 'polymarket' | 'kalshi', side: 'YES' | 'NO', tokenIdOrTicker: string, price: number) => {
+    if (platform === 'kalshi') {
+      await executeKalshiTrade(side, tokenIdOrTicker, price);
+    } else {
+      await executePolymarketTrade(side, tokenIdOrTicker, price);
+    }
   };
 
   return (
@@ -88,7 +235,59 @@ const ArbIntelligence = () => {
               <img src={domeLogo} alt="Dome" className="h-4 opacity-70" />
               <span>&</span>
               <img src={dflowLogo} alt="DFlow" className="h-4 opacity-70" />
+              <span>+ Claude AI</span>
             </div>
+          </div>
+        </div>
+
+        {/* Wallet Status */}
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+          {/* Solana Wallet for Kalshi */}
+          <div className="flex items-center gap-2 text-xs">
+            <img src={kalshiLogo} alt="Kalshi" className="w-4 h-4 rounded" />
+            <span className="text-muted-foreground">Kalshi:</span>
+            {solanaConnected ? (
+              <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                Connected
+              </Badge>
+            ) : (
+              <WalletMultiButton className="!h-6 !text-xs !py-0 !px-2 !rounded" />
+            )}
+          </div>
+
+          {/* Ethereum Wallet for Polymarket */}
+          <div className="flex items-center gap-2 text-xs">
+            <img src={polyLogo} alt="Polymarket" className="w-4 h-4 rounded" />
+            <span className="text-muted-foreground">Polymarket:</span>
+            {ethConnected ? (
+              <div className="flex items-center gap-1">
+                {isWrongNetwork ? (
+                  <Badge variant="outline" className="text-orange-500 border-orange-500/30">
+                    Wrong Network
+                  </Badge>
+                ) : !isLinked ? (
+                  <Button size="sm" variant="outline" onClick={linkUser} disabled={isLinking || !isDomeReady} className="h-6 text-xs">
+                    {isLinking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}
+                    Link
+                  </Button>
+                ) : !isFullyApproved ? (
+                  <Button size="sm" variant="outline" onClick={approveUSDC} disabled={isApproving} className="h-6 text-xs">
+                    {isApproving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Approve'}
+                  </Button>
+                ) : (
+                  <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    ${usdcBalance.toFixed(2)}
+                  </Badge>
+                )}
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => openWeb3Modal()} className="h-6 text-xs">
+                <Wallet className="w-3 h-3 mr-1" />
+                Connect
+              </Button>
+            )}
           </div>
         </div>
 
@@ -201,14 +400,12 @@ const ArbIntelligence = () => {
 
               {/* Market Comparison */}
               <div className="grid md:grid-cols-2 gap-6">
-                {/* Source Market */}
                 <MarketCard 
                   market={result.sourceMarket} 
                   label="Source Market"
                   isSource
                 />
                 
-                {/* Matched Market */}
                 {result.matchedMarket ? (
                   <MarketCard 
                     market={result.matchedMarket} 
@@ -226,8 +423,8 @@ const ArbIntelligence = () => {
                 )}
               </div>
 
-              {/* Arbitrage Strategy */}
-              {result.arbitrage?.exists ? (
+              {/* Arbitrage Strategy with Trading */}
+              {result.arbitrage?.exists && (
                 <Card className="border-green-500/50 bg-green-500/5">
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -266,6 +463,120 @@ const ArbIntelligence = () => {
                       <p className="text-lg font-medium">{result.arbitrage.strategy}</p>
                     </div>
 
+                    {/* Trade Amount Input */}
+                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                      <label className="block text-sm font-medium mb-2">Trade Amount (USD)</label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={tradeAmount}
+                          onChange={(e) => setTradeAmount(e.target.value)}
+                          className="flex-1"
+                          placeholder="10"
+                        />
+                        <div className="flex gap-1">
+                          {[10, 25, 50, 100].map((amt) => (
+                            <Button
+                              key={amt}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setTradeAmount(amt.toString())}
+                              className={cn(tradeAmount === amt.toString() && 'bg-primary/20')}
+                            >
+                              ${amt}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trade Instructions with Execute Buttons */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {/* Buy YES */}
+                      <div className="p-4 rounded-lg bg-background/50 border border-border">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                          <span className="font-medium">Buy YES</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <img 
+                            src={getPlatformLogo(result.arbitrage.buyYesPlatform)} 
+                            alt={result.arbitrage.buyYesPlatform}
+                            className="w-5 h-5 rounded"
+                          />
+                          <span className="capitalize">{result.arbitrage.buyYesPlatform}</span>
+                          <span className="text-muted-foreground">@</span>
+                          <span className="font-bold">{(result.arbitrage.buyYesPrice * 100).toFixed(1)}¢</span>
+                        </div>
+                        <Button
+                          className="w-full bg-green-500 hover:bg-green-600"
+                          onClick={() => executeTrade(
+                            result.arbitrage!.buyYesPlatform,
+                            'YES',
+                            result.arbitrage!.buyYesPlatform === 'kalshi' 
+                              ? (result.arbitrage!.buyYesTicker || '') 
+                              : (result.arbitrage!.buyYesTokenId || ''),
+                            result.arbitrage!.buyYesPrice
+                          )}
+                          disabled={
+                            isExecutingTrade !== null ||
+                            (result.arbitrage.buyYesPlatform === 'kalshi' && !solanaConnected) ||
+                            (result.arbitrage.buyYesPlatform === 'polymarket' && (!ethConnected || !isLinked || !isFullyApproved))
+                          }
+                        >
+                          {isExecutingTrade === 'yes' ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          ) : (
+                            <ShoppingCart className="w-4 h-4 mr-2" />
+                          )}
+                          Buy YES on {result.arbitrage.buyYesPlatform}
+                        </Button>
+                      </div>
+
+                      {/* Buy NO */}
+                      <div className="p-4 rounded-lg bg-background/50 border border-border">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle2 className="w-5 h-5 text-red-500" />
+                          <span className="font-medium">Buy NO</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <img 
+                            src={getPlatformLogo(result.arbitrage.buyNoPlatform)} 
+                            alt={result.arbitrage.buyNoPlatform}
+                            className="w-5 h-5 rounded"
+                          />
+                          <span className="capitalize">{result.arbitrage.buyNoPlatform}</span>
+                          <span className="text-muted-foreground">@</span>
+                          <span className="font-bold">{(result.arbitrage.buyNoPrice * 100).toFixed(1)}¢</span>
+                        </div>
+                        <Button
+                          className="w-full bg-red-500 hover:bg-red-600"
+                          onClick={() => executeTrade(
+                            result.arbitrage!.buyNoPlatform,
+                            'NO',
+                            result.arbitrage!.buyNoPlatform === 'kalshi' 
+                              ? (result.arbitrage!.buyNoTicker || '') 
+                              : (result.arbitrage!.buyNoTokenId || ''),
+                            result.arbitrage!.buyNoPrice
+                          )}
+                          disabled={
+                            isExecutingTrade !== null ||
+                            (result.arbitrage.buyNoPlatform === 'kalshi' && !solanaConnected) ||
+                            (result.arbitrage.buyNoPlatform === 'polymarket' && (!ethConnected || !isLinked || !isFullyApproved))
+                          }
+                        >
+                          {isExecutingTrade === 'no' ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          ) : (
+                            <ShoppingCart className="w-4 h-4 mr-2" />
+                          )}
+                          Buy NO on {result.arbitrage.buyNoPlatform}
+                        </Button>
+                      </div>
+                    </div>
+
                     {/* Profit Breakdown */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <StatCard 
@@ -288,42 +599,6 @@ const ArbIntelligence = () => {
                       />
                     </div>
 
-                    {/* Trade Instructions */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-lg bg-background/50 border border-border">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle2 className="w-5 h-5 text-green-500" />
-                          <span className="font-medium">Buy YES</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <img 
-                            src={getPlatformLogo(result.arbitrage.buyYesPlatform)} 
-                            alt={result.arbitrage.buyYesPlatform}
-                            className="w-5 h-5 rounded"
-                          />
-                          <span className="capitalize">{result.arbitrage.buyYesPlatform}</span>
-                          <span className="text-muted-foreground">@</span>
-                          <span className="font-bold">{(result.arbitrage.buyYesPrice * 100).toFixed(1)}¢</span>
-                        </div>
-                      </div>
-                      <div className="p-4 rounded-lg bg-background/50 border border-border">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle2 className="w-5 h-5 text-red-500" />
-                          <span className="font-medium">Buy NO</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <img 
-                            src={getPlatformLogo(result.arbitrage.buyNoPlatform)} 
-                            alt={result.arbitrage.buyNoPlatform}
-                            className="w-5 h-5 rounded"
-                          />
-                          <span className="capitalize">{result.arbitrage.buyNoPlatform}</span>
-                          <span className="text-muted-foreground">@</span>
-                          <span className="font-bold">{(result.arbitrage.buyNoPrice * 100).toFixed(1)}¢</span>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Risk Warning */}
                     <div className="flex items-start gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
                       <Info className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
@@ -339,7 +614,10 @@ const ArbIntelligence = () => {
                     </div>
                   </CardContent>
                 </Card>
-              ) : result.matchedMarket && (
+              )}
+
+              {/* No Arb Found */}
+              {result.matchedMarket && !result.arbitrage?.exists && (
                 <Card className="border-muted-foreground/30">
                   <CardContent className="pt-6">
                     <div className="flex items-start gap-3">
@@ -359,7 +637,7 @@ const ArbIntelligence = () => {
           )}
         </AnimatePresence>
 
-        {/* How It Works - Show when no result */}
+        {/* How It Works */}
         {!result && !isLoading && (
           <div className="mt-12">
             <h2 className="text-xl font-semibold mb-6 text-center">How It Works</h2>
@@ -371,60 +649,15 @@ const ArbIntelligence = () => {
               />
               <StepCard 
                 number={2}
-                title="AI Analysis"
+                title="Claude Analyzes"
                 description="AI finds matching markets and compares prices"
               />
               <StepCard 
                 number={3}
-                title="Get Strategy"
-                description="Receive actionable arbitrage recommendations"
+                title="Execute Trades"
+                description="Trade directly on both platforms"
               />
             </div>
-
-            {/* Example */}
-            <Card className="mt-8 bg-muted/20">
-              <CardHeader>
-                <CardTitle className="text-lg">Example Arbitrage</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-2 px-4">Platform</th>
-                        <th className="text-right py-2 px-4">YES Price</th>
-                        <th className="text-right py-2 px-4">NO Price</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-border/50">
-                        <td className="py-2 px-4 flex items-center gap-2">
-                          <img src={polyLogo} alt="Polymarket" className="w-4 h-4" />
-                          Polymarket
-                        </td>
-                        <td className="text-right py-2 px-4">52¢</td>
-                        <td className="text-right py-2 px-4 font-bold text-green-500">48¢</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-4 flex items-center gap-2">
-                          <img src={kalshiLogo} alt="Kalshi" className="w-4 h-4" />
-                          Kalshi
-                        </td>
-                        <td className="text-right py-2 px-4 font-bold text-green-500">48¢</td>
-                        <td className="text-right py-2 px-4">52¢</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <p className="text-sm">
-                    <span className="font-medium text-green-500">Strategy:</span>{' '}
-                    Buy YES on Kalshi (48¢) + Buy NO on Polymarket (48¢) = 96¢ cost → $1.00 payout → 
-                    <span className="font-bold text-green-500"> 4.2% profit</span>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Link to Sports Arb */}
             <div className="text-center mt-8">

@@ -9,6 +9,8 @@ export interface SourceMarket {
   noPrice: number;
   volume?: number;
   url: string;
+  tokenId?: string;
+  ticker?: string;
 }
 
 export interface MatchedMarket {
@@ -19,6 +21,8 @@ export interface MatchedMarket {
   noPrice: number;
   volume?: number;
   url: string;
+  tokenId?: string;
+  ticker?: string;
 }
 
 export interface ArbitrageOpportunity {
@@ -27,9 +31,13 @@ export interface ArbitrageOpportunity {
   buyYesOn: string;
   buyYesPlatform: 'polymarket' | 'kalshi';
   buyYesPrice: number;
+  buyYesTokenId?: string;
+  buyYesTicker?: string;
   buyNoOn: string;
   buyNoPlatform: 'polymarket' | 'kalshi';
   buyNoPrice: number;
+  buyNoTokenId?: string;
+  buyNoTicker?: string;
   totalCost: number;
   guaranteedPayout: number;
   netProfit: number;
@@ -47,9 +55,8 @@ export interface ArbitrageResult {
   searchResultsCount?: number;
   error?: string;
   debug?: {
-    sourceData?: unknown;
-    searchResults?: unknown;
-    aiAnalysis?: unknown;
+    reasoning?: string;
+    candidateTitles?: string[];
   };
 }
 

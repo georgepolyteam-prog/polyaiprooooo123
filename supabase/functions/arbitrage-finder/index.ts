@@ -7,11 +7,11 @@ const corsHeaders = {
 
 const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
 const DFLOW_API_KEY = Deno.env.get('DFLOW_API_KEY');
-const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
 const DOME_BASE_URL = 'https://api.domeapi.io/v1';
 const DFLOW_BASE_URL = 'https://a.prediction-markets-api.dflow.net/api/v1';
-const LOVABLE_AI_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 interface MarketData {
   platform: 'polymarket' | 'kalshi';
@@ -21,6 +21,8 @@ interface MarketData {
   noPrice: number;
   volume?: number;
   url: string;
+  tokenId?: string;
+  ticker?: string;
 }
 
 // Parse URL to detect platform and extract identifier
@@ -29,7 +31,6 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
     const parsed = new URL(url);
     
     if (parsed.hostname.includes('polymarket.com')) {
-      // Format: polymarket.com/event/slug or polymarket.com/event/slug/submarket
       const pathParts = parsed.pathname.split('/').filter(Boolean);
       if (pathParts[0] === 'event' && pathParts[1]) {
         return { platform: 'polymarket', slug: pathParts[1] };
@@ -37,7 +38,6 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
     }
     
     if (parsed.hostname.includes('kalshi.com')) {
-      // Format: kalshi.com/markets/ticker or kalshi.com/events/event-slug
       const pathParts = parsed.pathname.split('/').filter(Boolean);
       if (pathParts[0] === 'markets' && pathParts[1]) {
         return { platform: 'kalshi', slug: pathParts[1] };
@@ -73,7 +73,6 @@ async function fetchPolymarketData(slug: string): Promise<MarketData | null> {
     const data = await response.json();
     console.log(`[Polymarket] Event data:`, JSON.stringify(data).slice(0, 500));
 
-    // Extract primary market from event
     const event = data.event || data;
     const markets = event.markets || [];
     const primaryMarket = markets[0] || {};
@@ -88,7 +87,8 @@ async function fetchPolymarketData(slug: string): Promise<MarketData | null> {
       yesPrice: typeof yesPrice === 'number' ? yesPrice : parseFloat(yesPrice) || 0.5,
       noPrice: typeof noPrice === 'number' ? noPrice : parseFloat(noPrice) || 0.5,
       volume: event.volume || primaryMarket.volume,
-      url: `https://polymarket.com/event/${slug}`
+      url: `https://polymarket.com/event/${slug}`,
+      tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.tokenId
     };
   } catch (error) {
     console.error(`[Polymarket] Error fetching data:`, error);
@@ -101,7 +101,6 @@ async function fetchKalshiData(ticker: string): Promise<MarketData | null> {
   try {
     console.log(`[Kalshi] Fetching market: ${ticker}`);
     
-    // Try getting market by ticker
     const response = await fetch(`${DFLOW_BASE_URL}/markets/${ticker.toUpperCase()}`, {
       headers: {
         'Authorization': `Bearer ${DFLOW_API_KEY}`,
@@ -126,7 +125,8 @@ async function fetchKalshiData(ticker: string): Promise<MarketData | null> {
       yesPrice: market.yes_price || market.last_price || 0.5,
       noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
       volume: market.volume || market.volume_24h,
-      url: `https://kalshi.com/markets/${ticker}`
+      url: `https://kalshi.com/markets/${ticker}`,
+      ticker: market.ticker || ticker
     };
   } catch (error) {
     console.error(`[Kalshi] Error fetching data:`, error);
@@ -134,23 +134,45 @@ async function fetchKalshiData(ticker: string): Promise<MarketData | null> {
   }
 }
 
-// Generate optimal search query using AI
-async function generateSearchQuery(title: string): Promise<string> {
+// Call Claude API for AI tasks
+async function callClaude(systemPrompt: string, userMessage: string, maxTokens: number = 500): Promise<string | null> {
   try {
-    console.log(`[AI] Generating search query for: ${title}`);
-    
-    const response = await fetch(LOVABLE_AI_URL, {
+    const response = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'x-api-key': ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: maxTokens,
+        system: systemPrompt,
         messages: [
-          {
-            role: 'system',
-            content: `You are a search query optimizer for prediction markets. Given a market title, generate the most effective 1-3 word search query that would find this exact market on another platform.
+          { role: 'user', content: userMessage }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Claude] API error: ${response.status}`, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.content?.[0]?.text || null;
+  } catch (error) {
+    console.error(`[Claude] Error:`, error);
+    return null;
+  }
+}
+
+// Generate optimal search query using Claude
+async function generateSearchQuery(title: string): Promise<string> {
+  console.log(`[AI] Generating search query for: ${title}`);
+  
+  const systemPrompt = `You are a search query optimizer for prediction markets. Given a market title, generate the most effective 1-3 word search query that would find this exact market on another platform.
 
 Rules:
 - Extract ONLY key entities: names, teams, dates, specific numbers
@@ -160,31 +182,17 @@ Rules:
 - For politics: include person names
 - For crypto: include token symbols
 - Return ONLY the search query, nothing else
-- Maximum 3 words`
-          },
-          {
-            role: 'user',
-            content: title
-          }
-        ],
-        max_tokens: 20
-      })
-    });
+- Maximum 3 words`;
 
-    if (!response.ok) {
-      console.error(`[AI] Search query generation failed: ${response.status}`);
-      // Fallback: extract first 2-3 significant words
-      return title.split(' ').slice(0, 3).join(' ');
-    }
-
-    const data = await response.json();
-    const query = data.choices?.[0]?.message?.content?.trim() || title.split(' ').slice(0, 3).join(' ');
-    console.log(`[AI] Generated search query: ${query}`);
-    return query;
-  } catch (error) {
-    console.error(`[AI] Error generating search query:`, error);
-    return title.split(' ').slice(0, 3).join(' ');
+  const result = await callClaude(systemPrompt, title, 20);
+  
+  if (result) {
+    console.log(`[AI] Generated search query: ${result}`);
+    return result.trim();
   }
+  
+  // Fallback: extract first 2-3 significant words
+  return title.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
 }
 
 // Search Polymarket via Dome API
@@ -220,7 +228,8 @@ async function searchPolymarket(query: string): Promise<MarketData[]> {
         yesPrice: typeof yesPrice === 'number' ? yesPrice : parseFloat(yesPrice) || 0.5,
         noPrice: 1 - (typeof yesPrice === 'number' ? yesPrice : parseFloat(yesPrice) || 0.5),
         volume: event.volume,
-        url: `https://polymarket.com/event/${event.slug || event.id}`
+        url: `https://polymarket.com/event/${event.slug || event.id}`,
+        tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.tokenId
       };
     });
   } catch (error) {
@@ -250,7 +259,6 @@ async function searchKalshi(query: string): Promise<MarketData[]> {
     const events = data.events || data.data || data || [];
     console.log(`[Kalshi] Found ${events.length} events`);
 
-    // Flatten all markets from events
     const markets: MarketData[] = [];
     for (const event of events.slice(0, 5)) {
       const eventMarkets = event.markets || [];
@@ -262,7 +270,8 @@ async function searchKalshi(query: string): Promise<MarketData[]> {
           yesPrice: market.yes_price || market.last_price || 0.5,
           noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
           volume: market.volume,
-          url: `https://kalshi.com/markets/${market.ticker}`
+          url: `https://kalshi.com/markets/${market.ticker}`,
+          ticker: market.ticker
         });
       }
     }
@@ -274,7 +283,7 @@ async function searchKalshi(query: string): Promise<MarketData[]> {
   }
 }
 
-// AI analysis to determine if markets match and calculate arbitrage
+// AI analysis to determine if markets match and calculate arbitrage using Claude
 async function analyzeArbitrage(source: MarketData, candidates: MarketData[]): Promise<{
   matchedMarket: MarketData | null;
   arbitrage: any;
@@ -284,25 +293,13 @@ async function analyzeArbitrage(source: MarketData, candidates: MarketData[]): P
     return { matchedMarket: null, arbitrage: null, reasoning: 'No candidate markets found' };
   }
 
-  try {
-    console.log(`[AI] Analyzing ${candidates.length} candidates for arbitrage`);
+  console.log(`[AI] Analyzing ${candidates.length} candidates for arbitrage`);
 
-    const candidateList = candidates.map((c, i) => 
-      `${i + 1}. "${c.title}" - YES: ${(c.yesPrice * 100).toFixed(1)}¢, NO: ${(c.noPrice * 100).toFixed(1)}¢`
-    ).join('\n');
+  const candidateList = candidates.map((c, i) => 
+    `${i + 1}. "${c.title}" - YES: ${(c.yesPrice * 100).toFixed(1)}¢, NO: ${(c.noPrice * 100).toFixed(1)}¢`
+  ).join('\n');
 
-    const response = await fetch(LOVABLE_AI_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert at matching prediction markets across platforms and identifying arbitrage opportunities.
+  const systemPrompt = `You are an expert at matching prediction markets across platforms and identifying arbitrage opportunities.
 
 Your task:
 1. Determine which candidate market (if any) is the SAME event as the source
@@ -315,7 +312,7 @@ Arbitrage calculation:
 - If total cost < $1.00, profit = $1.00 - total cost
 - Profit % = (profit / total cost) * 100
 
-Response must be valid JSON:
+Response must be valid JSON only, no other text:
 {
   "matchIndex": number | null,
   "confidence": number (0-100),
@@ -332,11 +329,9 @@ Response must be valid JSON:
     "profitPercent": number,
     "strategy": "detailed trading instruction"
   } | null
-}`
-          },
-          {
-            role: 'user',
-            content: `SOURCE MARKET (${source.platform}):
+}`;
+
+  const userMessage = `SOURCE MARKET (${source.platform}):
 Title: "${source.title}"
 YES Price: ${(source.yesPrice * 100).toFixed(1)}¢
 NO Price: ${(source.noPrice * 100).toFixed(1)}¢
@@ -344,28 +339,23 @@ NO Price: ${(source.noPrice * 100).toFixed(1)}¢
 CANDIDATE MARKETS (${candidates[0]?.platform}):
 ${candidateList}
 
-Analyze which candidate (if any) matches the source, and calculate arbitrage opportunity.`
-          }
-        ],
-        max_tokens: 500
-      })
-    });
+Analyze which candidate (if any) matches the source, and calculate arbitrage opportunity.`;
 
-    if (!response.ok) {
-      console.error(`[AI] Analysis failed: ${response.status}`);
-      return { matchedMarket: null, arbitrage: null, reasoning: 'AI analysis failed' };
-    }
+  const result = await callClaude(systemPrompt, userMessage, 600);
+  
+  if (!result) {
+    return { matchedMarket: null, arbitrage: null, reasoning: 'AI analysis failed' };
+  }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    console.log(`[AI] Analysis result:`, content.slice(0, 500));
+  console.log(`[AI] Analysis result:`, result.slice(0, 500));
 
-    // Parse JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return { matchedMarket: null, arbitrage: null, reasoning: 'Could not parse AI response' };
-    }
+  // Parse JSON from response
+  const jsonMatch = result.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return { matchedMarket: null, arbitrage: null, reasoning: 'Could not parse AI response' };
+  }
 
+  try {
     const analysis = JSON.parse(jsonMatch[0]);
     
     if (!analysis.isSameMarket || analysis.matchIndex === null || analysis.matchIndex === undefined) {
@@ -401,9 +391,13 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
           buyYesOn: sourceYes <= targetYes ? source.platform : matchedMarket.platform,
           buyYesPlatform: sourceYes <= targetYes ? source.platform : matchedMarket.platform,
           buyYesPrice: bestYesPrice,
+          buyYesTokenId: sourceYes <= targetYes ? source.tokenId : matchedMarket.tokenId,
+          buyYesTicker: sourceYes <= targetYes ? source.ticker : matchedMarket.ticker,
           buyNoOn: sourceNo <= targetNo ? source.platform : matchedMarket.platform,
           buyNoPlatform: sourceNo <= targetNo ? source.platform : matchedMarket.platform,
           buyNoPrice: bestNoPrice,
+          buyNoTokenId: sourceNo <= targetNo ? source.tokenId : matchedMarket.tokenId,
+          buyNoTicker: sourceNo <= targetNo ? source.ticker : matchedMarket.ticker,
           totalCost: totalCost,
           guaranteedPayout: 1,
           netProfit: profit,
@@ -420,8 +414,8 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
       reasoning: analysis.reasoning
     };
   } catch (error) {
-    console.error(`[AI] Analysis error:`, error);
-    return { matchedMarket: null, arbitrage: null, reasoning: 'Analysis error occurred' };
+    console.error(`[AI] JSON parse error:`, error);
+    return { matchedMarket: null, arbitrage: null, reasoning: 'Failed to parse analysis' };
   }
 }
 
