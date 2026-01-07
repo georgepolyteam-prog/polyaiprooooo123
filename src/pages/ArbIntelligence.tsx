@@ -399,7 +399,11 @@ const ArbIntelligence = () => {
               {/* Search Info */}
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Search query: <span className="text-foreground font-medium">"{result.searchQuery}"</span>
+                  {result.searchQueries && result.searchQueries.length > 1 ? (
+                    <>Searched with <span className="text-foreground font-medium">{result.searchQueries.length} queries</span></>
+                  ) : (
+                    <>Search query: <span className="text-foreground font-medium">"{result.searchQuery}"</span></>
+                  )}
                 </span>
                 <div className="flex items-center gap-2">
                   <span>{result.searchResultsCount} results found</span>
@@ -437,7 +441,47 @@ const ArbIntelligence = () => {
                         </div>
                       )}
 
-                      {/* Kalshi Fetch Attempts */}
+                      {/* Search Queries Used */}
+                      {result.debug?.searchQueries && result.debug.searchQueries.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            Search Queries ({result.debug.searchQueries.length}):
+                          </p>
+                          <div className="bg-background/50 p-2 rounded border flex flex-wrap gap-1">
+                            {result.debug.searchQueries.map((query, i) => (
+                              <Badge key={i} variant="outline" className="text-[10px]">
+                                {query}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Kalshi Search Attempts */}
+                      {result.debug?.kalshiSearchAttempts && result.debug.kalshiSearchAttempts.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            Kalshi Search Attempts ({result.debug.kalshiSearchAttempts.length}):
+                          </p>
+                          <div className="space-y-2">
+                            {result.debug.kalshiSearchAttempts.map((attempt, i) => (
+                              <div key={i} className="bg-background/50 p-2 rounded border">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant={attempt.status === 200 ? "default" : "destructive"} className="text-[10px]">
+                                    {attempt.status}
+                                  </Badge>
+                                  <span className="font-medium text-foreground">"{attempt.query}"</span>
+                                  <span className="text-muted-foreground">
+                                    → {attempt.eventCount} events, {attempt.marketCount} markets
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Kalshi Fetch Attempts (for direct URL fetches) */}
                       {result.debug?.kalshiFetchAttempts && result.debug.kalshiFetchAttempts.length > 0 && (
                         <div>
                           <p className="font-semibold text-muted-foreground mb-1">
