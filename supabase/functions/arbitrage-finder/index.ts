@@ -12,6 +12,27 @@ const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 const DFLOW_BASE_URL = 'https://c.prediction-markets-api.dflow.net/api/v1';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
+// Timeout helper to prevent endless loading
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    return response;
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
 interface MarketData {
   platform: 'polymarket' | 'kalshi';
   title: string;
@@ -550,9 +571,10 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
 
     const markets: MarketData[] = [];
     
-    for (const event of events.slice(0, 5)) {
+    // Increase limits for multi-outcome markets (was 5/5, now 10/50)
+    for (const event of events.slice(0, 10)) {
       const eventMarkets = event.markets || [];
-      for (const market of eventMarkets.slice(0, 5)) {
+      for (const market of eventMarkets.slice(0, 50)) {
         let yesPrice = 0.5;
         let noPrice = 0.5;
         
@@ -593,7 +615,7 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
   }
 }
 
-// Search Polymarket with multiple queries and union results
+// Search Polymarket with multiple queries - SEQUENTIAL to prioritize first query results
 async function searchPolymarketMulti(queries: string[]): Promise<{ 
   markets: MarketData[]; 
   rawResponse: any; 
@@ -602,40 +624,52 @@ async function searchPolymarketMulti(queries: string[]): Promise<{
 }> {
   const searchAttempts: SearchAttempt[] = [];
   const allMarkets: MarketData[] = [];
-  const seenSlugs = new Set<string>();
+  const seenTokenIds = new Set<string>(); // Use tokenId for reliable dedup
   
   console.log(`[Polymarket] Multi-search with ${queries.length} queries:`, queries);
   
-  // Run all queries in parallel for speed
-  const results = await Promise.all(
-    queries.slice(0, 6).map(async (query) => {
+  // Run queries SEQUENTIALLY to prioritize earlier (more relevant) queries
+  for (const query of queries.slice(0, 6)) {
+    try {
       const result = await searchPolymarket(query);
-      return { query, result };
-    })
-  );
-  
-  for (const { query, result } of results) {
-    const eventCount = Array.isArray(result.rawResponse) ? result.rawResponse.length : 0;
-    let marketCount = 0;
-    
-    for (const market of result.markets) {
-      const key = `${market.slug}-${market.title}`;
-      if (!seenSlugs.has(key)) {
-        seenSlugs.add(key);
-        allMarkets.push(market);
-        marketCount++;
+      const eventCount = Array.isArray(result.rawResponse) ? result.rawResponse.length : 0;
+      let marketCount = 0;
+      
+      for (const market of result.markets) {
+        // Use tokenId for deduplication (more reliable than slug+title)
+        const key = market.tokenId || `${market.slug}-${market.title}`;
+        if (!seenTokenIds.has(key)) {
+          seenTokenIds.add(key);
+          allMarkets.push(market);
+          marketCount++;
+        }
       }
+      
+      searchAttempts.push({
+        query,
+        url: result.url,
+        status: result.status,
+        eventCount,
+        marketCount
+      });
+      
+      console.log(`[Polymarket] Query "${query}": ${eventCount} events, ${marketCount} new markets`);
+      
+      // If we found enough relevant markets, stop early to avoid unrelated results
+      if (allMarkets.length >= 30) {
+        console.log(`[Polymarket] Stopping early with ${allMarkets.length} markets`);
+        break;
+      }
+    } catch (error) {
+      console.error(`[Polymarket] Query "${query}" failed:`, error);
+      searchAttempts.push({
+        query,
+        url: '',
+        status: 0,
+        eventCount: 0,
+        marketCount: 0
+      });
     }
-    
-    searchAttempts.push({
-      query,
-      url: result.url,
-      status: result.status,
-      eventCount,
-      marketCount
-    });
-    
-    console.log(`[Polymarket] Query "${query}": ${eventCount} events, ${marketCount} new markets`);
   }
   
   console.log(`[Polymarket] Total unique markets from all queries: ${allMarkets.length}`);
@@ -934,6 +968,8 @@ serve(async (req) => {
   }
 
   const debug: DebugInfo = {};
+  const startTime = Date.now();
+  const MAX_REQUEST_TIME = 45000; // 45 second timeout
 
   try {
     const { url } = await req.json();
@@ -1039,6 +1075,25 @@ serve(async (req) => {
 
     debug.candidateTitles = searchResults.map(r => `${r.title} (YES: ${(r.yesPrice*100).toFixed(1)}¢)`);
     console.log(`[ArbitrageFinder] Found ${searchResults.length} candidates`);
+    
+    // Log first 5 candidates for debugging
+    console.log(`[ArbitrageFinder] Passing to AI - Source: "${sourceMarket!.title}", Candidates (first 5):`);
+    searchResults.slice(0, 5).forEach((c, i) => {
+      console.log(`  ${i+1}. "${c.title}" (event: ${c.eventTitle || 'N/A'})`);
+    });
+    
+    // Check timeout before expensive AI call
+    if (Date.now() - startTime > MAX_REQUEST_TIME - 15000) {
+      console.log(`[ArbitrageFinder] Timeout warning - skipping AI analysis`);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Request timeout - too many markets to process. Try a simpler market.',
+        debug
+      }), {
+        status: 408,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     const { matchedMarket, arbitrage, reasoning, aiInput, aiOutput } = await analyzeArbitrage(sourceMarket!, searchResults);
     
