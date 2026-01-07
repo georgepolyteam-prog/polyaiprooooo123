@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, Time, CandlestickData } from "lightweight-charts";
-import { Loader2, BarChart3, AlertCircle } from "lucide-react";
+import { Loader2, BarChart3, AlertCircle, RotateCcw, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import type { PolyMarket } from "@/hooks/usePolymarketTerminal";
@@ -34,6 +34,8 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
   const [error, setError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; price: number } | null>(null);
   const [visibleRange, setVisibleRange] = useState<{ min: number; max: number } | null>(null);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
+  const [priceChange, setPriceChange] = useState<number>(0);
 
   const { startTime, endTime, interval } = useMemo(() => {
     const now = Math.floor(Date.now() / 1000);
@@ -158,6 +160,16 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     chart.timeScale().fitContent();
     chartRef.current = chart;
     seriesRef.current = series;
+
+    // Track latest price and calculate change
+    if (chartData.length > 0) {
+      const latest = chartData[chartData.length - 1].close as number;
+      const first = chartData[0].open as number;
+      setLatestPrice(latest);
+      if (first > 0) {
+        setPriceChange(((latest - first) / first) * 100);
+      }
+    }
 
     // Track visible price range for context-menu pricing
     const updateVisibleRange = () => {
@@ -287,6 +299,13 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
     }
   }, []);
 
+  // Reset zoom to fit all data
+  const handleResetZoom = useCallback(() => {
+    if (chartRef.current) {
+      chartRef.current.timeScale().fitContent();
+    }
+  }, []);
+
   return (
     <section className="h-full flex flex-col">
       {/* Minimal header */}
@@ -344,11 +363,50 @@ export function PolyMarketChart({ market, alerts = [], onCreateAlert }: PolyMark
             <span className="text-[10px]">No chart data</span>
           </div>
         ) : (
-          <div 
-            ref={chartContainerRef} 
-            className="h-full w-full" 
-            onContextMenu={handleContextMenu}
-          />
+          <>
+            <div 
+              ref={chartContainerRef} 
+              className="h-full w-full" 
+              onContextMenu={handleContextMenu}
+            />
+            
+            {/* Sticky Current Price Badge */}
+            {latestPrice !== null && (
+              <div className="absolute top-3 right-3 bg-background/90 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-2 z-10 shadow-lg">
+                <div className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider mb-0.5">
+                  Current
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn(
+                    "text-lg font-bold font-mono",
+                    latestPrice >= 0.5 ? "text-emerald-400" : "text-red-400"
+                  )}>
+                    {(latestPrice * 100).toFixed(1)}¢
+                  </span>
+                  {priceChange !== 0 && (
+                    <span className={cn(
+                      "text-[10px] font-mono flex items-center gap-0.5",
+                      priceChange >= 0 ? "text-emerald-400" : "text-red-400"
+                    )}>
+                      {priceChange >= 0 ? (
+                        <TrendingUp className="w-3 h-3" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3" />
+                      )}
+                      {priceChange >= 0 ? "+" : ""}{priceChange.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleResetZoom}
+                  className="flex items-center gap-1 text-[9px] text-primary hover:text-primary/80 mt-1 transition-colors"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  Reset View
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* Alert lines - positioned using series.priceToCoordinate for accuracy */}
