@@ -3,7 +3,7 @@ import { LivePulseStrip } from "@/components/home/LivePulseStrip";
 import { EditorialFeatures } from "@/components/home/EditorialFeatures";
 import { BrutalistStats } from "@/components/home/BrutalistStats";
 import { TerminalCTA } from "@/components/home/TerminalCTA";
-import { MinimalTokenSection } from "@/components/home/MinimalTokenSection";
+import { SupportedPlatforms } from "@/components/home/SupportedPlatforms";
 import { MinimalFooter } from "@/components/home/MinimalFooter";
 
 const Home = () => {
@@ -24,8 +24,8 @@ const Home = () => {
       {/* Terminal CTA - quick start */}
       <TerminalCTA />
 
-      {/* Token section - minimal */}
-      <MinimalTokenSection />
+      {/* Supported platforms */}
+      <SupportedPlatforms />
 
       {/* Footer - minimal */}
       <MinimalFooter />
