@@ -9,7 +9,7 @@ const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
 const DFLOW_API_KEY = Deno.env.get('DFLOW_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
-const DOME_BASE_URL = 'https://api.domeapi.io/v1';
+const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
 const DFLOW_BASE_URL = 'https://a.prediction-markets-api.dflow.net/api/v1';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -53,42 +53,55 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
   }
 }
 
-// Fetch Polymarket event data via Dome API
+// Fetch Polymarket event data via Gamma API
 async function fetchPolymarketData(slug: string): Promise<MarketData | null> {
   try {
-    console.log(`[Polymarket] Fetching event: ${slug}`);
+    console.log(`[Polymarket] Fetching event via Gamma: ${slug}`);
     
-    const response = await fetch(`${DOME_BASE_URL}/polymarket/events/${slug}`, {
-      headers: {
-        'Authorization': `Bearer ${DOME_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const response = await fetch(`${GAMMA_API_BASE}/events?slug=${encodeURIComponent(slug)}`);
 
     if (!response.ok) {
       console.error(`[Polymarket] Failed to fetch event: ${response.status}`);
       return null;
     }
 
-    const data = await response.json();
-    console.log(`[Polymarket] Event data:`, JSON.stringify(data).slice(0, 500));
+    const events = await response.json();
+    console.log(`[Polymarket] Gamma returned ${events?.length || 0} events`);
+    
+    if (!events || events.length === 0) {
+      console.error(`[Polymarket] No event found for slug: ${slug}`);
+      return null;
+    }
 
-    const event = data.event || data;
+    const event = events[0];
     const markets = event.markets || [];
     const primaryMarket = markets[0] || {};
     
-    const yesPrice = primaryMarket.outcomePrices?.[0] || primaryMarket.yes_price || primaryMarket.bestBid || 0.5;
-    const noPrice = primaryMarket.outcomePrices?.[1] || primaryMarket.no_price || primaryMarket.bestAsk || 0.5;
+    // Gamma returns outcomePrices as JSON string like "[0.52, 0.48]"
+    let yesPrice = 0.5;
+    let noPrice = 0.5;
+    
+    if (primaryMarket.outcomePrices) {
+      try {
+        const prices = typeof primaryMarket.outcomePrices === 'string' 
+          ? JSON.parse(primaryMarket.outcomePrices) 
+          : primaryMarket.outcomePrices;
+        yesPrice = parseFloat(prices[0]) || 0.5;
+        noPrice = parseFloat(prices[1]) || 0.5;
+      } catch {
+        console.log(`[Polymarket] Could not parse outcomePrices`);
+      }
+    }
 
     return {
       platform: 'polymarket',
       title: event.title || primaryMarket.question || slug,
-      slug: slug,
-      yesPrice: typeof yesPrice === 'number' ? yesPrice : parseFloat(yesPrice) || 0.5,
-      noPrice: typeof noPrice === 'number' ? noPrice : parseFloat(noPrice) || 0.5,
-      volume: event.volume || primaryMarket.volume,
-      url: `https://polymarket.com/event/${slug}`,
-      tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.tokenId
+      slug: event.slug || slug,
+      yesPrice,
+      noPrice,
+      volume: parseFloat(event.volume) || 0,
+      url: `https://polymarket.com/event/${event.slug || slug}`,
+      tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.conditionId
     };
   } catch (error) {
     console.error(`[Polymarket] Error fetching data:`, error);
@@ -195,41 +208,53 @@ Rules:
   return title.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
 }
 
-// Search Polymarket via Dome API
+// Search Polymarket via Gamma API
 async function searchPolymarket(query: string): Promise<MarketData[]> {
   try {
-    console.log(`[Polymarket] Searching: ${query}`);
+    console.log(`[Polymarket] Searching via Gamma: ${query}`);
     
-    const response = await fetch(`${DOME_BASE_URL}/polymarket/events?search=${encodeURIComponent(query)}&limit=10`, {
-      headers: {
-        'Authorization': `Bearer ${DOME_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const response = await fetch(`${GAMMA_API_BASE}/events?_q=${encodeURIComponent(query)}&active=true&closed=false&limit=10`);
 
     if (!response.ok) {
       console.error(`[Polymarket] Search failed: ${response.status}`);
       return [];
     }
 
-    const data = await response.json();
-    const events = data.events || data.data || data || [];
-    console.log(`[Polymarket] Found ${events.length} results`);
+    const events = await response.json();
+    console.log(`[Polymarket] Gamma search found ${events?.length || 0} results`);
+
+    if (!events || !Array.isArray(events)) {
+      return [];
+    }
 
     return events.slice(0, 5).map((event: any) => {
       const markets = event.markets || [];
       const primaryMarket = markets[0] || {};
-      const yesPrice = primaryMarket.outcomePrices?.[0] || primaryMarket.yes_price || 0.5;
+      
+      let yesPrice = 0.5;
+      let noPrice = 0.5;
+      
+      if (primaryMarket.outcomePrices) {
+        try {
+          const prices = typeof primaryMarket.outcomePrices === 'string' 
+            ? JSON.parse(primaryMarket.outcomePrices) 
+            : primaryMarket.outcomePrices;
+          yesPrice = parseFloat(prices[0]) || 0.5;
+          noPrice = parseFloat(prices[1]) || 0.5;
+        } catch {
+          // Keep defaults
+        }
+      }
       
       return {
         platform: 'polymarket' as const,
         title: event.title || primaryMarket.question || '',
         slug: event.slug || event.id || '',
-        yesPrice: typeof yesPrice === 'number' ? yesPrice : parseFloat(yesPrice) || 0.5,
-        noPrice: 1 - (typeof yesPrice === 'number' ? yesPrice : parseFloat(yesPrice) || 0.5),
-        volume: event.volume,
+        yesPrice,
+        noPrice,
+        volume: parseFloat(event.volume) || 0,
         url: `https://polymarket.com/event/${event.slug || event.id}`,
-        tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.tokenId
+        tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.conditionId
       };
     });
   } catch (error) {
