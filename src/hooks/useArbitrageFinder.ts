@@ -46,6 +46,13 @@ export interface ArbitrageOpportunity {
   reasoning: string;
 }
 
+export interface FetchAttempt {
+  url: string;
+  status: number;
+  bodyPreview: string;
+  note: string;
+}
+
 export interface DebugInfo {
   reasoning?: string;
   candidateTitles?: string[];
@@ -58,6 +65,9 @@ export interface DebugInfo {
   allCandidateMarkets?: MatchedMarket[];
   aiInput?: string;
   aiOutput?: string;
+  kalshiFetchAttempts?: FetchAttempt[];
+  polymarketTokenIdNotes?: string[];
+  parsedUrlInfo?: any;
 }
 
 export interface ArbitrageResult {

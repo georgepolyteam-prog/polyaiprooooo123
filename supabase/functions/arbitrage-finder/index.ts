@@ -9,7 +9,6 @@ const DFLOW_API_KEY = Deno.env.get('DFLOW_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
-// Production DFlow endpoint (c. prefix)
 const DFLOW_BASE_URL = 'https://c.prediction-markets-api.dflow.net/api/v1';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -26,6 +25,13 @@ interface MarketData {
   eventTitle?: string;
 }
 
+interface FetchAttempt {
+  url: string;
+  status: number;
+  bodyPreview: string;
+  note: string;
+}
+
 interface DebugInfo {
   reasoning?: string;
   candidateTitles?: string[];
@@ -38,10 +44,13 @@ interface DebugInfo {
   allCandidateMarkets?: MarketData[];
   aiInput?: string;
   aiOutput?: string;
+  kalshiFetchAttempts?: FetchAttempt[];
+  polymarketTokenIdNotes?: string[];
+  parsedUrlInfo?: any;
 }
 
-// Parse URL to detect platform and extract identifier
-function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug: string } | null {
+// Parse URL to detect platform and extract identifiers
+function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug: string; seriesTicker?: string; marketTicker?: string } | null {
   try {
     const parsed = new URL(url);
     
@@ -56,14 +65,17 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
       const pathParts = parsed.pathname.split('/').filter(Boolean);
       // Handle: /markets/kxvenezuelaleader/who-will-be.../kxvenezuelaleader-26dec31
       if (pathParts[0] === 'markets' && pathParts[1]) {
-        // If there's a specific market ticker at the end, use that
-        if (pathParts.length >= 3 && pathParts[3]) {
-          return { platform: 'kalshi', slug: pathParts[3] };
+        const seriesTicker = pathParts[1].toUpperCase();
+        // If there's a specific market ticker at the end (e.g., kxvenezuelaleader-26dec31)
+        if (pathParts.length >= 4 && pathParts[3]) {
+          const marketTicker = pathParts[3].toUpperCase();
+          return { platform: 'kalshi', slug: marketTicker, seriesTicker, marketTicker };
         }
-        return { platform: 'kalshi', slug: pathParts[1] };
+        return { platform: 'kalshi', slug: seriesTicker, seriesTicker };
       }
       if (pathParts[0] === 'events' && pathParts[1]) {
-        return { platform: 'kalshi', slug: pathParts[1] };
+        const seriesTicker = pathParts[1].toUpperCase();
+        return { platform: 'kalshi', slug: seriesTicker, seriesTicker };
       }
     }
     
@@ -73,8 +85,24 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
   }
 }
 
-// Fetch Polymarket event data via Gamma API - returns ALL markets
-async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: MarketData | null; allMarkets: MarketData[]; rawResponse: any }> {
+// Safely parse tokenIds from Polymarket
+function parseTokenIds(clobTokenIds: any): string[] {
+  if (!clobTokenIds) return [];
+  if (Array.isArray(clobTokenIds)) return clobTokenIds;
+  if (typeof clobTokenIds === 'string') {
+    try {
+      const parsed = JSON.parse(clobTokenIds);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      console.log(`[TokenId] Failed to parse clobTokenIds string: ${clobTokenIds.slice(0, 100)}`);
+    }
+  }
+  return [];
+}
+
+// Fetch Polymarket event data via Gamma API
+async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: MarketData | null; allMarkets: MarketData[]; rawResponse: any; tokenIdNotes: string[] }> {
+  const tokenIdNotes: string[] = [];
   try {
     console.log(`[Polymarket] Fetching event via Gamma: ${slug}`);
     
@@ -86,12 +114,12 @@ async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: Marke
       rawResponse = JSON.parse(rawText);
     } catch {
       console.error(`[Polymarket] Invalid JSON response`);
-      return { primaryMarket: null, allMarkets: [], rawResponse: rawText.slice(0, 500) };
+      return { primaryMarket: null, allMarkets: [], rawResponse: rawText.slice(0, 500), tokenIdNotes };
     }
 
     if (!response.ok) {
       console.error(`[Polymarket] Failed to fetch event: ${response.status}`);
-      return { primaryMarket: null, allMarkets: [], rawResponse };
+      return { primaryMarket: null, allMarkets: [], rawResponse, tokenIdNotes };
     }
 
     const events = rawResponse;
@@ -99,7 +127,7 @@ async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: Marke
     
     if (!events || events.length === 0) {
       console.error(`[Polymarket] No event found for slug: ${slug}`);
-      return { primaryMarket: null, allMarkets: [], rawResponse };
+      return { primaryMarket: null, allMarkets: [], rawResponse, tokenIdNotes };
     }
 
     const event = events[0];
@@ -122,6 +150,16 @@ async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: Marke
         }
       }
 
+      // Properly parse tokenIds
+      const tokenIds = parseTokenIds(market.clobTokenIds);
+      const tokenId = tokenIds[0] || market.conditionId || undefined;
+      
+      if (tokenIds.length === 0 && market.clobTokenIds) {
+        tokenIdNotes.push(`Market "${market.question?.slice(0,50)}": clobTokenIds was "${String(market.clobTokenIds).slice(0,50)}", parsed to empty`);
+      } else if (tokenId) {
+        tokenIdNotes.push(`Market "${market.question?.slice(0,50)}": tokenId = ${tokenId.slice(0,20)}...`);
+      }
+
       allMarkets.push({
         platform: 'polymarket',
         title: market.question || market.title || '',
@@ -131,7 +169,7 @@ async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: Marke
         noPrice,
         volume: parseFloat(market.volume) || parseFloat(event.volume) || 0,
         url: `https://polymarket.com/event/${event.slug || slug}`,
-        tokenId: market.clobTokenIds?.[0] || market.conditionId
+        tokenId
       });
     }
 
@@ -147,21 +185,23 @@ async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: Marke
     } : null;
 
     console.log(`[Polymarket] Found ${allMarkets.length} markets in event`);
-    return { primaryMarket, allMarkets, rawResponse };
+    return { primaryMarket, allMarkets, rawResponse, tokenIdNotes };
   } catch (error) {
     console.error(`[Polymarket] Error fetching data:`, error);
-    return { primaryMarket: null, allMarkets: [], rawResponse: { error: String(error) } };
+    return { primaryMarket: null, allMarkets: [], rawResponse: { error: String(error) }, tokenIdNotes };
   }
 }
 
-// Fetch Kalshi market data via DFlow API - returns ALL markets from event
-async function fetchKalshiData(ticker: string): Promise<{ primaryMarket: MarketData | null; allMarkets: MarketData[]; rawResponse: any }> {
+// Fetch Kalshi market data via DFlow API - with proper nested markets fallback
+async function fetchKalshiData(ticker: string, seriesTicker?: string): Promise<{ primaryMarket: MarketData | null; allMarkets: MarketData[]; rawResponse: any; fetchAttempts: FetchAttempt[] }> {
+  const fetchAttempts: FetchAttempt[] = [];
+  
   try {
-    console.log(`[Kalshi] Fetching market: ${ticker}`);
+    console.log(`[Kalshi] Fetching market: ${ticker}, series: ${seriesTicker || 'N/A'}`);
     
-    // Try fetching by market ticker first
-    const marketUrl = `${DFLOW_BASE_URL}/markets/${ticker.toUpperCase()}`;
-    console.log(`[Kalshi] URL: ${marketUrl}`);
+    // Step 1: Try fetching by market ticker first
+    const marketUrl = `${DFLOW_BASE_URL}/markets/${ticker}`;
+    console.log(`[Kalshi] Attempt 1 - Market URL: ${marketUrl}`);
     
     const response = await fetch(marketUrl, {
       headers: {
@@ -176,48 +216,71 @@ async function fetchKalshiData(ticker: string): Promise<{ primaryMarket: MarketD
     try {
       rawResponse = JSON.parse(rawText);
     } catch {
-      console.error(`[Kalshi] Invalid JSON response`);
-      return { primaryMarket: null, allMarkets: [], rawResponse: rawText.slice(0, 500) };
+      fetchAttempts.push({ url: marketUrl, status: response.status, bodyPreview: rawText.slice(0, 300), note: 'Invalid JSON' });
+      rawResponse = rawText.slice(0, 500);
     }
 
-    if (!response.ok) {
-      console.error(`[Kalshi] Failed to fetch market: ${response.status}`, rawResponse);
-      
-      // Try searching for the event instead
-      const eventTicker = ticker.split('-')[0]; // e.g., kxvenezuelaleader-26dec31 -> kxvenezuelaleader
-      console.log(`[Kalshi] Trying event search for: ${eventTicker}`);
-      
-      const searchUrl = `${DFLOW_BASE_URL}/search?q=${encodeURIComponent(eventTicker)}`;
-      console.log(`[Kalshi] Search URL: ${searchUrl}`);
-      
-      const searchResponse = await fetch(searchUrl, {
-        headers: {
-          'x-api-key': DFLOW_API_KEY || '',
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const searchText = await searchResponse.text();
-      let searchData: any;
-      
-      try {
-        searchData = JSON.parse(searchText);
-      } catch {
-        return { primaryMarket: null, allMarkets: [], rawResponse: { originalError: rawResponse, searchError: searchText.slice(0, 500) } };
+    fetchAttempts.push({ 
+      url: marketUrl, 
+      status: response.status, 
+      bodyPreview: JSON.stringify(rawResponse).slice(0, 300), 
+      note: response.ok ? 'Success' : 'Not found' 
+    });
+
+    if (response.ok) {
+      console.log(`[Kalshi] Market data received directly`);
+      const market = rawResponse.market || rawResponse;
+      const allMarkets: MarketData[] = [{
+        platform: 'kalshi',
+        title: market.title || market.subtitle || ticker,
+        slug: market.ticker || ticker,
+        yesPrice: market.yes_price || market.last_price || 0.5,
+        noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
+        volume: market.volume || market.volume_24h,
+        url: `https://kalshi.com/markets/${market.ticker || ticker}`,
+        ticker: market.ticker || ticker
+      }];
+      return { primaryMarket: allMarkets[0], allMarkets, rawResponse, fetchAttempts };
+    }
+
+    // Step 2: Fetch events with nested markets using seriesTicker
+    const eventSeriesTicker = seriesTicker || ticker.split('-')[0];
+    const eventsUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&seriesTicker=${eventSeriesTicker}&status=active&limit=5`;
+    console.log(`[Kalshi] Attempt 2 - Events with nested markets: ${eventsUrl}`);
+    
+    const eventsResponse = await fetch(eventsUrl, {
+      headers: {
+        'x-api-key': DFLOW_API_KEY || '',
+        'Content-Type': 'application/json'
       }
-      
-      if (!searchResponse.ok) {
-        return { primaryMarket: null, allMarkets: [], rawResponse: { originalError: rawResponse, searchError: searchData } };
-      }
-      
-      // Process search results
-      const events = searchData.events || searchData.data || searchData || [];
+    });
+    
+    const eventsText = await eventsResponse.text();
+    let eventsData: any;
+    
+    try {
+      eventsData = JSON.parse(eventsText);
+    } catch {
+      fetchAttempts.push({ url: eventsUrl, status: eventsResponse.status, bodyPreview: eventsText.slice(0, 300), note: 'Invalid JSON' });
+      eventsData = null;
+    }
+    
+    fetchAttempts.push({ 
+      url: eventsUrl, 
+      status: eventsResponse.status, 
+      bodyPreview: JSON.stringify(eventsData).slice(0, 500), 
+      note: eventsResponse.ok ? 'Success' : 'Failed' 
+    });
+
+    if (eventsResponse.ok && eventsData) {
+      const events = eventsData.events || eventsData.data || eventsData || [];
       const allMarkets: MarketData[] = [];
+      let primaryMarket: MarketData | null = null;
       
-      for (const event of events.slice(0, 3)) {
+      for (const event of events.slice(0, 5)) {
         const eventMarkets = event.markets || [];
         for (const market of eventMarkets) {
-          allMarkets.push({
+          const marketData: MarketData = {
             platform: 'kalshi',
             title: market.title || market.subtitle || '',
             eventTitle: event.title,
@@ -227,35 +290,117 @@ async function fetchKalshiData(ticker: string): Promise<{ primaryMarket: MarketD
             volume: market.volume,
             url: `https://kalshi.com/markets/${market.ticker}`,
             ticker: market.ticker
-          });
+          };
+          allMarkets.push(marketData);
+          
+          // Match the primary market by ticker
+          if (market.ticker?.toUpperCase() === ticker.toUpperCase()) {
+            primaryMarket = marketData;
+          }
         }
       }
       
-      return { 
-        primaryMarket: allMarkets[0] || null, 
-        allMarkets, 
-        rawResponse: { originalError: rawResponse, searchResponse: searchData } 
-      };
+      console.log(`[Kalshi] Found ${allMarkets.length} markets from events endpoint`);
+      
+      if (allMarkets.length > 0) {
+        return { 
+          primaryMarket: primaryMarket || allMarkets[0], 
+          allMarkets, 
+          rawResponse: { originalError: rawResponse, eventsResponse: eventsData },
+          fetchAttempts
+        };
+      }
     }
 
-    console.log(`[Kalshi] Market data received`);
-
-    const market = rawResponse.market || rawResponse;
-    const allMarkets: MarketData[] = [{
-      platform: 'kalshi',
-      title: market.title || market.subtitle || ticker,
-      slug: market.ticker || ticker,
-      yesPrice: market.yes_price || market.last_price || 0.5,
-      noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
-      volume: market.volume || market.volume_24h,
-      url: `https://kalshi.com/markets/${market.ticker || ticker}`,
-      ticker: market.ticker || ticker
-    }];
-
-    return { primaryMarket: allMarkets[0], allMarkets, rawResponse };
+    // Step 3: Try search as last resort
+    const searchUrl = `${DFLOW_BASE_URL}/search?q=${encodeURIComponent(eventSeriesTicker)}`;
+    console.log(`[Kalshi] Attempt 3 - Search fallback: ${searchUrl}`);
+    
+    const searchResponse = await fetch(searchUrl, {
+      headers: {
+        'x-api-key': DFLOW_API_KEY || '',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const searchText = await searchResponse.text();
+    let searchData: any;
+    
+    try {
+      searchData = JSON.parse(searchText);
+    } catch {
+      fetchAttempts.push({ url: searchUrl, status: searchResponse.status, bodyPreview: searchText.slice(0, 300), note: 'Invalid JSON' });
+      return { primaryMarket: null, allMarkets: [], rawResponse: { originalError: rawResponse, searchError: searchText.slice(0, 500) }, fetchAttempts };
+    }
+    
+    fetchAttempts.push({ 
+      url: searchUrl, 
+      status: searchResponse.status, 
+      bodyPreview: JSON.stringify(searchData).slice(0, 500), 
+      note: searchResponse.ok ? 'Success - but may lack nested markets' : 'Failed' 
+    });
+    
+    if (!searchResponse.ok) {
+      return { primaryMarket: null, allMarkets: [], rawResponse: { originalError: rawResponse, searchError: searchData }, fetchAttempts };
+    }
+    
+    // Search results may not have nested markets - need to fetch each event
+    const searchEvents = searchData.events || searchData.data || searchData || [];
+    const allMarkets: MarketData[] = [];
+    
+    // For each event from search, fetch full event data with markets
+    for (const event of searchEvents.slice(0, 3)) {
+      const eventTicker = event.ticker || event.event_ticker;
+      if (!eventTicker) continue;
+      
+      const eventDetailUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&seriesTicker=${eventTicker}&limit=1`;
+      console.log(`[Kalshi] Fetching event details: ${eventDetailUrl}`);
+      
+      try {
+        const eventDetailResp = await fetch(eventDetailUrl, {
+          headers: {
+            'x-api-key': DFLOW_API_KEY || '',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (eventDetailResp.ok) {
+          const eventDetailData = await eventDetailResp.json();
+          const detailEvents = eventDetailData.events || eventDetailData.data || eventDetailData || [];
+          
+          for (const detailEvent of detailEvents) {
+            const eventMarkets = detailEvent.markets || [];
+            for (const market of eventMarkets) {
+              allMarkets.push({
+                platform: 'kalshi',
+                title: market.title || market.subtitle || '',
+                eventTitle: detailEvent.title,
+                slug: market.ticker || '',
+                yesPrice: market.yes_price || market.last_price || 0.5,
+                noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
+                volume: market.volume,
+                url: `https://kalshi.com/markets/${market.ticker}`,
+                ticker: market.ticker
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.log(`[Kalshi] Failed to fetch event details for ${eventTicker}:`, e);
+      }
+    }
+    
+    console.log(`[Kalshi] Total markets from search+fetch: ${allMarkets.length}`);
+    
+    return { 
+      primaryMarket: allMarkets.find(m => m.ticker?.toUpperCase() === ticker.toUpperCase()) || allMarkets[0] || null, 
+      allMarkets, 
+      rawResponse: { originalError: rawResponse, searchResponse: searchData },
+      fetchAttempts
+    };
   } catch (error) {
     console.error(`[Kalshi] Error fetching data:`, error);
-    return { primaryMarket: null, allMarkets: [], rawResponse: { error: String(error) } };
+    return { primaryMarket: null, allMarkets: [], rawResponse: { error: String(error) }, fetchAttempts };
   }
 }
 
@@ -316,7 +461,6 @@ Rules:
     return result.trim();
   }
   
-  // Fallback: extract first 2-3 significant words
   return title.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
 }
 
@@ -371,6 +515,10 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
           }
         }
         
+        // Properly parse tokenIds
+        const tokenIds = parseTokenIds(market.clobTokenIds);
+        const tokenId = tokenIds[0] || market.conditionId || undefined;
+        
         markets.push({
           platform: 'polymarket',
           title: market.question || event.title || '',
@@ -380,7 +528,7 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
           noPrice,
           volume: parseFloat(market.volume) || parseFloat(event.volume) || 0,
           url: `https://polymarket.com/event/${event.slug || event.id}`,
-          tokenId: market.clobTokenIds?.[0] || market.conditionId
+          tokenId
         });
       }
     }
@@ -392,7 +540,7 @@ async function searchPolymarket(query: string): Promise<{ markets: MarketData[];
   }
 }
 
-// Search Kalshi via DFlow API using /search endpoint
+// Search Kalshi via DFlow API - with nested market fetching
 async function searchKalshi(query: string): Promise<{ markets: MarketData[]; rawResponse: any; url: string }> {
   const url = `${DFLOW_BASE_URL}/search?q=${encodeURIComponent(query)}`;
   
@@ -426,20 +574,75 @@ async function searchKalshi(query: string): Promise<{ markets: MarketData[]; raw
     console.log(`[Kalshi] Found ${events.length} events`);
 
     const markets: MarketData[] = [];
-    for (const event of events.slice(0, 5)) {
-      const eventMarkets = event.markets || [];
-      for (const market of eventMarkets.slice(0, 5)) {
-        markets.push({
-          platform: 'kalshi',
-          title: market.title || market.subtitle || '',
-          eventTitle: event.title,
-          slug: market.ticker || '',
-          yesPrice: market.yes_price || market.last_price || 0.5,
-          noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
-          volume: market.volume,
-          url: `https://kalshi.com/markets/${market.ticker}`,
-          ticker: market.ticker
-        });
+    
+    // Check if events have nested markets
+    let hasNestedMarkets = false;
+    for (const event of events.slice(0, 3)) {
+      if (event.markets && event.markets.length > 0) {
+        hasNestedMarkets = true;
+        break;
+      }
+    }
+    
+    if (hasNestedMarkets) {
+      // Events have nested markets, use them directly
+      for (const event of events.slice(0, 5)) {
+        const eventMarkets = event.markets || [];
+        for (const market of eventMarkets.slice(0, 5)) {
+          markets.push({
+            platform: 'kalshi',
+            title: market.title || market.subtitle || '',
+            eventTitle: event.title,
+            slug: market.ticker || '',
+            yesPrice: market.yes_price || market.last_price || 0.5,
+            noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
+            volume: market.volume,
+            url: `https://kalshi.com/markets/${market.ticker}`,
+            ticker: market.ticker
+          });
+        }
+      }
+    } else {
+      // Need to fetch each event with nested markets
+      console.log(`[Kalshi] Search results lack nested markets, fetching individually...`);
+      
+      for (const event of events.slice(0, 3)) {
+        const eventTicker = event.ticker || event.series_ticker || event.event_ticker;
+        if (!eventTicker) continue;
+        
+        try {
+          const eventUrl = `${DFLOW_BASE_URL}/events?withNestedMarkets=true&seriesTicker=${eventTicker}&limit=1`;
+          const eventResp = await fetch(eventUrl, {
+            headers: {
+              'x-api-key': DFLOW_API_KEY || '',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (eventResp.ok) {
+            const eventData = await eventResp.json();
+            const detailEvents = eventData.events || eventData.data || eventData || [];
+            
+            for (const detailEvent of detailEvents) {
+              const eventMarkets = detailEvent.markets || [];
+              for (const market of eventMarkets.slice(0, 5)) {
+                markets.push({
+                  platform: 'kalshi',
+                  title: market.title || market.subtitle || '',
+                  eventTitle: detailEvent.title,
+                  slug: market.ticker || '',
+                  yesPrice: market.yes_price || market.last_price || 0.5,
+                  noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
+                  volume: market.volume,
+                  url: `https://kalshi.com/markets/${market.ticker}`,
+                  ticker: market.ticker
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.log(`[Kalshi] Failed to fetch event ${eventTicker}:`, e);
+        }
       }
     }
 
@@ -451,7 +654,7 @@ async function searchKalshi(query: string): Promise<{ markets: MarketData[]; raw
   }
 }
 
-// AI analysis to determine if markets match and calculate arbitrage using Claude
+// AI analysis to determine if markets match and calculate arbitrage
 async function analyzeArbitrage(source: MarketData, candidates: MarketData[]): Promise<{
   matchedMarket: MarketData | null;
   arbitrage: any;
@@ -525,7 +728,6 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
 
   console.log(`[AI] Analysis result:`, result.slice(0, 500));
 
-  // Parse JSON from response
   const jsonMatch = result.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     return { matchedMarket: null, arbitrage: null, reasoning: 'Could not parse AI response', aiInput: userMessage, aiOutput: result };
@@ -546,14 +748,12 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
 
     const matchedMarket = candidates[analysis.matchIndex - 1] || candidates[0];
     
-    // Recalculate arbitrage with actual prices if AI found one
     let arbitrage = null;
     const sourceYes = source.yesPrice;
     const sourceNo = source.noPrice;
     const targetYes = matchedMarket.yesPrice;
     const targetNo = matchedMarket.noPrice;
 
-    // Find best prices
     const bestYesPrice = Math.min(sourceYes, targetYes);
     const bestNoPrice = Math.min(sourceNo, targetNo);
     const totalCost = bestYesPrice + bestNoPrice;
@@ -583,7 +783,6 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
         reasoning: analysis.reasoning
       };
     } else {
-      // No arbitrage opportunity exists
       arbitrage = {
         exists: false,
         confidence: analysis.confidence || 80,
@@ -627,7 +826,6 @@ serve(async (req) => {
       });
     }
 
-    // Parse the URL
     const parsed = parseMarketUrl(url);
     if (!parsed) {
       return new Response(JSON.stringify({ 
@@ -640,9 +838,9 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[ArbitrageFinder] Detected ${parsed.platform} with slug: ${parsed.slug}`);
+    debug.parsedUrlInfo = parsed;
+    console.log(`[ArbitrageFinder] Detected ${parsed.platform} with slug: ${parsed.slug}, series: ${parsed.seriesTicker || 'N/A'}`);
 
-    // Fetch source market data
     let sourceMarket: MarketData | null = null;
     let allSourceMarkets: MarketData[] = [];
     
@@ -652,15 +850,17 @@ serve(async (req) => {
       allSourceMarkets = result.allMarkets;
       debug.sourceApiResponse = result.rawResponse;
       debug.allSourceMarkets = result.allMarkets;
+      debug.polymarketTokenIdNotes = result.tokenIdNotes;
     } else {
-      const result = await fetchKalshiData(parsed.slug);
+      const result = await fetchKalshiData(parsed.slug, parsed.seriesTicker);
       sourceMarket = result.primaryMarket;
       allSourceMarkets = result.allMarkets;
       debug.sourceApiResponse = result.rawResponse;
       debug.allSourceMarkets = result.allMarkets;
+      debug.kalshiFetchAttempts = result.fetchAttempts;
     }
 
-    if (!sourceMarket) {
+    if (!sourceMarket && allSourceMarkets.length === 0) {
       return new Response(JSON.stringify({ 
         success: false, 
         error: 'Could not fetch market data. The market may not exist or the API may be unavailable.',
@@ -671,12 +871,15 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[ArbitrageFinder] Source market: ${sourceMarket.title}`);
+    // Use first market if primary not found
+    if (!sourceMarket && allSourceMarkets.length > 0) {
+      sourceMarket = allSourceMarkets[0];
+    }
 
-    // Generate search query
-    const searchQuery = await generateSearchQuery(sourceMarket.title);
+    console.log(`[ArbitrageFinder] Source market: ${sourceMarket?.title}, Total markets: ${allSourceMarkets.length}`);
 
-    // Search the OTHER platform
+    const searchQuery = await generateSearchQuery(sourceMarket!.title);
+
     let searchResults: MarketData[] = [];
     if (parsed.platform === 'polymarket') {
       const result = await searchKalshi(searchQuery);
@@ -695,8 +898,7 @@ serve(async (req) => {
     debug.candidateTitles = searchResults.map(r => `${r.title} (YES: ${(r.yesPrice*100).toFixed(1)}¢)`);
     console.log(`[ArbitrageFinder] Found ${searchResults.length} candidates`);
 
-    // Analyze for arbitrage
-    const { matchedMarket, arbitrage, reasoning, aiInput, aiOutput } = await analyzeArbitrage(sourceMarket, searchResults);
+    const { matchedMarket, arbitrage, reasoning, aiInput, aiOutput } = await analyzeArbitrage(sourceMarket!, searchResults);
     
     debug.reasoning = reasoning;
     debug.aiInput = aiInput;
