@@ -262,54 +262,72 @@ export function PolyMarketSidebar({
         ) : (
           <div className="p-2 space-y-1">
             <AnimatePresence mode="sync">
-              {displayMarkets.map((market) => (
-                <motion.button
-                  key={market.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  onClick={() => onSelectMarket(market)}
-                  className={cn(
-                    'w-full text-left p-3 rounded-xl transition-all',
-                    'hover:bg-muted/50',
-                    selectedMarket?.id === market.id
-                      ? 'bg-primary/10 border border-primary/30 shadow-sm'
-                      : 'border border-transparent'
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    {market.image && (
-                      <img
-                        src={market.image}
-                        alt=""
-                        className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm"
-                      />
+              {displayMarkets.map((market) => {
+                // Calculate sentiment based on yes price
+                const yesSentiment = market.yesPrice;
+                
+                return (
+                  <motion.button
+                    key={market.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => onSelectMarket(market)}
+                    className={cn(
+                      'w-full text-left p-3 rounded-xl transition-all duration-150',
+                      'hover:bg-muted/50 hover:scale-[1.01] hover:shadow-sm',
+                      selectedMarket?.id === market.id
+                        ? 'bg-primary/10 border border-primary/30 shadow-sm shadow-primary/10'
+                        : 'border border-transparent hover:border-border/50'
                     )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground line-clamp-2 leading-relaxed">
-                        {market.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className={cn(
-                          'text-sm font-bold font-mono',
-                          market.yesPrice >= 50 ? 'text-emerald-400' : 'text-red-400'
-                        )}>
-                          {market.yesPrice}¢
-                        </span>
-                        {market.yesPrice >= 50 ? (
-                          <TrendingUp className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <TrendingDown className="w-3 h-3 text-red-400" />
-                        )}
-                        <span className="text-[10px] text-muted-foreground ml-auto font-mono">
-                          {formatVolume(market.volume24h || market.volume)}
-                        </span>
+                  >
+                    <div className="flex items-start gap-3">
+                      {market.image && (
+                        <img
+                          src={market.image}
+                          alt=""
+                          className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground line-clamp-2 leading-relaxed">
+                          {market.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className={cn(
+                            'text-sm font-bold font-mono',
+                            market.yesPrice >= 50 ? 'text-emerald-400' : 'text-red-400'
+                          )}>
+                            {market.yesPrice}¢
+                          </span>
+                          {market.yesPrice >= 50 ? (
+                            <TrendingUp className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <TrendingDown className="w-3 h-3 text-red-400" />
+                          )}
+                          <span className="text-[10px] text-muted-foreground ml-auto font-mono">
+                            {formatVolume(market.volume24h || market.volume)}
+                          </span>
+                        </div>
+                        
+                        {/* Market Sentiment Bar */}
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <div className="flex-1 h-1 rounded-full bg-red-500/20 overflow-hidden">
+                            <div 
+                              className="h-full bg-emerald-500 transition-all duration-300"
+                              style={{ width: `${yesSentiment}%` }} 
+                            />
+                          </div>
+                          <span className="text-[8px] text-muted-foreground font-mono w-7 text-right">
+                            {yesSentiment}%
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.button>
-              ))}
+                  </motion.button>
+                );
+              })}
             </AnimatePresence>
             
             {/* Load more trigger */}

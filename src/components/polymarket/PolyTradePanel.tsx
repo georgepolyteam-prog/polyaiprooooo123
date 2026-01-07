@@ -357,7 +357,7 @@ export function PolyTradePanel({ market, compact = false }: PolyTradePanelProps)
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              Market
+              Market <span className="text-muted-foreground/60 ml-0.5">M</span>
             </button>
             <button
               type="button"
@@ -370,6 +370,33 @@ export function PolyTradePanel({ market, compact = false }: PolyTradePanelProps)
               )}
             >
               Limit
+            </button>
+          </div>
+
+          {/* Preset Amount Buttons */}
+          <div className="flex items-center gap-1 mb-2">
+            {[10, 25, 50, 100].map((preset, idx) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setAmount(String(preset))}
+                className={cn(
+                  'flex-1 py-1.5 text-[10px] font-semibold rounded-lg transition-all border',
+                  Number(amount) === preset
+                    ? 'bg-primary/20 border-primary/60 text-primary'
+                    : 'bg-muted/30 border-border/30 text-muted-foreground hover:border-primary/40 hover:bg-muted/50'
+                )}
+              >
+                ${preset}
+                <span className="text-muted-foreground/50 ml-0.5 text-[8px]">{idx + 1}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setAmount(String(Math.floor(balance)))}
+              className="flex-1 py-1.5 text-[10px] font-semibold rounded-lg bg-muted/30 border border-border/30 text-muted-foreground hover:border-primary/40 hover:bg-muted/50 transition-all"
+            >
+              MAX
             </button>
           </div>
 
