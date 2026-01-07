@@ -41,7 +41,7 @@ const mainNav = [
 const exploreNav = [
   { title: 'Browse Markets', url: '/markets', icon: LayoutGrid },
   { title: 'Live Trades', url: '/live-trades', icon: Activity },
-  { title: 'Arb Finder', url: '/arb', icon: Scale },
+  { title: 'Arb Intelligence', url: '/arb', icon: Scale },
   { title: 'Dashboard', url: '/dashboard', icon: BarChart3 },
   { title: 'My Trades', url: '/my-trades', icon: Receipt },
   { title: 'Tracked Wallets', url: '/tracked-wallets', icon: Wallet },
