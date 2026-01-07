@@ -5,12 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DOME_API_KEY = Deno.env.get('DOME_API_KEY');
 const DFLOW_API_KEY = Deno.env.get('DFLOW_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 
 const GAMMA_API_BASE = 'https://gamma-api.polymarket.com';
-const DFLOW_BASE_URL = 'https://a.prediction-markets-api.dflow.net/api/v1';
+// Production DFlow endpoint (c. prefix)
+const DFLOW_BASE_URL = 'https://c.prediction-markets-api.dflow.net/api/v1';
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 
 interface MarketData {
@@ -23,6 +23,21 @@ interface MarketData {
   url: string;
   tokenId?: string;
   ticker?: string;
+  eventTitle?: string;
+}
+
+interface DebugInfo {
+  reasoning?: string;
+  candidateTitles?: string[];
+  kalshiSearchUrl?: string;
+  polymarketSearchUrl?: string;
+  kalshiResponse?: any;
+  polymarketResponse?: any;
+  sourceApiResponse?: any;
+  allSourceMarkets?: MarketData[];
+  allCandidateMarkets?: MarketData[];
+  aiInput?: string;
+  aiOutput?: string;
 }
 
 // Parse URL to detect platform and extract identifier
@@ -39,7 +54,12 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
     
     if (parsed.hostname.includes('kalshi.com')) {
       const pathParts = parsed.pathname.split('/').filter(Boolean);
+      // Handle: /markets/kxvenezuelaleader/who-will-be.../kxvenezuelaleader-26dec31
       if (pathParts[0] === 'markets' && pathParts[1]) {
+        // If there's a specific market ticker at the end, use that
+        if (pathParts.length >= 3 && pathParts[3]) {
+          return { platform: 'kalshi', slug: pathParts[3] };
+        }
         return { platform: 'kalshi', slug: pathParts[1] };
       }
       if (pathParts[0] === 'events' && pathParts[1]) {
@@ -53,97 +73,189 @@ function parseMarketUrl(url: string): { platform: 'polymarket' | 'kalshi'; slug:
   }
 }
 
-// Fetch Polymarket event data via Gamma API
-async function fetchPolymarketData(slug: string): Promise<MarketData | null> {
+// Fetch Polymarket event data via Gamma API - returns ALL markets
+async function fetchPolymarketData(slug: string): Promise<{ primaryMarket: MarketData | null; allMarkets: MarketData[]; rawResponse: any }> {
   try {
     console.log(`[Polymarket] Fetching event via Gamma: ${slug}`);
     
     const response = await fetch(`${GAMMA_API_BASE}/events?slug=${encodeURIComponent(slug)}`);
+    const rawText = await response.text();
+    let rawResponse: any;
+    
+    try {
+      rawResponse = JSON.parse(rawText);
+    } catch {
+      console.error(`[Polymarket] Invalid JSON response`);
+      return { primaryMarket: null, allMarkets: [], rawResponse: rawText.slice(0, 500) };
+    }
 
     if (!response.ok) {
       console.error(`[Polymarket] Failed to fetch event: ${response.status}`);
-      return null;
+      return { primaryMarket: null, allMarkets: [], rawResponse };
     }
 
-    const events = await response.json();
+    const events = rawResponse;
     console.log(`[Polymarket] Gamma returned ${events?.length || 0} events`);
     
     if (!events || events.length === 0) {
       console.error(`[Polymarket] No event found for slug: ${slug}`);
-      return null;
+      return { primaryMarket: null, allMarkets: [], rawResponse };
     }
 
     const event = events[0];
     const markets = event.markets || [];
-    const primaryMarket = markets[0] || {};
+    const allMarkets: MarketData[] = [];
     
-    // Gamma returns outcomePrices as JSON string like "[0.52, 0.48]"
-    let yesPrice = 0.5;
-    let noPrice = 0.5;
-    
-    if (primaryMarket.outcomePrices) {
-      try {
-        const prices = typeof primaryMarket.outcomePrices === 'string' 
-          ? JSON.parse(primaryMarket.outcomePrices) 
-          : primaryMarket.outcomePrices;
-        yesPrice = parseFloat(prices[0]) || 0.5;
-        noPrice = parseFloat(prices[1]) || 0.5;
-      } catch {
-        console.log(`[Polymarket] Could not parse outcomePrices`);
+    for (const market of markets) {
+      let yesPrice = 0.5;
+      let noPrice = 0.5;
+      
+      if (market.outcomePrices) {
+        try {
+          const prices = typeof market.outcomePrices === 'string' 
+            ? JSON.parse(market.outcomePrices) 
+            : market.outcomePrices;
+          yesPrice = parseFloat(prices[0]) || 0.5;
+          noPrice = parseFloat(prices[1]) || 0.5;
+        } catch {
+          console.log(`[Polymarket] Could not parse outcomePrices for ${market.question}`);
+        }
       }
+
+      allMarkets.push({
+        platform: 'polymarket',
+        title: market.question || market.title || '',
+        eventTitle: event.title,
+        slug: event.slug || slug,
+        yesPrice,
+        noPrice,
+        volume: parseFloat(market.volume) || parseFloat(event.volume) || 0,
+        url: `https://polymarket.com/event/${event.slug || slug}`,
+        tokenId: market.clobTokenIds?.[0] || market.conditionId
+      });
     }
 
-    return {
-      platform: 'polymarket',
-      title: event.title || primaryMarket.question || slug,
+    const primaryMarket = allMarkets.length > 0 ? {
+      platform: 'polymarket' as const,
+      title: event.title || allMarkets[0]?.title || slug,
       slug: event.slug || slug,
-      yesPrice,
-      noPrice,
+      yesPrice: allMarkets[0]?.yesPrice || 0.5,
+      noPrice: allMarkets[0]?.noPrice || 0.5,
       volume: parseFloat(event.volume) || 0,
       url: `https://polymarket.com/event/${event.slug || slug}`,
-      tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.conditionId
-    };
+      tokenId: allMarkets[0]?.tokenId
+    } : null;
+
+    console.log(`[Polymarket] Found ${allMarkets.length} markets in event`);
+    return { primaryMarket, allMarkets, rawResponse };
   } catch (error) {
     console.error(`[Polymarket] Error fetching data:`, error);
-    return null;
+    return { primaryMarket: null, allMarkets: [], rawResponse: { error: String(error) } };
   }
 }
 
-// Fetch Kalshi market data via DFlow API
-async function fetchKalshiData(ticker: string): Promise<MarketData | null> {
+// Fetch Kalshi market data via DFlow API - returns ALL markets from event
+async function fetchKalshiData(ticker: string): Promise<{ primaryMarket: MarketData | null; allMarkets: MarketData[]; rawResponse: any }> {
   try {
     console.log(`[Kalshi] Fetching market: ${ticker}`);
     
-    const response = await fetch(`${DFLOW_BASE_URL}/markets/${ticker.toUpperCase()}`, {
+    // Try fetching by market ticker first
+    const marketUrl = `${DFLOW_BASE_URL}/markets/${ticker.toUpperCase()}`;
+    console.log(`[Kalshi] URL: ${marketUrl}`);
+    
+    const response = await fetch(marketUrl, {
       headers: {
-        'Authorization': `Bearer ${DFLOW_API_KEY}`,
+        'x-api-key': DFLOW_API_KEY || '',
         'Content-Type': 'application/json'
       }
     });
 
-    if (!response.ok) {
-      console.error(`[Kalshi] Failed to fetch market: ${response.status}`);
-      return null;
+    const rawText = await response.text();
+    let rawResponse: any;
+    
+    try {
+      rawResponse = JSON.parse(rawText);
+    } catch {
+      console.error(`[Kalshi] Invalid JSON response`);
+      return { primaryMarket: null, allMarkets: [], rawResponse: rawText.slice(0, 500) };
     }
 
-    const data = await response.json();
-    console.log(`[Kalshi] Market data:`, JSON.stringify(data).slice(0, 500));
+    if (!response.ok) {
+      console.error(`[Kalshi] Failed to fetch market: ${response.status}`, rawResponse);
+      
+      // Try searching for the event instead
+      const eventTicker = ticker.split('-')[0]; // e.g., kxvenezuelaleader-26dec31 -> kxvenezuelaleader
+      console.log(`[Kalshi] Trying event search for: ${eventTicker}`);
+      
+      const searchUrl = `${DFLOW_BASE_URL}/search?q=${encodeURIComponent(eventTicker)}`;
+      console.log(`[Kalshi] Search URL: ${searchUrl}`);
+      
+      const searchResponse = await fetch(searchUrl, {
+        headers: {
+          'x-api-key': DFLOW_API_KEY || '',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const searchText = await searchResponse.text();
+      let searchData: any;
+      
+      try {
+        searchData = JSON.parse(searchText);
+      } catch {
+        return { primaryMarket: null, allMarkets: [], rawResponse: { originalError: rawResponse, searchError: searchText.slice(0, 500) } };
+      }
+      
+      if (!searchResponse.ok) {
+        return { primaryMarket: null, allMarkets: [], rawResponse: { originalError: rawResponse, searchError: searchData } };
+      }
+      
+      // Process search results
+      const events = searchData.events || searchData.data || searchData || [];
+      const allMarkets: MarketData[] = [];
+      
+      for (const event of events.slice(0, 3)) {
+        const eventMarkets = event.markets || [];
+        for (const market of eventMarkets) {
+          allMarkets.push({
+            platform: 'kalshi',
+            title: market.title || market.subtitle || '',
+            eventTitle: event.title,
+            slug: market.ticker || '',
+            yesPrice: market.yes_price || market.last_price || 0.5,
+            noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
+            volume: market.volume,
+            url: `https://kalshi.com/markets/${market.ticker}`,
+            ticker: market.ticker
+          });
+        }
+      }
+      
+      return { 
+        primaryMarket: allMarkets[0] || null, 
+        allMarkets, 
+        rawResponse: { originalError: rawResponse, searchResponse: searchData } 
+      };
+    }
 
-    const market = data.market || data;
-    
-    return {
+    console.log(`[Kalshi] Market data received`);
+
+    const market = rawResponse.market || rawResponse;
+    const allMarkets: MarketData[] = [{
       platform: 'kalshi',
       title: market.title || market.subtitle || ticker,
       slug: market.ticker || ticker,
       yesPrice: market.yes_price || market.last_price || 0.5,
       noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
       volume: market.volume || market.volume_24h,
-      url: `https://kalshi.com/markets/${ticker}`,
+      url: `https://kalshi.com/markets/${market.ticker || ticker}`,
       ticker: market.ticker || ticker
-    };
+    }];
+
+    return { primaryMarket: allMarkets[0], allMarkets, rawResponse };
   } catch (error) {
     console.error(`[Kalshi] Error fetching data:`, error);
-    return null;
+    return { primaryMarket: null, allMarkets: [], rawResponse: { error: String(error) } };
   }
 }
 
@@ -192,7 +304,7 @@ Rules:
 - Remove generic words: will, be, the, to, in, on, at, of
 - Keep proper nouns and identifiers
 - For sports: include team names
-- For politics: include person names
+- For politics: include person names and countries
 - For crypto: include token symbols
 - Return ONLY the search query, nothing else
 - Maximum 3 words`;
@@ -209,88 +321,118 @@ Rules:
 }
 
 // Search Polymarket via Gamma API
-async function searchPolymarket(query: string): Promise<MarketData[]> {
+async function searchPolymarket(query: string): Promise<{ markets: MarketData[]; rawResponse: any; url: string }> {
+  const url = `${GAMMA_API_BASE}/events?_q=${encodeURIComponent(query)}&active=true&closed=false&limit=10`;
+  
   try {
     console.log(`[Polymarket] Searching via Gamma: ${query}`);
+    console.log(`[Polymarket] URL: ${url}`);
     
-    const response = await fetch(`${GAMMA_API_BASE}/events?_q=${encodeURIComponent(query)}&active=true&closed=false&limit=10`);
+    const response = await fetch(url);
+    const rawText = await response.text();
+    let rawResponse: any;
+    
+    try {
+      rawResponse = JSON.parse(rawText);
+    } catch {
+      console.error(`[Polymarket] Invalid JSON search response`);
+      return { markets: [], rawResponse: rawText.slice(0, 1000), url };
+    }
 
     if (!response.ok) {
       console.error(`[Polymarket] Search failed: ${response.status}`);
-      return [];
+      return { markets: [], rawResponse, url };
     }
 
-    const events = await response.json();
+    const events = rawResponse;
     console.log(`[Polymarket] Gamma search found ${events?.length || 0} results`);
 
     if (!events || !Array.isArray(events)) {
-      return [];
+      return { markets: [], rawResponse, url };
     }
 
-    return events.slice(0, 5).map((event: any) => {
-      const markets = event.markets || [];
-      const primaryMarket = markets[0] || {};
-      
-      let yesPrice = 0.5;
-      let noPrice = 0.5;
-      
-      if (primaryMarket.outcomePrices) {
-        try {
-          const prices = typeof primaryMarket.outcomePrices === 'string' 
-            ? JSON.parse(primaryMarket.outcomePrices) 
-            : primaryMarket.outcomePrices;
-          yesPrice = parseFloat(prices[0]) || 0.5;
-          noPrice = parseFloat(prices[1]) || 0.5;
-        } catch {
-          // Keep defaults
+    const markets: MarketData[] = [];
+    
+    for (const event of events.slice(0, 5)) {
+      const eventMarkets = event.markets || [];
+      for (const market of eventMarkets.slice(0, 3)) {
+        let yesPrice = 0.5;
+        let noPrice = 0.5;
+        
+        if (market.outcomePrices) {
+          try {
+            const prices = typeof market.outcomePrices === 'string' 
+              ? JSON.parse(market.outcomePrices) 
+              : market.outcomePrices;
+            yesPrice = parseFloat(prices[0]) || 0.5;
+            noPrice = parseFloat(prices[1]) || 0.5;
+          } catch {
+            // Keep defaults
+          }
         }
+        
+        markets.push({
+          platform: 'polymarket',
+          title: market.question || event.title || '',
+          eventTitle: event.title,
+          slug: event.slug || event.id || '',
+          yesPrice,
+          noPrice,
+          volume: parseFloat(market.volume) || parseFloat(event.volume) || 0,
+          url: `https://polymarket.com/event/${event.slug || event.id}`,
+          tokenId: market.clobTokenIds?.[0] || market.conditionId
+        });
       }
-      
-      return {
-        platform: 'polymarket' as const,
-        title: event.title || primaryMarket.question || '',
-        slug: event.slug || event.id || '',
-        yesPrice,
-        noPrice,
-        volume: parseFloat(event.volume) || 0,
-        url: `https://polymarket.com/event/${event.slug || event.id}`,
-        tokenId: primaryMarket.clobTokenIds?.[0] || primaryMarket.conditionId
-      };
-    });
+    }
+
+    return { markets, rawResponse, url };
   } catch (error) {
     console.error(`[Polymarket] Search error:`, error);
-    return [];
+    return { markets: [], rawResponse: { error: String(error) }, url };
   }
 }
 
-// Search Kalshi via DFlow API
-async function searchKalshi(query: string): Promise<MarketData[]> {
+// Search Kalshi via DFlow API using /search endpoint
+async function searchKalshi(query: string): Promise<{ markets: MarketData[]; rawResponse: any; url: string }> {
+  const url = `${DFLOW_BASE_URL}/search?q=${encodeURIComponent(query)}`;
+  
   try {
     console.log(`[Kalshi] Searching: ${query}`);
+    console.log(`[Kalshi] URL: ${url}`);
     
-    const response = await fetch(`${DFLOW_BASE_URL}/events?status=active&search=${encodeURIComponent(query)}`, {
+    const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${DFLOW_API_KEY}`,
+        'x-api-key': DFLOW_API_KEY || '',
         'Content-Type': 'application/json'
       }
     });
 
-    if (!response.ok) {
-      console.error(`[Kalshi] Search failed: ${response.status}`);
-      return [];
+    const rawText = await response.text();
+    let rawResponse: any;
+    
+    try {
+      rawResponse = JSON.parse(rawText);
+    } catch {
+      console.error(`[Kalshi] Invalid JSON search response`);
+      return { markets: [], rawResponse: rawText.slice(0, 1000), url };
     }
 
-    const data = await response.json();
-    const events = data.events || data.data || data || [];
+    if (!response.ok) {
+      console.error(`[Kalshi] Search failed: ${response.status}`, rawResponse);
+      return { markets: [], rawResponse, url };
+    }
+
+    const events = rawResponse.events || rawResponse.data || rawResponse || [];
     console.log(`[Kalshi] Found ${events.length} events`);
 
     const markets: MarketData[] = [];
     for (const event of events.slice(0, 5)) {
       const eventMarkets = event.markets || [];
-      for (const market of eventMarkets.slice(0, 2)) {
+      for (const market of eventMarkets.slice(0, 5)) {
         markets.push({
           platform: 'kalshi',
-          title: market.title || event.title || '',
+          title: market.title || market.subtitle || '',
+          eventTitle: event.title,
           slug: market.ticker || '',
           yesPrice: market.yes_price || market.last_price || 0.5,
           noPrice: market.no_price || (1 - (market.yes_price || market.last_price || 0.5)),
@@ -301,10 +443,11 @@ async function searchKalshi(query: string): Promise<MarketData[]> {
       }
     }
 
-    return markets.slice(0, 5);
+    console.log(`[Kalshi] Total markets found: ${markets.length}`);
+    return { markets, rawResponse, url };
   } catch (error) {
     console.error(`[Kalshi] Search error:`, error);
-    return [];
+    return { markets: [], rawResponse: { error: String(error) }, url };
   }
 }
 
@@ -313,15 +456,17 @@ async function analyzeArbitrage(source: MarketData, candidates: MarketData[]): P
   matchedMarket: MarketData | null;
   arbitrage: any;
   reasoning: string;
+  aiInput: string;
+  aiOutput: string;
 }> {
   if (candidates.length === 0) {
-    return { matchedMarket: null, arbitrage: null, reasoning: 'No candidate markets found' };
+    return { matchedMarket: null, arbitrage: null, reasoning: 'No candidate markets found', aiInput: '', aiOutput: '' };
   }
 
   console.log(`[AI] Analyzing ${candidates.length} candidates for arbitrage`);
 
   const candidateList = candidates.map((c, i) => 
-    `${i + 1}. "${c.title}" - YES: ${(c.yesPrice * 100).toFixed(1)}¢, NO: ${(c.noPrice * 100).toFixed(1)}¢`
+    `${i + 1}. "${c.title}" (Event: ${c.eventTitle || 'N/A'}) - YES: ${(c.yesPrice * 100).toFixed(1)}¢, NO: ${(c.noPrice * 100).toFixed(1)}¢`
   ).join('\n');
 
   const systemPrompt = `You are an expert at matching prediction markets across platforms and identifying arbitrage opportunities.
@@ -330,6 +475,11 @@ Your task:
 1. Determine which candidate market (if any) is the SAME event as the source
 2. If a match is found, calculate if there's an arbitrage opportunity
 3. Return structured JSON
+
+IMPORTANT: Markets are the SAME if they resolve to the same outcome. Look for:
+- Same person/entity being asked about
+- Same timeframe or date
+- Same specific question about a binary outcome
 
 Arbitrage calculation:
 - If Source YES price < Target NO price (or vice versa), there's potential arb
@@ -358,6 +508,7 @@ Response must be valid JSON only, no other text:
 
   const userMessage = `SOURCE MARKET (${source.platform}):
 Title: "${source.title}"
+Event: "${source.eventTitle || 'N/A'}"
 YES Price: ${(source.yesPrice * 100).toFixed(1)}¢
 NO Price: ${(source.noPrice * 100).toFixed(1)}¢
 
@@ -369,7 +520,7 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
   const result = await callClaude(systemPrompt, userMessage, 600);
   
   if (!result) {
-    return { matchedMarket: null, arbitrage: null, reasoning: 'AI analysis failed' };
+    return { matchedMarket: null, arbitrage: null, reasoning: 'AI analysis failed', aiInput: userMessage, aiOutput: '' };
   }
 
   console.log(`[AI] Analysis result:`, result.slice(0, 500));
@@ -377,7 +528,7 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
   // Parse JSON from response
   const jsonMatch = result.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    return { matchedMarket: null, arbitrage: null, reasoning: 'Could not parse AI response' };
+    return { matchedMarket: null, arbitrage: null, reasoning: 'Could not parse AI response', aiInput: userMessage, aiOutput: result };
   }
 
   try {
@@ -387,7 +538,9 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
       return { 
         matchedMarket: null, 
         arbitrage: null, 
-        reasoning: analysis.reasoning || 'No matching market found' 
+        reasoning: analysis.reasoning || 'No matching market found',
+        aiInput: userMessage,
+        aiOutput: result
       };
     }
 
@@ -395,52 +548,60 @@ Analyze which candidate (if any) matches the source, and calculate arbitrage opp
     
     // Recalculate arbitrage with actual prices if AI found one
     let arbitrage = null;
-    if (analysis.arbitrage?.exists) {
-      const sourceYes = source.yesPrice;
-      const sourceNo = source.noPrice;
-      const targetYes = matchedMarket.yesPrice;
-      const targetNo = matchedMarket.noPrice;
+    const sourceYes = source.yesPrice;
+    const sourceNo = source.noPrice;
+    const targetYes = matchedMarket.yesPrice;
+    const targetNo = matchedMarket.noPrice;
 
-      // Find best prices
-      const bestYesPrice = Math.min(sourceYes, targetYes);
-      const bestNoPrice = Math.min(sourceNo, targetNo);
-      const totalCost = bestYesPrice + bestNoPrice;
+    // Find best prices
+    const bestYesPrice = Math.min(sourceYes, targetYes);
+    const bestNoPrice = Math.min(sourceNo, targetNo);
+    const totalCost = bestYesPrice + bestNoPrice;
 
-      if (totalCost < 1) {
-        const profit = 1 - totalCost;
-        const profitPercent = (profit / totalCost) * 100;
+    if (totalCost < 1) {
+      const profit = 1 - totalCost;
+      const profitPercent = (profit / totalCost) * 100;
 
-        arbitrage = {
-          exists: true,
-          confidence: analysis.confidence || 80,
-          buyYesOn: sourceYes <= targetYes ? source.platform : matchedMarket.platform,
-          buyYesPlatform: sourceYes <= targetYes ? source.platform : matchedMarket.platform,
-          buyYesPrice: bestYesPrice,
-          buyYesTokenId: sourceYes <= targetYes ? source.tokenId : matchedMarket.tokenId,
-          buyYesTicker: sourceYes <= targetYes ? source.ticker : matchedMarket.ticker,
-          buyNoOn: sourceNo <= targetNo ? source.platform : matchedMarket.platform,
-          buyNoPlatform: sourceNo <= targetNo ? source.platform : matchedMarket.platform,
-          buyNoPrice: bestNoPrice,
-          buyNoTokenId: sourceNo <= targetNo ? source.tokenId : matchedMarket.tokenId,
-          buyNoTicker: sourceNo <= targetNo ? source.ticker : matchedMarket.ticker,
-          totalCost: totalCost,
-          guaranteedPayout: 1,
-          netProfit: profit,
-          profitPercent: profitPercent,
-          strategy: `Buy YES on ${sourceYes <= targetYes ? source.platform : matchedMarket.platform} at ${(bestYesPrice * 100).toFixed(1)}¢ + Buy NO on ${sourceNo <= targetNo ? source.platform : matchedMarket.platform} at ${(bestNoPrice * 100).toFixed(1)}¢`,
-          reasoning: analysis.reasoning
-        };
-      }
+      arbitrage = {
+        exists: true,
+        confidence: analysis.confidence || 80,
+        buyYesOn: sourceYes <= targetYes ? source.platform : matchedMarket.platform,
+        buyYesPlatform: sourceYes <= targetYes ? source.platform : matchedMarket.platform,
+        buyYesPrice: bestYesPrice,
+        buyYesTokenId: sourceYes <= targetYes ? source.tokenId : matchedMarket.tokenId,
+        buyYesTicker: sourceYes <= targetYes ? source.ticker : matchedMarket.ticker,
+        buyNoOn: sourceNo <= targetNo ? source.platform : matchedMarket.platform,
+        buyNoPlatform: sourceNo <= targetNo ? source.platform : matchedMarket.platform,
+        buyNoPrice: bestNoPrice,
+        buyNoTokenId: sourceNo <= targetNo ? source.tokenId : matchedMarket.tokenId,
+        buyNoTicker: sourceNo <= targetNo ? source.ticker : matchedMarket.ticker,
+        totalCost: totalCost,
+        guaranteedPayout: 1,
+        netProfit: profit,
+        profitPercent: profitPercent,
+        strategy: `Buy YES on ${sourceYes <= targetYes ? source.platform : matchedMarket.platform} at ${(bestYesPrice * 100).toFixed(1)}¢ + Buy NO on ${sourceNo <= targetNo ? source.platform : matchedMarket.platform} at ${(bestNoPrice * 100).toFixed(1)}¢`,
+        reasoning: analysis.reasoning
+      };
+    } else {
+      // No arbitrage opportunity exists
+      arbitrage = {
+        exists: false,
+        confidence: analysis.confidence || 80,
+        totalCost,
+        reasoning: `Total cost ${(totalCost * 100).toFixed(1)}¢ exceeds $1.00 payout`
+      };
     }
 
     return {
       matchedMarket,
       arbitrage,
-      reasoning: analysis.reasoning
+      reasoning: analysis.reasoning,
+      aiInput: userMessage,
+      aiOutput: result
     };
   } catch (error) {
     console.error(`[AI] JSON parse error:`, error);
-    return { matchedMarket: null, arbitrage: null, reasoning: 'Failed to parse analysis' };
+    return { matchedMarket: null, arbitrage: null, reasoning: 'Failed to parse analysis', aiInput: userMessage, aiOutput: result };
   }
 }
 
@@ -449,6 +610,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const debug: DebugInfo = {};
+
   try {
     const { url } = await req.json();
     console.log(`[ArbitrageFinder] Processing URL: ${url}`);
@@ -456,7 +619,8 @@ serve(async (req) => {
     if (!url) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'No URL provided' 
+        error: 'No URL provided',
+        debug 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -468,7 +632,8 @@ serve(async (req) => {
     if (!parsed) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Invalid market URL. Please provide a Polymarket or Kalshi market URL.' 
+        error: 'Invalid market URL. Please provide a Polymarket or Kalshi market URL.',
+        debug: { ...debug, parsedUrl: null, inputUrl: url }
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -479,16 +644,27 @@ serve(async (req) => {
 
     // Fetch source market data
     let sourceMarket: MarketData | null = null;
+    let allSourceMarkets: MarketData[] = [];
+    
     if (parsed.platform === 'polymarket') {
-      sourceMarket = await fetchPolymarketData(parsed.slug);
+      const result = await fetchPolymarketData(parsed.slug);
+      sourceMarket = result.primaryMarket;
+      allSourceMarkets = result.allMarkets;
+      debug.sourceApiResponse = result.rawResponse;
+      debug.allSourceMarkets = result.allMarkets;
     } else {
-      sourceMarket = await fetchKalshiData(parsed.slug);
+      const result = await fetchKalshiData(parsed.slug);
+      sourceMarket = result.primaryMarket;
+      allSourceMarkets = result.allMarkets;
+      debug.sourceApiResponse = result.rawResponse;
+      debug.allSourceMarkets = result.allMarkets;
     }
 
     if (!sourceMarket) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Could not fetch market data. The market may not exist or the API may be unavailable.' 
+        error: 'Could not fetch market data. The market may not exist or the API may be unavailable.',
+        debug
       }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -503,27 +679,38 @@ serve(async (req) => {
     // Search the OTHER platform
     let searchResults: MarketData[] = [];
     if (parsed.platform === 'polymarket') {
-      searchResults = await searchKalshi(searchQuery);
+      const result = await searchKalshi(searchQuery);
+      searchResults = result.markets;
+      debug.kalshiSearchUrl = result.url;
+      debug.kalshiResponse = result.rawResponse;
+      debug.allCandidateMarkets = result.markets;
     } else {
-      searchResults = await searchPolymarket(searchQuery);
+      const result = await searchPolymarket(searchQuery);
+      searchResults = result.markets;
+      debug.polymarketSearchUrl = result.url;
+      debug.polymarketResponse = result.rawResponse;
+      debug.allCandidateMarkets = result.markets;
     }
 
+    debug.candidateTitles = searchResults.map(r => `${r.title} (YES: ${(r.yesPrice*100).toFixed(1)}¢)`);
     console.log(`[ArbitrageFinder] Found ${searchResults.length} candidates`);
 
     // Analyze for arbitrage
-    const { matchedMarket, arbitrage, reasoning } = await analyzeArbitrage(sourceMarket, searchResults);
+    const { matchedMarket, arbitrage, reasoning, aiInput, aiOutput } = await analyzeArbitrage(sourceMarket, searchResults);
+    
+    debug.reasoning = reasoning;
+    debug.aiInput = aiInput;
+    debug.aiOutput = aiOutput;
 
     return new Response(JSON.stringify({
       success: true,
       sourceMarket,
+      sourceMarkets: allSourceMarkets,
       matchedMarket,
       arbitrage,
       searchQuery,
       searchResultsCount: searchResults.length,
-      debug: {
-        reasoning,
-        candidateTitles: searchResults.map(r => r.title)
-      }
+      debug
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
@@ -532,7 +719,8 @@ serve(async (req) => {
     console.error('[ArbitrageFinder] Error:', error);
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+      error: error instanceof Error ? error.message : 'An unexpected error occurred',
+      debug
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

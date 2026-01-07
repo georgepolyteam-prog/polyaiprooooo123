@@ -46,18 +46,30 @@ export interface ArbitrageOpportunity {
   reasoning: string;
 }
 
+export interface DebugInfo {
+  reasoning?: string;
+  candidateTitles?: string[];
+  kalshiSearchUrl?: string;
+  polymarketSearchUrl?: string;
+  kalshiResponse?: any;
+  polymarketResponse?: any;
+  sourceApiResponse?: any;
+  allSourceMarkets?: SourceMarket[];
+  allCandidateMarkets?: MatchedMarket[];
+  aiInput?: string;
+  aiOutput?: string;
+}
+
 export interface ArbitrageResult {
   success: boolean;
   sourceMarket?: SourceMarket;
+  sourceMarkets?: SourceMarket[];
   matchedMarket?: MatchedMarket;
   arbitrage?: ArbitrageOpportunity;
   searchQuery?: string;
   searchResultsCount?: number;
   error?: string;
-  debug?: {
-    reasoning?: string;
-    candidateTitles?: string[];
-  };
+  debug?: DebugInfo;
 }
 
 interface UseArbitrageFinderReturn {
