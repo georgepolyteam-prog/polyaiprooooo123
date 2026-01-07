@@ -78,6 +78,7 @@ export interface DebugInfo {
   parsedUrlInfo?: any;
   searchQueries?: string[];
   kalshiSearchAttempts?: SearchAttempt[];
+  polymarketSearchAttempts?: SearchAttempt[];
 }
 
 export interface ArbitrageResult {

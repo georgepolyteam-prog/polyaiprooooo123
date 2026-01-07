@@ -481,6 +481,30 @@ const ArbIntelligence = () => {
                         </div>
                       )}
 
+                      {/* Polymarket Search Attempts */}
+                      {result.debug?.polymarketSearchAttempts && result.debug.polymarketSearchAttempts.length > 0 && (
+                        <div>
+                          <p className="font-semibold text-muted-foreground mb-1">
+                            Polymarket Search Attempts ({result.debug.polymarketSearchAttempts.length}):
+                          </p>
+                          <div className="space-y-2">
+                            {result.debug.polymarketSearchAttempts.map((attempt, i) => (
+                              <div key={i} className="bg-background/50 p-2 rounded border">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant={attempt.status === 200 ? "default" : "destructive"} className="text-[10px]">
+                                    {attempt.status}
+                                  </Badge>
+                                  <span className="font-medium text-foreground">"{attempt.query}"</span>
+                                  <span className="text-muted-foreground">
+                                    → {attempt.eventCount} events, {attempt.marketCount} markets
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Kalshi Fetch Attempts (for direct URL fetches) */}
                       {result.debug?.kalshiFetchAttempts && result.debug.kalshiFetchAttempts.length > 0 && (
                         <div>
